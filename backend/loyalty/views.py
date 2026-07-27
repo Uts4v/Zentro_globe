@@ -519,7 +519,7 @@ def my_missions(request):
     except PermissionError as e:
         return _customer_error(str(e))
 
-    missions = Mission.objects.filter(is_active=True).select_related("required_merchant")
+    missions = Mission.objects.filter(is_active=True).select_related("required_merchant", "linked_menu_item")
     merchant_id = request.query_params.get("merchant")
     if merchant_id:
         missions = missions.filter(required_merchant_id=merchant_id)
@@ -532,17 +532,39 @@ def my_missions(request):
     result = []
     for mission in missions:
         cm = progress_map.get(mission.id)
+        current_count = cm.current_count if cm else 0
+        is_completed = cm.is_completed if cm else False
+
+        if cm and cm.is_completed and mission.restart_interval and mission.restart_interval != "never":
+            now = timezone.now()
+            interval = mission.restart_interval
+            should_restart = False
+            if interval == "daily" and cm.completed_at and now - cm.completed_at >= timedelta(days=1):
+                should_restart = True
+            elif interval == "weekly" and cm.completed_at and now - cm.completed_at >= timedelta(weeks=1):
+                should_restart = True
+            elif interval == "monthly" and cm.completed_at and now - cm.completed_at >= timedelta(days=30):
+                should_restart = True
+            if should_restart:
+                cm.current_count = 0
+                cm.is_completed = False
+                cm.completed_at = None
+                cm.save()
+                current_count = 0
+                is_completed = False
+
         result.append({
             "id": cm.id if cm else f"new-{mission.id}",
             "title": mission.title,
             "description": mission.description,
             "icon": mission.icon,
             "target_count": mission.target_count,
-            "current_count": cm.current_count if cm else 0,
+            "current_count": current_count,
             "reward_points": mission.reward_points,
-            "is_completed": cm.is_completed if cm else False,
+            "is_completed": is_completed,
             "mission_type": mission.mission_type,
             "merchant_name": mission.required_merchant.business_name if mission.required_merchant else "",
+            "linked_menu_item_name": mission.linked_menu_item.name if mission.linked_menu_item else None,
         })
 
     return Response(result)

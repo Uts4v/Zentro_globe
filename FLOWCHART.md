@@ -6,19 +6,23 @@
 3. [Merchant Onboarding Flow](#3-merchant-onboarding-flow)
 4. [Customer Journey](#4-customer-journey)
 5. [Customer App - Ordering Flow](#5-customer-app---ordering-flow)
-6. [POS System - Complete Flow](#6-pos-system---complete-flow)
-7. [Loyalty System - Complete Flow](#7-loyalty-system---complete-flow)
-8. [Order Lifecycle (All Sources)](#8-order-lifecycle-all-sources)
-9. [Payment Processing](#9-payment-processing)
-10. [Shift Management & Cash Reconciliation](#10-shift-management--cash-reconciliation)
-11. [Staff Management](#11-staff-management)
-12. [Merchant Admin Dashboard](#12-merchant-admin-dashboard)
-13. [Table QR Ordering Flow](#13-table-qr-ordering-flow)
-14. [Point Transfer (Peer-to-Peer)](#14-point-transfer-peer-to-peer)
-15. [Offline Sync & Conflict Resolution](#15-offline-sync--conflict-resolution)
-16. [Notification System](#16-notification-system)
-17. [Data Model Relationships](#17-data-model-relationships)
-18. [API Endpoint Map](#18-api-endpoint-map)
+6. [Guest Ordering Flow](#6-guest-ordering-flow)
+7. [POS System - Complete Flow](#7-pos-system---complete-flow)
+8. [Loyalty System - Complete Flow](#8-loyalty-system---complete-flow)
+9. [Order Lifecycle (All Sources)](#9-order-lifecycle-all-sources)
+10. [Payment Processing](#10-payment-processing)
+11. [Shift Management & Cash Reconciliation](#11-shift-management--cash-reconciliation)
+12. [Staff Management & Scheduling](#12-staff-management--scheduling)
+13. [Merchant Admin Dashboard](#13-merchant-admin-dashboard)
+14. [Table QR Ordering Flow](#14-table-qr-ordering-flow)
+15. [Point Transfer (Peer-to-Peer)](#15-point-transfer-peer-to-peer)
+16. [Today's Specials](#16-todays-specials)
+17. [Membership Card Design & QR Tokens](#17-membership-card-design--qr-tokens)
+18. [Offline Sync & Conflict Resolution](#18-offline-sync--conflict-resolution)
+19. [Notification System](#19-notification-system)
+20. [PWA & Real-Time Features](#20-pwa--real-time-features)
+21. [Data Model Relationships](#21-data-model-relationships)
+22. [API Endpoint Map](#22-api-endpoint-map)
 
 ---
 
@@ -33,7 +37,7 @@
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                   │
 │  │  CUSTOMER    │  │  MERCHANT    │  │  POS         │                   │
 │  │  MOBILE APP  │  │  ADMIN WEB   │  │  TERMINAL    │                   │
-│  │  (React)     │  │  (React)     │  │  (React)     │                   │
+│  │  (React/PWA) │  │  (React)     │  │  (React)     │                   │
 │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘                   │
 │         │                  │                  │                         │
 │         └──────────────────┼──────────────────┘                         │
@@ -43,17 +47,19 @@
 │                   │  (Django DRF)   │                                   │
 │                   ├─────────────────┤                                   │
 │                   │ PostgreSQL DB   │                                   │
-│                   │                                                     │
+│                   │                 │                                   │
 │                   └─────────────────┘                                   │
 │                                                                         │
-│  37 Django Models │ 157 API Endpoints │ 42+ Frontend Routes             │
-│  6 Django Apps    │ JWT Auth + Device │ Zustand State                   │
+│  40 Django Models │ 157+ API Endpoints │ 47 Frontend Routes             │
+│  6 Django Apps    │ JWT Auth + Device  │ Zustand + React Query          │
+│                   │ WebSocket (Django Channels) │ TanStack Router       │
 └─────────────────────────────────────────────────────────────────────────┘
 
 Tech Stack:
-- Frontend: React 19, TanStack Router/Start, Zustand, Tailwind CSS
-- Backend: Django 6, DRF, SimpleJWT, PostgreSQL
+- Frontend: React 19, TanStack Router/Start (file-based), Zustand, TanStack Query, Tailwind CSS
+- Backend: Django 6, DRF, SimpleJWT, PostgreSQL, Django Channels (WebSocket)
 - Auth: JWT (customer + merchant), Device-Token (POS)
+- PWA: Service Worker, Install Prompt, Offline Fallback
 - Currency: Nepalese Rupees (NPR)
 ```
 
@@ -62,10 +68,44 @@ Tech Stack:
 backend/
 ├── accounts/       → User, CustomerProfile, PasswordResetToken
 ├── merchants/      → MerchantProfile, MenuItem, MerchantTable
-├── loyalty/        → Wallets, Points, Punch Cards, Missions, Rewards, QR, Card Design
+├── loyalty/        → Wallets, Points, Punch Cards, Missions, Rewards, QR, Card Design, TodaySpecial
 ├── orders/         → Order, OrderItem
 ├── notifications/  → Notification
-└── pos/            → Devices, Workers, Shifts, Payments, Discounts, Credit/Debit, Schedules
+└── pos/            → Devices, Workers, Shifts, Payments, Discounts, Credit/Debit, Schedules, Cash Movements
+```
+
+### Frontend Route Structure (47 Routes)
+```
+src/
+├── __root.tsx              → Root layout (providers, auth gate, WebSocket, PWA)
+├── index.tsx               → Home Dashboard (loyalty card, quick actions, specials)
+├── menu.tsx                → Menu Browser
+├── cart.tsx                → Shopping Cart
+├── map.tsx                 → Store Discovery Map
+├── stores.tsx              → Stores List
+├── stores.$id.tsx          → Store Detail
+├── loyalty.tsx             → Loyalty Dashboard
+├── rewards.tsx             → Rewards Catalog
+├── missions.tsx            → Missions Hub
+├── leaderboard.tsx         → Leaderboard
+├── cards.tsx               → Membership Cards (card stack)
+├── cards.$merchantSlug.tsx → Card Detail
+├── transfers.tsx           → Point Transfers (Send/Receive/History)
+├── notifications.tsx       → Notifications Inbox
+├── profile.tsx             → Customer Profile
+├── offline.tsx             → PWA Offline Fallback
+├── customer.merchants.tsx  → Joined Merchants
+├── customer.order.tsx      → Single Order Detail
+├── customer.orders.tsx     → Order History
+├── customer.merchant.$slug.tsx → Merchant Storefront
+├── guest.merchant.$slug.tsx    → Guest Ordering (no auth)
+├── loyalty.qr.$token.tsx       → Membership QR Resolver
+├── table.$token.order.tsx      → Table QR Order
+├── m.$slug.tsx                  → Smart Entry Point (role-based redirect)
+├── m.$slug.table.$token.tsx    → Table via Merchant Slug
+├── auth.*                      → Auth routes (login, signup, forgot/reset password)
+├── merchant.*                  → Merchant dashboard (orders, menu, tables, loyalty, specials, analytics, store, onboarding)
+└── pos.*                       → POS terminal (orders, staff, schedule, reports, z-report, settings, accounts, cash-movements, conflicts)
 ```
 
 ---
@@ -354,9 +394,102 @@ Same as Pickup but:
 
 ---
 
-## 6. POS System - Complete Flow
+## 6. Guest Ordering Flow
 
-### 6.1 POS Boot Sequence
+### 6.1 Guest Entry Points
+```
+┌─────────────────────────────────────────────────────────────┐
+│  GUEST ENTRY POINTS                                         │
+│                                                              │
+│  1. Table QR: /m/{slug}/table/{token}                       │
+│     → Resolves table → Redirects to guest ordering          │
+│                                                              │
+│  2. Direct URL: /guest/merchant/{slug}                      │
+│     → Guest menu browsing (no auth required)                │
+│                                                              │
+│  3. Smart Entry: /m/{slug}                                  │
+│     → If not logged in → Guest landing page                 │
+│     → Shows menu + "Sign up to earn points" CTA            │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+```
+
+### 6.2 Guest Ordering Process
+```
+┌─────────────────────────────────────────────────────────────┐
+│  1. BROWSE MENU (no auth required)                          │
+│     GET /merchants/<id>/menu/ (public)                      │
+│     → Same menu as logged-in customers                     │
+│     → Cart stored in Zustand (persisted to localStorage)   │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  2. CHECKOUT (guest)                                        │
+│     POST /orders/guest-create/                              │
+│     {                                                       │
+│       merchant_id, items, notes,                            │
+│       fulfillment_type, table_token,                        │
+│       guest_name (optional),                                │
+│       guest_session_id (auto-generated UUID)               │
+│     }                                                       │
+│                                                              │
+│     • Creates Order (source=table_qr, status=pending)      │
+│     • No loyalty points (no customer linked)               │
+│     • Order appears on POS + merchant dashboard            │
+│     • Guest can track via session ID                       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  3. POST-ORDER (optional signup)                            │
+│     • Guest sees "Sign up to earn points on this order"    │
+│     • If signs up → Customer can claim order via POS       │
+│     • Merchant can link customer to order:                 │
+│       POST /pos/order/assign-customer/                     │
+│       → Retroactively awards loyalty points                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 6.3 Smart Entry Point (/m/{slug})
+```
+/m/{slug} → Smart Router
+      │
+      ├── Logged in as Customer → /customer/merchant/{slug}
+      │   (merchant storefront with loyalty card, menu, actions)
+      │
+      ├── Logged in as Merchant → /merchant/store
+      │   (merchant dashboard)
+      │
+      └── Not logged in → Guest Landing Page
+          (menu preview, "Sign Up" / "Log In" CTAs)
+```
+
+---
+
+## 7. POS System - Complete Flow
+
+### 7.0 POS Route Map
+```
+┌─────────────────────────────────────────────────────────────┐
+│  /pos  POS SIDEBAR NAV                                       │
+│                                                             │
+│  ├── /pos              → Main Order Screen (Menu + Cart)    │
+│  ├── /pos/orders       → Order History / Incoming Orders    │
+│  ├── /pos/staff        → Worker Management (CRUD + PIN)     │
+│  ├── /pos/staff-report → Staff Daily Report                │
+│  ├── /pos/schedule     → Staff Schedule (Weekly Calendar)  │
+│  ├── /pos/reports      → Reports Hub                       │
+│  │   └── /pos/reports/z-report → End-of-Day Z-Report      │
+│  ├── /pos/settings     → POS Terminal Configuration        │
+│  ├── /pos/accounts     → Debit/Credit Account Management   │
+│  ├── /pos/cash-movements → Cash In/Out Tracking            │
+│  └── /pos/conflicts    → Sync Conflict Resolution          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 7.1 POS Boot Sequence
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Navigate to /pos                                           │
@@ -406,7 +539,7 @@ Same as Pickup but:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 6.2 POS Ordering Flow
+### 7.2 POS Ordering Flow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  1. BROWSE MENU                                             │
@@ -481,7 +614,7 @@ Same as Pickup but:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 6.3 Incoming Orders (from Customer App / Table QR)
+### 7.3 Incoming Orders (from Customer App / Table QR)
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  INCOMING ORDERS PANEL (top of POS order screen)            │
@@ -507,9 +640,9 @@ Same as Pickup but:
 
 ---
 
-## 7. Loyalty System - Complete Flow
+## 8. Loyalty System - Complete Flow
 
-### 7.1 Points Earning Flow
+### 8.1 Points Earning Flow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  TRIGGER: Order status transitions to COMPLETED             │
@@ -568,7 +701,7 @@ Same as Pickup but:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 7.2 Tier Progression
+### 8.2 Tier Progression
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  TIER THRESHOLDS (based on LIFETIME POINTS, per merchant)  │
@@ -588,7 +721,7 @@ Same as Pickup but:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 7.3 Punch Card Flow
+### 8.3 Punch Card Flow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  MERCHANT CREATES PUNCH CARD TEMPLATE                       │
@@ -628,6 +761,7 @@ Same as Pickup but:
 └─────────────────────────┬───────────────────────────────────┘
                           │
                           ▼
+                          
 ┌─────────────────────────────────────────────────────────────┐
 │  MERCHANT CONFIRMS                                          │
 │  POST /loyalty/punch-cards/confirm-proof/                   │
@@ -639,7 +773,7 @@ Same as Pickup but:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 7.4 Reward Redemption Flow
+### 8.4 Reward Redemption Flow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  CUSTOMER BROWSES REWARDS                                   │
@@ -684,7 +818,7 @@ Same as Pickup but:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 7.5 Missions Flow
+### 8.5 Missions Flow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  MERCHANT CREATES MISSIONS                                  │
@@ -721,9 +855,9 @@ Same as Pickup but:
 
 ---
 
-## 8. Order Lifecycle (All Sources)
+## 9. Order Lifecycle (All Sources)
 
-### 8.1 Order Sources
+### 9.1 Order Sources
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  SOURCE          │ CREATED BY     │ AUTH REQUIRED          │
@@ -736,7 +870,7 @@ Same as Pickup but:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 8.2 Order Status Machine
+### 9.2 Order Status Machine
 ```
                     ┌──────────┐
                     │ pending  │ (initial status)
@@ -780,7 +914,7 @@ Valid Transitions:
   cancelled   → (terminal)
 ```
 
-### 8.3 Order Creation by Source
+### 9.3 Order Creation by Source
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  CUSTOMER APP ORDER                                         │
@@ -821,9 +955,9 @@ Valid Transitions:
 
 ---
 
-## 9. Payment Processing
+## 10. Payment Processing
 
-### 9.1 POS Payment Flow
+### 10.1 POS Payment Flow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  PAYMENT METHODS                                            │
@@ -866,7 +1000,7 @@ Valid Transitions:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 9.2 Discount Flow
+### 10.2 Discount Flow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  POST /pos/discount/apply/                                  │
@@ -891,7 +1025,7 @@ Valid Transitions:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 9.3 Refund Flow
+### 10.3 Refund Flow
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  POST /pos/refund/                                          │
@@ -914,9 +1048,9 @@ Valid Transitions:
 
 ---
 
-## 10. Shift Management & Cash Reconciliation
+## 11. Shift Management & Cash Reconciliation
 
-### 10.1 Shift Lifecycle
+### 11.1 Shift Lifecycle
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  SHIFT OPEN                                                 │
@@ -975,7 +1109,7 @@ Valid Transitions:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 10.2 Z-Report (End of Day)
+### 11.2 Z-Report (End of Day)
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  GET /pos/z-report/?date=YYYY-MM-DD                        │
@@ -1020,7 +1154,7 @@ Valid Transitions:
 
 ---
 
-## 11. Staff Management
+## 12. Staff Management & Scheduling
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1057,16 +1191,33 @@ Valid Transitions:
 │  POST /pos/schedules/create/                                │
 │  { worker_id, shift_date, start_time, end_time, role }     │
 │                                                             │
+│  GET /pos/schedules/ → List all schedules                   │
+│  DELETE /pos/schedules/{id}/delete/ → Remove schedule       │
+│                                                             │
 │  Weekly Calendar View (Mon-Sun)                             │
 │  • Add shift per worker per day                            │
 │  • Delete shift (hover → trash icon)                       │
 │  • Navigate weeks (prev/next)                              │
+│  • Status: scheduled → confirmed → completed / cancelled   │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  STAFF DAILY REPORT                                         │
+│  GET /pos/staff-report/?date=YYYY-MM-DD                    │
+│                                                             │
+│  Per-worker summary:                                        │
+│  • Orders processed                                         │
+│  • Revenue generated                                        │
+│  • Discounts applied                                        │
+│  • Refunds processed                                        │
+│  • Shift duration                                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 12. Merchant Admin Dashboard
+## 13. Merchant Admin Dashboard
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1102,8 +1253,12 @@ Valid Transitions:
 │  │   ├── Missions CRUD (order_count, spend_amount, streak)│
 │  │   ├── Rewards CRUD (emoji, name, points_cost, stock)   │
 │  │   ├── Punch Card templates + proof code confirmation   │
+│  │   ├── Customer list management                         │
 │  │   └── Full transaction ledger                           │
-│  ├── Today's Special → Promotional popup management        │
+│  ├── Specials     → Today's Special promotions             │
+│  │   ├── Link to menu items or rewards                    │
+│  │   ├── Toggle active/inactive                            │
+│  │   └── Auto-popup on customer storefront                │
 │  ├── Analytics    → Revenue charts, top items, top         │
 │  │                  customers, order history (60 days)     │
 │  └── Store        → Profile, branding, card design,        │
@@ -1140,9 +1295,9 @@ Valid Transitions:
 
 ---
 
-## 13. Table QR Ordering Flow
+## 14. Table QR Ordering Flow
 
-### 13.1 Table Setup (Merchant Side)
+### 14.1 Table Setup (Merchant Side)
 ```
 /merchant/tables
      │
@@ -1165,7 +1320,7 @@ Valid Transitions:
 └─────────────────────────────────────────────────────┘
 ```
 
-### 13.2 Customer Table Ordering
+### 14.2 Customer Table Ordering
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  CUSTOMER SCANS TABLE QR                                    │
@@ -1198,7 +1353,7 @@ Valid Transitions:
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 13.3 POS Table Order (alternative path)
+### 14.3 POS Table Order (alternative path)
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  POST /pos/table/{token}/order/                             │
@@ -1214,7 +1369,7 @@ Valid Transitions:
 
 ---
 
-## 14. Point Transfer (Peer-to-Peer)
+## 15. Point Transfer (Peer-to-Peer)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1259,7 +1414,138 @@ QR SCANNER FLOW:
 
 ---
 
-## 15. Offline Sync & Conflict Resolution
+## 16. Today's Specials
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MERCHANT CREATES SPECIAL                                   │
+│  POST /loyalty/merchant/specials/                            │
+│  { title, description, image_url,                           │
+│    linked_menu_item_id, linked_reward_id, is_active }       │
+│                                                             │
+│  • linked_menu_item → "Buy this item today!"               │
+│  • linked_reward → "Redeem this reward today!"             │
+│  • Both optional (can be standalone promotion)             │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  MERCHANT MANAGES SPECIALS                                  │
+│  GET /loyalty/merchant/specials/ → List all specials        │
+│  PATCH /loyalty/merchant/specials/{id}/ → Edit special      │
+│  DELETE /loyalty/merchant/specials/{id}/ → Delete special   │
+│                                                             │
+│  /merchant/specials → UI with toggle active/inactive       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  CUSTOMER SEES SPECIALS                                     │
+│  GET /loyalty/specials/{slug}/ → Active specials for store  │
+│                                                             │
+│  Displayed as:                                              │
+│  • TodaySpecialPopup (auto-popup on merchant storefront)   │
+│  • Banner on /customer/merchant/{slug}                     │
+│  • Menu items highlighted with "Today's Special" badge     │
+│                                                             │
+│  Notification:                                              │
+│  • type=special_offer sent to joined customers             │
+│  • Pushed via WebSocket in real-time                       │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 17. Membership Card Design & QR Tokens
+
+### 17.1 Card Design System
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MERCHANT DESIGNS MEMBERSHIP CARD                           │
+│  GET/PATCH /loyalty/merchant/card-design/                   │
+│                                                             │
+│  Fields:                                                    │
+│  ┌─────────────────────────────────────────┐               │
+│  │  card_title: "VIP Member"               │               │
+│  │  card_subtitle: "Loyalty Rewards"       │               │
+│  │  primary_color: #FF6B35                 │               │
+│  │  secondary_color: #004E89              │               │
+│  │  accent_color: #FCBF49                 │               │
+│  │  text_mode: light / dark               │               │
+│  │  background_type: solid / image / pattern│              │
+│  │  background_image: URL                  │               │
+│  │  background_pattern: zentro_dots / geometric / diamonds │
+│  │  tier_style: default / minimal / badge  │               │
+│  │  logo: URL                              │               │
+│  │  points_label: "Zentro Points"          │               │
+│  │  membership_label: "Member Since"       │               │
+│  │  show_lifetime_points: true             │               │
+│  │  show_joined_date: true                 │               │
+│  │  show_qr_shortcut: true                 │               │
+│  │  show_color_overlay: true               │               │
+│  └─────────────────────────────────────────┘               │
+│                                                             │
+│  POST /loyalty/merchant/card-design/publish/ → Publish card │
+│  (is_published = true → visible to customers)              │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│  CUSTOMER VIEWS CARD                                        │
+│  GET /loyalty/membership-cards/ → All merchant cards        │
+│  /cards → Card stack display (swipe between merchants)     │
+│  /cards/{merchantSlug} → Individual card with details       │
+│                                                             │
+│  Shows:                                                     │
+│  • Designed card with merchant branding                     │
+│  • Current tier + points balance                            │
+│  • QR shortcut for transfers                               │
+│  • Lifetime points + joined date (if enabled)              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 17.2 Membership QR Tokens
+```
+┌─────────────────────────────────────────────────────────────┐
+│  QR TOKEN SYSTEM                                            │
+│                                                             │
+│  Each customer-merchant membership gets a rotatable QR:    │
+│  GET /api/customer/memberships/{slug}/qr/                  │
+│  → Returns current token (MQR_XXXXXXXXXXXX)                │
+│                                                             │
+│  POST /api/customer/memberships/{slug}/qr/                 │
+│  → Rotates token (invalidates old, creates new version)    │
+│                                                             │
+│  Resolving:                                                 │
+│  GET /loyalty/qr/{public_token}/                           │
+│  → Resolves token → Returns membership info                │
+│  → Used for: transfers, check-in, identification           │
+│                                                             │
+│  Token Versioning:                                          │
+│  • token_version increments on each rotation               │
+│  • is_active flag controls validity                        │
+│  • Previous tokens become invalid immediately             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 17.3 Customer Management (Merchant)
+```
+┌─────────────────────────────────────────────────────────────┐
+│  MERCHANT CUSTOMER LIST                                     │
+│  GET /loyalty/merchant/customers/                           │
+│  → All customers who joined this merchant                  │
+│  → Shows: name, membership#, points, tier, last active     │
+│                                                             │
+│  MERCHANT CUSTOMER DETAIL                                   │
+│  GET /loyalty/merchant/customers/{membership_id}/           │
+│  → Individual customer profile at this merchant            │
+│  → Transaction history, wallet, punch cards                │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 18. Offline Sync & Conflict Resolution
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1313,7 +1599,7 @@ QR SCANNER FLOW:
 
 ---
 
-## 16. Notification System
+## 19. Notification System
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -1343,12 +1629,70 @@ QR SCANNER FLOW:
 │  POS Notifications:                                         │
 │  • GET /pos/notifications/ (last 30)                       │
 │  • POST /pos/notifications/{id}/read/                      │
+│                                                             │
+│  Delivery Methods:                                          │
+│  • Database persistence (all notifications)                │
+│  • WebSocket push (Django Channels) → real-time toasts    │
+│  • Toast notification via GlobalNotificationToasts component│
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 17. Data Model Relationships
+## 20. PWA & Real-Time Features
+
+### 20.1 Progressive Web App
+```
+┌─────────────────────────────────────────────────────────────┐
+│  PWA FEATURES                                               │
+│                                                             │
+│  Service Worker:                                            │
+│  • Pre-caches app shell for offline browsing               │
+│  • Background sync for offline orders                      │
+│  • Cache-first strategy for static assets                  │
+│                                                             │
+│  Install Prompt:                                            │
+│  • PwaProvider detects installability                      │
+│  • InstallZentroButton shows install banner               │
+│  • Custom install flow (not browser default)              │
+│                                                             │
+│  Offline Fallback:                                          │
+│  /offline → Shown when connection lost                     │
+│  • Cached pages still accessible                          │
+│  • Clear indication of offline state                      │
+│                                                             │
+│  Assets:                                                    │
+│  • manifest.json (app metadata)                           │
+│  • apple-touch-icon (iOS home screen)                     │
+│  • Service worker with cache strategies                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 20.2 Real-Time WebSocket Notifications
+```
+┌─────────────────────────────────────────────────────────────┐
+│  WEBSOCKET ARCHITECTURE                                     │
+│                                                             │
+│  Django Channels → WebSocket connection                    │
+│  • Established in root component (__root.tsx)              │
+│  • GlobalNotificationToasts component listens             │
+│                                                             │
+│  Real-Time Events:                                          │
+│  • new_order → Merchant sees incoming order instantly      │
+│  • order_update → Customer sees status change              │
+│  • points_earned → Instant points notification            │
+│  • special_offer → Today's special popup                   │
+│  • transfer_sent/received → Transfer confirmation         │
+│                                                             │
+│  Fallback:                                                  │
+│  • Polling every 30 seconds if WebSocket unavailable      │
+│  • Database-persisted notifications survive disconnect    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 21. Data Model Relationships
 
 ```
 User (AUTH_USER_MODEL)
@@ -1378,6 +1722,8 @@ User (AUTH_USER_MODEL)
  │     ├── FK → Reward.merchant
  │     │     └── FK → Redemption.reward
  │     ├── FK → TodaySpecial.merchant
+ │     │     ├── FK → TodaySpecial.linked_menu_item → MenuItem
+ │     │     └── FK → TodaySpecial.linked_reward → Reward
  │     ├── FK → PosDevice.merchant
  │     ├── FK → ShiftWorker.merchant
  │     ├── FK → CashShift.merchant
@@ -1393,7 +1739,8 @@ User (AUTH_USER_MODEL)
  │     │     └── FK → CreditTransaction.account
  │     ├── FK → DebitAccount.merchant
  │     │     └── FK → DebitTransaction.account
- │     └── FK → StaffSchedule.merchant
+ │     ├── FK → StaffSchedule.merchant
+ │     └── FK → PosAuditLog.merchant
  │
  ├── FK → Notification.user
  ├── FK → PasswordResetToken.user
@@ -1423,12 +1770,12 @@ POS Credit/Debit            │ CreditAccount, CreditTransaction,
 POS Infrastructure          │ PosAuditLog, ProcessedClientMutation,
                             │ StaffSchedule │ 3
 ────────────────────────────┴────────┼──────
-                              TOTAL  │ 37
+                             TOTAL   │ 40
 ```
 
 ---
 
-## 18. API Endpoint Map
+## 22. API Endpoint Map
 
 ### Summary by Feature Area
 ```
@@ -1438,45 +1785,98 @@ POS Infrastructure          │ PosAuditLog, ProcessedClientMutation,
 │ System / Health                  │ /healthz/  │ 2        │
 │ Authentication & Accounts        │ /api/auth/ │ 9        │
 │ Media Upload                     │ /api/media/│ 1        │
-│ Merchants & Menu                 │ /api/merchants/ │ 23  │
-│ Loyalty (general)                │ /api/loyalty/    │ 51  │
-│ Customer Memberships             │ /api/customer/memberships/ │ 5 │
-│ Orders                           │ /api/orders/     │ 7   │
+│ Merchants & Menu                 │ /api/merchants/ │ 25  │
+│ Loyalty (general)                │ /api/loyalty/    │ 55  │
+│ Customer Memberships             │ /api/customer/memberships/ │ 6 │
+│ Orders                           │ /api/orders/     │ 8   │
 │ Notifications                    │ /api/notifications/ │ 5  │
-│ POS System                       │ /api/pos/  │ 54       │
+│ POS System                       │ /api/pos/  │ 58       │
 ├──────────────────────────────────┼────────────┼──────────┤
-│ GRAND TOTAL                      │            │ ~157     │
+│ GRAND TOTAL                      │            │ ~169     │
 └──────────────────────────────────┴────────────┴──────────┘
 ```
 
-### POS Endpoint Groups
+### Loyalty Endpoint Groups (Updated)
+```
+Group                    │ Endpoints │ Key URLs
+─────────────────────────┼───────────┼─────────────────────────────
+Memberships / Join       │ 6         │ /loyalty/merchant-profiles/join/, /loyalty/merchant-profiles/mine/
+Wallets                  │ 2         │ /loyalty/wallets/mine/, /loyalty/wallets/
+Loyalty Rules            │ 1         │ /loyalty/rules/
+Transactions             │ 2         │ /loyalty/transactions/, /loyalty/merchant/transactions/
+Punch Cards              │ 7         │ /loyalty/merchant/punch-cards/, /loyalty/punch-cards/
+Missions                 │ 5         │ /loyalty/missions/create/, /loyalty/missions/my-missions/
+Today's Specials         │ 5         │ /loyalty/specials/{slug}/, /loyalty/merchant/specials/
+Rewards                  │ 5         │ /loyalty/rewards/create/, /loyalty/rewards/{id}/redeem/
+Redemptions              │ 3         │ /loyalty/redemptions/confirm/, /loyalty/redemptions/merchant/
+Leaderboard              │ 1         │ /loyalty/leaderboard/
+Transfers                │ 3         │ /loyalty/transfers/create/, /loyalty/merchant/transfers/
+Membership Cards         │ 1         │ /loyalty/membership-cards/
+QR Tokens                │ 1         │ /loyalty/qr/{token}/
+Card Design              │ 3         │ /loyalty/merchant/card-design/
+Customer Management      │ 2         │ /loyalty/merchant/customers/
+─────────────────────────┼───────────┼─────────────────────────────
+LOYALTY TOTAL            │ 55        │
+```
+
+### Customer Membership Endpoints (Updated)
+```
+Group                    │ Endpoints │ Key URLs
+─────────────────────────┼───────────┼─────────────────────────────
+List Memberships         │ 1         │ /customer/memberships/
+Join Merchant            │ 1         │ /customer/memberships/join/
+Membership Detail        │ 1         │ /customer/memberships/{slug}/
+QR Token Get             │ 1         │ /customer/memberships/{slug}/qr/ (GET)
+QR Token Rotate          │ 1         │ /customer/memberships/{slug}/qr/ (POST)
+─────────────────────────┼───────────┼─────────────────────────────
+CUSTOMER MEMBERSHIP TOTAL│ 6         │
+```
+
+### Order Endpoints (Updated)
+```
+Group                    │ Endpoints │ Key URLs
+─────────────────────────┼───────────┼─────────────────────────────
+Customer Orders          │ 1         │ /orders/my-orders/
+Merchant Orders          │ 1         │ /orders/store-orders/
+Create Order             │ 1         │ /orders/create/
+Guest Order              │ 1         │ /orders/guest-create/
+Order History            │ 1         │ /orders/merchant-history/
+Order Detail             │ 1         │ /orders/{id}/
+Update Status            │ 1         │ /orders/{id}/update-status/
+Cancel Order             │ 1         │ /orders/{id}/cancel/
+─────────────────────────┼───────────┼─────────────────────────────
+ORDER TOTAL              │ 8         │
+```
+
+### POS Endpoint Groups (Updated)
 ```
 Group               │ Endpoints │ Key URLs
 ────────────────────┼───────────┼─────────────────────────────
-Auth & Bootstrap    │ 5         │ /pos/auth/login, /pos/auth/bootstrap
+Auth & Bootstrap    │ 5         │ /pos/auth/login, /pos/auth/bootstrap, /pos/auth/device-bootstrap
 Device Management   │ 4         │ /pos/device/register, /pos/devices/
 Worker Management   │ 5         │ /pos/workers/, /pos/worker/login
-Shift Management    │ 5         │ /pos/shift/open, /pos/shift/close
-POS Orders          │ 3         │ /pos/order/create, /pos/orders/
+Shift Management    │ 5         │ /pos/shift/open, /pos/shift/close, /pos/shift/active, /pos/shifts/
+POS Orders          │ 4         │ /pos/order/create, /pos/orders/, /pos/order/status/
 Receipts & Bills    │ 1         │ /pos/receipt/{id}
-Payments            │ 3         │ /pos/payment/create, /pos/payment/split
+Payments            │ 3         │ /pos/payment/create, /pos/payment/split, /pos/payments/
 Discounts           │ 1         │ /pos/discount/apply
 Cash Movements      │ 2         │ /pos/cash/movement, /pos/cash/movements
 Customer Search     │ 1         │ /pos/customers/search
 Refunds             │ 1         │ /pos/refund
-Credit Accounts     │ 3         │ /pos/credit/sale, /pos/credit/repayment
-Debit Accounts      │ 4         │ /pos/debit/topup, /pos/debit/purchase
-Settings            │ 2         │ /pos/settings/
+Credit Accounts     │ 3         │ /pos/credit/accounts, /pos/credit/sale, /pos/credit/repayment
+Debit Accounts      │ 4         │ /pos/debit/accounts, /pos/debit/topup, /pos/debit/purchase, /pos/debit/adjustment
+Settings            │ 2         │ /pos/settings/, /pos/settings/update/
 Menu Snapshot       │ 1         │ /pos/menu/snapshot
 Audit Logs          │ 1         │ /pos/audit
 Z-Report            │ 1         │ /pos/z-report
-Conflict Resolution │ 3         │ /pos/conflicts/
+Staff Report        │ 1         │ /pos/staff-report
+Conflict Resolution │ 3         │ /pos/conflicts/, /pos/conflicts/resolve/, /pos/conflicts/clear-mutations/
 Table QR (Public)   │ 2         │ /pos/table/{token}/menu, /pos/table/{token}/order
 Assign Customer     │ 1         │ /pos/order/assign-customer
 Notifications       │ 2         │ /pos/notifications/
 Staff Scheduling    │ 3         │ /pos/schedules/
 ────────────────────┼───────────┼─────────────────────────────
-POS TOTAL           │ 54        │
+POS TOTAL           │ 58        │
 ```
 
 ---
@@ -1494,6 +1894,16 @@ Sign Up → Login → Browse Stores → Join Merchant → Browse Menu
 → Generate Punch Proof → Show Code → Merchant Confirms
 → Transfer Points (Send/Receive via QR)
 → View Leaderboard → View Membership Cards
+→ View Today's Specials → Quick Action Buttons
+```
+
+### Guest Flow
+```
+Scan Table QR / Visit /guest/merchant/{slug}
+→ Browse Menu (no auth) → Add to Cart
+→ Checkout with Guest Name → Place Order
+→ Order appears on POS/Merchant dashboard
+→ Optional: Sign up to link loyalty points
 ```
 
 ### Merchant Flow
@@ -1502,10 +1912,11 @@ Sign Up → Onboarding → Configure Store → Upload Logo/Banner
 → Set Theme Color → Generate QR → Design Membership Card
 → Create Menu Items → Enable Features (POS, Tables, Discounts)
 → Create Missions → Create Rewards → Create Punch Cards
-→ Create Today's Special → Set Table Ordering
+→ Create Today's Specials → Set Table Ordering
 → Manage Orders (Accept/Reject/Advance Status)
 → Confirm Reward Redemptions → Confirm Punch Card Proofs
 → View Analytics → View Reports → Generate Z-Report
+→ Manage Customer List → Manage Staff Schedule
 ```
 
 ### POS Flow
@@ -1513,8 +1924,9 @@ Sign Up → Onboarding → Configure Store → Upload Logo/Banner
 Device Registration → Worker PIN Login → Open Shift
 → Browse Menu → Add to Cart → Link Customer
 → Select Payment Method → Process Payment
-→ Print Receipt → Handle Incoming Orders (App/QR)
+→ Print Receipt → Handle Incoming Orders (App/QR/Guest)
 → Record Cash Movements → Apply Discounts (with approval)
 → Process Refunds → Manage Credit/Debit Accounts
-→ Close Shift → View Z-Report → Close Store
+→ View Staff Report → Close Shift → View Z-Report → Close Store
+→ Handle Sync Conflicts (if offline mode used)
 ```

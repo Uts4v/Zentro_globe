@@ -10,13 +10,14 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { MerchantThemeProvider } from "@/lib/merchant-theme";
 import { PwaProvider } from "@/features/pwa/PwaProvider";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { ZentroLoadingScreen } from "@/components/brand/ZentroLoadingScreen";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
@@ -24,12 +25,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { tokenStore } from "@/lib/django-api-base";
 
 // Routes that never require auth
-const PUBLIC_ROUTES = [
-  "/auth",
-  "/auth/merchant",
-  "/auth/forgot-password",
-  "/auth/reset-password",
-];
+const PUBLIC_ROUTES = ["/auth", "/auth/merchant", "/auth/forgot-password", "/auth/reset-password"];
 
 // ── Auth gate ─────────────────────────────────────────────────────────────────
 // Renders children immediately; redirects to /auth once auth finishes loading
@@ -39,7 +35,7 @@ function AuthGate() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  const isPublic   = PUBLIC_ROUTES.some((r) => pathname.startsWith(r));
+  const isPublic = PUBLIC_ROUTES.some((r) => pathname.startsWith(r));
   const isMerchant = pathname.startsWith("/merchant");
 
   useEffect(() => {
@@ -124,9 +120,15 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "Zentro — Order & Loyalty" },
-      { name: "description", content: "Premium coffee ordering with a loyalty card that feels like a keepsake." },
+      {
+        name: "description",
+        content: "Premium coffee ordering with a loyalty card that feels like a keepsake.",
+      },
       { property: "og:title", content: "Zentro — Order & Loyalty" },
-      { property: "og:description", content: "Order, earn, redeem. A modern loyalty experience for your favorite cafés." },
+      {
+        property: "og:description",
+        content: "Order, earn, redeem. A modern loyalty experience for your favorite cafés.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "apple-mobile-web-app-capable", content: "yes" },
@@ -148,7 +150,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/icons/pwa-192x192.svg" },
-      { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+      { rel: "icon", type: "image/png", href: "/favicon.png" },
     ],
   }),
   shellComponent: RootShell,
@@ -184,10 +186,10 @@ function GlobalNotificationToasts() {
     // Defer WebSocket connection until after page load to avoid blocking initial render
     const connectWebSocket = () => {
       const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const apiHost = (import.meta.env.VITE_DJANGO_API_BASE_URL as string | undefined)
-        ?.replace(/^https?:\/\//, "")
-        ?.replace(/\/api\/?$/, "")
-        || window.location.host;
+      const apiHost =
+        (import.meta.env.VITE_DJANGO_API_BASE_URL as string | undefined)
+          ?.replace(/^https?:\/\//, "")
+          ?.replace(/\/api\/?$/, "") || window.location.host;
       const wsUrl = `${wsProto}//${apiHost}/ws/notifications/?token=${token}`;
       const ws = new WebSocket(wsUrl);
 
@@ -248,23 +250,25 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-        <ThemeProvider>
-          <MerchantThemeProvider>
-            <PwaProvider>
-              <AuthProvider>
-                <GlobalNotificationToasts />
-                <InnerRoot />
-                <Toaster position="top-center" richColors expand visibleToasts={4} />
-              </AuthProvider>
-            </PwaProvider>
-          </MerchantThemeProvider>
-        </ThemeProvider>
+      <ThemeProvider>
+        <MerchantThemeProvider>
+          <PwaProvider>
+            <AuthProvider>
+              <GlobalNotificationToasts />
+              <InnerRoot />
+              <Toaster position="top-center" richColors expand visibleToasts={4} />
+            </AuthProvider>
+          </PwaProvider>
+        </MerchantThemeProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
 function RootShell({ children }: { children: ReactNode }) {
+  const [showSplash, setShowSplash] = useState(true);
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -276,6 +280,9 @@ function RootShell({ children }: { children: ReactNode }) {
         />
       </head>
       <body>
+        {showSplash && (
+          <ZentroLoadingScreen duration={2000} onComplete={() => setShowSplash(false)} />
+        )}
         {children}
         <Scripts />
       </body>

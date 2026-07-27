@@ -15,6 +15,7 @@ export const Route = createFileRoute("/auth/merchant/signup")({
 function MerchantSignup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [storeName, setStoreName] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,10 +27,16 @@ function MerchantSignup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
     setBusy(true);
 
     try {
-      const { error: err } = await signUp(email, password, name, { role: "merchant", store_name: storeName });
+      const { error: err } = await signUp(email, password, name, { role: "merchant", store_name: storeName, confirmPassword });
       if (err) {
         setError(err);
         return;
@@ -62,6 +69,7 @@ function MerchantSignup() {
         <Field label="Store name" placeholder="Maison Aria" icon={<Store className="h-4 w-4" />} value={storeName} onChange={setStoreName} />
         <Field label="Business email" placeholder="hello@maison.com" type="email" icon={<Mail className="h-4 w-4" />} value={email} onChange={setEmail} />
         <Field label="Password" placeholder="••••••••" type="password" icon={<Lock className="h-4 w-4" />} value={password} onChange={setPassword} />
+        <Field label="Confirm password" placeholder="••••••••" type="password" icon={<Lock className="h-4 w-4" />} value={confirmPassword} onChange={setConfirmPassword} />
 
         <button
           type="submit"

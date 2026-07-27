@@ -401,7 +401,23 @@ class Mission(models.Model):
         null=True, blank=True,
         related_name="missions",
     )
+    RESTART_CHOICES = [
+        ("never", "Never"),
+        ("daily", "Daily"),
+        ("weekly", "Weekly"),
+        ("monthly", "Monthly"),
+    ]
+
     is_active = models.BooleanField(default=True)
+    restart_interval = models.CharField(
+        max_length=10, choices=RESTART_CHOICES, default="never", blank=True,
+    )
+    linked_menu_item = models.ForeignKey(
+        "merchants.MenuItem",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="missions",
+    )
     starts_at = models.DateTimeField(null=True, blank=True)
     ends_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -452,6 +468,12 @@ class Reward(models.Model):
     image_url = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
     stock = models.IntegerField(default=-1)
+    linked_menu_item = models.ForeignKey(
+        "merchants.MenuItem",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="rewards",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -68,6 +68,10 @@ function MerchantLogin() {
         </button>
       </form>
 
+      <p className="mt-4 text-center text-xs text-muted-foreground">
+        <Link to="/auth/forgot-password" className="font-medium text-ink underline-offset-4 hover:underline">Forgot password?</Link>
+      </p>
+
       <p className="mt-auto pt-8 text-center text-xs text-muted-foreground">
         New to Zentro? <Link to="/auth/merchant/signup" className="font-medium text-ink underline-offset-4 hover:underline">Register your business</Link>
       </p>

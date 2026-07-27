@@ -22,11 +22,9 @@ export function CategoryChips({ categories, active, onSelect, merchantColor }: C
             style={
               isActive
                 ? {
-                    background: merchantColor || "var(--ink)",
-                    color: "#FFFFFF",
-                    boxShadow: merchantColor
-                      ? `0 4px 14px ${merchantColor}40`
-                      : "0 4px 14px rgba(26,26,26,0.2)",
+                    background: "var(--foreground)",
+                    color: "var(--background)",
+                    boxShadow: "0 4px 14px rgba(26,26,26,0.2)",
                   }
                 : {
                     background: "var(--mist)",

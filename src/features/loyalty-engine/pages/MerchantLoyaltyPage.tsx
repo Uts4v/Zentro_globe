@@ -2,8 +2,8 @@
 import { Plus, Pencil, Trash2, X, Check, AlertCircle, Loader2, Gift } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
-  loyaltyApi, missionApi, punchCardApi, transactionApi,
-  type Reward, type Mission, type MerchantPunchCard, type PointTransaction,
+  loyaltyApi, missionApi, menuApi, punchCardApi, transactionApi,
+  type Reward, type Mission, type MerchantPunchCard, type PointTransaction, type MenuItem,
 } from "@/lib/api";
 import { ErrorBanner, EmptyState, Toggle, IconBtn, Chip } from "@/components/LoyaltyShared";
 import { MissionModal } from "@/features/missions/components/MissionModal";
@@ -39,6 +39,9 @@ export function MerchantLoyaltyPage() {
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
 
+  // ── Menu Items (for linking) ─────────────────────────────────────────────
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+
   useEffect(() => {
     missionApi.merchantMissions()
       .then(setMissions)
@@ -61,6 +64,12 @@ export function MerchantLoyaltyPage() {
   }, []);
 
   useEffect(() => {
+    menuApi.myItems()
+      .then(setMenuItems)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (tab === "transactions") {
       setTransactionsLoading(true);
       transactionApi.merchantList()
@@ -71,7 +80,7 @@ export function MerchantLoyaltyPage() {
   }, [tab]);
 
   // ── Mission CRUD ───────────────────────────────────────────────────────────
-  async function saveMission(data: Omit<Mission, "id" | "merchant_id" | "created_at">) {
+  async function saveMission(data: Omit<Mission, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">) {
     setMissionSaving(true);
     setMissionsError("");
     try {
@@ -109,7 +118,7 @@ export function MerchantLoyaltyPage() {
   }
 
   // ── Reward CRUD ────────────────────────────────────────────────────────────
-  async function saveReward(data: Omit<Reward, "id" | "merchant_id" | "created_at">) {
+  async function saveReward(data: Omit<Reward, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">) {
     setRewardSaving(true);
     setRewardsError("");
     try {
@@ -227,6 +236,9 @@ export function MerchantLoyaltyPage() {
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{m.title}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{m.description}</p>
+                      {m.linked_menu_item_name && (
+                        <p className="mt-0.5 text-xs font-medium text-ember">Linked: {m.linked_menu_item_name}</p>
+                      )}
                     </div>
                     <div className="flex shrink-0 gap-1">
                       <IconBtn onClick={() => setMissionModal(m)}>
@@ -285,6 +297,9 @@ export function MerchantLoyaltyPage() {
                       <div className="min-w-0">
                         <p className="truncate font-medium text-foreground">{r.name}</p>
                         <p className="text-xs text-muted-foreground line-clamp-1">{r.description}</p>
+                        {r.linked_menu_item_name && (
+                          <p className="mt-0.5 text-xs font-medium text-ember">Linked: {r.linked_menu_item_name}</p>
+                        )}
                       </div>
                     </div>
                     <div className="flex shrink-0 gap-1">
@@ -434,6 +449,7 @@ export function MerchantLoyaltyPage() {
       {missionModal !== null && (
         <MissionModal
           initial={missionModal === "new" ? null : missionModal}
+          menuItems={menuItems}
           saving={missionSaving}
           onSave={saveMission}
           onClose={() => setMissionModal(null)}
@@ -442,6 +458,7 @@ export function MerchantLoyaltyPage() {
       {rewardModal !== null && (
         <RewardModal
           initial={rewardModal === "new" ? null : rewardModal}
+          menuItems={menuItems}
           saving={rewardSaving}
           onSave={saveReward}
           onClose={() => setRewardModal(null)}

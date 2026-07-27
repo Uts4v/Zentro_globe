@@ -33,6 +33,7 @@ urlpatterns = [
     path("shift/last-closed/", views.last_closed_shift, name="pos-shift-last-closed"),
     path("shift/open/", views.open_shift, name="pos-shift-open"),
     path("shift/close/", views.close_shift, name="pos-shift-close"),
+    path("shift/summary/", views.shift_summary, name="pos-shift-summary"),
     path("shifts/", views.list_shifts, name="pos-shifts"),
 
     # POS orders

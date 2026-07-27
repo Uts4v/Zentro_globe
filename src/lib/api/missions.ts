@@ -16,7 +16,7 @@ export const missionApi = {
     });
   },
 
-  create: async (input: Omit<Mission, "id" | "merchant_id" | "created_at">): Promise<Mission> => {
+  create: async (input: Omit<Mission, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">): Promise<Mission> => {
     return djangoFetch<Mission>(apiUrl("/loyalty/missions/create/"), {
       method: "POST",
       headers: authHeaders(true),

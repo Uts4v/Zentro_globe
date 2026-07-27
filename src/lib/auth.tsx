@@ -223,7 +223,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string,
       password: string,
       name: string,
-      meta?: { role?: Role; store_name?: string }
+      meta?: { role?: Role; store_name?: string; confirmPassword?: string }
     ): Promise<{ error: string | null }> => {
       try {
         const data = await djangoFetch<{
@@ -238,6 +238,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({
             email,
             password,
+            confirm_password: meta?.confirmPassword ?? password,
             full_name: name,
             role: meta?.role ?? "customer",
             store_name: meta?.store_name ?? "",

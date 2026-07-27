@@ -111,6 +111,21 @@ def _award_loyalty(order: Order):
     _update_mission_progress(customer, order, wallet, streak_incremented)
 
 
+def _should_restart_mission(cm):
+    """Check if a completed CustomerMission should restart based on its restart_interval."""
+    if not cm.is_completed or not cm.completed_at or not cm.mission.restart_interval:
+        return False
+    interval = cm.mission.restart_interval
+    now = timezone.now()
+    if interval == "daily":
+        return now - cm.completed_at >= timedelta(days=1)
+    elif interval == "weekly":
+        return now - cm.completed_at >= timedelta(weeks=1)
+    elif interval == "monthly":
+        return now - cm.completed_at >= timedelta(days=30)
+    return False
+
+
 def _update_mission_progress(customer, order, wallet, streak_incremented):
     from loyalty.services import award_wallet_points as award_pts
 
@@ -127,7 +142,12 @@ def _update_mission_progress(customer, order, wallet, streak_incremented):
             customer=customer, mission=mission,
         )
         if cm.is_completed:
-            continue
+            if _should_restart_mission(cm):
+                cm.current_count = 0
+                cm.is_completed = False
+                cm.completed_at = None
+            else:
+                continue
 
         if mission.mission_type == "spend_amount":
             cm.current_count += int(order.total_amount)

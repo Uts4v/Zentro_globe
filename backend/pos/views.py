@@ -15,7 +15,7 @@ from orders.models import Order, OrderItem
 from accounts.models import CustomerProfile, User
 from notifications.services import send_notification
 from notifications.models import Notification
-from orders.views import _award_loyalty
+from orders.views import _award_loyalty, _deduct_reward_redemption_points
 
 from .models import (
     PosDevice, ShiftWorker, CashShift, PosPayment,
@@ -938,7 +938,7 @@ def close_shift(request):
         total_other=Sum("amount", exclude=Q(payment_method__in=[
             PosPayment.METHOD_CASH, PosPayment.METHOD_CARD,
         ])),
-        order_count=Sum("order__id", distinct=True),
+        order_count=Count("order", distinct=True),
     )
 
     shift.total_sales = totals["total"] or 0
@@ -968,6 +968,52 @@ def close_shift(request):
            })
 
     return Response(CashShiftSerializer(shift).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def shift_summary(request):
+    """Return live payment totals for a shift (used by the close-screen)."""
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response({"error": "POS is not enabled."},
+                        status=status.HTTP_403_FORBIDDEN)
+
+    shift_id = request.query_params.get("shift_id")
+    if not shift_id:
+        return Response({"error": "shift_id query param required."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        shift = CashShift.objects.get(
+            id=shift_id, merchant=merchant,
+        )
+    except CashShift.DoesNotExist:
+        return Response({"error": "Shift not found."},
+                        status=status.HTTP_404_NOT_FOUND)
+
+    totals = PosPayment.objects.filter(
+        shift=shift, status=PosPayment.STATUS_COMPLETED,
+    ).aggregate(
+        total=Sum("amount"),
+        total_cash=Sum("amount", filter=Q(payment_method=PosPayment.METHOD_CASH)),
+        total_card=Sum("amount", filter=Q(payment_method=PosPayment.METHOD_CARD)),
+        total_other=Sum("amount", exclude=Q(payment_method__in=[
+            PosPayment.METHOD_CASH, PosPayment.METHOD_CARD,
+        ])),
+        order_count=Count("order", distinct=True),
+    )
+
+    return Response({
+        "total_sales": str(totals["total"] or 0),
+        "total_cash_sales": str(totals["total_cash"] or 0),
+        "total_card_sales": str(totals["total_card"] or 0),
+        "total_other_sales": str(totals["total_other"] or 0),
+        "total_orders": totals["order_count"] or 0,
+        "opening_cash": str(shift.opening_cash),
+        "cash_payouts": str(shift.cash_payouts),
+        "cash_payins": str(shift.cash_payins),
+    })
 
 
 @api_view(["GET"])
@@ -1161,6 +1207,7 @@ def create_pos_order(request):
         table=table_instance,
         table_name_snapshot=table_name_snap,
         table_number_snapshot=table_number_snap,
+        cash_shift=shift,
         kot_number=kot_number,
     )
 
@@ -3374,6 +3421,19 @@ def assign_customer_to_order(request):
 
     order.customer = customer
     order.save(update_fields=["customer", "points_earned", "updated_at"])
+
+    # If the order is already completed and loyalty hasn't been awarded yet,
+    # award loyalty (points, punch cards, mission progress) retroactively.
+    if (
+        order.status == Order.STATUS_COMPLETED
+        and not order.loyalty_awarded
+    ):
+        if order.order_type == Order.ORDER_TYPE_REWARD_REDEMPTION and order.reward_redemption:
+            _deduct_reward_redemption_points(order)
+        else:
+            _award_loyalty(order)
+        order.loyalty_awarded = True
+        order.save(update_fields=["loyalty_awarded", "updated_at"])
 
     return Response({
         "message": "Customer assigned to order.",

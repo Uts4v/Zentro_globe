@@ -115,6 +115,7 @@ class RegisterSerializer(serializers.Serializer):
 
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
+    confirm_password = serializers.CharField(write_only=True, min_length=8)
     full_name = serializers.CharField(max_length=255)
     role = serializers.ChoiceField(
         choices=["customer", "merchant"],
@@ -136,6 +137,10 @@ class RegisterSerializer(serializers.Serializer):
         return value
 
     def validate(self, data):
+        if data.get("password") != data.get("confirm_password"):
+            raise serializers.ValidationError(
+                {"confirm_password": "Passwords do not match."}
+            )
         if data.get("role") == "merchant" and not data.get("store_name", "").strip():
             raise serializers.ValidationError(
                 {"store_name": "Store name is required for merchant accounts."}

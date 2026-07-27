@@ -48,7 +48,7 @@ export const loyaltyApi = {
   },
 
   createReward: async (
-    input: Omit<Reward, "id" | "merchant_id" | "created_at">,
+    input: Omit<Reward, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">,
   ): Promise<Reward> => {
     return djangoFetch<Reward>(apiUrl("/loyalty/rewards/create/"), {
       method: "POST",

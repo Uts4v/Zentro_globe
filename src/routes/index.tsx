@@ -16,7 +16,7 @@ import {
   type Reward,
 } from "@/lib/api";
 import { MobileShell, TopBar } from "@/components/MobileShell";
-import { X as XIcon, QrCode, SendHorizontal, Loader2 } from "lucide-react";
+import { X as XIcon, QrCode, SendHorizontal, Loader2, Target, Check, Gift, Flame } from "lucide-react";
 import { requireAuth } from "@/lib/auth-guard";
 import { lazy, Suspense, useState, useEffect, useMemo } from "react";
 import { TodaySpecialPopup } from "@/features/merchant-management/components/TodaySpecialPopup";
@@ -390,11 +390,11 @@ function Index() {
         {selectedMerchantId && todaySpecial && (
           <section className="px-5">
             <div
-              className="group relative overflow-hidden bg-white p-5 transition-all"
+              className="group relative overflow-hidden bg-card p-5 transition-all"
               style={{
                 borderRadius: 30,
-                boxShadow: "0 16px 40px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.02)",
-                border: "1px solid #F0ECE6",
+                boxShadow: "var(--shadow-card)",
+                border: "1px solid var(--border)",
               }}
             >
               <div className="flex items-center gap-4">
@@ -405,27 +405,27 @@ function Index() {
                     className="h-20 w-20 shrink-0 rounded-2xl object-cover shadow-sm transition-transform group-hover:scale-105"
                   />
                 ) : (
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-[#FFEFEA] text-3xl">
-                    🔥
+                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-ember-soft text-3xl">
+                    <Flame className="h-8 w-8 text-ember" />
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-[#FFEFEA] px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-[#FF5238]">
-                      🔥 Today's Special
+                    <span className="rounded-full bg-ember-soft px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-ember">
+                      Today's Special
                     </span>
                   </div>
-                  <h3 className="mt-2 truncate text-[17px] font-black leading-snug text-[#18102B]">
+                  <h3 className="mt-2 truncate text-[17px] font-black leading-snug text-foreground">
                     {todaySpecial.title}
                   </h3>
                   {todaySpecial.description && (
-                    <p className="mt-0.5 line-clamp-2 text-[12px] font-medium text-[#7D7D9C]">
+                    <p className="mt-0.5 line-clamp-2 text-[12px] font-medium text-muted-foreground">
                       {todaySpecial.description}
                     </p>
                   )}
                   {(todaySpecial.linked_menu_item_name || todaySpecial.linked_reward_name) && (
-                    <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-[#F3EEFF] px-2.5 py-0.5 text-[10px] font-extrabold text-[#6E57FF]">
-                      ✨ {todaySpecial.linked_menu_item_name ?? todaySpecial.linked_reward_name}
+                    <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
+                      {todaySpecial.linked_menu_item_name ?? todaySpecial.linked_reward_name}
                     </span>
                   )}
                 </div>
@@ -437,7 +437,7 @@ function Index() {
         {/* Punch Cards (Original Interactive Stamp Punch Cards) */}
         {selectedMerchantId && allPunchCards.length > 0 && (
           <section className="px-5">
-            <p className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#7D7D9C]">
+            <p className="mb-3 text-[11px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
               Punch Cards
             </p>
             <div className="space-y-3">
@@ -457,10 +457,10 @@ function Index() {
         {selectedMerchantId && joined && (
           <section className="px-5">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#7D7D9C]">
-                🎯 Active Missions
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
+                Active Missions
               </p>
-              <Link to="/missions" className="text-[11px] font-extrabold text-[#6E57FF] hover:underline">
+              <Link to="/missions" className="text-[11px] font-extrabold text-primary hover:underline">
                 View all
               </Link>
             </div>
@@ -469,49 +469,54 @@ function Index() {
                 {missions.map((m) => (
                   <div
                     key={m.id}
-                    className="rounded-[26px] bg-white p-4.5 transition-all"
+                    className="rounded-[26px] bg-card p-4.5 transition-all"
                     style={{
-                      boxShadow: "0 12px 36px rgba(0,0,0,0.03)",
-                      border: "1px solid #F0ECE6",
+                      boxShadow: "var(--shadow-card)",
+                      border: "1px solid var(--border)",
                     }}
                   >
                     <div className="flex items-start gap-3.5">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#F3EEFF] text-xl text-[#6E57FF]">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xl text-primary">
                         {m.icon || "🎯"}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-extrabold text-[#18102B]">{m.title}</p>
+                          <p className="truncate text-sm font-extrabold text-foreground">{m.title}</p>
                           {m.is_completed ? (
-                            <span className="shrink-0 rounded-full bg-[#EBFBF3] px-2.5 py-0.5 text-[10px] font-extrabold text-[#10B981]">
+                            <span className="shrink-0 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-500">
                               Done ✓
                             </span>
                           ) : (
-                            <span className="shrink-0 rounded-full bg-[#F3EEFF] px-2.5 py-0.5 text-[10px] font-extrabold text-[#6E57FF]">
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
                               +{m.reward_points} pts
                             </span>
                           )}
                         </div>
                         {m.description && (
-                          <p className="mt-0.5 line-clamp-1 text-[11.5px] font-medium text-[#7D7D9C]">
+                          <p className="mt-0.5 line-clamp-1 text-[11.5px] font-medium text-muted-foreground">
                             {m.description}
                           </p>
                         )}
+                        {m.linked_menu_item_name && (
+                          <p className="mt-0.5 text-[11.5px] font-medium text-ember">
+                            Buy {m.linked_menu_item_name} {m.target_count}x
+                          </p>
+                        )}
                         <div className="mt-2.5">
-                          <div className="mb-1 flex items-center justify-between text-[10px] font-extrabold text-[#7D7D9C]">
+                          <div className="mb-1 flex items-center justify-between text-[10px] font-extrabold text-muted-foreground">
                             <span>
                               {m.current_count} / {m.target_count}
                             </span>
                             <span className="capitalize">{m.mission_type.replace(/_/g, " ")}</span>
                           </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-[#F4F1FF]">
+                          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                             <div
                               className="h-full rounded-full transition-all duration-500"
                               style={{
                                 width: `${Math.min(100, (m.current_count / m.target_count) * 100)}%`,
                                 background: m.is_completed
                                   ? "#10B981"
-                                  : "linear-gradient(90deg, #6E57FF 0%, #8D7CFF 100%)",
+                                  : "linear-gradient(90deg, var(--primary) 0%, var(--primary) 100%)",
                               }}
                             />
                           </div>
@@ -524,26 +529,26 @@ function Index() {
             ) : (
               /* Fallback Mission Display */
               <div
-                className="rounded-[26px] bg-white p-4.5"
-                style={{ boxShadow: "0 12px 36px rgba(0,0,0,0.03)", border: "1px solid #F0ECE6" }}
+                className="rounded-[26px] bg-card p-4.5"
+                style={{ boxShadow: "var(--shadow-card)", border: "1px solid var(--border)" }}
               >
                 <div className="flex items-center gap-3.5">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#EBFBF3] text-xl">
-                    🥤
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-xl text-emerald-500">
+                    <Target className="h-5 w-5" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
-                      <p className="text-sm font-extrabold text-[#18102B]">Order any drink</p>
-                      <span className="rounded-full bg-[#F3EEFF] px-2.5 py-0.5 text-[10px] font-extrabold text-[#6E57FF]">
+                      <p className="text-sm font-extrabold text-foreground">Order any drink</p>
+                      <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
                         +25 pts
                       </span>
                     </div>
-                    <p className="mt-0.5 text-[11.5px] font-medium text-[#7D7D9C]">
+                    <p className="mt-0.5 text-[11.5px] font-medium text-muted-foreground">
                       Order 1 drink today to claim bonus points
                     </p>
-                    <div className="mt-2.5 flex items-center justify-between text-[10px] font-extrabold text-[#7D7D9C]">
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#F4F1FF] mr-3">
-                        <div className="h-full w-1/2 rounded-full bg-[#10B981]" />
+                    <div className="mt-2.5 flex items-center justify-between text-[10px] font-extrabold text-muted-foreground">
+                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted mr-3">
+                        <div className="h-full w-1/2 rounded-full bg-emerald-500" />
                       </div>
                       <span>1 / 2</span>
                     </div>
@@ -558,10 +563,10 @@ function Index() {
         {selectedMerchantId && joined && (
           <section className="px-5">
             <div className="mb-3 flex items-center justify-between">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#7D7D9C]">
-                🎁 Available Rewards
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
+                Available Rewards
               </p>
-              <Link to="/rewards" className="text-[11px] font-extrabold text-[#6E57FF] hover:underline">
+              <Link to="/rewards" className="text-[11px] font-extrabold text-primary hover:underline">
                 Explore all
               </Link>
             </div>
@@ -570,24 +575,24 @@ function Index() {
                 {rewards.map((r) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between rounded-[26px] bg-white p-4 transition-all"
+                    className="flex items-center justify-between rounded-[26px] bg-card p-4 transition-all"
                     style={{
-                      boxShadow: "0 12px 36px rgba(0,0,0,0.03)",
-                      border: "1px solid #F0ECE6",
+                      boxShadow: "var(--shadow-card)",
+                      border: "1px solid var(--border)",
                     }}
                   >
                     <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#F3EEFF] text-2xl">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl">
                         {r.emoji || "🎁"}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-extrabold text-[#18102B]">{r.name}</p>
+                        <p className="truncate text-[14px] font-extrabold text-foreground">{r.name}</p>
                         {r.description && (
-                          <p className="mt-0.5 truncate text-[11px] font-medium text-[#7D7D9C]">
+                          <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
                             {r.description}
                           </p>
                         )}
-                        <span className="mt-1 inline-block text-[11px] font-extrabold text-[#6E57FF]">
+                        <span className="mt-1 inline-block text-[11px] font-extrabold text-primary">
                           {r.points_cost} pts
                         </span>
                       </div>
@@ -598,8 +603,8 @@ function Index() {
                       disabled={redeemingRewardId === r.id || points < r.points_cost}
                       className={`shrink-0 rounded-full px-4 py-2 text-[11px] font-extrabold transition-all active:scale-95 ${
                         points >= r.points_cost
-                          ? "bg-[#6E57FF] text-white shadow-md hover:bg-[#5E46F8]"
-                          : "bg-[#F3F4F6] text-[#A0A0B8] cursor-not-allowed"
+                          ? "bg-primary text-primary-foreground shadow-md hover:opacity-90"
+                          : "bg-muted text-muted-foreground cursor-not-allowed"
                       }`}
                     >
                       {redeemingRewardId === r.id ? "Redeeming…" : points >= r.points_cost ? "Redeem" : "Locked"}
@@ -611,26 +616,26 @@ function Index() {
               /* Fallback Reward Display */
               <div className="space-y-3">
                 <div
-                  className="flex items-center justify-between rounded-[26px] bg-white p-4"
-                  style={{ boxShadow: "0 12px 36px rgba(0,0,0,0.03)", border: "1px solid #F0ECE6" }}
+                  className="flex items-center justify-between rounded-[26px] bg-card p-4"
+                  style={{ boxShadow: "var(--shadow-card)", border: "1px solid var(--border)" }}
                 >
                   <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#F3EEFF] text-2xl">
-                      ☕
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xl text-primary">
+                      <Gift className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-extrabold text-[#18102B]">Free Special Chiya</p>
-                      <p className="mt-0.5 truncate text-[11px] font-medium text-[#7D7D9C]">
+                      <p className="truncate text-[14px] font-extrabold text-foreground">Free Special Chiya</p>
+                      <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
                         1 Free cup of signature Chiya Tea
                       </p>
-                      <span className="mt-1 inline-block text-[11px] font-extrabold text-[#6E57FF]">
+                      <span className="mt-1 inline-block text-[11px] font-extrabold text-primary">
                         100 pts
                       </span>
                     </div>
                   </div>
                   <Link
                     to="/rewards"
-                    className="shrink-0 rounded-full bg-[#6E57FF] px-4 py-2 text-[11px] font-extrabold text-white shadow-md"
+                    className="shrink-0 rounded-full bg-primary px-4 py-2 text-[11px] font-extrabold text-primary-foreground shadow-md"
                   >
                     View
                   </Link>

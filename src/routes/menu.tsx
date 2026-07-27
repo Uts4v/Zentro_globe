@@ -76,11 +76,7 @@ function MenuItemCard({
           <button
             onClick={onAdd}
             disabled={disabled}
-            className="grid h-8 w-8 place-items-center rounded-full text-white transition-all active:scale-90 disabled:opacity-40"
-            style={{
-              background: merchantColor || "var(--foreground)",
-              boxShadow: merchantColor ? `0 4px 12px ${merchantColor}40` : undefined,
-            }}
+            className="grid h-8 w-8 place-items-center rounded-full bg-foreground text-background transition-all active:scale-90 disabled:opacity-40"
             aria-label={`Add ${item.name}`}
           >
             <Plus className="h-4 w-4" strokeWidth={2.4} />

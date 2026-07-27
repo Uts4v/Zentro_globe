@@ -15,6 +15,7 @@ export const Route = createFileRoute("/auth/signup")({
 function CustomerSignup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -25,10 +26,16 @@ function CustomerSignup() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
     setBusy(true);
 
     try {
-      const { error: err } = await signUp(email, password, name, { role: "customer" });
+      const { error: err } = await signUp(email, password, name, { role: "customer", confirmPassword });
       if (err) {
         setError(err);
         return;
@@ -59,6 +66,7 @@ function CustomerSignup() {
         <Field label="Name" placeholder="Maya Rivera" icon={<User className="h-4 w-4" />} value={name} onChange={setName} />
         <Field label="Email" placeholder="you@maison.com" type="email" icon={<Mail className="h-4 w-4" />} value={email} onChange={setEmail} />
         <Field label="Password" placeholder="••••••••" type="password" icon={<Lock className="h-4 w-4" />} value={password} onChange={setPassword} />
+        <Field label="Confirm password" placeholder="••••••••" type="password" icon={<Lock className="h-4 w-4" />} value={confirmPassword} onChange={setConfirmPassword} />
 
         <button
           type="submit"

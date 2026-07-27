@@ -9,9 +9,11 @@ import { useEffect, useState, useMemo } from "react";
 import {
   Loader2, Plus, Minus, ShoppingBag, Search, X as XIcon,
   Utensils, ArrowRight, SendHorizontal, Sparkles, Star, Gift, Zap, UserPlus,
+  Sun, Moon,
 } from "lucide-react";
 import { tableApi, menuApi, type TableResolution } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { useTheme } from "@/lib/theme";
 import { useStore, cartTotal, type MenuItem } from "@/lib/store";
 
 export const Route = createFileRoute("/m/$slug/table/$token")({
@@ -87,6 +89,7 @@ function TableQRScanPage() {
   const token = params.token;
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { resolved: themeResolved, setTheme } = useTheme();
   const {
     cart, add, remove, setActiveTable, setSelectedMerchant, setGuestSession,
     activeTable, guestSession, setGuestName, placeGuestOrder,
@@ -386,19 +389,28 @@ function TableQRScanPage() {
               </span>
             </div>
           </div>
-          <button
-            onClick={() => setShowCheckout(true)}
-            disabled={cartCount === 0}
-            className="relative flex h-10 items-center gap-2 rounded-full bg-foreground px-4 text-sm font-medium text-background disabled:opacity-40"
-          >
-            <ShoppingBag className="h-4 w-4" />
-            {cartCount > 0 && (
-              <>
-                <span>{cartCount}</span>
-                <span className="text-xs opacity-70">· NPR {total.toFixed(0)}</span>
-              </>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTheme(themeResolved === "dark" ? "light" : "dark")}
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 text-foreground transition-colors hover:bg-muted"
+              aria-label="Toggle theme"
+            >
+              {themeResolved === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+            <button
+              onClick={() => setShowCheckout(true)}
+              disabled={cartCount === 0}
+              className="relative flex h-10 items-center gap-2 rounded-full bg-foreground px-4 text-sm font-medium text-background disabled:opacity-40"
+            >
+              <ShoppingBag className="h-4 w-4" />
+              {cartCount > 0 && (
+                <>
+                  <span>{cartCount}</span>
+                  <span className="text-xs opacity-70">· NPR {total.toFixed(0)}</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Search */}

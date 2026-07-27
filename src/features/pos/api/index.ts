@@ -7,10 +7,9 @@ const headers = () => ({
 
 // ── Health ────────────────────────────────────────────────────────────────────
 export const posHealth = () =>
-  djangoFetch<{ status: string; server_time: string }>(
-    apiUrl("/pos/health/"),
-    { headers: headers() }
-  );
+  djangoFetch<{ status: string; server_time: string }>(apiUrl("/pos/health/"), {
+    headers: headers(),
+  });
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export const posLogin = (email: string, password: string) =>
@@ -39,21 +38,18 @@ export const posAuthorizeDevice = (
   name: string,
   platform?: string,
   userAgent?: string,
-  existingToken?: string
+  existingToken?: string,
 ) =>
-  djangoFetch<{ device: PosDevice; device_token: string }>(
-    apiUrl("/pos/auth/device/authorize/"),
-    {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({
-        name,
-        platform: platform || "",
-        user_agent: userAgent || "",
-        device_token: existingToken || "",
-      }),
-    }
-  );
+  djangoFetch<{ device: PosDevice; device_token: string }>(apiUrl("/pos/auth/device/authorize/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      name,
+      platform: platform || "",
+      user_agent: userAgent || "",
+      device_token: existingToken || "",
+    }),
+  });
 
 export const posBootstrap = (deviceId: string) =>
   djangoFetch<PosBootstrapResponse>(apiUrl("/pos/auth/bootstrap/"), {
@@ -111,7 +107,7 @@ export const posUpdateWorker = (
     can_process_refund: boolean;
     can_close_shift: boolean;
     can_view_reports: boolean;
-  }>
+  }>,
 ) =>
   djangoFetch<ShiftWorker>(apiUrl(`/pos/workers/${workerId}/update/`), {
     method: "PATCH",
@@ -122,18 +118,15 @@ export const posUpdateWorker = (
 export const posWorkerLogin = (workerId: string, pin: string) => {
   const deviceId = localStorage.getItem("pos_device_id") || "";
   const deviceToken = localStorage.getItem("pos_device_token") || "";
-  return djangoFetch<{ worker: ShiftWorker; message: string }>(
-    apiUrl("/pos/worker/login/"),
-    {
-      method: "POST",
-      headers: {
-        "X-Pos-Device-Id": deviceId,
-        "X-Pos-Device-Token": deviceToken,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ worker_id: workerId, pin }),
-    }
-  );
+  return djangoFetch<{ worker: ShiftWorker; message: string }>(apiUrl("/pos/worker/login/"), {
+    method: "POST",
+    headers: {
+      "X-Pos-Device-Id": deviceId,
+      "X-Pos-Device-Token": deviceToken,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ worker_id: workerId, pin }),
+  });
 };
 
 export const posWorkerLogout = (workerId: string) => {
@@ -152,22 +145,17 @@ export const posWorkerLogout = (workerId: string) => {
 
 // ── Shifts ────────────────────────────────────────────────────────────────────
 export const posGetActiveShift = (deviceId: string) =>
-  djangoFetch<{ shift: CashShift | null }>(
-    apiUrl(`/pos/shift/active/?device_id=${deviceId}`),
-    { headers: headers() }
-  );
+  djangoFetch<{ shift: CashShift | null }>(apiUrl(`/pos/shift/active/?device_id=${deviceId}`), {
+    headers: headers(),
+  });
 
 export const posGetLastClosedShift = (deviceId: string) =>
   djangoFetch<{ shift: CashShift | null }>(
     apiUrl(`/pos/shift/last-closed/?device_id=${deviceId}`),
-    { headers: headers() }
+    { headers: headers() },
   );
 
-export const posOpenShift = (
-  deviceId: string,
-  workerId: string,
-  openingCash: number
-) =>
+export const posOpenShift = (deviceId: string, workerId: string, openingCash: number) =>
   djangoFetch<CashShift>(apiUrl("/pos/shift/open/"), {
     method: "POST",
     headers: headers(),
@@ -178,11 +166,7 @@ export const posOpenShift = (
     }),
   });
 
-export const posCloseShift = (
-  shiftId: string,
-  workerId: string,
-  closingCash: number
-) =>
+export const posCloseShift = (shiftId: string, workerId: string, closingCash: number) =>
   djangoFetch<CashShift>(apiUrl("/pos/shift/close/"), {
     method: "POST",
     headers: headers(),
@@ -191,6 +175,22 @@ export const posCloseShift = (
       worker_id: workerId,
       closing_cash: closingCash,
     }),
+  });
+
+export interface ShiftSummary {
+  total_sales: string;
+  total_cash_sales: string;
+  total_card_sales: string;
+  total_other_sales: string;
+  total_orders: number;
+  opening_cash: string;
+  cash_payouts: string;
+  cash_payins: string;
+}
+
+export const posShiftSummary = (shiftId: string) =>
+  djangoFetch<ShiftSummary>(apiUrl(`/pos/shift/summary/?shift_id=${shiftId}`), {
+    headers: headers(),
   });
 
 // ── Orders ────────────────────────────────────────────────────────────────────
@@ -202,16 +202,15 @@ export const posCreateOrder = (data: PosCreateOrderPayload) =>
   });
 
 export const posListOrders = (shiftId?: string) =>
-  djangoFetch<PosOrder[]>(
-    apiUrl(`/pos/orders/${shiftId ? `?shift_id=${shiftId}` : ""}`),
-    { headers: headers() }
-  );
+  djangoFetch<PosOrder[]>(apiUrl(`/pos/orders/${shiftId ? `?shift_id=${shiftId}` : ""}`), {
+    headers: headers(),
+  });
 
 export const posUpdateOrderStatus = (
   orderId: string,
   status: string,
   workerId?: string,
-  deviceId?: string
+  deviceId?: string,
 ) =>
   djangoFetch<PosOrder>(apiUrl("/pos/order/status/"), {
     method: "POST",
@@ -225,14 +224,11 @@ export const posUpdateOrderStatus = (
   });
 
 export const posAssignCustomerToOrder = (orderId: string, customerId: string) =>
-  djangoFetch<{ message: string; points_earned: number }>(
-    apiUrl("/pos/order/assign-customer/"),
-    {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({ order_id: orderId, customer_id: customerId }),
-    }
-  );
+  djangoFetch<{ message: string; points_earned: number }>(apiUrl("/pos/order/assign-customer/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ order_id: orderId, customer_id: customerId }),
+  });
 
 // ── Payments ──────────────────────────────────────────────────────────────────
 export const posCreatePayment = (data: PosCreatePaymentPayload) =>
@@ -327,10 +323,9 @@ export const posZReport = (params?: { shift_id?: string; date?: string }) => {
   if (params?.shift_id) qs.set("shift_id", params.shift_id);
   if (params?.date) qs.set("date", params.date);
   const query = qs.toString();
-  return djangoFetch<PosZReportData>(
-    apiUrl(`/pos/z-report/${query ? `?${query}` : ""}`),
-    { headers: headers() }
-  );
+  return djangoFetch<PosZReportData>(apiUrl(`/pos/z-report/${query ? `?${query}` : ""}`), {
+    headers: headers(),
+  });
 };
 
 // ── Credit Accounts ─────────────────────────────────────────────────────────
@@ -368,7 +363,7 @@ export const posStaffDailyReport = (params?: { date?: string; worker_id?: string
   const query = qs.toString();
   return djangoFetch<PosStaffDailyReportData>(
     apiUrl(`/pos/staff-report/${query ? `?${query}` : ""}`),
-    { headers: headers() }
+    { headers: headers() },
   );
 };
 
@@ -990,33 +985,39 @@ export interface PosResolveConflictPayload {
 export const posTableMenu = (token: string) =>
   djangoFetch<PosTableMenu>(apiUrl(`/pos/table/${token}/menu/`), {});
 
-export const posTableOrder = (token: string, data: {
-  items: Array<{ menu_item_id: number; quantity: number }>;
-  notes?: string;
-  customer_name?: string;
-}) =>
+export const posTableOrder = (
+  token: string,
+  data: {
+    items: Array<{ menu_item_id: number; quantity: number }>;
+    notes?: string;
+    customer_name?: string;
+  },
+) =>
   djangoFetch<{ message: string; order_id: number; table: string; total: string }>(
     apiUrl(`/pos/table/${token}/order/`),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
-    }
+    },
   );
 
 export interface PosTableMenu {
   table: { id: number; name: string; table_number: number };
   merchant: { name: string; logo_url: string };
-  categories: Record<string, Array<{
-    id: number;
-    name: string;
-    description: string;
-    price: string;
-    image_url: string;
-    category: string;
-    emoji: string;
-    is_featured: boolean;
-  }>>;
+  categories: Record<
+    string,
+    Array<{
+      id: number;
+      name: string;
+      description: string;
+      price: string;
+      image_url: string;
+      category: string;
+      emoji: string;
+      is_featured: boolean;
+    }>
+  >;
 }
 
 // ── Notifications (Phase 31) ──────────────────────────────────────────────
@@ -1044,10 +1045,9 @@ export interface PosNotification {
 // ── Staff Scheduling (Phase 31+) ──────────────────────────────────────────
 
 export const posListSchedules = (week?: string) =>
-  djangoFetch<PosStaffSchedule[]>(
-    apiUrl(`/pos/schedules/${week ? `?week=${week}` : ""}`),
-    { headers: headers() }
-  );
+  djangoFetch<PosStaffSchedule[]>(apiUrl(`/pos/schedules/${week ? `?week=${week}` : ""}`), {
+    headers: headers(),
+  });
 
 export const posCreateSchedule = (data: PosCreateSchedulePayload) =>
   djangoFetch<PosStaffSchedule>(apiUrl("/pos/schedules/create/"), {
@@ -1074,7 +1074,7 @@ export const posCreateCashMovement = (data: PosCashMovementPayload) =>
 export const posListCashMovements = (shiftId?: string) =>
   djangoFetch<PosCashMovement[]>(
     apiUrl(`/pos/cash/movements/${shiftId ? `?shift_id=${shiftId}` : ""}`),
-    { headers: headers() }
+    { headers: headers() },
   );
 
 export interface PosStaffSchedule {

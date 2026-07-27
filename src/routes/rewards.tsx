@@ -98,6 +98,9 @@ function Rewards() {
               </div>
               <h3 className="mt-3 text-sm font-semibold text-foreground">{r.name}</h3>
               <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>
+              {r.linked_menu_item_name && (
+                <p className="mt-1 text-xs font-medium text-ember">{r.linked_menu_item_name}</p>
+              )}
               <div className="mt-3 flex items-center justify-between">
                 <span className="font-display text-xl text-foreground">{r.points_cost} pts</span>
                 <button

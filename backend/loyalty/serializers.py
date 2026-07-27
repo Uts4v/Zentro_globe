@@ -3,6 +3,7 @@ loyalty/serializers.py
 """
 
 from rest_framework import serializers
+from merchants.models import MenuItem
 from .models import (
     LoyaltyRules,
     Mission,
@@ -105,6 +106,14 @@ class MissionSerializer(serializers.ModelSerializer):
         read_only=True,
         default="",
     )
+    linked_menu_item_name = serializers.CharField(
+        source="linked_menu_item.name", read_only=True, default=None,
+    )
+    linked_menu_item = serializers.PrimaryKeyRelatedField(
+        queryset=MenuItem.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Mission
@@ -119,11 +128,14 @@ class MissionSerializer(serializers.ModelSerializer):
             "required_merchant",
             "required_merchant_name",
             "is_active",
+            "restart_interval",
+            "linked_menu_item",
+            "linked_menu_item_name",
             "starts_at",
             "ends_at",
             "created_at",
         ]
-        read_only_fields = ["id", "required_merchant", "required_merchant_name", "created_at"]
+        read_only_fields = ["id", "required_merchant", "required_merchant_name", "linked_menu_item_name", "created_at"]
 class TodaySpecialSerializer(serializers.ModelSerializer):
     linked_menu_item_name = serializers.CharField(
         source="linked_menu_item.name", read_only=True, default=None
@@ -181,6 +193,14 @@ class MissionViewSerializer(serializers.Serializer):
 
 class RewardSerializer(serializers.ModelSerializer):
     merchant_name = serializers.CharField(source="merchant.business_name", read_only=True)
+    linked_menu_item_name = serializers.CharField(
+        source="linked_menu_item.name", read_only=True, default=None,
+    )
+    linked_menu_item = serializers.PrimaryKeyRelatedField(
+        queryset=MenuItem.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = Reward
@@ -195,9 +215,11 @@ class RewardSerializer(serializers.ModelSerializer):
             "image_url",
             "is_active",
             "stock",
+            "linked_menu_item",
+            "linked_menu_item_name",
             "created_at",
         ]
-        read_only_fields = ["id", "merchant", "merchant_name", "created_at"]
+        read_only_fields = ["id", "merchant", "merchant_name", "linked_menu_item_name", "created_at"]
 
 
 class RedemptionSerializer(serializers.ModelSerializer):

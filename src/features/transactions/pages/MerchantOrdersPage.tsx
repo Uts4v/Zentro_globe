@@ -1,8 +1,20 @@
 // transactions/pages/merchant.orders.tsx
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Check, RefreshCw, Loader2, Clock, Bell, X, Utensils, ShoppingBag, Truck, Filter } from "lucide-react";
+import {
+  Check,
+  RefreshCw,
+  Loader2,
+  Clock,
+  Bell,
+  X,
+  Utensils,
+  ShoppingBag,
+  Truck,
+  Filter,
+} from "lucide-react";
 import { orderApi, type Order, type OrderStatus, type FulfillmentType } from "@/lib/api";
 import { toast } from "sonner";
+import { playOrderChime } from "@/lib/audio";
 
 const NEXT_STATUS: Record<OrderStatus, OrderStatus | null> = {
   pending: "confirmed",
@@ -55,24 +67,6 @@ export function MerchantOrdersPage() {
   const [cancelling, setCancelling] = useState<string | null>(null);
   const [fulfillmentFilter, setFulfillmentFilter] = useState<FulfillmentType | "all">("all");
 
-  function playNotification() {
-    try {
-      const ctx = new AudioContext();
-      const oscillator = ctx.createOscillator();
-      const gain = ctx.createGain();
-      oscillator.connect(gain);
-      gain.connect(ctx.destination);
-      oscillator.frequency.setValueAtTime(880, ctx.currentTime);
-      oscillator.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.4);
-    } catch {
-      // Audio not available — ignore
-    }
-  }
-
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -107,9 +101,13 @@ export function MerchantOrdersPage() {
             newOnes.forEach((o) => {
               knownOrderIds.current.add(o.id);
               setNewOrderIds((s) => new Set([...s, o.id]));
-              playNotification();
+              playOrderChime();
               setTimeout(() => {
-                setNewOrderIds((s) => { const n = new Set(s); n.delete(o.id); return n; });
+                setNewOrderIds((s) => {
+                  const n = new Set(s);
+                  n.delete(o.id);
+                  return n;
+                });
               }, 5000);
             });
           }
@@ -153,15 +151,14 @@ export function MerchantOrdersPage() {
 
   const todayOrders = orders.filter((o) => isToday(o.created_at));
 
-  const filteredOrders = fulfillmentFilter === "all"
-    ? todayOrders
-    : todayOrders.filter((o) => o.fulfillment_type === fulfillmentFilter);
+  const filteredOrders =
+    fulfillmentFilter === "all"
+      ? todayOrders
+      : todayOrders.filter((o) => o.fulfillment_type === fulfillmentFilter);
 
   const grouped = {
     incoming: filteredOrders.filter((o) => o.status === "pending"),
-    active: filteredOrders.filter((o) =>
-      ["confirmed", "preparing", "ready"].includes(o.status)
-    ),
+    active: filteredOrders.filter((o) => ["confirmed", "preparing", "ready"].includes(o.status)),
     done: filteredOrders.filter((o) => ["completed", "cancelled"].includes(o.status)),
   };
 
@@ -177,9 +174,7 @@ export function MerchantOrdersPage() {
     <div className="space-y-8">
       <div className="flex items-end justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            Live queue
-          </p>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Live queue</p>
           <h1 className="font-display mt-1 text-5xl text-foreground">Today's Orders</h1>
         </div>
         <div className="flex items-center gap-2">
@@ -207,12 +202,14 @@ export function MerchantOrdersPage() {
       {/* Fulfillment type filters */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <Filter className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        {([
-          { key: "all", label: "All", icon: null },
-          { key: "dine_in", label: "Dine-in", icon: Utensils },
-          { key: "pickup", label: "Pickup", icon: ShoppingBag },
-          { key: "delivery", label: "Delivery", icon: Truck },
-        ] as const).map((f) => (
+        {(
+          [
+            { key: "all", label: "All", icon: null },
+            { key: "dine_in", label: "Dine-in", icon: Utensils },
+            { key: "pickup", label: "Pickup", icon: ShoppingBag },
+            { key: "delivery", label: "Delivery", icon: Truck },
+          ] as const
+        ).map((f) => (
           <button
             key={f.key}
             onClick={() => setFulfillmentFilter(f.key)}
@@ -278,16 +275,25 @@ export function MerchantOrdersPage() {
 }
 
 function Column({
-  title, count, accent, children,
+  title,
+  count,
+  accent,
+  children,
 }: {
-  title: string; count: number; accent?: boolean; children: React.ReactNode;
+  title: string;
+  count: number;
+  accent?: boolean;
+  children: React.ReactNode;
 }) {
   return (
     <section>
       <div className="mb-3 flex items-center gap-3">
         <h2 className="font-display text-2xl text-foreground">{title}</h2>
-        <span className={`grid h-6 min-w-6 place-items-center rounded-full px-2 text-[11px] font-medium ${accent ? "gradient-ember text-white" : "bg-mist text-foreground"
-          }`}>
+        <span
+          className={`grid h-6 min-w-6 place-items-center rounded-full px-2 text-[11px] font-medium ${
+            accent ? "gradient-ember text-white" : "bg-mist text-foreground"
+          }`}
+        >
           {count}
         </span>
       </div>
@@ -305,7 +311,10 @@ function Empty({ text }: { text: string }) {
 }
 
 function CancelOrderModal({
-  order, onConfirm, onClose, loading,
+  order,
+  onConfirm,
+  onClose,
+  loading,
 }: {
   order: Order;
   onConfirm: (reason: string) => void;
@@ -323,10 +332,10 @@ function CancelOrderModal({
         className="w-full max-w-md space-y-4 rounded-t-3xl bg-background p-6 shadow-2xl sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="font-display text-xl text-foreground">Cancel order #{String(order.id).slice(0, 8)}?</h3>
-        <p className="text-sm text-muted-foreground">
-          Customer will be notified immediately.
-        </p>
+        <h3 className="font-display text-xl text-foreground">
+          Cancel order #{String(order.id).slice(0, 8)}?
+        </h3>
+        <p className="text-sm text-muted-foreground">Customer will be notified immediately.</p>
 
         <div>
           <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -365,7 +374,12 @@ function CancelOrderModal({
 }
 
 function OrderCard({
-  order, onAdvance, onCancel, advancing, cancelling, isNew,
+  order,
+  onAdvance,
+  onCancel,
+  advancing,
+  cancelling,
+  isNew,
 }: {
   order: Order;
   onAdvance?: () => void;
@@ -376,9 +390,12 @@ function OrderCard({
 }) {
   const next = NEXT_STATUS[order.status];
   const mins = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60_000);
-  const isGuest = !!(order as any).guest_session_id || !(order as any).customer_id || (order as any).customer_id === "";
+  const isGuest =
+    !!(order as any).guest_session_id ||
+    !(order as any).customer_id ||
+    (order as any).customer_id === "";
   const customerName = isGuest
-    ? ((order as any).guest_name_snapshot || "Guest")
+    ? (order as any).guest_name_snapshot || "Guest"
     : (order.profiles?.full_name ?? "Customer");
   const isPunchCard = (order as any).order_type === "punch_card_redemption";
   const isReward = (order as any).order_type === "reward_redemption";
@@ -391,13 +408,15 @@ function OrderCard({
   const fulfillmentBadge = isDineIn
     ? { label: "Dine-in", icon: "🍽️", color: "bg-blue-100 text-blue-700" }
     : isDelivery
-    ? { label: "Delivery", icon: "🚗", color: "bg-orange-100 text-orange-700" }
-    : { label: "Pickup", icon: "🛍️", color: "bg-green-100 text-green-700" };
+      ? { label: "Delivery", icon: "🚗", color: "bg-orange-100 text-orange-700" }
+      : { label: "Pickup", icon: "🛍️", color: "bg-green-100 text-green-700" };
 
   return (
-    <article className={`glass-strong rounded-3xl p-5 transition-all ${
-      isNew ? "ring-2 ring-ember shadow-ember animate-pulse" : ""
-    } ${isPunchCard ? "ring-2 ring-violet-300" : ""}`}>
+    <article
+      className={`glass-strong rounded-3xl p-5 transition-all ${
+        isNew ? "ring-2 ring-ember shadow-ember animate-pulse" : ""
+      } ${isPunchCard ? "ring-2 ring-violet-300" : ""}`}
+    >
       <div className="flex items-start justify-between">
         <div>
           {isNew && (
@@ -420,12 +439,8 @@ function OrderCard({
           {isDineIn && tableName && (
             <div className="mb-2 inline-flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-100 px-3 py-1.5">
               <Utensils className="h-4 w-4 text-blue-600" />
-              <span className="font-display text-sm font-bold text-blue-800">
-                {tableName}
-              </span>
-              {tableNum && (
-                <span className="text-xs text-blue-500">#{tableNum}</span>
-              )}
+              <span className="font-display text-sm font-bold text-blue-800">{tableName}</span>
+              {tableNum && <span className="text-xs text-blue-500">#{tableNum}</span>}
             </div>
           )}
 
@@ -438,7 +453,9 @@ function OrderCard({
                 KOT #{String((order as any).kot_number).padStart(3, "0")}
               </span>
             )}
-            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${fulfillmentBadge.color}`}>
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${fulfillmentBadge.color}`}
+            >
               {fulfillmentBadge.icon} {fulfillmentBadge.label}
             </span>
           </div>
@@ -454,7 +471,9 @@ function OrderCard({
             </div>
           )}
         </div>
-        <span className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-widest font-medium ${STATUS_COLOR[order.status]}`}>
+        <span
+          className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-widest font-medium ${STATUS_COLOR[order.status]}`}
+        >
           {order.status}
         </span>
       </div>
@@ -462,11 +481,11 @@ function OrderCard({
       <ul className="mt-4 space-y-1.5">
         {(order.order_items ?? []).map((item) => (
           <li key={item.id} className="flex items-center justify-between text-sm">
-            <span className="text-foreground">{item.quantity}× {item.name}</span>
+            <span className="text-foreground">
+              {item.quantity}× {item.name}
+            </span>
             <span className="text-muted-foreground">
-              {Number(item.subtotal) > 0
-                ? `NPR ${Number(item.subtotal).toLocaleString()}`
-                : "FREE"}
+              {Number(item.subtotal) > 0 ? `NPR ${Number(item.subtotal).toLocaleString()}` : "FREE"}
             </span>
           </li>
         ))}
@@ -497,7 +516,11 @@ function OrderCard({
             disabled={advancing}
             className="inline-flex flex-1 h-11 items-center justify-center gap-2 rounded-2xl bg-ink text-sm font-medium text-primary-foreground disabled:opacity-50"
           >
-            {advancing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {advancing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
             {ADVANCE_LABEL[order.status]}
           </button>
         )}

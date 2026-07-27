@@ -36,7 +36,7 @@ function IgStyleNav({ path }: { path: string }) {
       aria-label="Primary"
     >
       <div className="mx-3 mb-[max(10px,env(safe-area-inset-bottom))]">
-        <div className="relative flex h-16 items-center justify-between rounded-[32px] bg-white px-2 shadow-[0_16px_40px_rgba(110,87,255,0.15),0_4px_12px_rgba(0,0,0,0.04)] border border-white/80">
+        <div className="relative flex h-16 items-center justify-between rounded-[32px] bg-card px-2 shadow-elevated border border-border">
           {nav.map((item) => {
             const active = item.to === "/" ? path === item.to : path.startsWith(item.to);
             const Icon = item.icon;
@@ -49,10 +49,10 @@ function IgStyleNav({ path }: { path: string }) {
                   aria-label={item.label}
                   className="relative -mt-6 flex flex-col items-center"
                 >
-                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-[#5E46F8] to-[#8D7CFF] text-white shadow-[0_10px_25px_rgba(94,70,248,0.4)] transition-transform active:scale-90">
+                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black text-white shadow-[0_10px_25px_rgba(0,0,0,0.3)] transition-transform active:scale-90">
                     <Icon size={24} strokeWidth={2.2} />
                   </span>
-                  <span className="mt-0.5 text-[9px] font-bold text-[#6E57FF]">{item.label}</span>
+                  <span className="mt-0.5 text-[9px] font-bold text-foreground">{item.label}</span>
                 </Link>
               );
             }
@@ -67,17 +67,17 @@ function IgStyleNav({ path }: { path: string }) {
                 <Icon
                   size={20}
                   strokeWidth={active ? 2.2 : 1.6}
-                  className={active ? "text-[#6E57FF]" : "text-[#9494B0]"}
+                  className={active ? "text-foreground" : "text-muted-foreground"}
                 />
                 <span
                   className={`mt-0.5 text-[9px] font-bold transition-colors ${
-                    active ? "text-[#6E57FF]" : "text-[#9494B0]"
+                    active ? "text-foreground" : "text-muted-foreground"
                   }`}
                 >
                   {item.label}
                 </span>
                 {active && (
-                  <span className="mt-0.5 h-1 w-1 rounded-full bg-[#6E57FF]" />
+                  <span className="mt-0.5 h-1 w-1 rounded-full bg-foreground" />
                 )}
               </Link>
             );
@@ -100,7 +100,7 @@ export function MobileShell({ children, homeMode = false }: { children: ReactNod
   }
 
   return (
-    <div className="relative mx-auto flex min-h-dvh max-w-[460px] flex-col overflow-x-hidden bg-[#FAF8F4] pb-28">
+    <div className="relative mx-auto flex min-h-dvh max-w-[460px] flex-col overflow-x-hidden bg-background pb-28">
       <div className="relative z-10 flex min-h-dvh flex-col">
         {children}
       </div>
@@ -183,24 +183,18 @@ export function TopBar({ title, right, homeMode = false }: { title?: string; rig
         <div className="min-w-0 flex-1">
           <Link
             to="/"
-            className="inline-flex items-center text-[18px] font-extrabold tracking-[-0.03em] text-[#1B1B3A]"
+            className="inline-flex items-center text-[18px] font-extrabold tracking-[-0.03em] text-foreground"
           >
-            zentro<span className="text-[#6E57FF]">.</span>
+            zentro<span className="text-primary">.</span>
           </Link>
           {title ? (
-            <h1 className="mt-3 text-[28px] font-semibold text-[#1B1B3A]">{title}</h1>
+            <h1 className="mt-3 text-[28px] font-semibold text-foreground">{title}</h1>
           ) : (
             <div className="mt-2">
-              <p
-                className="text-[15px] font-medium"
-                style={{ color: "#7D7D9C" }}
-              >
+              <p className="text-[15px] font-medium text-muted-foreground">
                 {getGreeting()},
               </p>
-              <h1
-                className="mt-0.5 text-[36px] font-extrabold leading-tight tracking-[-0.04em]"
-                style={{ color: "#1B1B3A" }}
-              >
+              <h1 className="mt-0.5 text-[36px] font-extrabold leading-tight tracking-[-0.04em] text-foreground">
                 {firstName || "Welcome"}{" "}
                 <span className="relative inline-block" aria-hidden>
                   👋
@@ -220,19 +214,19 @@ export function TopBar({ title, right, homeMode = false }: { title?: string; rig
           <button
             type="button"
             onClick={cycleTheme}
-            className="grid h-11 w-11 place-items-center rounded-full bg-white text-[#1B1B3A] transition-transform active:scale-95"
-            style={{ boxShadow: "0 4px 16px rgba(0,0,0,.06)" }}
+            className="grid h-11 w-11 place-items-center rounded-full bg-card text-foreground transition-transform active:scale-95"
+            style={{ boxShadow: "var(--shadow-card)" }}
           >
             {resolved === "dark" ? <Moon size={18} /> : <Sun size={18} />}
           </button>
           <Link
             to={"/notifications" as any}
-            className="relative grid h-12 w-12 place-items-center rounded-full bg-white transition-transform active:scale-95"
-            style={{ boxShadow: "0 12px 40px rgba(0,0,0,.08)" }}
+            className="relative grid h-12 w-12 place-items-center rounded-full bg-card transition-transform active:scale-95"
+            style={{ boxShadow: "var(--shadow-card)" }}
           >
-            <Bell size={20} className="text-[#1B1B3A]" />
+            <Bell size={20} className="text-foreground" />
             {unreadCount > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-[#6E57FF] px-1 text-[10px] font-bold text-white">
+              <span className="absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
                 {unreadCount > 9 ? "9+" : unreadCount}
               </span>
             )}
@@ -241,7 +235,7 @@ export function TopBar({ title, right, homeMode = false }: { title?: string; rig
             to={"/profile" as any}
             className="grid h-12 w-12 place-items-center overflow-hidden rounded-full transition-transform active:scale-95"
             style={{
-              boxShadow: "0 4px 16px rgba(0,0,0,.06)",
+              boxShadow: "var(--shadow-card)",
               background: "linear-gradient(135deg, #E8E0FF, #D6CCFF)",
               padding: "2px",
             }}

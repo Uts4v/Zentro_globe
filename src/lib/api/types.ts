@@ -5,7 +5,7 @@ export interface TodaySpecial {
   title: string;
   description: string;
   image_url: string;
-  linked_menu_item: string | null;
+  linked_menu_item: number | null;
   linked_menu_item_name: string | null;
   linked_reward: string | null;
   linked_reward_name: string | null;
@@ -307,6 +307,9 @@ export interface Mission {
     | "referral"
     | "special";
   is_active: boolean;
+  restart_interval: "never" | "daily" | "weekly" | "monthly";
+  linked_menu_item: number | null;
+  linked_menu_item_name: string | null;
   created_at: string;
 }
 
@@ -320,6 +323,7 @@ export interface MissionView {
   reward_points: number;
   is_completed: boolean;
   mission_type: string;
+  linked_menu_item_name: string | null;
 }
 
 export interface Reward {
@@ -331,6 +335,8 @@ export interface Reward {
   points_cost: number;
   stock: number;
   is_active: boolean;
+  linked_menu_item: number | null;
+  linked_menu_item_name: string | null;
   created_at: string;
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { usePosStore } from "../store";
 import {
   posListOrders,
@@ -9,8 +9,19 @@ import {
   PosCustomer,
 } from "../api";
 import {
-  Bell, Check, X, Clock, Loader2, ShoppingBag, ChevronRight, RefreshCw, UserPlus, Search, Utensils,
+  Bell,
+  Check,
+  X,
+  Clock,
+  Loader2,
+  ShoppingBag,
+  ChevronRight,
+  RefreshCw,
+  UserPlus,
+  Search,
+  Utensils,
 } from "lucide-react";
+import { playOrderChime } from "@/lib/audio";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -33,6 +44,7 @@ export default function IncomingOrdersPanel() {
   const currentWorker = usePosStore((s) => s.currentWorker);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const knownOrderIds = useRef<Set<number>>(new Set());
 
   // Customer linking state
   const [linkingOrderId, setLinkingOrderId] = useState<number | null>(null);
@@ -46,9 +58,22 @@ export default function IncomingOrdersPanel() {
     try {
       const data = await posListOrders();
       const incoming = data.filter(
-        (o) => ["customer_app", "table_qr"].includes(o.source) &&
-               ["pending", "confirmed"].includes(o.status)
+        (o) =>
+          ["customer_app", "table_qr"].includes(o.source) &&
+          ["pending", "confirmed"].includes(o.status),
       );
+
+      // Play chime for new incoming orders
+      if (knownOrderIds.current.size > 0) {
+        const newOrders = incoming.filter((o) => !knownOrderIds.current.has(o.id));
+        if (newOrders.length > 0) {
+          playOrderChime();
+        }
+      }
+
+      // Update known IDs
+      incoming.forEach((o) => knownOrderIds.current.add(o.id));
+
       setIncomingOrders(incoming);
     } catch {
       // silent
@@ -137,9 +162,7 @@ export default function IncomingOrdersPanel() {
               {incomingOrders.length}
             </span>
           </div>
-          <h3 className="text-sm font-bold text-foreground">
-            Incoming Orders
-          </h3>
+          <h3 className="text-sm font-bold text-foreground">Incoming Orders</h3>
         </div>
         <button
           onClick={fetchOrders}
@@ -154,9 +177,7 @@ export default function IncomingOrdersPanel() {
       <div className="space-y-2 max-h-96 overflow-y-auto">
         {incomingOrders.map((order) => {
           const isExpanded = expandedId === order.id;
-          const createdAgo = order.created_at
-            ? formatTimeAgo(order.created_at)
-            : "";
+          const createdAgo = order.created_at ? formatTimeAgo(order.created_at) : "";
           const hasCustomer = !!order.customer;
           const isLinking = linkingOrderId === order.id;
 
@@ -169,10 +190,10 @@ export default function IncomingOrdersPanel() {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-foreground">
-                      #{order.id}
-                    </span>
-                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700"}`}>
+                    <span className="text-sm font-bold text-foreground">#{order.id}</span>
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700"}`}
+                    >
                       {order.status}
                     </span>
                     <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-bold text-ink">
@@ -215,7 +236,10 @@ export default function IncomingOrdersPanel() {
               <div className="mt-2 text-xs text-muted-foreground">
                 {order.items.length} item{order.items.length !== 1 ? "s" : ""}
                 {" · "}
-                {order.items.slice(0, 3).map((item) => item.name).join(", ")}
+                {order.items
+                  .slice(0, 3)
+                  .map((item) => item.name)
+                  .join(", ")}
                 {order.items.length > 3 && ` +${order.items.length - 3} more`}
               </div>
 
@@ -225,7 +249,9 @@ export default function IncomingOrdersPanel() {
                 className="mt-2 flex items-center gap-1 text-[11px] font-medium text-ink hover:underline"
               >
                 {isExpanded ? "Less" : "Details"}
-                <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`} />
+                <ChevronRight
+                  className={`h-3 w-3 transition-transform ${isExpanded ? "rotate-90" : ""}`}
+                />
               </button>
 
               {/* Expanded details */}
@@ -292,10 +318,16 @@ export default function IncomingOrdersPanel() {
                     </div>
                   )}
                   {custSearch.length >= 2 && custResults.length === 0 && !custSearching && (
-                    <p className="text-[10px] text-muted-foreground text-center">No customers found</p>
+                    <p className="text-[10px] text-muted-foreground text-center">
+                      No customers found
+                    </p>
                   )}
                   <button
-                    onClick={() => { setLinkingOrderId(null); setCustSearch(""); setCustResults([]); }}
+                    onClick={() => {
+                      setLinkingOrderId(null);
+                      setCustSearch("");
+                      setCustResults([]);
+                    }}
                     className="w-full text-[10px] text-muted-foreground hover:underline"
                   >
                     Cancel
