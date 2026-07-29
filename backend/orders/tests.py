@@ -98,13 +98,14 @@ class OrderMissionTrackingTests(TestCase):
 
         self.client.force_authenticate(user=self.merchant_user)
 
-        complete_response = self.client.patch(
-            f"/api/orders/{order_id}/update-status/",
-            {"status": "completed"},
-            format="json",
-        )
-
-        self.assertEqual(complete_response.status_code, 200)
+        for status in ("confirmed", "preparing", "ready", "completed"):
+            resp = self.client.patch(
+                f"/api/orders/{order_id}/update-status/",
+                {"status": status},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 200,
+                             f"Transition to {status} failed: {getattr(resp, 'data', resp.content)}")
 
         order_count_progress = CustomerMission.objects.get(customer=self.customer_profile, mission=self.order_count_mission)
         self.assertEqual(order_count_progress.current_count, 1)

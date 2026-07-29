@@ -5,6 +5,46 @@ from django.db import models
 from django.utils import timezone
 
 
+class PreparationArea(models.Model):
+    """
+    A merchant-specific preparation area (Bar, Kitchen, Bakery, Main Counter, etc.).
+    Only created when preparation_routing_enabled is True on the merchant.
+    """
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="preparation_areas",
+    )
+    name = models.CharField(max_length=100)
+    is_default = models.BooleanField(
+        default=False,
+        help_text="Fallback area for unassigned menu items",
+    )
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    color = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="Optional display color (hex or name)",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "preparation_areas"
+        ordering = ["display_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["merchant", "name"],
+                name="unique_area_name_per_merchant",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.merchant.business_name})"
+
+
 class Order(models.Model):
     STATUS_PENDING   = "pending"
     STATUS_CONFIRMED = "confirmed"
@@ -25,7 +65,7 @@ class Order(models.Model):
     # Valid status transitions (source -> set of allowed targets)
     VALID_TRANSITIONS = {
         STATUS_PENDING:   {STATUS_CONFIRMED, STATUS_CANCELLED},
-        STATUS_CONFIRMED: {STATUS_PREPARING, STATUS_CANCELLED, STATUS_READY},
+        STATUS_CONFIRMED: {STATUS_PREPARING, STATUS_CANCELLED, STATUS_READY, STATUS_COMPLETED},
         STATUS_PREPARING: {STATUS_READY, STATUS_CANCELLED},
         STATUS_READY:     {STATUS_COMPLETED, STATUS_CANCELLED},
         STATUS_COMPLETED: set(),
@@ -278,19 +318,67 @@ class Order(models.Model):
 
 
 class OrderItem(models.Model):
-    order     = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    PENDING = "pending"
+    PREPARING = "preparing"
+    READY = "ready"
+    CANCELLED = "cancelled"
+
+    PREPARATION_STATUS_CHOICES = [
+        (PENDING, "Pending"),
+        (PREPARING, "Preparing"),
+        (READY, "Ready"),
+        (CANCELLED, "Cancelled"),
+    ]
+
+    VALID_PREPARATION_TRANSITIONS = {
+        PENDING: {PREPARING, CANCELLED},
+        PREPARING: {READY, CANCELLED},
+        READY: set(),
+        CANCELLED: set(),
+    }
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
     menu_item = models.ForeignKey(
         "merchants.MenuItem",
         on_delete=models.SET_NULL,
         null=True, blank=True,
     )
-    name     = models.CharField(max_length=255)
-    price    = models.DecimalField(max_digits=10, decimal_places=2)
+    name = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.IntegerField(default=1)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
 
+    # ── Preparation routing (snapshot from menu item at order creation) ────────
+    preparation_area = models.ForeignKey(
+        PreparationArea,
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="order_items",
+    )
+    requires_preparation = models.BooleanField(
+        default=True,
+        help_text="Snapshot: whether this item requires preparation",
+    )
+    preparation_status = models.CharField(
+        max_length=20,
+        choices=PREPARATION_STATUS_CHOICES,
+        default=PENDING,
+        db_index=True,
+    )
+    preparation_started_at = models.DateTimeField(null=True, blank=True)
+    preparation_ready_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         db_table = "order_items"
+        indexes = [
+            models.Index(fields=["preparation_area", "preparation_status"]),
+            models.Index(fields=["order", "requires_preparation"]),
+        ]
 
     def __str__(self):
         return f"{self.quantity}× {self.name}"
+
+    def can_transition_preparation_to(self, new_status):
+        return new_status in self.VALID_PREPARATION_TRANSITIONS.get(
+            self.preparation_status, set()
+        )

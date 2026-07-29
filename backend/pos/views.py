@@ -1211,6 +1211,10 @@ def create_pos_order(request):
         kot_number=kot_number,
     )
 
+    # Apply preparation routing
+    from orders.services.preparation import prepare_order_items_for_routing
+    order_items_data = prepare_order_items_for_routing(order, order_items_data)
+
     for item in order_items_data:
         OrderItem.objects.create(order=order, **item)
 
@@ -1471,8 +1475,14 @@ def create_payment(request):
     if total_paid >= order.total_amount:
         order.payment_status = "paid"
         order.payment_method = method
+        # Auto-complete and award loyalty
+        if order.status not in (Order.STATUS_COMPLETED, Order.STATUS_CANCELLED):
+            order.status = Order.STATUS_COMPLETED
+            if not order.loyalty_awarded and order.customer is not None:
+                _award_loyalty(order)
+                order.loyalty_awarded = True
         order.version += 1
-        order.save(update_fields=["payment_status", "payment_method", "version", "updated_at"])
+        order.save(update_fields=["payment_status", "payment_method", "status", "loyalty_awarded", "version", "updated_at"])
     elif total_paid > 0:
         order.payment_status = "partially_paid"
         order.version += 1

@@ -233,14 +233,15 @@ Redirect to /merchant/ (dashboard)
   │   ├── Labels (title, subtitle, points_label)
   │   ├── Toggles (lifetime points, joined date)
   │   └── Publish → is_published = true
-  └── Enable Features:
-      ├── Table Ordering
-      ├── POS System
-      ├── Credit Accounts
-      ├── Debit Accounts
-      ├── Discounts
-      ├── Shift Management
-      └── Receipt Printing
+      └── Enable Features:
+          ├── Table Ordering
+          ├── POS System
+          ├── Credit Accounts
+          ├── Debit Accounts
+          ├── Discounts
+          ├── Shift Management
+          ├── Preparation Routing (KDS)
+          └── Receipt Printing
 ```
 
 ---
@@ -588,14 +589,25 @@ Same as Pickup but:
 │  └─────────────────────┬───────────────────────────────────┘
 │                        │
 │                        ▼
-│  POST /pos/order/create/ {
-│    merchant_id, items, customer_id,
-│    shift_id, worker_id, device_id,
-│    client_mutation_id, fulfillment_type
-│  }
-│                        │
-│                        ▼
-│  POST /pos/payment/create/ {
+  │  POST /pos/order/create/ {
+  │    merchant_id, items, customer_id,
+  │    shift_id, worker_id, device_id,
+  │    client_mutation_id, fulfillment_type
+  │  }
+  │                        │
+  │                        ▼
+  │  PREPARATION ROUTING (if enabled)
+  │  ├── Each OrderItem routed to designated PreparationArea
+  │  │   (Bar → Barista queue, Kitchen → Chef queue, etc.)
+  │  ├── resolve_preparation_area() via priority chain:
+  │  │   1. MenuItem.preparation_area (explicit assignment)
+  │  │   2. MenuItem.category → area mapping
+  │  │   3. Default fallback area
+  │  ├── Items without requires_preparation skip routing
+  │  └── Real-time WebSocket broadcast to KDS screens
+  │                        │
+  │                        ▼
+  │  POST /pos/payment/create/ {
 │    order_id (uuid), shift_id,
 │    payment_method, amount,
 │    change_amount, client_mutation_id
@@ -871,6 +883,8 @@ Same as Pickup but:
 ```
 
 ### 9.2 Order Status Machine
+
+#### Order-Level Status
 ```
                     ┌──────────┐
                     │ pending  │ (initial status)
@@ -914,6 +928,38 @@ Valid Transitions:
   cancelled   → (terminal)
 ```
 
+#### Item-Level Preparation Status (when preparation_routing_enabled)
+```
+┌──────────────────────────────────────────────────────────────┐
+│  Each OrderItem has its own preparation_status:              │
+│  ┌──────────┐                                                │
+│  │ pending  │ (initial — assigned to area)                   │
+│  └────┬─────┘                                                │
+│       │                                                      │
+│       ▼                                                      │
+│  ┌──────────┐                                                │
+│  │preparing │ (worker started — timestamp recorded)          │
+│  └────┬─────┘                                                │
+│       │                                                      │
+│       ▼                                                      │
+│  ┌──────────┐                                                │
+│  │  ready   │ (item completed — timestamp recorded)          │
+│  └──────────┘                                                │
+│       │                                                      │
+│       ▼                                                      │
+│  ┌──────────┐                                                │
+│  │cancelled │ (item-level cancellation)                      │
+│  └──────────┘                                                │
+├──────────────────────────────────────────────────────────────┤
+│  Parent Order synchronized automatically:                    │
+│  • All items ready → Order status = "ready"                  │
+│  • Any item in progress → Order status = "preparing"        │
+│  • No items with preparation → Order can skip to "ready"    │
+│                                                              │
+│  Real-time WebSocket broadcasts per-area queue updates       │
+└──────────────────────────────────────────────────────────────┘
+```
+
 ### 9.3 Order Creation by Source
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -921,21 +967,27 @@ Valid Transitions:
 │  POST /orders/create/                                       │
 │  { merchant_id, items, notes, fulfillment_type,             │
 │    table_token }                                            │
-│  → Server calculates subtotal from MenuItem prices         │
-│  → Server calculates points_earned from items              │
-│  → Creates Order + OrderItems                               │
-│  → Notifies merchant via Notification                      │
-│  → Order starts as "pending"                               │
-└─────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────┐
-│  TABLE QR ORDER                                             │
-│  POST /pos/table/{token}/order/                             │
-│  { items, notes, customer_name }                            │
-│  → Public endpoint (no auth)                                │
-│  → Resolves table from token                               │
-│  → Creates Order (source=table_qr, status=pending)         │
-│  → Notifies POS terminal                                   │
+  │  → Server calculates subtotal from MenuItem prices         │
+  │  → Server calculates points_earned from items              │
+  │  → Creates Order + OrderItems                               │
+  │  → prepare_order_items_for_routing() fires                  │
+  │  │   (if merchant has preparation_routing_enabled)          │
+  │  │   ├── Each item resolved to its PreparationArea         │
+  │  │   ├── snapshot_preparation_area saved on OrderItem     │
+  │  │   └── Real-time KDS WebSocket event broadcast          │
+  │  → Notifies merchant via Notification                      │
+  │  → Order starts as "pending"                               │
+  └─────────────────────────────────────────────────────────────┘
+ 
+ ┌─────────────────────────────────────────────────────────────┐
+ │  TABLE QR ORDER                                             │
+ │  POST /pos/table/{token}/order/                             │
+ │  { items, notes, customer_name }                            │
+ │  → Public endpoint (no auth)                                │
+ │  → Resolves table from token                               │
+ │  → Creates Order (source=table_qr, status=pending)         │
+ │  → Same preparation routing as Customer App Order          │
+ │  → Notifies POS terminal                                   │
 └─────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────┐
@@ -943,13 +995,15 @@ Valid Transitions:
 │  POST /pos/order/create/                                    │
 │  { merchant_id, items, customer_id, shift_id, worker_id,   │
 │    device_id, fulfillment_type, client_mutation_id }        │
-│  → Server validates: POS enabled, shift active, items exist│
-│  → Server calculates prices from MenuItem (never trust client)│
-│  → Calculates points_earned from items + spend-based       │
-│  → Creates Order + OrderItems                               │
-│  → If customer_id: joins customer to merchant              │
-│  → Idempotent via client_mutation_id                       │
-│  → Order status = "completed" (POS auto-completes on pay) │
+  │  → Server validates: POS enabled, shift active, items exist│
+  │  → Server calculates prices from MenuItem (never trust client)│
+  │  → Calculates points_earned from items + spend-based       │
+  │  → Creates Order + OrderItems                               │
+  │  → prepare_order_items_for_routing() fires                 │
+  │  │   (if merchant has preparation_routing_enabled)          │
+  │  → If customer_id: joins customer to merchant              │
+  │  → Idempotent via client_mutation_id                       │
+  │  → Order status = "completed" (POS auto-completes on pay) │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1203,6 +1257,24 @@ Valid Transitions:
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
+│  PREPARATION AREA ASSIGNMENTS                                │
+│  POST /orders/preparation-areas/staff-areas/                │
+│  { worker_id, preparation_area_ids: [1, 2, 3] }             │
+│                                                              │
+│  • ShiftWorker assigned to one or more PreparationAreas     │
+│  • Stored in StaffPreparationArea model                     │
+│  • Determines which KDS queues the worker can view/manage   │
+│  • E.g., Barista → "Bar", Chef → "Kitchen"                 │
+│  • Unused if preparation_routing_enabled = false            │
+│                                                              │
+│  KDS Worker View:                                            │
+│  • Worker sees only orders for their assigned areas         │
+│  • Can update item status: pending → preparing → ready     │
+│  • Real-time updates via WebSocket                          │
+└─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
 │  STAFF DAILY REPORT                                         │
 │  GET /pos/staff-report/?date=YYYY-MM-DD                    │
 │                                                             │
@@ -1259,10 +1331,16 @@ Valid Transitions:
 │  │   ├── Link to menu items or rewards                    │
 │  │   ├── Toggle active/inactive                            │
 │  │   └── Auto-popup on customer storefront                │
-│  ├── Analytics    → Revenue charts, top items, top         │
-│  │                  customers, order history (60 days)     │
-│  └── Store        → Profile, branding, card design,        │
-│                      theme, QR code, settings              │
+  │  ├── Preparation  → KDS / Preparation Area management      │
+  │  │   ├── Define areas (Bar, Kitchen, Main Counter, etc.)  │
+  │  │   ├── Assign menu items to preparation areas            │
+  │  │   ├── Assign staff to areas                             │
+  │  │   ├── Toggle preparation routing on/off                │
+  │  │   └── "Setup Cafe" preset (auto-create Bar + Kitchen)  │
+  │  ├── Analytics    → Revenue charts, top items, top         │
+  │  │                  customers, order history (60 days)     │
+  │  └── Store        → Profile, branding, card design,        │
+  │                      theme, QR code, settings              │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -1760,7 +1838,7 @@ Missions                    │ Mission, CustomerMission │ 2
 Rewards & Redemption        │ Reward, Redemption │ 2
 Membership & Design         │ MembershipQrToken, MerchantMembershipCardDesign,
                             │ TodaySpecial │ 3
-Orders                      │ Order, OrderItem │ 2
+Orders (incl. Preparation)  │ Order, OrderItem, PreparationArea │ 3
 Notifications               │ Notification │ 1
 POS Devices & Workers       │ PosDevice, ShiftWorker │ 2
 POS Shifts & Cash           │ CashShift, PosCashMovement │ 2
@@ -1768,9 +1846,9 @@ POS Payments & Discounts    │ PosPayment, PosDiscount │ 2
 POS Credit/Debit            │ CreditAccount, CreditTransaction,
                             │ DebitAccount, DebitTransaction │ 4
 POS Infrastructure          │ PosAuditLog, ProcessedClientMutation,
-                            │ StaffSchedule │ 3
+                            │ StaffSchedule, StaffPreparationArea │ 4
 ────────────────────────────┴────────┼──────
-                             TOTAL   │ 40
+                             TOTAL   │ 42
 ```
 
 ---
@@ -1788,11 +1866,11 @@ POS Infrastructure          │ PosAuditLog, ProcessedClientMutation,
 │ Merchants & Menu                 │ /api/merchants/ │ 25  │
 │ Loyalty (general)                │ /api/loyalty/    │ 55  │
 │ Customer Memberships             │ /api/customer/memberships/ │ 6 │
-│ Orders                           │ /api/orders/     │ 8   │
+│ Orders (incl. Preparation/KDS)   │ /api/orders/     │ 16  │
 │ Notifications                    │ /api/notifications/ │ 5  │
 │ POS System                       │ /api/pos/  │ 58       │
 ├──────────────────────────────────┼────────────┼──────────┤
-│ GRAND TOTAL                      │            │ ~169     │
+│ GRAND TOTAL                      │            │ ~177     │
 └──────────────────────────────────┴────────────┴──────────┘
 ```
 
@@ -1844,8 +1922,16 @@ Order History            │ 1         │ /orders/merchant-history/
 Order Detail             │ 1         │ /orders/{id}/
 Update Status            │ 1         │ /orders/{id}/update-status/
 Cancel Order             │ 1         │ /orders/{id}/cancel/
+Preparation Areas        │ 8         │ /orders/preparation-areas/
+                         │           │ /orders/preparation-areas/{id}/
+                         │           │ /orders/preparation-areas/setup-cafe/
+                         │           │ /orders/preparation-areas/bulk-assign-menu-items/
+                         │           │ /orders/preparation-areas/staff-areas/
+                         │           │ /orders/preparation-areas/{id}/orders/
+                         │           │ /orders/preparation-areas/{id}/actions/
+                         │           │ /orders/preparation-settings/
 ─────────────────────────┼───────────┼─────────────────────────────
-ORDER TOTAL              │ 8         │
+ORDER TOTAL              │ 16        │
 ```
 
 ### POS Endpoint Groups (Updated)
@@ -1913,6 +1999,9 @@ Sign Up → Onboarding → Configure Store → Upload Logo/Banner
 → Create Menu Items → Enable Features (POS, Tables, Discounts)
 → Create Missions → Create Rewards → Create Punch Cards
 → Create Today's Specials → Set Table Ordering
+→ Set Up Preparation Areas (Bar, Kitchen, etc.)
+→ Assign Menu Items to Preparation Areas
+→ Assign Staff to Preparation Areas
 → Manage Orders (Accept/Reject/Advance Status)
 → Confirm Reward Redemptions → Confirm Punch Card Proofs
 → View Analytics → View Reports → Generate Z-Report
@@ -1924,6 +2013,7 @@ Sign Up → Onboarding → Configure Store → Upload Logo/Banner
 Device Registration → Worker PIN Login → Open Shift
 → Browse Menu → Add to Cart → Link Customer
 → Select Payment Method → Process Payment
+→ Preparation Routing (items → Bar/Kitchen queues)
 → Print Receipt → Handle Incoming Orders (App/QR/Guest)
 → Record Cash Movements → Apply Discounts (with approval)
 → Process Refunds → Manage Credit/Debit Accounts
