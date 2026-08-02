@@ -413,7 +413,7 @@ function OrderCard({
 
   return (
     <article
-      className={`glass-strong rounded-3xl p-5 transition-all ${
+      className={`glass-strong cv-auto rounded-3xl p-5 transition-all ${
         isNew ? "ring-2 ring-ember shadow-ember animate-pulse" : ""
       } ${isPunchCard ? "ring-2 ring-violet-300" : ""}`}
     >

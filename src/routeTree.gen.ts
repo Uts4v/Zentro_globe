@@ -34,6 +34,7 @@ import { Route as PosStaffRouteImport } from './routes/pos.staff'
 import { Route as PosSettingsRouteImport } from './routes/pos.settings'
 import { Route as PosScheduleRouteImport } from './routes/pos.schedule'
 import { Route as PosReportsRouteImport } from './routes/pos.reports'
+import { Route as PosPreparationRouteImport } from './routes/pos.preparation'
 import { Route as PosOrdersRouteImport } from './routes/pos.orders'
 import { Route as PosConflictsRouteImport } from './routes/pos.conflicts'
 import { Route as PosCashMovementsRouteImport } from './routes/pos.cash-movements'
@@ -42,11 +43,13 @@ import { Route as OrdersIdRouteImport } from './routes/orders.$id'
 import { Route as MerchantTablesRouteImport } from './routes/merchant.tables'
 import { Route as MerchantStoreRouteImport } from './routes/merchant.store'
 import { Route as MerchantSpecialsRouteImport } from './routes/merchant.specials'
+import { Route as MerchantPreparationRouteImport } from './routes/merchant.preparation'
 import { Route as MerchantOrdersRouteImport } from './routes/merchant.orders'
 import { Route as MerchantOnboardingRouteImport } from './routes/merchant.onboarding'
 import { Route as MerchantMenuRouteImport } from './routes/merchant.menu'
 import { Route as MerchantLoyaltyRouteImport } from './routes/merchant.loyalty'
 import { Route as MerchantAnalyticsRouteImport } from './routes/merchant.analytics'
+import { Route as MerchantAiRouteImport } from './routes/merchant.ai'
 import { Route as MSlugRouteImport } from './routes/m.$slug'
 import { Route as CustomerOrdersRouteImport } from './routes/customer.orders'
 import { Route as CustomerOrderRouteImport } from './routes/customer.order'
@@ -59,6 +62,7 @@ import { Route as AuthLoginRouteImport } from './routes/auth.login'
 import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-password'
 import { Route as TableTokenOrderRouteImport } from './routes/table.$token.order'
 import { Route as PosReportsZReportRouteImport } from './routes/pos.reports.z-report'
+import { Route as PosPreparationAreaIdRouteImport } from './routes/pos.preparation.$areaId'
 import { Route as LoyaltyQrTokenRouteImport } from './routes/loyalty.qr.$token'
 import { Route as GuestMerchantSlugRouteImport } from './routes/guest.merchant.$slug'
 import { Route as CustomerMerchantSlugRouteImport } from './routes/customer.merchant.$slug'
@@ -191,6 +195,11 @@ const PosReportsRoute = PosReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => PosRoute,
 } as any)
+const PosPreparationRoute = PosPreparationRouteImport.update({
+  id: '/preparation',
+  path: '/preparation',
+  getParentRoute: () => PosRoute,
+} as any)
 const PosOrdersRoute = PosOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
@@ -231,6 +240,11 @@ const MerchantSpecialsRoute = MerchantSpecialsRouteImport.update({
   path: '/specials',
   getParentRoute: () => MerchantRoute,
 } as any)
+const MerchantPreparationRoute = MerchantPreparationRouteImport.update({
+  id: '/preparation',
+  path: '/preparation',
+  getParentRoute: () => MerchantRoute,
+} as any)
 const MerchantOrdersRoute = MerchantOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
@@ -254,6 +268,11 @@ const MerchantLoyaltyRoute = MerchantLoyaltyRouteImport.update({
 const MerchantAnalyticsRoute = MerchantAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
+  getParentRoute: () => MerchantRoute,
+} as any)
+const MerchantAiRoute = MerchantAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
   getParentRoute: () => MerchantRoute,
 } as any)
 const MSlugRoute = MSlugRouteImport.update({
@@ -316,6 +335,11 @@ const PosReportsZReportRoute = PosReportsZReportRouteImport.update({
   path: '/z-report',
   getParentRoute: () => PosReportsRoute,
 } as any)
+const PosPreparationAreaIdRoute = PosPreparationAreaIdRouteImport.update({
+  id: '/$areaId',
+  path: '/$areaId',
+  getParentRoute: () => PosPreparationRoute,
+} as any)
 const LoyaltyQrTokenRoute = LoyaltyQrTokenRouteImport.update({
   id: '/qr/$token',
   path: '/qr/$token',
@@ -375,11 +399,13 @@ export interface FileRoutesByFullPath {
   '/customer/order': typeof CustomerOrderRoute
   '/customer/orders': typeof CustomerOrdersRoute
   '/m/$slug': typeof MSlugRouteWithChildren
+  '/merchant/ai': typeof MerchantAiRoute
   '/merchant/analytics': typeof MerchantAnalyticsRoute
   '/merchant/loyalty': typeof MerchantLoyaltyRoute
   '/merchant/menu': typeof MerchantMenuRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
+  '/merchant/preparation': typeof MerchantPreparationRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
@@ -388,6 +414,7 @@ export interface FileRoutesByFullPath {
   '/pos/cash-movements': typeof PosCashMovementsRoute
   '/pos/conflicts': typeof PosConflictsRoute
   '/pos/orders': typeof PosOrdersRoute
+  '/pos/preparation': typeof PosPreparationRouteWithChildren
   '/pos/reports': typeof PosReportsRouteWithChildren
   '/pos/schedule': typeof PosScheduleRoute
   '/pos/settings': typeof PosSettingsRoute
@@ -401,6 +428,7 @@ export interface FileRoutesByFullPath {
   '/customer/merchant/$slug': typeof CustomerMerchantSlugRoute
   '/guest/merchant/$slug': typeof GuestMerchantSlugRoute
   '/loyalty/qr/$token': typeof LoyaltyQrTokenRoute
+  '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
   '/m/$slug/table/$token': typeof MSlugTableTokenRoute
@@ -431,11 +459,13 @@ export interface FileRoutesByTo {
   '/customer/order': typeof CustomerOrderRoute
   '/customer/orders': typeof CustomerOrdersRoute
   '/m/$slug': typeof MSlugRouteWithChildren
+  '/merchant/ai': typeof MerchantAiRoute
   '/merchant/analytics': typeof MerchantAnalyticsRoute
   '/merchant/loyalty': typeof MerchantLoyaltyRoute
   '/merchant/menu': typeof MerchantMenuRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
+  '/merchant/preparation': typeof MerchantPreparationRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
@@ -444,6 +474,7 @@ export interface FileRoutesByTo {
   '/pos/cash-movements': typeof PosCashMovementsRoute
   '/pos/conflicts': typeof PosConflictsRoute
   '/pos/orders': typeof PosOrdersRoute
+  '/pos/preparation': typeof PosPreparationRouteWithChildren
   '/pos/reports': typeof PosReportsRouteWithChildren
   '/pos/schedule': typeof PosScheduleRoute
   '/pos/settings': typeof PosSettingsRoute
@@ -457,6 +488,7 @@ export interface FileRoutesByTo {
   '/customer/merchant/$slug': typeof CustomerMerchantSlugRoute
   '/guest/merchant/$slug': typeof GuestMerchantSlugRoute
   '/loyalty/qr/$token': typeof LoyaltyQrTokenRoute
+  '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
   '/m/$slug/table/$token': typeof MSlugTableTokenRoute
@@ -490,11 +522,13 @@ export interface FileRoutesById {
   '/customer/order': typeof CustomerOrderRoute
   '/customer/orders': typeof CustomerOrdersRoute
   '/m/$slug': typeof MSlugRouteWithChildren
+  '/merchant/ai': typeof MerchantAiRoute
   '/merchant/analytics': typeof MerchantAnalyticsRoute
   '/merchant/loyalty': typeof MerchantLoyaltyRoute
   '/merchant/menu': typeof MerchantMenuRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
+  '/merchant/preparation': typeof MerchantPreparationRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
@@ -503,6 +537,7 @@ export interface FileRoutesById {
   '/pos/cash-movements': typeof PosCashMovementsRoute
   '/pos/conflicts': typeof PosConflictsRoute
   '/pos/orders': typeof PosOrdersRoute
+  '/pos/preparation': typeof PosPreparationRouteWithChildren
   '/pos/reports': typeof PosReportsRouteWithChildren
   '/pos/schedule': typeof PosScheduleRoute
   '/pos/settings': typeof PosSettingsRoute
@@ -516,6 +551,7 @@ export interface FileRoutesById {
   '/customer/merchant/$slug': typeof CustomerMerchantSlugRoute
   '/guest/merchant/$slug': typeof GuestMerchantSlugRoute
   '/loyalty/qr/$token': typeof LoyaltyQrTokenRoute
+  '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
   '/m/$slug/table/$token': typeof MSlugTableTokenRoute
@@ -550,11 +586,13 @@ export interface FileRouteTypes {
     | '/customer/order'
     | '/customer/orders'
     | '/m/$slug'
+    | '/merchant/ai'
     | '/merchant/analytics'
     | '/merchant/loyalty'
     | '/merchant/menu'
     | '/merchant/onboarding'
     | '/merchant/orders'
+    | '/merchant/preparation'
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
@@ -563,6 +601,7 @@ export interface FileRouteTypes {
     | '/pos/cash-movements'
     | '/pos/conflicts'
     | '/pos/orders'
+    | '/pos/preparation'
     | '/pos/reports'
     | '/pos/schedule'
     | '/pos/settings'
@@ -576,6 +615,7 @@ export interface FileRouteTypes {
     | '/customer/merchant/$slug'
     | '/guest/merchant/$slug'
     | '/loyalty/qr/$token'
+    | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
     | '/m/$slug/table/$token'
@@ -606,11 +646,13 @@ export interface FileRouteTypes {
     | '/customer/order'
     | '/customer/orders'
     | '/m/$slug'
+    | '/merchant/ai'
     | '/merchant/analytics'
     | '/merchant/loyalty'
     | '/merchant/menu'
     | '/merchant/onboarding'
     | '/merchant/orders'
+    | '/merchant/preparation'
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
@@ -619,6 +661,7 @@ export interface FileRouteTypes {
     | '/pos/cash-movements'
     | '/pos/conflicts'
     | '/pos/orders'
+    | '/pos/preparation'
     | '/pos/reports'
     | '/pos/schedule'
     | '/pos/settings'
@@ -632,6 +675,7 @@ export interface FileRouteTypes {
     | '/customer/merchant/$slug'
     | '/guest/merchant/$slug'
     | '/loyalty/qr/$token'
+    | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
     | '/m/$slug/table/$token'
@@ -664,11 +708,13 @@ export interface FileRouteTypes {
     | '/customer/order'
     | '/customer/orders'
     | '/m/$slug'
+    | '/merchant/ai'
     | '/merchant/analytics'
     | '/merchant/loyalty'
     | '/merchant/menu'
     | '/merchant/onboarding'
     | '/merchant/orders'
+    | '/merchant/preparation'
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
@@ -677,6 +723,7 @@ export interface FileRouteTypes {
     | '/pos/cash-movements'
     | '/pos/conflicts'
     | '/pos/orders'
+    | '/pos/preparation'
     | '/pos/reports'
     | '/pos/schedule'
     | '/pos/settings'
@@ -690,6 +737,7 @@ export interface FileRouteTypes {
     | '/customer/merchant/$slug'
     | '/guest/merchant/$slug'
     | '/loyalty/qr/$token'
+    | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
     | '/m/$slug/table/$token'
@@ -901,6 +949,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PosReportsRouteImport
       parentRoute: typeof PosRoute
     }
+    '/pos/preparation': {
+      id: '/pos/preparation'
+      path: '/preparation'
+      fullPath: '/pos/preparation'
+      preLoaderRoute: typeof PosPreparationRouteImport
+      parentRoute: typeof PosRoute
+    }
     '/pos/orders': {
       id: '/pos/orders'
       path: '/orders'
@@ -957,6 +1012,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MerchantSpecialsRouteImport
       parentRoute: typeof MerchantRoute
     }
+    '/merchant/preparation': {
+      id: '/merchant/preparation'
+      path: '/preparation'
+      fullPath: '/merchant/preparation'
+      preLoaderRoute: typeof MerchantPreparationRouteImport
+      parentRoute: typeof MerchantRoute
+    }
     '/merchant/orders': {
       id: '/merchant/orders'
       path: '/orders'
@@ -990,6 +1052,13 @@ declare module '@tanstack/react-router' {
       path: '/analytics'
       fullPath: '/merchant/analytics'
       preLoaderRoute: typeof MerchantAnalyticsRouteImport
+      parentRoute: typeof MerchantRoute
+    }
+    '/merchant/ai': {
+      id: '/merchant/ai'
+      path: '/ai'
+      fullPath: '/merchant/ai'
+      preLoaderRoute: typeof MerchantAiRouteImport
       parentRoute: typeof MerchantRoute
     }
     '/m/$slug': {
@@ -1075,6 +1144,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/pos/reports/z-report'
       preLoaderRoute: typeof PosReportsZReportRouteImport
       parentRoute: typeof PosReportsRoute
+    }
+    '/pos/preparation/$areaId': {
+      id: '/pos/preparation/$areaId'
+      path: '/$areaId'
+      fullPath: '/pos/preparation/$areaId'
+      preLoaderRoute: typeof PosPreparationAreaIdRouteImport
+      parentRoute: typeof PosPreparationRoute
     }
     '/loyalty/qr/$token': {
       id: '/loyalty/qr/$token'
@@ -1175,11 +1251,13 @@ const LoyaltyRouteWithChildren =
   LoyaltyRoute._addFileChildren(LoyaltyRouteChildren)
 
 interface MerchantRouteChildren {
+  MerchantAiRoute: typeof MerchantAiRoute
   MerchantAnalyticsRoute: typeof MerchantAnalyticsRoute
   MerchantLoyaltyRoute: typeof MerchantLoyaltyRoute
   MerchantMenuRoute: typeof MerchantMenuRoute
   MerchantOnboardingRoute: typeof MerchantOnboardingRoute
   MerchantOrdersRoute: typeof MerchantOrdersRoute
+  MerchantPreparationRoute: typeof MerchantPreparationRoute
   MerchantSpecialsRoute: typeof MerchantSpecialsRoute
   MerchantStoreRoute: typeof MerchantStoreRoute
   MerchantTablesRoute: typeof MerchantTablesRoute
@@ -1187,11 +1265,13 @@ interface MerchantRouteChildren {
 }
 
 const MerchantRouteChildren: MerchantRouteChildren = {
+  MerchantAiRoute: MerchantAiRoute,
   MerchantAnalyticsRoute: MerchantAnalyticsRoute,
   MerchantLoyaltyRoute: MerchantLoyaltyRoute,
   MerchantMenuRoute: MerchantMenuRoute,
   MerchantOnboardingRoute: MerchantOnboardingRoute,
   MerchantOrdersRoute: MerchantOrdersRoute,
+  MerchantPreparationRoute: MerchantPreparationRoute,
   MerchantSpecialsRoute: MerchantSpecialsRoute,
   MerchantStoreRoute: MerchantStoreRoute,
   MerchantTablesRoute: MerchantTablesRoute,
@@ -1200,6 +1280,18 @@ const MerchantRouteChildren: MerchantRouteChildren = {
 
 const MerchantRouteWithChildren = MerchantRoute._addFileChildren(
   MerchantRouteChildren,
+)
+
+interface PosPreparationRouteChildren {
+  PosPreparationAreaIdRoute: typeof PosPreparationAreaIdRoute
+}
+
+const PosPreparationRouteChildren: PosPreparationRouteChildren = {
+  PosPreparationAreaIdRoute: PosPreparationAreaIdRoute,
+}
+
+const PosPreparationRouteWithChildren = PosPreparationRoute._addFileChildren(
+  PosPreparationRouteChildren,
 )
 
 interface PosReportsRouteChildren {
@@ -1219,6 +1311,7 @@ interface PosRouteChildren {
   PosCashMovementsRoute: typeof PosCashMovementsRoute
   PosConflictsRoute: typeof PosConflictsRoute
   PosOrdersRoute: typeof PosOrdersRoute
+  PosPreparationRoute: typeof PosPreparationRouteWithChildren
   PosReportsRoute: typeof PosReportsRouteWithChildren
   PosScheduleRoute: typeof PosScheduleRoute
   PosSettingsRoute: typeof PosSettingsRoute
@@ -1232,6 +1325,7 @@ const PosRouteChildren: PosRouteChildren = {
   PosCashMovementsRoute: PosCashMovementsRoute,
   PosConflictsRoute: PosConflictsRoute,
   PosOrdersRoute: PosOrdersRoute,
+  PosPreparationRoute: PosPreparationRouteWithChildren,
   PosReportsRoute: PosReportsRouteWithChildren,
   PosScheduleRoute: PosScheduleRoute,
   PosSettingsRoute: PosSettingsRoute,

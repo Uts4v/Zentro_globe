@@ -777,3 +777,36 @@ class StaffSchedule(models.Model):
 
     def __str__(self):
         return f"{self.worker.display_name} — {self.shift_date} {self.start_time}-{self.end_time}"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════
+# STAFF PREPARATION AREA ASSIGNMENTS
+# ═════════════════════════════════════════════════════════════════════════════════
+
+class StaffPreparationArea(models.Model):
+    """
+    Maps a POS worker to one or more preparation areas.
+    A Barista may be assigned to Bar only; a Supervisor to Bar + Kitchen.
+    """
+    worker = models.ForeignKey(
+        ShiftWorker,
+        on_delete=models.CASCADE,
+        related_name="preparation_area_assignments",
+    )
+    preparation_area = models.ForeignKey(
+        "orders.PreparationArea",
+        on_delete=models.CASCADE,
+        related_name="staff_assignments",
+    )
+
+    class Meta:
+        db_table = "staff_preparation_areas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["worker", "preparation_area"],
+                name="unique_worker_preparation_area",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.worker.display_name} → {self.preparation_area.name}"

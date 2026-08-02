@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   MapPin,
+  Phone,
   Loader2,
   ChevronRight,
   ArrowRight,
@@ -87,6 +88,20 @@ function GlowPoints({ store }: { store: DiscoveryItem }) {
   );
 }
 
+function PhoneLink({ store, className }: { store: DiscoveryItem; className: string }) {
+  if (!store.phone) return null;
+  return (
+    <a
+      href={`tel:${store.phone}`}
+      onClick={(e) => e.stopPropagation()}
+      className={`${className} flex items-center gap-1.5 text-muted-foreground hover:text-foreground`}
+    >
+      <Phone className="h-3.5 w-3.5 shrink-0" />
+      <span>{store.phone}</span>
+    </a>
+  );
+}
+
 function FeaturedCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => void }) {
   return (
     <div className="glass-strong overflow-hidden rounded-3xl md:flex">
@@ -113,6 +128,7 @@ function FeaturedCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => v
               </span>
             </p>
           )}
+          <PhoneLink store={store} className="text-sm" />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5">
@@ -161,6 +177,7 @@ function CafeGridCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => v
               </span>
             </p>
           )}
+          <PhoneLink store={store} className="text-xs" />
         </div>
 
         <div className="flex items-end justify-between gap-2 pt-2">

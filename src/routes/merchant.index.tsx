@@ -1,13 +1,6 @@
 ﻿// C:\Users\ACER\Desktop\NTE Loyalty\zentro-glow-loyalty\src\routes\merchant.index.tsx
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  TrendingUp,
-  Users,
-  Coffee,
-  Loader2,
-  Activity,
-  ShoppingBag,
-} from "lucide-react";
+import { TrendingUp, Users, Coffee, Loader2, Activity, ShoppingBag } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { analyticsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -25,36 +18,56 @@ interface TopItem {
 }
 
 interface OverviewStats {
-  hourly_velocity: { hour: string; count: number }[];
+  trend: { date: string; count: number }[];
   velocity_change: number;
   active_members: number;
   today: { orders: number; revenue: number };
 }
 
-// Build a today-centric OverviewStats from the Django analytics response
-function buildOverviewStats(data: any): OverviewStats {
-  const daily: any[] = data.daily_revenue ?? [];
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const todayRow = daily.find((d: any) => d.date === todayStr);
+interface AnalyticsDailyRow {
+  date: string;
+  revenue: number;
+  orders: number;
+}
 
-  // Hourly velocity: use daily_revenue as a proxy (last 12 entries → last 12 days)
-  // Django doesn't yet expose hourly granularity — we use daily points as bars.
-  const velocity = daily.slice(-12).map((d: any) => ({
-    hour: d.date,
+interface AnalyticsTopItem {
+  name: string;
+  total_qty: number;
+  total_revenue: number;
+}
+
+interface AnalyticsResponse {
+  daily_revenue?: AnalyticsDailyRow[];
+  today?: { orders: number; revenue: number };
+  yesterday?: { orders: number; revenue: number };
+  loyalty?: { active_members?: number };
+  top_customers?: { name: string; order_count: number; total_spent: number }[];
+  top_items?: AnalyticsTopItem[];
+}
+
+// Build a today-centric OverviewStats from the Django analytics response.
+// The backend already returns a zero-filled daily series (in the merchant's
+// local timezone) plus explicit today/yesterday summaries.
+function buildOverviewStats(data: AnalyticsResponse): OverviewStats {
+  const daily = data.daily_revenue ?? [];
+
+  const trend = daily.slice(-12).map((d) => ({
+    date: d.date,
     count: Number(d.orders ?? 0),
   }));
 
-  const prev = daily.length >= 2 ? Number(daily[daily.length - 2]?.revenue ?? 0) : 0;
-  const curr = todayRow ? Number(todayRow.revenue ?? 0) : 0;
-  const velocityChange = prev > 0 ? Math.round(((curr - prev) / prev) * 100) : 0;
+  const todayRev = Number(data.today?.revenue ?? 0);
+  const yesterdayRev = Number(data.yesterday?.revenue ?? 0);
+  const velocityChange =
+    yesterdayRev > 0 ? Math.round(((todayRev - yesterdayRev) / yesterdayRev) * 100) : 0;
 
   return {
-    hourly_velocity: velocity,
+    trend,
     velocity_change: velocityChange,
-    active_members: data.top_customers?.length ?? 0,
+    active_members: Number(data.loyalty?.active_members ?? data.top_customers?.length ?? 0),
     today: {
-      orders: todayRow ? Number(todayRow.orders ?? 0) : 0,
-      revenue: todayRow ? Number(todayRow.revenue ?? 0) : 0,
+      orders: Number(data.today?.orders ?? 0),
+      revenue: todayRev,
     },
   };
 }
@@ -98,15 +111,16 @@ function Overview() {
         // Top items from Django analytics
         const rankedItems = (data.top_items ?? [])
           .slice(0, 4)
-          .map((item: any, index: number) => ({
+          .map((item: AnalyticsTopItem, index: number) => ({
             id: `${index}-${item.name}`,
             name: item.name,
             emoji: "☕",
             sold: item.total_qty ?? 0,
           }));
         setTopItems(rankedItems);
-      } catch (err: any) {
-        if (!cancelled) setError(err?.message || "Failed to load merchant overview");
+      } catch (err: unknown) {
+        if (!cancelled)
+          setError(err instanceof Error ? err.message : "Failed to load merchant overview");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -125,11 +139,10 @@ function Overview() {
   };
 
   const activeMembers = stats?.active_members ?? 0;
-  const velocity = stats?.hourly_velocity ?? [];
+  const velocity = stats?.trend ?? [];
   const velocityChange = stats?.velocity_change ?? 0;
 
-  const averageOrderValue =
-    today.orders > 0 ? Number(today.revenue ?? 0) / today.orders : 0;
+  const averageOrderValue = today.orders > 0 ? Number(today.revenue ?? 0) / today.orders : 0;
 
   const maxVelocity = Math.max(...velocity.map((item) => item.count), 1);
 
@@ -193,13 +206,9 @@ function Overview() {
             </h1>
 
             <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
-              Your store has received{" "}
-              <span className="font-medium text-ink">{today.orders}</span>{" "}
+              Your store has received <span className="font-medium text-ink">{today.orders}</span>{" "}
               orders today with{" "}
-              <span className="font-medium text-ink">
-                {formatMoney(today.revenue)}
-              </span>{" "}
-              in revenue.
+              <span className="font-medium text-ink">{formatMoney(today.revenue)}</span> in revenue.
             </p>
           </div>
 
@@ -242,9 +251,7 @@ function Overview() {
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                 Last 12 days
               </p>
-              <h2 className="font-display mt-1 text-2xl text-ink">
-                Order trend
-              </h2>
+              <h2 className="font-display mt-1 text-2xl text-ink">Order trend</h2>
             </div>
 
             <span
@@ -259,28 +266,23 @@ function Overview() {
 
           {velocity.length === 0 || velocity.every((item) => item.count === 0) ? (
             <div className="mt-6 flex h-44 items-center justify-center rounded-3xl bg-mist/50 text-sm text-muted-foreground">
-              No orders in the last 12 hours
+              No orders in the last 12 days
             </div>
           ) : (
             <div className="mt-6 flex h-44 items-end gap-2 rounded-3xl bg-mist/40 px-4 py-4">
               {velocity.map((item, index) => {
-                const height =
-                  item.count > 0
-                    ? Math.max((item.count / maxVelocity) * 100, 10)
-                    : 3;
+                const height = item.count > 0 ? Math.max((item.count / maxVelocity) * 100, 10) : 3;
 
-                const hourLabel = new Date(item.hour).toLocaleDateString(
-                  "en-US",
-                  { month: "short", day: "numeric" },
-                );
+                const dateLabel = new Date(`${item.date}T12:00:00`).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                });
 
                 return (
                   <div
-                    key={item.hour}
+                    key={item.date}
                     className="group flex flex-1 flex-col items-center justify-end gap-2"
-                    title={`${item.count} order${
-                      item.count === 1 ? "" : "s"
-                    } at ${hourLabel}`}
+                    title={`${item.count} order${item.count === 1 ? "" : "s"} on ${dateLabel}`}
                   >
                     <div
                       className="w-full rounded-t-xl gradient-ember transition-all duration-300 group-hover:opacity-90"
@@ -291,7 +293,7 @@ function Overview() {
                     />
 
                     <span className="hidden text-[10px] text-muted-foreground sm:block">
-                      {hourLabel}
+                      {dateLabel}
                     </span>
                   </div>
                 );
@@ -306,30 +308,22 @@ function Overview() {
               <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
                 Menu performance
               </p>
-              <h2 className="font-display mt-1 text-2xl text-ink">
-                Top sellers
-              </h2>
+              <h2 className="font-display mt-1 text-2xl text-ink">Top sellers</h2>
             </div>
           </div>
 
           <ul className="mt-5 space-y-3">
             {topItems.map((item, index) => (
               <li key={item.id} className="flex items-center gap-3">
-                <span className="font-display w-5 text-sm text-muted-foreground">
-                  {index + 1}
-                </span>
+                <span className="font-display w-5 text-sm text-muted-foreground">{index + 1}</span>
 
                 <div className="grid h-10 w-10 place-items-center rounded-2xl bg-mist text-xl">
                   {item.emoji}
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-ink">
-                    {item.name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {item.sold} sold
-                  </p>
+                  <p className="truncate text-sm font-medium text-ink">{item.name}</p>
+                  <p className="text-xs text-muted-foreground">{item.sold} sold</p>
                 </div>
               </li>
             ))}

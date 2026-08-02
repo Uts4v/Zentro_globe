@@ -45,6 +45,7 @@ export type MerchantProfile = {
   is_approved: boolean;
   is_open: boolean;
   onboarding_complete: boolean;
+  ai_enabled: boolean;
 };
 
 export type AuthUser = {

@@ -11,6 +11,7 @@ class MenuItemSerializer(serializers.ModelSerializer):
             "id", "name", "description", "price", "image_url",
             "category", "is_available", "is_featured", "loyalty_reward",
             "points_per_item", "emoji",
+            "preparation_area", "requires_preparation",
             "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
@@ -30,6 +31,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "store_theme_color", "card_text_color", "card_background_image",
             "table_ordering_enabled", "allow_pickup", "allow_delivery", "allow_dine_in",
             "allow_point_transfer",
+            "ai_enabled", "ai_insights_enabled", "ai_insights_time", "timezone",
             "menu_items", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "is_approved", "qr_code", "created_at", "updated_at"]
@@ -70,7 +72,7 @@ class MerchantDiscoverySerializer(serializers.ModelSerializer):
         model = MerchantProfile
         fields = [
             "id", "business_name", "slug", "business_type",
-            "address", "logo_url", "is_open",
+            "address", "phone", "logo_url", "is_open",
             "latitude", "longitude", "distance_km",
         ]
 

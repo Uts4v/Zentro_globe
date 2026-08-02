@@ -229,7 +229,7 @@ export default function PosLayout() {
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       {/* ── Sidebar ── */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-background/80 backdrop-blur-xl lg:flex">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-background lg:flex">
         {/* Logo */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
@@ -275,6 +275,7 @@ export default function PosLayout() {
         <nav className="flex-1 space-y-1 px-3 py-4">
           <NavItem to="/pos" label="Order" icon={ShoppingCart} badge={cartCount} />
           <NavItem to="/pos/orders" label="Orders" icon={Clock} />
+          <NavItem to="/pos/preparation" label="Preparation" icon={AlertTriangle} />
           <NavItem to="/pos/accounts" label="Accounts" icon={CreditCard} />
           <NavItem to="/pos/cash-movements" label="Cash In/Out" icon={HandCoins} />
           <NavItem to="/pos/reports" label="Reports" icon={BarChart3} />
@@ -342,7 +343,7 @@ export default function PosLayout() {
       {/* ── Main content ── */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile header */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background px-4 py-3 lg:hidden">
           <Link to="/" className="font-display text-xl text-foreground">
             zentro<span className="text-ember">.</span>
           </Link>

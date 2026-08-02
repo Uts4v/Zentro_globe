@@ -6,7 +6,7 @@ from django.db.models import Sum, Count, Q, F
 from django.utils import timezone
 
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 
@@ -388,6 +388,7 @@ def pos_bootstrap(request):
 
 @api_view(["GET"])
 @permission_classes([IsPosDevice])
+@throttle_classes([])
 def pos_bootstrap_device(request):
     """
     Bootstrap POS terminal using device token auth (no JWT required).
@@ -704,6 +705,7 @@ def update_worker(request, worker_id):
 
 @api_view(["POST"])
 @permission_classes([IsPosDevice])
+@throttle_classes([])
 def worker_login(request):
     merchant = request.pos_merchant
     if not _require_pos(merchant):
@@ -745,6 +747,7 @@ def worker_login(request):
 
 @api_view(["POST"])
 @permission_classes([IsPosDevice])
+@throttle_classes([])
 def worker_logout(request):
     merchant = request.pos_merchant
     worker_id = request.data.get("worker_id")

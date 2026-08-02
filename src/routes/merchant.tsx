@@ -21,9 +21,12 @@ import {
   QrCode,
   Monitor,
   LogOut,
+  ChefHat,
+  Bot,
 } from "lucide-react";
 import { MerchantNav } from "@/components/merchant-nav";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
+import { ChatWidget } from "@/features/ai/components/ChatWidget";
 
 export const Route = createFileRoute("/merchant")({
   beforeLoad: async ({ context, location }) => {
@@ -48,7 +51,9 @@ const navItems = [
   { to: "/merchant/tables", label: "Tables & QR", icon: QrCode },
   { to: "/merchant/loyalty", label: "Loyalty", icon: Trophy },
   { to: "/merchant/specials", label: "Today's Special", icon: Sparkles },
+  { to: "/merchant/preparation", label: "Preparation", icon: ChefHat },
   { to: "/merchant/analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/merchant/ai", label: "AI Assistant", icon: Bot },
   { to: "/merchant/store", label: "Store", icon: Store },
   { to: "/pos", label: "POS Terminal", icon: Monitor },
 ];
@@ -66,7 +71,7 @@ function MerchantLayout() {
   return (
     <div className="flex min-h-dvh bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-background/80 backdrop-blur-xl lg:flex">
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-background lg:flex">
         <MerchantNav navItems={navItems} onSignOut={handleSignOut} />
       </aside>
 
@@ -93,7 +98,7 @@ function MerchantLayout() {
       {/* Main area */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-xl lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background px-4 py-3 lg:hidden">
           <button
             onClick={() => setMobileOpen(true)}
             className="grid h-9 w-9 place-items-center rounded-xl border border-border text-muted-foreground hover:bg-muted"
@@ -123,6 +128,7 @@ function MerchantLayout() {
           <Outlet />
         </main>
       </div>
+      <ChatWidget />
     </div>
   );
 }

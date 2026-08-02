@@ -21,12 +21,13 @@ Endpoints:
 import io
 import base64
 import math
-from datetime import timedelta
+from datetime import datetime, timedelta, time as dt_time
+from zoneinfo import ZoneInfo
 
 import qrcode
 from django.conf import settings
-from django.db.models import Avg, Count, Sum
-from django.db.models.functions import TruncDate
+from django.db.models import Avg, Count, Min, Sum
+from django.db.models.functions import ExtractHour, TruncDate
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -326,20 +327,39 @@ def toggle_availability(request, pk):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def merchant_analytics(request):
-    """GET /api/merchants/analytics/?days=30"""
+    """GET /api/merchants/analytics/?days=30
+
+    Returns a rich analytics summary computed in the merchant's local timezone:
+    KPIs, filled daily series, today/yesterday, hourly velocity, status /
+    fulfillment / type / source / payment breakdowns, top items & customers,
+    new vs returning customers and loyalty stats.
+    """
     try:
         merchant = _get_merchant(request.user)
     except PermissionError as e:
         return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
-    days = int(request.query_params.get("days", 30))
-    since = timezone.now() - timedelta(days=days)
+    try:
+        days = max(1, min(int(request.query_params.get("days", 30)), 90))
+    except (TypeError, ValueError):
+        days = 30
 
     from orders.models import Order, OrderItem
 
+    tz = ZoneInfo(merchant.timezone or "Asia/Kathmandu")
+    now_local = timezone.localtime(timezone.now(), tz)
+    local_today = now_local.date()
+
+    day_start = lambda d: datetime.combine(d, dt_time.min).replace(tzinfo=tz)
+
+    today_start = day_start(local_today)
+    yesterday_start = today_start - timedelta(days=1)
+    period_start = today_start - timedelta(days=days - 1)
+
+    # Non-cancelled orders define revenue/orders; cancelled orders are excluded.
     orders_qs = Order.objects.filter(
         merchant=merchant,
-        created_at__gte=since,
+        created_at__gte=period_start,
     ).exclude(status=Order.STATUS_CANCELLED)
 
     agg = orders_qs.aggregate(
@@ -348,42 +368,167 @@ def merchant_analytics(request):
         avg_order_value=Avg("total_amount"),
     )
 
+    # ── Daily series (every calendar day in the period, zeros filled) ─────────
+    daily_rows = (
+        orders_qs
+        .annotate(date=TruncDate("created_at", tzinfo=tz))
+        .values("date")
+        .annotate(revenue=Sum("total_amount"), orders=Count("id"))
+    )
+    daily_map = {r["date"]: r for r in daily_rows}
+    daily_revenue = []
+    for i in range(days):
+        d = period_start.date() + timedelta(days=i)
+        row = daily_map.get(d) or {}
+        daily_revenue.append({
+            "date": str(d),
+            "revenue": float(row.get("revenue") or 0),
+            "orders": int(row.get("orders") or 0),
+        })
+
+    def _day_summary(start):
+        sub = orders_qs.filter(created_at__gte=start, created_at__lt=start + timedelta(days=1))
+        s = sub.aggregate(revenue=Sum("total_amount"), orders=Count("id"))
+        return {"revenue": float(s["revenue"] or 0), "orders": int(s["orders"] or 0)}
+
+    today = _day_summary(today_start)
+    yesterday = _day_summary(yesterday_start)
+
+    # ── Hourly velocity (today) + busiest hours (whole period) ────────────────
+    def _hourly_series(qs):
+        rows = (
+            qs
+            .annotate(hour=ExtractHour("created_at", tzinfo=tz))
+            .values("hour")
+            .annotate(count=Count("id"))
+        )
+        counts = {r["hour"]: int(r["count"]) for r in rows}
+        return [{"hour": h, "count": counts.get(h, 0)} for h in range(24)]
+
+    hourly_velocity = _hourly_series(
+        orders_qs.filter(created_at__gte=today_start, created_at__lt=today_start + timedelta(days=1))
+    )
+    busiest_hours = _hourly_series(orders_qs)
+
+    # ── Top items ─────────────────────────────────────────────────────────────
     top_items = (
         OrderItem.objects
-        .filter(order__merchant=merchant, order__created_at__gte=since)
+        .filter(order__merchant=merchant, order__created_at__gte=period_start)
         .exclude(order__status=Order.STATUS_CANCELLED)
         .values("name")
         .annotate(total_qty=Sum("quantity"), total_revenue=Sum("subtotal"))
         .order_by("-total_qty")[:10]
     )
 
+    # ── Top customers ─────────────────────────────────────────────────────────
     top_customers = (
         orders_qs
+        .exclude(customer=None)
         .values("customer__full_name", "customer__user__email")
         .annotate(order_count=Count("id"), total_spent=Sum("total_amount"))
-        .order_by("-order_count")[:10]
+        .order_by("-order_count", "-total_spent")[:10]
     )
 
-    daily = (
-        orders_qs
-        .annotate(date=TruncDate("created_at"))
-        .values("date")
-        .annotate(revenue=Sum("total_amount"), orders=Count("id"))
-        .order_by("date")
-    )
-
-    status_counts = (
+    # ── Status breakdown (all statuses, including cancelled) ──────────────────
+    status_rows = (
         Order.objects
-        .filter(merchant=merchant, created_at__gte=since)
+        .filter(merchant=merchant, created_at__gte=period_start)
         .values("status")
         .annotate(count=Count("id"))
     )
+    status_map = {r["status"]: int(r["count"]) for r in status_rows}
+    orders_by_status = {code: status_map.get(code, 0) for code, _ in Order.STATUS_CHOICES}
+
+    def _breakdown(field, choices):
+        rows = (
+            orders_qs
+            .values(field)
+            .annotate(count=Count("id"))
+        )
+        counts = {r[field]: int(r["count"]) for r in rows}
+        return {code: counts.get(code, 0) for code, _ in choices}
+
+    orders_by_fulfillment = _breakdown("fulfillment_type", Order.FULFILLMENT_CHOICES)
+    orders_by_type = _breakdown("order_type", Order.ORDER_TYPE_CHOICES)
+    orders_by_source = _breakdown("source", Order.SOURCE_CHOICES)
+
+    payment_rows = (
+        orders_qs
+        .exclude(payment_method="")
+        .values("payment_method")
+        .annotate(count=Count("id"), amount=Sum("total_amount"))
+        .order_by("-amount")
+    )
+    orders_by_payment = [
+        {
+            "method": r["payment_method"],
+            "count": int(r["count"]),
+            "revenue": float(r["amount"] or 0),
+        }
+        for r in payment_rows
+    ]
+
+    # ── Customer health ───────────────────────────────────────────────────────
+    customer_orders = orders_qs.exclude(customer=None)
+    total_customers = customer_orders.values("customer").distinct().count()
+    new_customers = (
+        customer_orders
+        .values("customer")
+        .annotate(first=Min("created_at"))
+        .filter(first__gte=period_start)
+        .count()
+    )
+    returning_customers = max(total_customers - new_customers, 0)
+    guest_orders = orders_qs.filter(customer=None).count()
+
+    # ── Weekly comparison ─────────────────────────────────────────────────────
+    week_start = local_today - timedelta(days=local_today.weekday())
+    prev_week_start = week_start - timedelta(days=7)
+
+    def _week_summary(start):
+        s = orders_qs.filter(created_at__gte=day_start(start), created_at__lt=day_start(start) + timedelta(days=7)).aggregate(
+            revenue=Sum("total_amount"), orders=Count("id")
+        )
+        return {"revenue": float(s["revenue"] or 0), "orders": int(s["orders"] or 0)}
+
+    weekly = {
+        "this_week": _week_summary(week_start),
+        "last_week": _week_summary(prev_week_start),
+    }
+
+    # ── Loyalty ───────────────────────────────────────────────────────────────
+    from loyalty.models import CustomerMerchantWallet, PointTransaction, Redemption
+
+    active_members = CustomerMerchantWallet.objects.filter(merchant=merchant).count()
+    points_issued = (
+        PointTransaction.objects
+        .filter(
+            merchant=merchant,
+            created_at__gte=period_start,
+            transaction_type__in=["EARNED", "MISSION_BONUS"],
+        )
+        .aggregate(total=Sum("points"))["total"] or 0
+    )
+    rewards_redeemed = Redemption.objects.filter(
+        reward__merchant=merchant,
+        created_at__gte=period_start,
+    ).count()
+    punch_cards_redeemed = Order.objects.filter(
+        merchant=merchant,
+        created_at__gte=period_start,
+        order_type=Order.ORDER_TYPE_PUNCH_REDEMPTION,
+    ).count()
 
     return Response({
         "period_days": days,
-        "total_revenue": agg["total_revenue"] or 0,
+        "total_revenue": float(agg["total_revenue"] or 0),
         "total_orders": agg["total_orders"] or 0,
         "avg_order_value": round(float(agg["avg_order_value"] or 0), 2),
+        "today": today,
+        "yesterday": yesterday,
+        "daily_revenue": daily_revenue,
+        "hourly_velocity": hourly_velocity,
+        "busiest_hours": busiest_hours,
         "top_items": list(top_items),
         "top_customers": [
             {
@@ -393,15 +538,24 @@ def merchant_analytics(request):
             }
             for c in top_customers
         ],
-        "daily_revenue": [
-            {
-                "date": str(d["date"]),
-                "revenue": d["revenue"],
-                "orders": d["orders"],
-            }
-            for d in daily
-        ],
-        "orders_by_status": {s["status"]: s["count"] for s in status_counts},
+        "orders_by_status": orders_by_status,
+        "orders_by_fulfillment": orders_by_fulfillment,
+        "orders_by_type": orders_by_type,
+        "orders_by_source": orders_by_source,
+        "orders_by_payment": orders_by_payment,
+        "customers": {
+            "total_customers": total_customers,
+            "new_customers": new_customers,
+            "returning_customers": returning_customers,
+            "guest_orders": guest_orders,
+        },
+        "weekly": weekly,
+        "loyalty": {
+            "active_members": active_members,
+            "points_issued": float(points_issued),
+            "rewards_redeemed": rewards_redeemed,
+            "punch_cards_redeemed": punch_cards_redeemed,
+        },
     })
 
 

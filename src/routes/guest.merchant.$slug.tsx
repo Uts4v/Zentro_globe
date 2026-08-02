@@ -272,7 +272,7 @@ function GuestMerchantMenu() {
   return (
     <div className="mx-auto min-h-dvh max-w-[480px] bg-background">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-xl px-5 pt-5 pb-3">
+      <div className="sticky top-0 z-10 bg-background px-5 pt-5 pb-3">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-display text-xl text-foreground">{merchant?.business_name || "Menu"}</h1>

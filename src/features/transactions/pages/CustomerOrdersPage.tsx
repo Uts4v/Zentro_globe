@@ -154,7 +154,7 @@ function OrderRow({
   });
 
   return (
-    <article className="glass-strong overflow-hidden rounded-3xl">
+    <article className="glass-strong cv-auto overflow-hidden rounded-3xl">
       {/* Summary row */}
       <button onClick={onToggle} className="flex w-full items-center gap-4 p-5 text-left">
         <div className="flex-1">

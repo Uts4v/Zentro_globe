@@ -195,9 +195,20 @@
     text-rendering: optimizeLegibility;
   }
   body {
-    background-image: var(--gradient-warm);
-    background-attachment: fixed;
+    /* Keep the warm gradient visible without background-attachment: fixed,
+       which forces a full repaint on every scroll frame and causes jank.
+       The gradient lives on a composited fixed ::before layer below content;
+       the base color stays on <html>. */
+    background: none;
     min-height: 100dvh;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-image: var(--gradient-warm);
+    pointer-events: none;
   }
 }
 
@@ -225,17 +236,25 @@
 }
 
 @utility glass {
+  /* NOTE: backdrop-filter (blur/saturate) was removed from the shared glass
+     utilities — it forces the browser to re-sample the backdrop for every
+     element on every scroll frame and is the #1 cause of scroll jank in apps
+     that use dozens of glass cards. The translucent background + shadow keeps
+     the layered look at a fraction of the cost. */
   background: var(--glass-bg);
-  backdrop-filter: blur(28px) saturate(180%);
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow);
 }
 
 @utility glass-strong {
   background: var(--glass-strong-bg, color-mix(in oklab, white 78%, transparent));
-  backdrop-filter: blur(40px) saturate(200%);
   border: 1px solid var(--glass-strong-border, color-mix(in oklab, white 85%, transparent));
   box-shadow: var(--glass-shadow);
+}
+
+@utility cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
 }
 
 @utility shadow-soft {

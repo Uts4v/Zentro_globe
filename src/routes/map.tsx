@@ -5,7 +5,7 @@ import { MobileShell, TopBar } from "@/components/MobileShell";
 import { merchantApi, type MerchantDiscoveryItem } from "@/lib/api";
 import { CafeDiscoveryMap } from "@/features/store-locator/pages/CafeDiscoveryMap";
 import { useEffect, useState } from "react";
-import { Navigation, Loader2, ChevronRight, Search } from "lucide-react";
+import { Navigation, Loader2, ChevronRight, Search, Phone } from "lucide-react";
 import { useStore } from "@/lib/store";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -164,6 +164,11 @@ function MapPage() {
                     </div>
                     {m.address && (
                       <p className="mt-0.5 truncate text-xs text-muted-foreground">{m.address}</p>
+                    )}
+                    {m.phone && (
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Phone className="h-3 w-3 shrink-0" /> {m.phone}
+                      </p>
                     )}
                     {m.distance_km != null && (
                       <p className="mt-0.5 text-xs text-ember font-medium">

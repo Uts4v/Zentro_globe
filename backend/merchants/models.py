@@ -104,6 +104,30 @@ class MerchantProfile(models.Model):
         help_text="Enable prepaid debit accounts (customer wallet / stored value)",
     )
 
+    # ── Preparation routing ────────────────────────────────────────────────────
+    preparation_routing_enabled = models.BooleanField(
+        default=False,
+        help_text="Route order items to separate preparation areas (bar, kitchen, etc.)",
+    )
+
+    # ── AI feature flags ───────────────────────────────────────────────────────
+    ai_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable AI features for this merchant (assistant chat, insights)",
+    )
+    ai_insights_enabled = models.BooleanField(
+        default=False,
+        help_text="Enable daily AI-generated business insights",
+    )
+    ai_insights_time = models.TimeField(
+        null=True, blank=True,
+        help_text="Preferred local time for daily insight generation",
+    )
+    timezone = models.CharField(
+        max_length=50, default="Asia/Kathmandu",
+        help_text="Merchant's local timezone for scheduling",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -130,6 +154,21 @@ class MenuItem(models.Model):
     loyalty_reward = models.BooleanField(default=True)
     points_per_item = models.IntegerField(default=1)
     emoji = models.CharField(max_length=10, default="☕")
+
+    # ── Preparation routing (optional) ─────────────────────────────────────────
+    preparation_area = models.ForeignKey(
+        "orders.PreparationArea",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="menu_items",
+        help_text="Specific preparation area for this item (overrides category default)",
+    )
+    requires_preparation = models.BooleanField(
+        default=True,
+        help_text="Whether this item requires preparation (set False for packaged goods)",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

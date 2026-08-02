@@ -20,6 +20,7 @@ export interface MerchantDiscoveryItem {
   slug: string;
   business_type: string | null;
   address: string | null;
+  phone: string | null;
   logo_url: string | null;
   is_open: boolean;
   latitude: string | null;
@@ -42,6 +43,8 @@ export interface MenuItem {
   emoji: string;
   created_at: string;
   updated_at: string;
+  preparation_area?: number | null;
+  requires_preparation?: boolean;
 }
 
 export type MenuItemInput = Omit<MenuItem, "id" | "merchant_id" | "created_at" | "updated_at">;
@@ -64,6 +67,9 @@ export interface OrderItem {
   price: string;
   quantity: number;
   subtotal: string;
+  preparation_area?: number | null;
+  requires_preparation?: boolean;
+  preparation_status?: string;
 }
 
 export interface Order {
@@ -161,6 +167,7 @@ export interface MerchantProfile {
   allow_pickup?: boolean;
   allow_delivery?: boolean;
   allow_dine_in?: boolean;
+  preparation_routing_enabled?: boolean;
 }
 
 export interface MerchantTable {

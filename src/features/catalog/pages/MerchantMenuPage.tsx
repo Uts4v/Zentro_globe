@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, Eye, EyeOff, Star, X, Check, Loader2, ImageIcon, 
 import { menuApi, merchantApi, type MenuItem } from "@/lib/api";
 import { optimizeImage } from "@/lib/image-optimize";
 import { uploadImage } from "@/lib/image-upload";
+import { usePreparationAreas, usePreparationSettings } from "@/features/preparation/hooks";
 
 const EMPTY_FORM = {
   name: "",
@@ -15,6 +16,8 @@ const EMPTY_FORM = {
   is_available: true,
   is_featured: false,
   image_url: "",
+  preparation_area: "" as string,
+  requires_preparation: true,
 };
 
 type FormState = typeof EMPTY_FORM;
@@ -58,6 +61,10 @@ export function MerchantMenuPage() {
   const imgInputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  const { data: prepSettings } = usePreparationSettings();
+  const { data: prepAreas = [] } = usePreparationAreas();
+  const showPrepFields = prepSettings?.preparation_routing_enabled && prepAreas.length > 0;
+
   useEffect(() => { loadAll(); }, []);
 
   async function loadAll() {
@@ -97,6 +104,8 @@ export function MerchantMenuPage() {
       is_available: item.is_available,
       is_featured: item.is_featured,
       image_url: item.image_url,
+      preparation_area: item.preparation_area ? String(item.preparation_area) : "",
+      requires_preparation: item.requires_preparation ?? true,
     });
     setImgState(
       item.image_url
@@ -160,7 +169,13 @@ export function MerchantMenuPage() {
     setSaving(true);
     setError("");
     try {
-      const payload = { ...form, price: form.price, points_per_item: Number(form.points_per_item) };
+      const payload = {
+        ...form,
+        price: form.price,
+        points_per_item: Number(form.points_per_item),
+        preparation_area: form.preparation_area ? Number(form.preparation_area) : null,
+        requires_preparation: form.requires_preparation,
+      };
       if (editing) {
         const updated = await menuApi.update(editing.id, payload);
         setItems((prev) => prev.map((i) => (i.id === editing.id ? updated : i)));
@@ -469,6 +484,35 @@ export function MerchantMenuPage() {
                 />
               </div>
 
+              {/* Preparation Area (only shown when routing is enabled) */}
+              {showPrepFields && (
+                <div className="space-y-2">
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Preparation Area</label>
+                  <select
+                    value={form.preparation_area}
+                    onChange={(e) => setForm((f) => ({ ...f, preparation_area: e.target.value }))}
+                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  >
+                    <option value="">No specific area</option>
+                    {prepAreas.filter((a) => a.is_active).map((area) => (
+                      <option key={area.id} value={String(area.id)}>{area.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, requires_preparation: !f.requires_preparation }))}
+                    className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+                      form.requires_preparation
+                        ? "border-ink bg-ink text-primary-foreground"
+                        : "border-border bg-white/50 text-muted-foreground"
+                    }`}
+                  >
+                    {form.requires_preparation ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                    Requires preparation
+                  </button>
+                </div>
+              )}
+
               {/* Toggles */}
               <div className="grid grid-cols-3 gap-2">
                 {([
@@ -525,7 +569,7 @@ function ItemCard({
   catClass: string;
 }) {
   return (
-    <article className={`glass-strong overflow-hidden rounded-3xl transition-opacity ${!item.is_available ? "opacity-60" : ""}`}>
+    <article className={`glass-strong cv-auto overflow-hidden rounded-3xl transition-opacity ${!item.is_available ? "opacity-60" : ""}`}>
       {item.image_url ? (
         <div className="h-40 w-full overflow-hidden">
           <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" loading="lazy" />

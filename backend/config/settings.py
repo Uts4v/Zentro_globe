@@ -44,6 +44,8 @@ INSTALLED_APPS = [
     "orders",
     "notifications",
     "pos",
+    "django_q",
+    "ai_core",
 ]
 
 # Switch from WSGI to ASGI
@@ -224,3 +226,65 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # ── File upload limits ────────────────────────────────────────────────────────
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+
+# ── Django-Q2 ─────────────────────────────────────────────────────────────────
+Q_CLUSTER = {
+    "name": "zentro-ai",
+    "orm": "default",
+    "retry": 300,
+    "timeout": 120,
+    "max_attempts": 3,
+    "poll": 5,
+    "save_limit": 100,
+    "catch_up": False,
+}
+
+# ── AI Core ───────────────────────────────────────────────────────────────────
+AI_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+AI_DEFAULT_MODEL_ALIAS = "merchant-insights"
+AI_MODEL_ALIASES = {
+    "merchant-insights": {
+        "provider": "groq",
+        "model": os.getenv("AI_INSIGHTS_MODEL", "llama-3.1-8b-instant"),
+        "capabilities": ["structured_generation"],
+    },
+    "fast-chat": {
+        "provider": "groq",
+        "model": os.getenv("AI_CHAT_MODEL", "llama-3.1-8b-instant"),
+        "capabilities": ["chat"],
+    },
+}
+
+# ── Rate Limiting (DRF throttling) ───────────────────────────────────────────
+REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
+    "rest_framework.throttling.AnonRateThrottle",
+    "rest_framework.throttling.UserRateThrottle",
+]
+REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
+    "anon": "500/hour",
+    "user": "1000/day",
+}
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "structured": {
+            "format": "{asctime} [{levelname}] {name}: {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "structured",
+        },
+    },
+    "loggers": {
+        "ai_core": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+    },
+}

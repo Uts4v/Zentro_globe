@@ -27,6 +27,7 @@ from notifications.models import Notification
 
 from .models import Order, OrderItem
 from .serializers import OrderSerializer, CreateOrderSerializer, CreateGuestOrderSerializer
+from .services.preparation import prepare_order_items_for_routing
 
 logger = logging.getLogger(__name__)
 
@@ -337,6 +338,9 @@ def create_order(request):
         table_number_snapshot=table_number_snap,
     )
 
+    # Apply preparation routing
+    order_items_data = prepare_order_items_for_routing(order, order_items_data)
+
     for item in order_items_data:
         OrderItem.objects.create(order=order, **item)
 
@@ -456,6 +460,9 @@ def guest_create_order(request):
         guest_name_snapshot=data.get("guest_name", ""),
         kot_number=kot_number,
     )
+
+    # Apply preparation routing
+    order_items_data = prepare_order_items_for_routing(order, order_items_data)
 
     for item in order_items_data:
         OrderItem.objects.create(order=order, **item)
