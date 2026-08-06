@@ -22,7 +22,7 @@ export function useUpdatePreparationSettings() {
     mutationFn: prepApi.updatePreparationSettings,
     onSuccess: (data) => {
       qc.setQueryData<PreparationSettings>(preparationKeys.settings(), (old) =>
-        old ? { ...old, preparation_routing_enabled: data.preparation_routing_enabled } : old
+        old ? { ...old, preparation_routing_enabled: data.preparation_routing_enabled } : old,
       );
     },
   });
@@ -53,8 +53,13 @@ export function useCreateArea() {
 export function useUpdateArea() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Parameters<typeof prepApi.updatePreparationArea>[1] }) =>
-      prepApi.updatePreparationArea(id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: number;
+      data: Parameters<typeof prepApi.updatePreparationArea>[1];
+    }) => prepApi.updatePreparationArea(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: preparationKeys.areas() });
     },
@@ -83,10 +88,14 @@ export function useSetupCafePreset() {
 
 // ── Area Orders (KDS) ───────────────────────────────────────────────────────
 
-export function useAreaOrders(areaId: number | null, status?: string) {
+export function useAreaOrders(
+  areaId: number | null,
+  status?: "active" | "ready" | "all",
+  workerId?: string,
+) {
   return useQuery({
-    queryKey: preparationKeys.areaOrders(areaId ?? 0, status),
-    queryFn: () => prepApi.getAreaOrders(areaId!, status as any),
+    queryKey: preparationKeys.areaOrders(areaId ?? 0, `${status ?? "active"}:${workerId ?? ""}`),
+    queryFn: () => prepApi.getAreaOrders(areaId!, status, workerId),
     enabled: Boolean(areaId),
     refetchInterval: 12_000,
     staleTime: 5_000,
@@ -101,17 +110,29 @@ export function usePreparationAction() {
       action,
       orderId,
       workerId,
+      staffShiftId,
     }: {
       areaId: number;
       action: "start" | "ready" | "cancel";
       orderId: number;
       workerId?: string;
-    }) => prepApi.preparationAction(areaId, action, { order_id: orderId, worker_id: workerId }),
+      staffShiftId?: string;
+    }) =>
+      prepApi.preparationAction(areaId, action, {
+        order_id: orderId,
+        worker_id: workerId,
+        staff_shift_id: staffShiftId,
+      }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({
         queryKey: preparationKeys.areaOrders(variables.areaId),
       });
       qc.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (_error, variables) => {
+      qc.invalidateQueries({
+        queryKey: preparationKeys.areaOrders(variables.areaId),
+      });
     },
   });
 }
@@ -170,15 +191,52 @@ export function useStaffAreas(workerId: string | null) {
 export function useSetStaffAreas() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      workerId,
-      areaIds,
-    }: {
-      workerId: string;
-      areaIds: number[];
-    }) => prepApi.setStaffPreparationAreas(workerId, areaIds),
+    mutationFn: ({ workerId, areaIds }: { workerId: string; areaIds: number[] }) =>
+      prepApi.setStaffPreparationAreas(workerId, areaIds),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: preparationKeys.all });
     },
+  });
+}
+
+// ── Staff Shift (KDS clock-in/out) ───────────────────────────────────────────
+
+export function useActiveStaffShift(workerId: string | null) {
+  return useQuery({
+    queryKey: preparationKeys.staffShift(workerId ?? ""),
+    queryFn: () => prepApi.getActiveStaffShift(workerId!),
+    enabled: Boolean(workerId),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+}
+
+export function useOpenStaffShift() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: prepApi.openStaffShift,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: preparationKeys.all });
+    },
+  });
+}
+
+export function useCloseStaffShift() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ shiftId, workerId }: { shiftId: string; workerId: string }) =>
+      prepApi.closeStaffShift(shiftId, workerId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: preparationKeys.all });
+    },
+  });
+}
+
+export function useListStaffShifts(status: "active" | "closed" = "active") {
+  return useQuery({
+    queryKey: preparationKeys.staffShifts(status),
+    queryFn: () => prepApi.listStaffShifts(status),
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   });
 }

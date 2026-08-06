@@ -23,6 +23,8 @@ export interface PreparationOrderItem {
   preparation_status: PreparationStatus;
   preparation_started_at: string | null;
   preparation_ready_at: string | null;
+  started_by: string | null;
+  ready_by: string | null;
 }
 
 export interface PreparationOrder {
@@ -66,6 +68,33 @@ export interface PreparationSettings {
 export interface StaffAreaAssignment {
   area_id: number;
   area_name: string;
+}
+
+// ── Staff Shifts (KDS clock-in/out) ─────────────────────────────────────────
+
+export type StaffShiftStatus = "active" | "closed";
+
+export interface StaffShiftArea {
+  preparation_area_id: number;
+  area_name: string;
+}
+
+export interface StaffShift {
+  id: string;
+  worker: string;
+  worker_name: string;
+  worker_role: string;
+  status: StaffShiftStatus;
+  areas: StaffShiftArea[];
+  area_ids: number[];
+  opened_at: string;
+  closed_at: string | null;
+  closed_by: string | null;
+  opened_from_device_id: string;
+}
+
+export interface ActiveStaffShiftResponse {
+  shift: StaffShift | null;
 }
 
 // Extended MenuItem to include preparation fields

@@ -368,6 +368,26 @@ class OrderItem(models.Model):
     preparation_started_at = models.DateTimeField(null=True, blank=True)
     preparation_ready_at = models.DateTimeField(null=True, blank=True)
 
+    # ── Preparation attribution (who did what, which KDS shift) ───────────────
+    preparation_started_by = models.ForeignKey(
+        "pos.ShiftWorker",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="started_preparation_items",
+    )
+    preparation_ready_by = models.ForeignKey(
+        "pos.ShiftWorker",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="ready_preparation_items",
+    )
+    preparation_staff_shift = models.ForeignKey(
+        "pos.StaffShift",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="prepared_items",
+    )
+
     class Meta:
         db_table = "order_items"
         indexes = [

@@ -1,10 +1,12 @@
 // src/features/preparation/api.ts
 import { apiUrl, djangoFetch, tokenStore } from "@/lib/django-api-base";
 import type {
+  ActiveStaffShiftResponse,
   PreparationArea,
   PreparationAreaOrdersResponse,
   PreparationSettings,
   StaffAreaAssignment,
+  StaffShift,
 } from "./types";
 
 const headers = () => ({
@@ -19,17 +21,12 @@ export const getPreparationSettings = () =>
     headers: headers(),
   });
 
-export const updatePreparationSettings = (data: {
-  preparation_routing_enabled: boolean;
-}) =>
-  djangoFetch<{ preparation_routing_enabled: boolean }>(
-    apiUrl("/orders/preparation-settings/"),
-    {
-      method: "PATCH",
-      headers: headers(),
-      body: JSON.stringify(data),
-    }
-  );
+export const updatePreparationSettings = (data: { preparation_routing_enabled: boolean }) =>
+  djangoFetch<{ preparation_routing_enabled: boolean }>(apiUrl("/orders/preparation-settings/"), {
+    method: "PATCH",
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
 
 // ── Areas ────────────────────────────────────────────────────────────────────
 
@@ -57,7 +54,7 @@ export const updatePreparationArea = (
     is_active: boolean;
     display_order: number;
     color: string;
-  }>
+  }>,
 ) =>
   djangoFetch<PreparationArea>(apiUrl(`/orders/preparation-areas/${id}/`), {
     method: "PATCH",
@@ -71,17 +68,14 @@ export const deletePreparationArea = (id: number) =>
     {
       method: "DELETE",
       headers: headers(),
-    }
+    },
   );
 
 export const setupCafePreset = () =>
-  djangoFetch<PreparationArea[]>(
-    apiUrl("/orders/preparation-areas/setup-cafe/"),
-    {
-      method: "POST",
-      headers: headers(),
-    }
-  );
+  djangoFetch<PreparationArea[]>(apiUrl("/orders/preparation-areas/setup-cafe/"), {
+    method: "POST",
+    headers: headers(),
+  });
 
 // ── Bulk Assign ──────────────────────────────────────────────────────────────
 
@@ -96,49 +90,74 @@ export const bulkAssignMenuItems = (data: {
       method: "POST",
       headers: headers(),
       body: JSON.stringify(data),
-    }
+    },
   );
 
 // ── Staff Assignment ─────────────────────────────────────────────────────────
 
 export const getStaffPreparationAreas = (workerId: string) =>
-  djangoFetch<StaffAreaAssignment[]>(
-    apiUrl(`/orders/staff/${workerId}/preparation-areas/`),
-    { headers: headers() }
-  );
+  djangoFetch<StaffAreaAssignment[]>(apiUrl(`/orders/staff/${workerId}/preparation-areas/`), {
+    headers: headers(),
+  });
 
-export const setStaffPreparationAreas = (
-  workerId: string,
-  areaIds: number[]
-) =>
-  djangoFetch<{ assigned: number }>(
-    apiUrl(`/orders/staff/${workerId}/preparation-areas/`),
-    {
-      method: "PUT",
-      headers: headers(),
-      body: JSON.stringify({ area_ids: areaIds }),
-    }
-  );
+export const setStaffPreparationAreas = (workerId: string, areaIds: number[]) =>
+  djangoFetch<{ assigned: number }>(apiUrl(`/orders/staff/${workerId}/preparation-areas/`), {
+    method: "PUT",
+    headers: headers(),
+    body: JSON.stringify({ area_ids: areaIds }),
+  });
 
 // ── Area Orders (KDS) ───────────────────────────────────────────────────────
 
 export const getAreaOrders = (
   areaId: number,
-  status?: "active" | "ready" | "all"
+  status?: "active" | "ready" | "all",
+  workerId?: string,
 ) => {
-  const qs = status ? `?status=${status}` : "";
+  const params = new URLSearchParams();
+  if (status) params.set("status", status);
+  if (workerId) params.set("worker_id", workerId);
+  const qs = params.toString();
   return djangoFetch<PreparationAreaOrdersResponse>(
-    apiUrl(`/orders/preparation-areas/${areaId}/orders/${qs}`),
-    { headers: headers() }
+    apiUrl(`/orders/preparation-areas/${areaId}/orders/${qs ? `?${qs}` : ""}`),
+    { headers: headers() },
   );
 };
+
+// ── Staff Shift (KDS clock-in/out) ───────────────────────────────────────────
+
+export const openStaffShift = (data: {
+  worker_id: string;
+  area_ids?: number[];
+  device_id?: string | null;
+}) =>
+  djangoFetch<StaffShift>(apiUrl("/pos/staff-shift/open/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
+
+export const closeStaffShift = (shiftId: string, workerId: string) =>
+  djangoFetch<StaffShift>(apiUrl("/pos/staff-shift/close/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ shift_id: shiftId, worker_id: workerId }),
+  });
+
+export const getActiveStaffShift = (workerId: string) =>
+  djangoFetch<ActiveStaffShiftResponse>(apiUrl(`/pos/staff-shift/active/?worker_id=${workerId}`), {
+    headers: headers(),
+  });
+
+export const listStaffShifts = (status: "active" | "closed" = "active") =>
+  djangoFetch<StaffShift[]>(apiUrl(`/pos/staff-shifts/?status=${status}`), { headers: headers() });
 
 // ── Status Actions ───────────────────────────────────────────────────────────
 
 export const preparationAction = (
   areaId: number,
   action: "start" | "ready" | "cancel",
-  data: { order_id: number; worker_id?: string }
+  data: { order_id: number; worker_id?: string; staff_shift_id?: string },
 ) =>
   djangoFetch<{
     order_id: number;
@@ -175,7 +194,7 @@ export const updateMenuItemPreparation = (
   data: {
     preparation_area: number | null;
     requires_preparation: boolean;
-  }
+  },
 ) =>
   djangoFetch<{ id: number }>(apiUrl(`/merchants/menu-items/${itemId}/`), {
     method: "PATCH",

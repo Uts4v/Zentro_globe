@@ -1,11 +1,16 @@
 // src/features/preparation/screens/PreparationAreaScreen.tsx
 import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import { usePosStore } from "@/features/pos/store";
 import { playOrderChime } from "@/lib/audio";
+import { tokenStore } from "@/lib/django-api-base";
 import {
   useAreaOrders,
   usePreparationAreas,
   usePreparationAction,
+  useActiveStaffShift,
+  useOpenStaffShift,
+  useCloseStaffShift,
 } from "../hooks";
 import type { PreparationOrder } from "../types";
 
@@ -26,6 +31,11 @@ function getElapsedClass(seconds: number): string {
   if (seconds > 600) return "text-red-600 font-bold"; // >10 min
   if (seconds > 300) return "text-orange-500 font-semibold"; // >5 min
   return "text-gray-500";
+}
+
+function formatShiftTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
 function OrderCard({
@@ -55,15 +65,13 @@ function OrderCard({
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div>
-          <div className="text-lg font-bold">
-            Order {order.order_number}
-          </div>
+          <div className="text-lg font-bold">Order {order.order_number}</div>
           <div className="text-sm text-gray-600">
             {order.table_name
               ? order.table_name
               : order.fulfillment_type === "pickup"
-              ? "Pickup"
-              : "Dine-in"}
+                ? "Pickup"
+                : "Dine-in"}
             {order.customer_name && (
               <span className="ml-2 text-gray-400">· {order.customer_name}</span>
             )}
@@ -88,19 +96,29 @@ function OrderCard({
               item.preparation_status === "ready"
                 ? "line-through text-gray-400"
                 : item.preparation_status === "preparing"
-                ? "text-blue-700"
-                : ""
+                  ? "text-blue-700"
+                  : ""
             }`}
           >
             <span className="text-sm">
               <span className="font-semibold">{item.quantity}×</span> {item.name}
             </span>
             <span className="text-xs text-gray-400">
-              {item.preparation_status === "preparing"
-                ? "Prep..."
-                : item.preparation_status === "ready"
-                ? "✓"
-                : ""}
+              {item.preparation_status === "preparing" ? (
+                item.started_by ? (
+                  <span className="text-blue-500">Prep: {item.started_by}</span>
+                ) : (
+                  "Prep..."
+                )
+              ) : item.preparation_status === "ready" ? (
+                item.ready_by ? (
+                  <span className="text-green-600">✓ {item.ready_by}</span>
+                ) : (
+                  "✓"
+                )
+              ) : (
+                ""
+              )}
             </span>
           </div>
         ))}
@@ -163,11 +181,17 @@ function OrderCard({
 
 export default function PreparationAreaScreen({ areaId }: Props) {
   const worker = usePosStore((s) => s.currentWorker);
+  const device = usePosStore((s) => s.device);
   const { data: areas = [] } = usePreparationAreas();
   const [viewStatus, setViewStatus] = useState<"active" | "ready" | "all">("active");
 
-  const { data, isLoading, refetch } = useAreaOrders(areaId, viewStatus);
+  const { data: activeShiftData } = useActiveStaffShift(worker?.id ?? null);
+  const activeShift = activeShiftData?.shift ?? null;
+
+  const { data, isLoading, refetch } = useAreaOrders(areaId, viewStatus, worker?.id);
   const actionMutation = usePreparationAction();
+  const openShiftMutation = useOpenStaffShift();
+  const closeShiftMutation = useCloseStaffShift();
 
   const knownOrderIds = useRef(new Set<number>());
   const prevOrderCount = useRef(0);
@@ -176,9 +200,7 @@ export default function PreparationAreaScreen({ areaId }: Props) {
   useEffect(() => {
     if (!data) return;
     const currentIds = new Set(data.orders.map((o) => o.id));
-    const newOrders = data.orders.filter(
-      (o) => !knownOrderIds.current.has(o.id)
-    );
+    const newOrders = data.orders.filter((o) => !knownOrderIds.current.has(o.id));
 
     if (knownOrderIds.current.size > 0 && newOrders.length > 0) {
       playOrderChime();
@@ -190,14 +212,12 @@ export default function PreparationAreaScreen({ areaId }: Props) {
 
   // WebSocket connection
   useEffect(() => {
-    const wsBase =
-      (import.meta.env.VITE_WS_URL as string | undefined) ||
-      "ws://127.0.0.1:8000";
+    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) || "ws://127.0.0.1:8000";
     const merchant = usePosStore.getState().merchant;
     if (!merchant) return;
 
     const ws = new WebSocket(
-      `${wsBase}/ws/preparation/${merchant.id}/${areaId}/`
+      `${wsBase}/ws/preparation/${merchant.id}/${areaId}/?token=${tokenStore.getAccess() ?? ""}`,
     );
 
     ws.onmessage = () => {
@@ -211,21 +231,70 @@ export default function PreparationAreaScreen({ areaId }: Props) {
     return () => ws.close();
   }, [areaId, refetch]);
 
+  const handleOpenShift = useCallback(() => {
+    if (!worker) return;
+    openShiftMutation.mutate({
+      worker_id: worker.id,
+      area_ids: [areaId],
+      device_id: device?.id ?? null,
+    });
+  }, [openShiftMutation, worker, areaId, device]);
+
+  const handleCloseShift = useCallback(() => {
+    if (!worker || !activeShift) return;
+    closeShiftMutation.mutate({ shiftId: activeShift.id, workerId: worker.id });
+  }, [closeShiftMutation, worker, activeShift]);
+
   const handleAction = useCallback(
     (action: "start" | "ready" | "cancel", orderId: number) => {
-      actionMutation.mutate({
-        areaId,
-        action,
-        orderId,
-        workerId: worker?.id,
-      });
+      actionMutation.mutate(
+        {
+          areaId,
+          action,
+          orderId,
+          workerId: worker?.id,
+          staffShiftId: activeShift?.id,
+        },
+        {
+          onError: (err) => {
+            toast.error(err instanceof Error ? err.message : "Action failed. Please try again.");
+          },
+        },
+      );
     },
-    [actionMutation, areaId, worker?.id]
+    [actionMutation, areaId, worker?.id, activeShift?.id],
   );
 
   const areaName = areas.find((a) => a.id === areaId)?.name ?? "Preparation";
   const orders = data?.orders ?? [];
   const activeCount = data?.active_count ?? 0;
+
+  // KDS staff must clock in before acting
+  if (!activeShift && worker) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
+        <div className="w-full max-w-sm bg-white rounded-2xl border p-6 text-center">
+          <div className="text-4xl mb-3">🕐</div>
+          <h2 className="text-lg font-bold text-gray-900">Open your shift</h2>
+          <p className="mt-2 text-sm text-gray-500">
+            {worker.display_name}, you&apos;re about to cover{" "}
+            <span className="font-semibold text-gray-700">{areaName}</span>. Multiple staff can be
+            on shift at the same time — Ramesh on Bar, Sita on Kitchen, etc.
+          </p>
+          <button
+            onClick={handleOpenShift}
+            disabled={openShiftMutation.isPending}
+            className="mt-5 w-full py-3 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700 disabled:opacity-50"
+          >
+            {openShiftMutation.isPending ? "Opening..." : "Open Shift"}
+          </button>
+          <p className="mt-3 text-xs text-gray-400">
+            Opening a staff shift does not open a cash drawer.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -233,17 +302,28 @@ export default function PreparationAreaScreen({ areaId }: Props) {
       <div className="bg-white border-b px-4 py-3 sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold uppercase tracking-wide">
-              {areaName}
-            </h1>
+            <h1 className="text-xl font-bold uppercase tracking-wide">{areaName}</h1>
             <div className="text-sm text-gray-500">
               {activeCount} active order{activeCount !== 1 ? "s" : ""}
               {worker && <span className="ml-2">· {worker.display_name}</span>}
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-xs text-gray-400">Online</span>
+            {activeShift && (
+              <div className="flex items-center gap-2 rounded-lg bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                Shift since {formatShiftTime(activeShift.opened_at)}
+                <button
+                  onClick={handleCloseShift}
+                  disabled={closeShiftMutation.isPending}
+                  className="ml-1 text-green-600 underline hover:text-green-800 disabled:opacity-50"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+            {!activeShift && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />}
+            <span className="text-xs text-gray-400">{activeShift ? "Online" : "No shift"}</span>
           </div>
         </div>
 
@@ -279,15 +359,11 @@ export default function PreparationAreaScreen({ areaId }: Props) {
       {/* Content */}
       <div className="p-4">
         {isLoading && orders.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">
-            Loading orders...
-          </div>
+          <div className="text-center py-12 text-gray-400">Loading orders...</div>
         ) : orders.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-4xl mb-3">✨</div>
-            <div className="text-lg font-medium text-gray-500">
-              {areaName} is clear
-            </div>
+            <div className="text-lg font-medium text-gray-500">{areaName} is clear</div>
             <div className="text-sm text-gray-400 mt-1">
               New orders will appear here automatically.
             </div>

@@ -381,6 +381,8 @@ class PosAuditLog(models.Model):
     ACTION_WORKER_UPDATE = "worker_update"
     ACTION_SHIFT_OPEN = "shift_open"
     ACTION_SHIFT_CLOSE = "shift_close"
+    ACTION_STAFF_SHIFT_OPEN = "staff_shift_open"
+    ACTION_STAFF_SHIFT_CLOSE = "staff_shift_close"
     ACTION_ORDER_CREATE = "order_create"
     ACTION_ORDER_UPDATE = "order_update"
     ACTION_ORDER_CANCEL = "order_cancel"
@@ -407,6 +409,8 @@ class PosAuditLog(models.Model):
         (ACTION_WORKER_UPDATE, "Worker Update"),
         (ACTION_SHIFT_OPEN, "Shift Open"),
         (ACTION_SHIFT_CLOSE, "Shift Close"),
+        (ACTION_STAFF_SHIFT_OPEN, "Staff Shift Open"),
+        (ACTION_STAFF_SHIFT_CLOSE, "Staff Shift Close"),
         (ACTION_ORDER_CREATE, "Order Create"),
         (ACTION_ORDER_UPDATE, "Order Update"),
         (ACTION_ORDER_CANCEL, "Order Cancel"),
@@ -810,3 +814,104 @@ class StaffPreparationArea(models.Model):
 
     def __str__(self):
         return f"{self.worker.display_name} → {self.preparation_area.name}"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════
+# STAFF SHIFTS (KDS clock-in/out)
+# ═════════════════════════════════════════════════════════════════════════════════
+
+class StaffShift(models.Model):
+    """
+    A per-staff clock-in/out shift for the preparation screens (KDS).
+
+    Completely separate from CashShift (the cash-drawer shift). Kitchen and
+    Bar staff open StaffShifts so multiple workers can be on duty at the same
+    time — Ramesh on Bar, Sita on Kitchen, etc. — without touching cash
+    accounting. Managers/admins may open a shift covering several areas.
+    """
+    STATUS_ACTIVE = "active"
+    STATUS_CLOSED = "closed"
+
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_CLOSED, "Closed"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="staff_shifts",
+    )
+    worker = models.ForeignKey(
+        ShiftWorker,
+        on_delete=models.PROTECT,
+        related_name="staff_shifts",
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE, db_index=True,
+    )
+    opened_at = models.DateTimeField(default=timezone.now)
+    closed_at = models.DateTimeField(null=True, blank=True)
+    closed_by = models.ForeignKey(
+        ShiftWorker,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="closed_staff_shifts",
+    )
+    opened_from_device_id = models.CharField(
+        max_length=100, blank=True, default="",
+        help_text="POS device that started this shift",
+    )
+
+    class Meta:
+        db_table = "pos_staff_shifts"
+        ordering = ["-opened_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["worker", "status"],
+                condition=models.Q(status="active"),
+                name="unique_active_staff_shift_per_worker",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.worker.display_name} — {self.status}"
+
+    def area_ids(self):
+        return list(
+            self.area_assignments.values_list("preparation_area_id", flat=True)
+        )
+
+
+class StaffShiftArea(models.Model):
+    """
+    A preparation area covered by a staff shift.
+
+    Normal staff usually have one area (Ramesh → Bar). Supervisors and
+    managers may have several (Maya → Bar + Kitchen). Managers/admins get
+    all-area access through permissions rather than an assignment per area.
+    """
+    shift = models.ForeignKey(
+        StaffShift,
+        on_delete=models.CASCADE,
+        related_name="area_assignments",
+    )
+    preparation_area = models.ForeignKey(
+        "orders.PreparationArea",
+        on_delete=models.PROTECT,
+        related_name="active_shift_assignments",
+    )
+
+    class Meta:
+        db_table = "pos_staff_shift_areas"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["shift", "preparation_area"],
+                name="unique_staff_shift_area",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.shift.worker.display_name} → {self.preparation_area.name}"

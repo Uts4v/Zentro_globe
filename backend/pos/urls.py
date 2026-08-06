@@ -36,6 +36,12 @@ urlpatterns = [
     path("shift/summary/", views.shift_summary, name="pos-shift-summary"),
     path("shifts/", views.list_shifts, name="pos-shifts"),
 
+    # Staff shifts (KDS clock-in/out)
+    path("staff-shift/open/", views.open_staff_shift, name="pos-staff-shift-open"),
+    path("staff-shift/close/", views.close_staff_shift, name="pos-staff-shift-close"),
+    path("staff-shift/active/", views.active_staff_shift, name="pos-staff-shift-active"),
+    path("staff-shifts/", views.list_staff_shifts, name="pos-staff-shifts"),
+
     # POS orders
     path("order/create/", views.create_pos_order, name="pos-order-create"),
     path("order/status/", views.update_order_status_uuid, name="pos-order-status"),

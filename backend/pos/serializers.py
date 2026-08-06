@@ -3,6 +3,7 @@ from .models import (
     PosDevice, ShiftWorker, CashShift, PosPayment,
     PosDiscount, PosAuditLog, CreditAccount, CreditTransaction,
     DebitAccount, DebitTransaction, PosCashMovement,
+    StaffShift, StaffShiftArea,
 )
 
 
@@ -112,6 +113,54 @@ class OpenShiftSerializer(serializers.Serializer):
 
 class CloseShiftSerializer(serializers.Serializer):
     closing_cash = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0)
+    worker_id = serializers.UUIDField()
+
+
+# ── Staff Shift (KDS clock-in/out) ────────────────────────────────────────────
+
+class StaffShiftAreaSerializer(serializers.ModelSerializer):
+    area_name = serializers.CharField(
+        source="preparation_area.name", read_only=True
+    )
+
+    class Meta:
+        model = StaffShiftArea
+        fields = ["preparation_area_id", "area_name"]
+
+
+class StaffShiftSerializer(serializers.ModelSerializer):
+    worker_name = serializers.CharField(
+        source="worker.display_name", read_only=True
+    )
+    worker_role = serializers.CharField(source="worker.role", read_only=True)
+    areas = StaffShiftAreaSerializer(source="area_assignments", many=True, read_only=True)
+    area_ids = serializers.ListField(
+        child=serializers.IntegerField(), read_only=True
+    )
+
+    class Meta:
+        model = StaffShift
+        fields = [
+            "id", "worker", "worker_name", "worker_role",
+            "status", "areas", "area_ids",
+            "opened_at", "closed_at", "closed_by", "opened_from_device_id",
+        ]
+        read_only_fields = [
+            "id", "worker", "status", "opened_at", "closed_at",
+            "closed_by", "opened_from_device_id",
+        ]
+
+
+class OpenStaffShiftSerializer(serializers.Serializer):
+    worker_id = serializers.UUIDField()
+    area_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, default=list
+    )
+    device_id = serializers.UUIDField(required=False, allow_null=True)
+
+
+class CloseStaffShiftSerializer(serializers.Serializer):
+    shift_id = serializers.UUIDField()
     worker_id = serializers.UUIDField()
 
 

@@ -65,6 +65,16 @@ def _worker_has_area_access(worker, area):
     ).exists()
 
 
+def _resolve_worker(request, merchant, worker_id):
+    """Resolve a ShiftWorker belonging to the merchant, or None."""
+    if not worker_id:
+        return None
+    try:
+        return ShiftWorker.objects.get(id=worker_id, merchant=merchant)
+    except (ShiftWorker.DoesNotExist, ValueError):
+        return None
+
+
 # ── Preparation Area Management ──────────────────────────────────────────────
 
 class PreparationAreaSerializer(serializers.ModelSerializer):
@@ -357,6 +367,17 @@ def preparation_area_orders(request, area_id):
     except PreparationArea.DoesNotExist:
         return Response({"error": "Area not found."}, status=404)
 
+    # Enforce worker area access (kitchen staff → kitchen only, etc.)
+    worker_id = request.query_params.get("worker_id")
+    worker = _resolve_worker(request, merchant, worker_id)
+    if worker is None:
+        return Response({"error": "worker_id query param is required."}, status=400)
+    if not _worker_has_area_access(worker, area):
+        return Response(
+            {"error": "You do not have access to this preparation area."},
+            status=403,
+        )
+
     status_param = request.query_params.get("status", "active")
 
     if status_param == "ready":
@@ -390,7 +411,9 @@ def preparation_area_orders(request, area_id):
             .prefetch_related(
                 Prefetch(
                     "items",
-                    queryset=active_items.select_related("menu_item"),
+                    queryset=active_items.select_related(
+                        "menu_item", "preparation_started_by", "preparation_ready_by"
+                    ),
                     to_attr="area_items",
                 )
             )
@@ -409,7 +432,9 @@ def preparation_area_orders(request, area_id):
                 **filters,
             ).exclude(
                 preparation_status=OrderItem.CANCELLED
-            ).select_related("menu_item")
+            ).select_related(
+                "menu_item", "preparation_started_by", "preparation_ready_by"
+            )
 
         item_data = []
         for item in area_items:
@@ -428,6 +453,14 @@ def preparation_area_orders(request, area_id):
                 "preparation_ready_at": (
                     item.preparation_ready_at.isoformat()
                     if item.preparation_ready_at else None
+                ),
+                "started_by": (
+                    item.preparation_started_by.display_name
+                    if item.preparation_started_by else None
+                ),
+                "ready_by": (
+                    item.preparation_ready_by.display_name
+                    if item.preparation_ready_by else None
                 ),
             })
 
@@ -505,17 +538,35 @@ def preparation_area_action(request, area_id, action):
 
     # Check worker access
     worker_id = request.data.get("worker_id")
-    worker = None
-    if worker_id:
+    worker = _resolve_worker(request, merchant, worker_id)
+    if worker is None:
+        return Response(
+            {"error": "worker_id is required."},
+            status=400,
+        )
+    if not _worker_has_area_access(worker, area):
+        return Response(
+            {"error": "You do not have access to this preparation area."},
+            status=403,
+        )
+
+    # Optional staff shift attribution (KDS clock-in)
+    staff_shift = None
+    shift_id = request.data.get("staff_shift_id")
+    if shift_id:
+        from pos.models import StaffShift
         try:
-            worker = ShiftWorker.objects.get(id=worker_id, merchant=merchant)
-            if not _worker_has_area_access(worker, area):
-                return Response(
-                    {"error": "You do not have access to this preparation area."},
-                    status=403,
-                )
-        except ShiftWorker.DoesNotExist:
-            pass
+            staff_shift = StaffShift.objects.get(
+                id=shift_id,
+                merchant=merchant,
+                worker=worker,
+                status=StaffShift.STATUS_ACTIVE,
+            )
+        except (StaffShift.DoesNotExist, ValueError):
+            return Response(
+                {"error": "Active staff shift not found for this worker."},
+                status=400,
+            )
 
     status_map = {
         "start": OrderItem.PREPARING,
@@ -532,6 +583,7 @@ def preparation_area_action(request, area_id, action):
             preparation_area=area,
             staff=worker,
             target_status=target_status,
+            staff_shift=staff_shift,
         )
     except ValueError as e:
         return Response({"error": str(e)}, status=400)

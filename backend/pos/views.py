@@ -23,6 +23,7 @@ from .models import (
     CreditAccount, CreditTransaction,
     DebitAccount, DebitTransaction,
     StaffSchedule, PosCashMovement,
+    StaffShift, StaffShiftArea, StaffPreparationArea,
 )
 from .serializers import (
     PosDeviceSerializer, RegisterDeviceSerializer,
@@ -30,6 +31,7 @@ from .serializers import (
     ShiftWorkerSerializer, CreateWorkerSerializer, UpdateWorkerSerializer,
     WorkerLoginSerializer,
     CashShiftSerializer, OpenShiftSerializer, CloseShiftSerializer,
+    StaffShiftSerializer, OpenStaffShiftSerializer, CloseStaffShiftSerializer,
     PosPaymentSerializer, CreatePaymentSerializer, CreateSplitPaymentSerializer,
     PosDiscountSerializer, ApplyDiscountSerializer,
     PosAuditLogSerializer,
@@ -1030,6 +1032,213 @@ def list_shifts(request):
         )
     shifts = CashShift.objects.filter(merchant=merchant)[:50]
     return Response(CashShiftSerializer(shifts, many=True).data)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STAFF SHIFTS (KDS clock-in/out)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _worker_area_ids(worker, area_ids):
+    """
+    Return only the preparation areas this worker may be assigned to a shift.
+
+    Managers/admins may cover any area; everyone else is limited to their
+    StaffPreparationArea assignments (kitchen staff → kitchen only, etc.).
+    """
+    if worker.role in (ShiftWorker.ROLE_MANAGER, ShiftWorker.ROLE_ADMIN):
+        return list(area_ids)
+    allowed = set(
+        StaffPreparationArea.objects
+        .filter(worker=worker)
+        .values_list("preparation_area_id", flat=True)
+    )
+    return [aid for aid in area_ids if aid in allowed]
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+@transaction.atomic
+def open_staff_shift(request):
+    """
+    POST /api/pos/staff-shift/open/
+    { worker_id, area_ids: [1, 2], device_id? }
+
+    Starts (or resumes) the worker's KDS shift. Multiple staff may hold
+    active shifts simultaneously; each worker has at most one active shift.
+    """
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response(
+            {"error": "POS is not enabled."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    ser = OpenStaffShiftSerializer(data=request.data)
+    if not ser.is_valid():
+        return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    worker = ShiftWorker.objects.filter(
+        id=ser.validated_data["worker_id"],
+        merchant=merchant, is_active=True,
+    ).first()
+    if worker is None:
+        return Response({"error": "Worker not found."},
+                        status=status.HTTP_404_NOT_FOUND)
+
+    # Resume an existing active shift instead of opening a duplicate
+    existing = (
+        StaffShift.objects
+        .filter(worker=worker, status=StaffShift.STATUS_ACTIVE)
+        .select_related("worker")
+        .prefetch_related("area_assignments__preparation_area")
+        .first()
+    )
+    if existing:
+        return Response(StaffShiftSerializer(existing).data)
+
+    area_ids = ser.validated_data.get("area_ids") or []
+    allowed_ids = _worker_area_ids(worker, area_ids)
+
+    device = None
+    device_id = ser.validated_data.get("device_id")
+    if device_id:
+        device = PosDevice.objects.filter(
+            id=device_id, merchant=merchant, is_active=True,
+        ).first()
+
+    shift = StaffShift.objects.create(
+        merchant=merchant,
+        worker=worker,
+        opened_from_device_id=str(device.id) if device else "",
+    )
+    for area_id in allowed_ids:
+        StaffShiftArea.objects.create(shift=shift, preparation_area_id=area_id)
+
+    _audit(merchant, PosAuditLog.ACTION_STAFF_SHIFT_OPEN,
+           device=device, worker=worker, user=request.user,
+           entity_type="staff_shift", entity_id=shift.id,
+           metadata={"area_ids": allowed_ids})
+
+    return Response(StaffShiftSerializer(shift).data,
+                    status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+@transaction.atomic
+def close_staff_shift(request):
+    """
+    POST /api/pos/staff-shift/close/
+    { shift_id, worker_id }
+
+    Only the shift owner, or a manager/admin, may close a shift.
+    Closing one staff shift never closes anyone else's shift or a cash drawer.
+    """
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response(
+            {"error": "POS is not enabled."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    ser = CloseStaffShiftSerializer(data=request.data)
+    if not ser.is_valid():
+        return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    shift = StaffShift.objects.filter(
+        id=ser.validated_data["shift_id"],
+        merchant=merchant,
+        status=StaffShift.STATUS_ACTIVE,
+    ).first()
+    if shift is None:
+        return Response({"error": "Active staff shift not found."},
+                        status=status.HTTP_404_NOT_FOUND)
+
+    worker = ShiftWorker.objects.filter(
+        id=ser.validated_data["worker_id"],
+        merchant=merchant, is_active=True,
+    ).first()
+    if worker is None:
+        return Response({"error": "Worker not found."},
+                        status=status.HTTP_404_NOT_FOUND)
+
+    is_owner = shift.worker_id == worker.id
+    is_authorized = worker.role in (
+        ShiftWorker.ROLE_MANAGER, ShiftWorker.ROLE_ADMIN,
+    )
+    if not (is_owner or is_authorized):
+        return Response(
+            {"error": "Only the shift owner or a manager can close this shift."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    shift.status = StaffShift.STATUS_CLOSED
+    shift.closed_at = timezone.now()
+    shift.closed_by = worker
+    shift.save()
+
+    _audit(merchant, PosAuditLog.ACTION_STAFF_SHIFT_CLOSE,
+           worker=worker, user=request.user,
+           entity_type="staff_shift", entity_id=shift.id,
+           metadata={"closed_by": worker.display_name})
+
+    return Response(StaffShiftSerializer(shift).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def active_staff_shift(request):
+    """GET /api/pos/staff-shift/active/?worker_id= — worker's active shift."""
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response(
+            {"error": "POS is not enabled."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    worker_id = request.query_params.get("worker_id")
+    if not worker_id:
+        return Response({"error": "worker_id query param required."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    shift = (
+        StaffShift.objects
+        .filter(merchant=merchant, worker_id=worker_id,
+                status=StaffShift.STATUS_ACTIVE)
+        .select_related("worker")
+        .prefetch_related("area_assignments__preparation_area")
+        .first()
+    )
+    if not shift:
+        return Response({"shift": None})
+
+    return Response({"shift": StaffShiftSerializer(shift).data})
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def list_staff_shifts(request):
+    """
+    GET /api/pos/staff-shifts/?status=active
+    All staff shifts for the merchant (who is working where right now).
+    """
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response(
+            {"error": "POS is not enabled."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    status_param = request.query_params.get("status", "active")
+    qs = StaffShift.objects.filter(merchant=merchant)
+    if status_param == "active":
+        qs = qs.filter(status=StaffShift.STATUS_ACTIVE)
+
+    shifts = (
+        qs.select_related("worker")
+        .prefetch_related("area_assignments__preparation_area")[:50]
+    )
+    return Response(StaffShiftSerializer(shifts, many=True).data)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

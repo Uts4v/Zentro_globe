@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
+import { posListWorkers, posCreateWorker, posUpdateWorker, ShiftWorker } from "../api";
 import {
-  posListWorkers,
-  posCreateWorker,
-  posUpdateWorker,
-  ShiftWorker,
-} from "../api";
+  listPreparationAreas,
+  getStaffPreparationAreas,
+  setStaffPreparationAreas,
+} from "@/features/preparation/api";
+import type { PreparationArea } from "@/features/preparation/types";
 import {
   Users,
   Plus,
@@ -17,6 +18,7 @@ import {
   Check,
   UserX,
   UserCheck,
+  ChefHat,
 } from "lucide-react";
 
 const ROLES = [
@@ -32,6 +34,8 @@ const ROLE_COLORS: Record<string, string> = {
   manager: "bg-amber-100 text-amber-700",
   admin: "bg-purple-100 text-purple-700",
 };
+
+const ALL_ACCESS_ROLES = ["manager", "admin"];
 
 export default function StaffManagementScreen() {
   const [workers, setWorkers] = useState<ShiftWorker[]>([]);
@@ -50,15 +54,60 @@ export default function StaffManagementScreen() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Preparation areas + per-worker assignments
+  const [areas, setAreas] = useState<PreparationArea[]>([]);
+  const [workerAreaIds, setWorkerAreaIds] = useState<Record<string, number[]>>({});
+  const [savingAreaFor, setSavingAreaFor] = useState<string | null>(null);
+  const [newAreaIds, setNewAreaIds] = useState<number[]>([]);
+
   useEffect(() => {
     loadWorkers();
+    loadAreas();
   }, []);
+
+  async function loadAreas() {
+    try {
+      const data = await listPreparationAreas();
+      setAreas(data.filter((a) => a.is_active));
+    } catch {
+      // preparation routing may be disabled — ignore
+    }
+  }
+
+  async function loadWorkerAreas(workerId: string) {
+    try {
+      const data = await getStaffPreparationAreas(workerId);
+      setWorkerAreaIds((prev) => ({
+        ...prev,
+        [workerId]: data.map((a) => a.area_id),
+      }));
+    } catch {
+      // ignore
+    }
+  }
+
+  async function handleToggleArea(workerId: string, areaId: number) {
+    const current = workerAreaIds[workerId] ?? [];
+    const next = current.includes(areaId)
+      ? current.filter((id) => id !== areaId)
+      : [...current, areaId];
+    setWorkerAreaIds((prev) => ({ ...prev, [workerId]: next }));
+    setSavingAreaFor(workerId);
+    try {
+      await setStaffPreparationAreas(workerId, next);
+    } catch {
+      await loadWorkerAreas(workerId);
+    } finally {
+      setSavingAreaFor(null);
+    }
+  }
 
   async function loadWorkers() {
     setLoading(true);
     try {
       const data = await posListWorkers();
       setWorkers(data);
+      data.forEach((w) => loadWorkerAreas(w.id));
     } catch {
       // ignore
     } finally {
@@ -79,6 +128,11 @@ export default function StaffManagementScreen() {
         can_process_refund: newRefund,
         can_close_shift: newCloseShift,
         can_view_reports: newViewReports,
+      }).then(async (created) => {
+        if (newAreaIds.length > 0) {
+          await setStaffPreparationAreas(created.id, newAreaIds);
+        }
+        return created;
       });
       setShowCreate(false);
       resetForm();
@@ -116,6 +170,7 @@ export default function StaffManagementScreen() {
     setNewRefund(false);
     setNewCloseShift(false);
     setNewViewReports(false);
+    setNewAreaIds([]);
     setError(null);
   }
 
@@ -135,7 +190,10 @@ export default function StaffManagementScreen() {
           </div>
         </div>
         <button
-          onClick={() => { resetForm(); setShowCreate(true); }}
+          onClick={() => {
+            resetForm();
+            setShowCreate(true);
+          }}
           className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-white hover:opacity-90"
         >
           <Plus className="h-4 w-4" />
@@ -164,15 +222,21 @@ export default function StaffManagementScreen() {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className={`grid h-10 w-10 place-items-center rounded-full ${
-                    worker.is_active ? "bg-ink/10" : "bg-muted"
-                  }`}>
-                    <Users className={`h-5 w-5 ${worker.is_active ? "text-ink" : "text-muted-foreground"}`} />
+                  <div
+                    className={`grid h-10 w-10 place-items-center rounded-full ${
+                      worker.is_active ? "bg-ink/10" : "bg-muted"
+                    }`}
+                  >
+                    <Users
+                      className={`h-5 w-5 ${worker.is_active ? "text-ink" : "text-muted-foreground"}`}
+                    />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-foreground">{worker.display_name}</p>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${ROLE_COLORS[worker.role] || "bg-gray-100 text-gray-700"}`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${ROLE_COLORS[worker.role] || "bg-gray-100 text-gray-700"}`}
+                      >
                         {worker.role}
                       </span>
                       {!worker.is_active && (
@@ -198,7 +262,11 @@ export default function StaffManagementScreen() {
                     }`}
                     title={worker.is_active ? "Deactivate" : "Activate"}
                   >
-                    {worker.is_active ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                    {worker.is_active ? (
+                      <UserCheck className="h-4 w-4" />
+                    ) : (
+                      <UserX className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -230,6 +298,50 @@ export default function StaffManagementScreen() {
                   onChange={(v) => handleUpdatePermissions(worker, "can_view_reports", v)}
                 />
               </div>
+
+              {/* Preparation area access */}
+              {ALL_ACCESS_ROLES.includes(worker.role) ? (
+                <p className="mt-3 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700">
+                  <ChefHat className="h-3.5 w-3.5" />
+                  {worker.role === "manager" ? "Manager" : "Admin"} — has access to all preparation
+                  areas (Kitchen, Bar, …)
+                </p>
+              ) : (
+                <div className="mt-3">
+                  <div className="mb-1.5 flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-muted-foreground">
+                      Preparation screens
+                    </span>
+                    {savingAreaFor === worker.id && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                  {areas.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      No preparation areas yet. Enable preparation routing in Settings.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {areas.map((area) => {
+                        const selected = (workerAreaIds[worker.id] ?? []).includes(area.id);
+                        return (
+                          <button
+                            key={area.id}
+                            onClick={() => handleToggleArea(worker.id, area.id)}
+                            disabled={!worker.is_active || savingAreaFor === worker.id}
+                            className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                              selected ? "bg-ink/10 text-ink" : "bg-muted text-muted-foreground"
+                            } ${!worker.is_active ? "opacity-40" : "hover:opacity-80"}`}
+                          >
+                            <ChefHat className="h-3 w-3" />
+                            {area.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -237,18 +349,29 @@ export default function StaffManagementScreen() {
 
       {/* Create Worker Modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowCreate(false)}>
-          <div className="w-full max-w-md rounded-2xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowCreate(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-card shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-border px-5 py-4">
               <h2 className="text-lg font-bold text-foreground">Add Worker</h2>
-              <button onClick={() => setShowCreate(false)} className="rounded-lg p-1 text-muted-foreground hover:bg-muted">
+              <button
+                onClick={() => setShowCreate(false)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
             <div className="px-5 py-4 space-y-4">
               {/* Name */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Display Name</label>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Display Name
+                </label>
                 <input
                   type="text"
                   value={newName}
@@ -261,7 +384,9 @@ export default function StaffManagementScreen() {
 
               {/* PIN */}
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">PIN (4-8 digits)</label>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  PIN (4-8 digits)
+                </label>
                 <input
                   type="password"
                   value={newPin}
@@ -281,7 +406,9 @@ export default function StaffManagementScreen() {
                       key={r.value}
                       onClick={() => setNewRole(r.value)}
                       className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${
-                        newRole === r.value ? "bg-ink text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                        newRole === r.value
+                          ? "bg-ink text-white"
+                          : "bg-muted text-muted-foreground hover:bg-muted/80"
                       }`}
                     >
                       {r.label}
@@ -292,14 +419,68 @@ export default function StaffManagementScreen() {
 
               {/* Permissions */}
               <div>
-                <label className="mb-2 block text-xs font-medium text-muted-foreground">Permissions</label>
+                <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                  Permissions
+                </label>
                 <div className="space-y-2">
-                  <Checkbox label="Can apply discounts" checked={newDiscount} onChange={setNewDiscount} />
-                  <Checkbox label="Can process refunds" checked={newRefund} onChange={setNewRefund} />
-                  <Checkbox label="Can close shifts" checked={newCloseShift} onChange={setNewCloseShift} />
-                  <Checkbox label="Can view reports" checked={newViewReports} onChange={setNewViewReports} />
+                  <Checkbox
+                    label="Can apply discounts"
+                    checked={newDiscount}
+                    onChange={setNewDiscount}
+                  />
+                  <Checkbox
+                    label="Can process refunds"
+                    checked={newRefund}
+                    onChange={setNewRefund}
+                  />
+                  <Checkbox
+                    label="Can close shifts"
+                    checked={newCloseShift}
+                    onChange={setNewCloseShift}
+                  />
+                  <Checkbox
+                    label="Can view reports"
+                    checked={newViewReports}
+                    onChange={setNewViewReports}
+                  />
                 </div>
               </div>
+
+              {/* Preparation area access */}
+              {newRole === "manager" || newRole === "admin" ? (
+                <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-700">
+                  {newRole === "manager" ? "Managers" : "Admins"} get access to all preparation
+                  areas automatically.
+                </p>
+              ) : areas.length > 0 ? (
+                <div>
+                  <label className="mb-2 block text-xs font-medium text-muted-foreground">
+                    Preparation screens (Kitchen / Bar)
+                  </label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {areas.map((area) => {
+                      const selected = newAreaIds.includes(area.id);
+                      return (
+                        <button
+                          key={area.id}
+                          type="button"
+                          onClick={() =>
+                            setNewAreaIds((prev) =>
+                              selected ? prev.filter((id) => id !== area.id) : [...prev, area.id],
+                            )
+                          }
+                          className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                            selected ? "bg-ink/10 text-ink" : "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          <ChefHat className="h-3 w-3" />
+                          {area.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
 
               {/* Error */}
               {error && (
@@ -347,9 +528,7 @@ function PermissionToggle({
       onClick={() => !disabled && onChange(!checked)}
       disabled={disabled}
       className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-        checked
-          ? "bg-ink/10 text-ink"
-          : "bg-muted text-muted-foreground"
+        checked ? "bg-ink/10 text-ink" : "bg-muted text-muted-foreground"
       } ${disabled ? "opacity-40" : "hover:opacity-80"}`}
     >
       {checked ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
@@ -369,9 +548,11 @@ function Checkbox({
 }) {
   return (
     <label className="flex items-center gap-2 cursor-pointer">
-      <div className={`grid h-5 w-5 place-items-center rounded border transition-colors ${
-        checked ? "border-ink bg-ink" : "border-border bg-background"
-      }`}>
+      <div
+        className={`grid h-5 w-5 place-items-center rounded border transition-colors ${
+          checked ? "border-ink bg-ink" : "border-border bg-background"
+        }`}
+      >
         {checked && <Check className="h-3 w-3 text-white" />}
       </div>
       <span className="text-sm text-foreground">{label}</span>

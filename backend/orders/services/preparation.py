@@ -145,32 +145,55 @@ def validate_area_status_transition(current_status, target_status):
 
 
 @transaction.atomic
-def update_area_order_status(*, order, preparation_area, staff, target_status):
+def update_area_order_status(
+    *, order, preparation_area, staff, target_status, staff_shift=None
+):
     """
     Update all active preparation items for one order + one area.
     Returns the updated QuerySet.
 
     Used by the KDS (Kitchen Display System) when a worker taps
     Start Preparing, Mark Ready, etc.
+
+    Records attribution — who started / marked ready an item, and which
+    staff shift the action happened under. Uses select_for_update so two
+    workers can never claim the same order/items simultaneously.
+
+    The default area is a consolidated view (see get_area_orders): it
+    shows items from every area, so acting on it targets all of the
+    order's active preparation items across all areas. Non-default areas
+    only act on their own items.
+
+    Same-status taps are idempotent: re-tapping "Start Preparing" on an
+    order that is already preparing is a no-op success instead of an error,
+    which keeps stale KDS screens from failing.
     """
-    items = (
+    base_items = (
         OrderItem.objects
         .select_for_update()
         .filter(
             order=order,
-            preparation_area=preparation_area,
             requires_preparation=True,
         )
         .exclude(preparation_status=OrderItem.CANCELLED)
     )
+    if not preparation_area.is_default:
+        base_items = base_items.filter(preparation_area=preparation_area)
+
+    items = base_items
 
     if not items.exists():
         raise ValueError(
             "No active preparation items for this order and area."
         )
 
+    # Idempotent: items already in the target status need no change.
+    to_change = items.exclude(preparation_status=target_status)
+    if not to_change.exists():
+        return items
+
     current_statuses = set(
-        items.values_list("preparation_status", flat=True)
+        to_change.values_list("preparation_status", flat=True)
     )
 
     # Validate that all items can make this transition
@@ -182,17 +205,29 @@ def update_area_order_status(*, order, preparation_area, staff, target_status):
 
     if target_status == "preparing":
         update_fields["preparation_started_at"] = now
+        if staff is not None:
+            update_fields["preparation_started_by"] = staff
     elif target_status == "ready":
         update_fields["preparation_ready_at"] = now
+        if staff is not None:
+            update_fields["preparation_ready_by"] = staff
 
-    items.update(**update_fields)
+    if staff_shift is not None:
+        update_fields["preparation_staff_shift"] = staff_shift
+
+    to_change.update(**update_fields)
 
     # Refresh from DB to get updated values
-    items = OrderItem.objects.filter(
-        order=order,
-        preparation_area=preparation_area,
-        requires_preparation=True,
+    items = (
+        OrderItem.objects
+        .filter(
+            order=order,
+            requires_preparation=True,
+        )
+        .exclude(preparation_status=OrderItem.CANCELLED)
     )
+    if not preparation_area.is_default:
+        items = items.filter(preparation_area=preparation_area)
 
     synchronize_parent_order_status(order)
 
