@@ -51,6 +51,9 @@ class Notification(models.Model):
     class Meta:
         db_table = "notifications"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"], name="notif_user_created_idx"),
+        ]
 
     def __str__(self):
         return f"{self.user} — {self.title}"

@@ -12,9 +12,10 @@ from django.db import transaction
 from django.utils import timezone
 
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from accounts.models import CustomerProfile, User
 from merchants.models import MerchantProfile
@@ -63,6 +64,17 @@ def _notify_safe(**kwargs):
         send_notification(**kwargs)
     except Exception:
         logger.exception("Failed to send notification (flow continues)")
+
+
+def _paginate(request, qs, default=50, max_limit=200):
+    """Slice a queryset with limit/offset params while keeping the plain-list shape.
+
+    Always returns a capped list so unbounded endpoints can't be abused.
+    """
+    limit = int(request.query_params.get("limit", default))
+    limit = max(1, min(limit, max_limit))
+    offset = max(0, int(request.query_params.get("offset", 0)))
+    return qs[offset:offset + limit]
 
 
 @api_view(["GET"])
@@ -340,6 +352,7 @@ def customer_point_transactions(request):
         return _customer_error(str(e))
 
     transactions = PointTransaction.objects.filter(customer=customer, merchant_id=merchant_id)
+    transactions = _paginate(request, transactions)
     return Response(PointTransactionSerializer(transactions, many=True).data)
 
 
@@ -352,6 +365,7 @@ def merchant_point_transactions(request):
         return _merchant_error(str(e))
 
     transactions = PointTransaction.objects.filter(merchant=merchant)
+    transactions = _paginate(request, transactions)
     return Response(PointTransactionSerializer(transactions, many=True).data)
 
 
@@ -811,6 +825,7 @@ def confirm_punch_proof(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([ScopedRateThrottle])
 @transaction.atomic
 def redeem_reward(request, pk):
     """
@@ -897,6 +912,9 @@ def redeem_reward(request, pk):
     data = RedemptionSerializer(redemption).data
     data["order_id"] = redemption_order.id
     return Response(data, status=status.HTTP_201_CREATED)
+
+
+redeem_reward.throttle_scope = "redeem"
 
 
 @api_view(["GET"])
@@ -1016,6 +1034,7 @@ def leaderboard(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([ScopedRateThrottle])
 @transaction.atomic
 def transfer_create(request):
     """
@@ -1129,6 +1148,9 @@ def transfer_create(request):
         "sender_balance": sender_wallet.points_balance,
         "receiver_balance": receiver_wallet.points_balance,
     }, status=status.HTTP_201_CREATED)
+
+
+transfer_create.throttle_scope = "transfer"
 
 
 @api_view(["GET"])
@@ -1473,11 +1495,17 @@ def merchant_customer_list(request):
         .order_by("-joined_at")
     )
 
+    wallets_by_customer = {
+        w.customer_id: w
+        for w in CustomerMerchantWallet.objects.filter(
+            merchant=merchant,
+            customer_id__in=[m.customer_id for m in memberships],
+        )
+    }
+
     result = []
     for m in memberships:
-        wallet = CustomerMerchantWallet.objects.filter(
-            customer=m.customer, merchant=merchant,
-        ).first()
+        wallet = wallets_by_customer.get(m.customer_id)
         result.append({
             "membership_id": m.id,
             "membership_number": m.membership_number,

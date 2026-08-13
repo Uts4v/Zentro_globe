@@ -1,6 +1,7 @@
 import logging
 from datetime import date
 
+from celery import shared_task
 from django.utils import timezone
 
 from ..models import AIRequest, AIArtifact
@@ -12,7 +13,8 @@ from ..constants import (
 logger = logging.getLogger(__name__)
 
 
-def generate_merchant_report(merchant_id: int, report_date_str: str, request_id: str | None = None):
+@shared_task(bind=True, name="ai_core.tasks.generate_merchant_report", max_retries=2)
+def generate_merchant_report(self, merchant_id: int, report_date_str: str, request_id: str | None = None):
     from merchants.models import MerchantProfile
     try:
         merchant = MerchantProfile.objects.get(id=merchant_id)
@@ -42,3 +44,20 @@ def generate_merchant_report(merchant_id: int, report_date_str: str, request_id:
             request_obj.sanitized_error = str(e)[:500]
             request_obj.completed_at = timezone.now()
             request_obj.save(update_fields=["status", "error_code", "sanitized_error", "completed_at"])
+
+
+def enqueue_merchant_report(merchant_id: int, report_date_str: str, request_id: str | None = None):
+    """Enqueue report generation on Celery; fall back to synchronous execution
+    when the broker is unavailable (e.g. local dev without Redis)."""
+    from django.conf import settings
+
+    if getattr(settings, "CELERY_TASK_ALWAYS_EAGER", False):
+        generate_merchant_report.delay(merchant_id, report_date_str, request_id)
+        return
+
+    try:
+        result = generate_merchant_report.delay(merchant_id, report_date_str, request_id)
+        logger.info("Enqueued daily insight generation (task %s)", result.id)
+    except Exception:
+        logger.warning("Celery broker unavailable — running report generation synchronously")
+        generate_merchant_report(merchant_id, report_date_str, request_id)

@@ -51,18 +51,63 @@ INSTALLED_APPS = [
 # Switch from WSGI to ASGI
 ASGI_APPLICATION = "config.asgi.application"
 
-# Channel layer — use InMemoryChannelLayer for dev (no Redis needed),
-# swap for RedisChannelLayer in production.
+# Channel layer — RedisChannelLayer in production (REDIS_URL set),
+# InMemoryChannelLayer for dev (no Redis needed).
 _redis_url = os.getenv("REDIS_URL", "")
-CHANNEL_LAYERS = {
+
+# ── Cache ─────────────────────────────────────────────────────────────────────
+CACHES = {
     "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",
-    },
+        "BACKEND": (
+            "django.core.cache.backends.redis.RedisCache"
+            if _redis_url
+            else "django.core.cache.backends.locmem.LocMemCache"
+        ),
+        "LOCATION": _redis_url or "unique-locmem-zone",
+        "KEY_PREFIX": "zentro",
+        "TIMEOUT": 300,
+    }
 }
+
+if _redis_url:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [_redis_url],
+                "capacity": 5000,
+                "expiry": 10,
+            },
+        },
+    }
+else:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer",
+        },
+    }
+
+# Used by throttle + health checks; defaults to the configured default cache.
+THROTTLE_CACHE = "default"
+
+# ── Celery (production background tasks) ──────────────────────────────────────
+CELERY_BROKER_URL = _redis_url or "redis://127.0.0.1:6379/1"
+CELERY_RESULT_BACKEND = CELERY_BROKER_URL if _redis_url else None
+CELERY_TASK_ALWAYS_EAGER = bool(os.getenv("CELERY_TASK_ALWAYS_EAGER", "False").lower() in ("true", "1", "yes"))
+CELERY_TASK_EAGER_PROPAGATES = True
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = "UTC"
+CELERY_TASK_TRACK_STARTED = True
+
+# ── Slow request logging ──────────────────────────────────────────────────────
+SLOW_REQUEST_THRESHOLD_SECONDS = float(os.getenv("SLOW_REQUEST_THRESHOLD_SECONDS", "1.0"))
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
+    "config.middleware.RequestContextMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -105,7 +150,7 @@ if DATABASE_URL:
             "PASSWORD": url.password or "",
             "HOST": url.hostname or "localhost",
             "PORT": url.port or 5432,
-            "CONN_MAX_AGE": 0,
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
             "OPTIONS": {
                 "sslmode": os.getenv("DB_SSLMODE", "require"),
                 "connect_timeout": 10,
@@ -121,7 +166,7 @@ elif os.getenv("DB_ENGINE") == "django.db.backends.postgresql":
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": os.getenv("DB_HOST", "localhost"),
             "PORT": os.getenv("DB_PORT", "5432"),
-            "CONN_MAX_AGE": 0,
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
             "OPTIONS": {
                 "sslmode": os.getenv("DB_SSLMODE", "prefer"),
             },
@@ -228,6 +273,8 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 
 # ── Django-Q2 ─────────────────────────────────────────────────────────────────
+# django-q2 is present for existing functionality only; new background work
+# uses the Celery architecture. Do not add Redis broker wiring here.
 Q_CLUSTER = {
     "name": "zentro-ai",
     "orm": "default",
@@ -265,6 +312,13 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "anon": "500/hour",
     "user": "1000/day",
+    "pos": "1200/hour",
+    "pin": "20/min",
+    "login": "10/min",
+    "otp": "5/min",
+    "transfer": "10/hour",
+    "redeem": "10/min",
+    "guest": "60/hour",
 }
 
 # ── Logging ───────────────────────────────────────────────────────────────────
@@ -276,15 +330,25 @@ LOGGING = {
             "format": "{asctime} [{levelname}] {name}: {message}",
             "style": "{",
         },
+        "verbose": {
+            "format": "{asctime} [{levelname}] {name} request_id={request_id} path={path} method={method} status={status_code} duration_ms={duration_ms} user={user} {message}",
+            "style": "{",
+        },
     },
     "handlers": {
         "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "console_simple": {
             "class": "logging.StreamHandler",
             "formatter": "structured",
         },
     },
     "loggers": {
-        "ai_core": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "ai_core": {"handlers": ["console_simple"], "level": "INFO", "propagate": False},
         "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+        "config.middleware": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        "django.channels.server": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }

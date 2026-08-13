@@ -52,6 +52,7 @@ export default function IncomingOrdersPanel() {
   const [custResults, setCustResults] = useState<PosCustomer[]>([]);
   const [custSearching, setCustSearching] = useState(false);
   const [linking, setLinking] = useState(false);
+  const searchRequest = useRef<AbortController | null>(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -124,13 +125,16 @@ export default function IncomingOrdersPanel() {
   async function searchCustomer() {
     if (custSearch.length < 2) return;
     setCustSearching(true);
+    searchRequest.current?.abort();
+    const controller = new AbortController();
+    searchRequest.current = controller;
     try {
-      const results = await posSearchCustomers(custSearch);
-      setCustResults(results);
+      const results = await posSearchCustomers(custSearch, controller.signal);
+      if (!controller.signal.aborted) setCustResults(results);
     } catch {
-      setCustResults([]);
+      if (!controller.signal.aborted) setCustResults([]);
     } finally {
-      setCustSearching(false);
+      if (!controller.signal.aborted) setCustSearching(false);
     }
   }
 

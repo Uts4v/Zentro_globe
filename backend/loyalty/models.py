@@ -373,6 +373,9 @@ class PointTransaction(models.Model):
     class Meta:
         db_table = "point_transactions"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["merchant", "customer", "-created_at"], name="pt_merchant_customer_idx"),
+        ]
 
     def __str__(self):
         return f"{self.transaction_type}: {self.points} pts for {self.customer} @ {self.merchant}"

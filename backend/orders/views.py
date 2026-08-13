@@ -9,9 +9,10 @@ from django.db.models import Q
 from accounts.models import CustomerProfile
 
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from merchants.models import MerchantProfile, MenuItem
 from loyalty.models import (
@@ -30,6 +31,28 @@ from .serializers import OrderSerializer, CreateOrderSerializer, CreateGuestOrde
 from .services.preparation import prepare_order_items_for_routing
 
 logger = logging.getLogger(__name__)
+
+
+def _paginate(request, qs, default=100, max_limit=200):
+    """Slice a queryset with limit/offset params while keeping the plain-list shape."""
+    limit = int(request.query_params.get("limit", default))
+    limit = max(1, min(limit, max_limit))
+    offset = max(0, int(request.query_params.get("offset", 0)))
+    return qs[offset:offset + limit]
+
+
+def _order_qs():
+    """select_related paths covering every OrderSerializer display source."""
+    return Order.objects.select_related(
+        "merchant",
+        "customer__user",
+        "reward_redemption__reward",
+        "punch_card_redemption__punch_card",
+        "table",
+        "processed_by_worker",
+        "pos_device",
+        "cash_shift",
+    ).prefetch_related("items__menu_item")
 
 
 def _notify_safe(**kwargs):
@@ -191,12 +214,11 @@ def my_orders(request):
         return Response({"error": "No customer profile found."}, status=status.HTTP_404_NOT_FOUND)
 
     orders = (
-        Order.objects
+        _order_qs()
         .filter(customer=customer)
-        .prefetch_related("items__menu_item")
-        .select_related("merchant")
         .order_by("-created_at")
     )
+    orders = _paginate(request, orders)
     return Response(OrderSerializer(orders, many=True).data)
 
 
@@ -209,10 +231,8 @@ def store_orders(request):
         return Response({"error": "No merchant profile found."}, status=status.HTTP_404_NOT_FOUND)
 
     qs = (
-        Order.objects
+        _order_qs()
         .filter(merchant=merchant)
-        .prefetch_related("items__menu_item")
-        .select_related("customer__user")
         .order_by("-created_at")
     )
 
@@ -220,6 +240,7 @@ def store_orders(request):
     if filter_status:
         qs = qs.filter(status=filter_status)
 
+    qs = _paginate(request, qs)
     return Response(OrderSerializer(qs, many=True).data)
 
 
@@ -296,14 +317,19 @@ def create_order(request):
     points_earned  = 0
     order_items_data = []
 
+    # Batch-fetch menu items in one query instead of one per line item.
+    menu_items_by_id = {
+        mi.id: mi
+        for mi in MenuItem.objects.filter(
+            id__in=[i["menu_item_id"] for i in data["items"]],
+            merchant=merchant,
+            is_available=True,
+        )
+    }
+
     for item_data in data["items"]:
-        try:
-            menu_item = MenuItem.objects.get(
-                id=item_data["menu_item_id"],
-                merchant=merchant,
-                is_available=True,
-            )
-        except MenuItem.DoesNotExist:
+        menu_item = menu_items_by_id.get(item_data["menu_item_id"])
+        if menu_item is None:
             return Response(
                 {"error": f"Menu item {item_data['menu_item_id']} not found or unavailable."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -341,8 +367,10 @@ def create_order(request):
     # Apply preparation routing
     order_items_data = prepare_order_items_for_routing(order, order_items_data)
 
-    for item in order_items_data:
-        OrderItem.objects.create(order=order, **item)
+    OrderItem.objects.bulk_create(
+        [OrderItem(order=order, **item) for item in order_items_data],
+        batch_size=200,
+    )
 
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
@@ -360,6 +388,7 @@ def create_order(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 @transaction.atomic
 def guest_create_order(request):
     """Create an order without authentication. Requires a valid table token."""
@@ -407,14 +436,19 @@ def guest_create_order(request):
     points_earned = 0
     order_items_data = []
 
+    # Batch-fetch menu items in one query instead of one per line item.
+    menu_items_by_id = {
+        mi.id: mi
+        for mi in MenuItem.objects.filter(
+            id__in=[i["menu_item_id"] for i in data["items"]],
+            merchant=merchant,
+            is_available=True,
+        )
+    }
+
     for item_data in data["items"]:
-        try:
-            menu_item = MenuItem.objects.get(
-                id=item_data["menu_item_id"],
-                merchant=merchant,
-                is_available=True,
-            )
-        except MenuItem.DoesNotExist:
+        menu_item = menu_items_by_id.get(item_data["menu_item_id"])
+        if menu_item is None:
             return Response(
                 {"error": f"Menu item {item_data['menu_item_id']} not found or unavailable."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -435,8 +469,10 @@ def guest_create_order(request):
             "subtotal": subtotal,
         })
 
-    # Generate KOT number
+    # Generate KOT number. Lock the merchant row so concurrent guest orders
+    # can't compute the same count+1.
     from django.utils import timezone as tz
+    merchant = MerchantProfile.objects.select_for_update().get(pk=merchant.pk)
     today_start = tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_count = Order.objects.filter(
         merchant=merchant, created_at__gte=today_start, kot_number__isnull=False,
@@ -464,8 +500,10 @@ def guest_create_order(request):
     # Apply preparation routing
     order_items_data = prepare_order_items_for_routing(order, order_items_data)
 
-    for item in order_items_data:
-        OrderItem.objects.create(order=order, **item)
+    OrderItem.objects.bulk_create(
+        [OrderItem(order=order, **item) for item in order_items_data],
+        batch_size=200,
+    )
 
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
@@ -479,6 +517,9 @@ def guest_create_order(request):
     ))
 
     return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+
+
+guest_create_order.throttle_scope = "guest"
 
 
 @api_view(["GET"])
@@ -510,7 +551,9 @@ def order_detail(request, pk):
 @transaction.atomic
 def update_order_status(request, pk):
     try:
-        order = Order.objects.select_related("customer__user", "merchant").get(pk=pk)
+        order = Order.objects.select_for_update(of=("self",)).select_related(
+            "customer__user", "merchant"
+        ).get(pk=pk)
     except Order.DoesNotExist:
         return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -687,10 +730,10 @@ def customer_order_history(request):
         return Response({"error": "No customer profile."}, status=403)
 
     one_month_ago = timezone.now() - timedelta(days=30)
-    qs = Order.objects.filter(
+    qs = _order_qs().filter(
         customer=customer,
         created_at__gte=one_month_ago,
-    ).prefetch_related("items").select_related("merchant").order_by("-created_at")
+    ).order_by("-created_at")
 
     search = request.query_params.get("search", "").strip()
     if search:
@@ -704,6 +747,7 @@ def customer_order_history(request):
     if status_filter:
         qs = qs.filter(status=status_filter)
 
+    qs = _paginate(request, qs)
     from .serializers import OrderSerializer
     return Response(OrderSerializer(qs, many=True).data)
 
@@ -753,10 +797,10 @@ def merchant_order_history(request):
         return Response({"error": "No merchant profile."}, status=403)
 
     two_months_ago = timezone.now() - timedelta(days=60)
-    qs = Order.objects.filter(
+    qs = _order_qs().filter(
         merchant=merchant,
         created_at__gte=two_months_ago,
-    ).prefetch_related("items").select_related("customer__user").order_by("-created_at")
+    ).order_by("-created_at")
 
     search = request.query_params.get("search", "").strip()
     if search:
@@ -787,5 +831,6 @@ def merchant_order_history(request):
         except ValueError:
             pass
 
+    qs = _paginate(request, qs)
     from .serializers import OrderSerializer
     return Response(OrderSerializer(qs, many=True).data)

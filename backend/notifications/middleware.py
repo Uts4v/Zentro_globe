@@ -9,6 +9,11 @@ def get_user_from_token(token_key):
     from accounts.models import User
     try:
         token = AccessToken(token_key)
+        # Only accept short-lived WebSocket tokens issued by /api/auth/ws-token/.
+        # Long-lived access tokens carry no ws_auth claim and are rejected so
+        # they can never leak via query strings into logs/proxies.
+        if not token.get("ws_auth"):
+            return AnonymousUser()
         return User.objects.get(id=token["user_id"])
     except Exception:
         return AnonymousUser()

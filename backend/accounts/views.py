@@ -26,10 +26,11 @@ from django.conf import settings
 from django.db import transaction
 
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
-from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.throttling import ScopedRateThrottle
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.exceptions import TokenError
 
@@ -55,12 +56,15 @@ class LoginView(TokenObtainPairView):
     """
     serializer_class = CustomTokenObtainPairSerializer
     permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
 
 # ── Register ──────────────────────────────────────────────────────────────────
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 @transaction.atomic
 def register(request):
     """
@@ -160,6 +164,9 @@ def register(request):
     )
 
 
+register.throttle_scope = "login"
+
+
 # ── Logout ────────────────────────────────────────────────────────────────────
 
 @api_view(["POST"])
@@ -215,6 +222,8 @@ def me(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([ScopedRateThrottle])
+@transaction.atomic
 def change_password(request):
     """
     POST /api/auth/change-password/
@@ -238,10 +247,14 @@ def change_password(request):
     return Response({"detail": "Password changed successfully."})
 
 
+change_password.throttle_scope = "login"
+
+
 # ── Forgot password ───────────────────────────────────────────────────────────
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def forgot_password(request):
     """
     POST /api/auth/forgot-password/
@@ -288,10 +301,14 @@ def forgot_password(request):
     return Response({"detail": "If that email is registered, you will receive a reset link."})
 
 
+forgot_password.throttle_scope = "otp"
+
+
 # ── Reset password ────────────────────────────────────────────────────────────
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def reset_password(request):
     """
     POST /api/auth/reset-password/
@@ -326,6 +343,29 @@ def reset_password(request):
     reset_token.save(update_fields=["used"])
 
     return Response({"detail": "Password reset successfully. You can now log in."})
+
+
+reset_password.throttle_scope = "otp"
+
+
+# ── WebSocket auth token ──────────────────────────────────────────────────────
+# WebSocket URLs appear in logs, proxies and monitoring tools, so we must not
+# put a long-lived access token in the query string. Clients fetch this short-
+# lived (60s) WS-only JWT and connect with ?token=<ws_token>. The WS middleware
+# rejects tokens that lack the ws_auth claim, so a stolen access token can
+# never be replayed into a WebSocket URL, and the WS token itself expires in
+# a minute.
+
+WS_TOKEN_LIFETIME = timedelta(seconds=60)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def ws_token(request):
+    token = AccessToken.for_user(request.user)
+    token["ws_auth"] = True
+    token.set_exp(lifetime=WS_TOKEN_LIFETIME)
+    return Response({"token": str(token), "expires_in": 60})
 
 
 # ── Media upload ──────────────────────────────────────────────────────────────

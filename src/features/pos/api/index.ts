@@ -884,9 +884,10 @@ export interface PosZReportData {
 
 // ── Customer Search (Phase 26) ─────────────────────────────────────────────
 
-export const posSearchCustomers = (query: string) =>
+export const posSearchCustomers = (query: string, signal?: AbortSignal) =>
   djangoFetch<PosCustomer[]>(apiUrl(`/pos/customers/search/?q=${encodeURIComponent(query)}`), {
     headers: headers(),
+    signal,
   });
 
 export interface PosCustomer {

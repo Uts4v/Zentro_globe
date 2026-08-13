@@ -3,12 +3,14 @@ import uuid
 
 from django.db import transaction
 from django.db.models import Sum, Count, Q, F
+from django.db import IntegrityError
 from django.utils import timezone
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 
 from merchants.models import MerchantProfile, MenuItem
 from orders.models import Order, OrderItem
@@ -707,7 +709,7 @@ def update_worker(request, worker_id):
 
 @api_view(["POST"])
 @permission_classes([IsPosDevice])
-@throttle_classes([])
+@throttle_classes([ScopedRateThrottle])
 def worker_login(request):
     merchant = request.pos_merchant
     if not _require_pos(merchant):
@@ -745,6 +747,9 @@ def worker_login(request):
         "worker": ShiftWorkerSerializer(worker).data,
         "message": "Login successful",
     })
+
+
+worker_login.throttle_scope = "pin"
 
 
 @api_view(["POST"])
@@ -1318,7 +1323,16 @@ def create_pos_order(request):
             return Response({"error": "Table not found."},
                             status=status.HTTP_404_NOT_FOUND)
 
-    # Calculate totals server-side (never trust frontend totals)
+    # Calculate totals server-side (never trust frontend totals).
+    # Batch-fetch menu items in a single query instead of one per line item.
+    item_ids = [item_data.get("menu_item_id") for item_data in items_data]
+    menu_items_by_id = {
+        mi.id: mi
+        for mi in MenuItem.objects.filter(
+            id__in=item_ids, merchant=merchant, is_available=True,
+        )
+    }
+
     total_amount = 0
     points_earned = 0
     order_items_data = []
@@ -1327,11 +1341,8 @@ def create_pos_order(request):
         menu_item_id = item_data.get("menu_item_id")
         quantity = item_data.get("quantity", 1)
 
-        try:
-            menu_item = MenuItem.objects.get(
-                id=menu_item_id, merchant=merchant, is_available=True,
-            )
-        except MenuItem.DoesNotExist:
+        menu_item = menu_items_by_id.get(menu_item_id)
+        if menu_item is None:
             return Response(
                 {"error": f"Menu item {menu_item_id} not found or unavailable."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -1398,48 +1409,71 @@ def create_pos_order(request):
             except Order.DoesNotExist:
                 pass
 
-    # Generate sequential KOT number per merchant per day (resets at midnight)
+    # Generate sequential KOT number per merchant per day (resets at midnight).
+    # Lock the merchant row so two devices can't compute the same count+1.
     from django.utils import timezone as tz
+    from merchants.models import MerchantProfile as _MP
+    merchant = _MP.objects.select_for_update().get(pk=merchant.pk)
     today_start = tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_count = Order.objects.filter(
         merchant=merchant, created_at__gte=today_start, kot_number__isnull=False,
     ).count()
     kot_number = today_count + 1
 
-    order = Order.objects.create(
-        customer=customer,
-        merchant=merchant,
-        total_amount=total_amount,
-        points_earned=points_earned,
-        notes=data.get("notes", ""),
-        status=Order.STATUS_CONFIRMED,  # POS orders go directly to confirmed
-        order_type=order_type,
-        source=source,
-        fulfillment_type=fulfillment,
-        table=table_instance,
-        table_name_snapshot=table_name_snap,
-        table_number_snapshot=table_number_snap,
-        cash_shift=shift,
-        kot_number=kot_number,
-    )
+    try:
+        with transaction.atomic():
+            order = Order.objects.create(
+                customer=customer,
+                merchant=merchant,
+                total_amount=total_amount,
+                points_earned=points_earned,
+                notes=data.get("notes", ""),
+                status=Order.STATUS_CONFIRMED,  # POS orders go directly to confirmed
+                order_type=order_type,
+                source=source,
+                fulfillment_type=fulfillment,
+                table=table_instance,
+                table_name_snapshot=table_name_snap,
+                table_number_snapshot=table_number_snap,
+                cash_shift=shift,
+                kot_number=kot_number,
+            )
 
-    # Apply preparation routing
-    from orders.services.preparation import prepare_order_items_for_routing
-    order_items_data = prepare_order_items_for_routing(order, order_items_data)
+            # Apply preparation routing
+            from orders.services.preparation import prepare_order_items_for_routing
+            order_items_data = prepare_order_items_for_routing(order, order_items_data)
 
-    for item in order_items_data:
-        OrderItem.objects.create(order=order, **item)
+            OrderItem.objects.bulk_create(
+                [OrderItem(order=order, **item) for item in order_items_data],
+                batch_size=200,
+            )
 
-    # Record client mutation for idempotency
-    if client_mutation_id:
-        ProcessedClientMutation.objects.create(
+            # Record client mutation for idempotency
+            if client_mutation_id:
+                ProcessedClientMutation.objects.create(
+                    merchant=merchant,
+                    device=device or PosDevice.objects.filter(merchant=merchant).first(),
+                    client_mutation_id=client_mutation_id,
+                    entity_type="order",
+                    operation="create",
+                    server_object_id=order.id,
+                )
+    except IntegrityError:
+        # Concurrent duplicate submission won the race and the unique
+        # (merchant, device, client_mutation_id) constraint fired.
+        # Roll back this request and return the order created by the winner.
+        from orders.serializers import OrderSerializer
+        existing_mutation = ProcessedClientMutation.objects.filter(
             merchant=merchant,
-            device=device or PosDevice.objects.filter(merchant=merchant).first(),
             client_mutation_id=client_mutation_id,
-            entity_type="order",
-            operation="create",
-            server_object_id=order.id,
-        )
+        ).first()
+        if existing_mutation and existing_mutation.server_object_id:
+            try:
+                existing_order = Order.objects.get(id=existing_mutation.server_object_id)
+                return Response(OrderSerializer(existing_order).data)
+            except Order.DoesNotExist:
+                pass
+        raise
 
     _audit(merchant, PosAuditLog.ACTION_ORDER_CREATE,
            device=device, worker=worker, user=request.user,
@@ -1456,8 +1490,13 @@ def create_pos_order(request):
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+@transaction.atomic
 def update_order_status_uuid(request):
-    """Update order status by UUID — validates transitions server-side."""
+    """Update order status by UUID — validates transitions server-side.
+
+    The order row is locked (select_for_update) so two devices can never
+    complete the same order twice, which would double-award loyalty points.
+    """
     merchant = _get_merchant(request)
     if not _require_pos(merchant):
         return Response({"error": "POS is not enabled."},
@@ -1476,7 +1515,7 @@ def update_order_status_uuid(request):
                         status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        order = Order.objects.get(uuid=order_id, merchant=merchant)
+        order = Order.objects.select_for_update().get(uuid=order_id, merchant=merchant)
     except Order.DoesNotExist:
         return Response({"error": "Order not found."},
                         status=status.HTTP_404_NOT_FOUND)
@@ -1549,7 +1588,16 @@ def pos_orders(request):
     if status_filter:
         qs = qs.filter(status=status_filter)
 
-    qs = qs.select_related("customer__user", "merchant").prefetch_related("items")[:50]
+    qs = qs.select_related(
+        "customer__user",
+        "merchant",
+        "reward_redemption__reward",
+        "punch_card_redemption__punch_card",
+        "table",
+        "processed_by_worker",
+        "pos_device",
+        "cash_shift",
+    ).prefetch_related("items")[:50]
 
     from orders.serializers import OrderSerializer
     return Response(OrderSerializer(qs, many=True).data)
@@ -1575,7 +1623,7 @@ def create_payment(request):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        order = Order.objects.get(
+        order = Order.objects.select_for_update().get(
             uuid=ser.validated_data["order_id"], merchant=merchant,
         )
     except Order.DoesNotExist:
@@ -1627,22 +1675,9 @@ def create_payment(request):
         except PosPayment.DoesNotExist:
             pass
 
-    payment = PosPayment.objects.create(
-        merchant=merchant,
-        order=order,
-        shift=shift,
-        worker=worker,
-        device=device,
-        payment_method=method,
-        amount=ser.validated_data["amount"],
-        status=PosPayment.STATUS_COMPLETED,
-        external_reference=ser.validated_data.get("external_reference", ""),
-        change_amount=ser.validated_data.get("change_amount", 0),
-        client_mutation_id=client_mutation_id,
-        client_created_at=ser.validated_data.get("client_created_at", timezone.now()),
-    )
-
-    # Deduct from debit account when paying with debit wallet
+    # Validate debit account BEFORE creating the payment so a failed
+    # debit check can never leave an orphan payment row behind.
+    debit_account = None
     if method == PosPayment.METHOD_DEBIT:
         debit_account_id = ser.validated_data.get("debit_account_id")
         if not debit_account_id:
@@ -1651,7 +1686,7 @@ def create_payment(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         try:
-            debit_account = DebitAccount.objects.get(
+            debit_account = DebitAccount.objects.select_for_update().get(
                 id=debit_account_id, merchant=merchant, is_active=True,
             )
         except DebitAccount.DoesNotExist:
@@ -1665,50 +1700,80 @@ def create_payment(request):
                 {"error": f"Insufficient balance. Available: Rs {debit_account.balance}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        balance_before = debit_account.balance
-        debit_account.balance -= pay_amount
-        debit_account.save(update_fields=["balance"])
-        DebitTransaction.objects.create(
-            account=debit_account,
-            order=order,
-            worker=worker,
-            transaction_type=DebitTransaction.TYPE_PURCHASE,
-            amount=pay_amount,
-            balance_before=balance_before,
-            balance_after=debit_account.balance,
-            note=f"POS payment {payment.id}",
+
+    try:
+        with transaction.atomic():
+            payment = PosPayment.objects.create(
+                merchant=merchant,
+                order=order,
+                shift=shift,
+                worker=worker,
+                device=device,
+                payment_method=method,
+                amount=ser.validated_data["amount"],
+                status=PosPayment.STATUS_COMPLETED,
+                external_reference=ser.validated_data.get("external_reference", ""),
+                change_amount=ser.validated_data.get("change_amount", 0),
+                client_mutation_id=client_mutation_id,
+                client_created_at=ser.validated_data.get("client_created_at", timezone.now()),
+            )
+
+            # Deduct from debit account when paying with debit wallet
+            if method == PosPayment.METHOD_DEBIT:
+                balance_before = debit_account.balance
+                debit_account.balance -= pay_amount
+                debit_account.save(update_fields=["balance"])
+                DebitTransaction.objects.create(
+                    account=debit_account,
+                    order=order,
+                    worker=worker,
+                    transaction_type=DebitTransaction.TYPE_PURCHASE,
+                    amount=pay_amount,
+                    balance_before=balance_before,
+                    balance_after=debit_account.balance,
+                    note=f"POS payment {payment.id}",
+                    client_mutation_id=client_mutation_id,
+                )
+
+            # Mark order as paid when total payments >= total amount
+            total_paid = PosPayment.objects.filter(
+                order=order, status=PosPayment.STATUS_COMPLETED
+            ).aggregate(total=Sum("amount"))["total"] or 0
+            if total_paid >= order.total_amount:
+                order.payment_status = "paid"
+                order.payment_method = method
+                # Auto-complete and award loyalty
+                if order.status not in (Order.STATUS_COMPLETED, Order.STATUS_CANCELLED):
+                    order.status = Order.STATUS_COMPLETED
+                    if not order.loyalty_awarded and order.customer is not None:
+                        _award_loyalty(order)
+                        order.loyalty_awarded = True
+                order.version += 1
+                order.save(update_fields=["payment_status", "payment_method", "status", "loyalty_awarded", "version", "updated_at"])
+            elif total_paid > 0:
+                order.payment_status = "partially_paid"
+                order.version += 1
+                order.save(update_fields=["payment_status", "version", "updated_at"])
+
+            # Record idempotency
+            ProcessedClientMutation.objects.create(
+                merchant=merchant,
+                device=device,
+                client_mutation_id=client_mutation_id,
+                entity_type="payment",
+                operation="create",
+                server_object_id=payment.id,
+            )
+    except IntegrityError:
+        # A concurrent duplicate (double-tap / retried offline sync) already
+        # created this payment. Roll back this attempt and return the winner's
+        # payment instead of raising a 500.
+        existing_payment = PosPayment.objects.filter(
             client_mutation_id=client_mutation_id,
-        )
-
-    # Mark order as paid when total payments >= total amount
-    total_paid = PosPayment.objects.filter(
-        order=order, status=PosPayment.STATUS_COMPLETED
-    ).aggregate(total=Sum("amount"))["total"] or 0
-    if total_paid >= order.total_amount:
-        order.payment_status = "paid"
-        order.payment_method = method
-        # Auto-complete and award loyalty
-        if order.status not in (Order.STATUS_COMPLETED, Order.STATUS_CANCELLED):
-            order.status = Order.STATUS_COMPLETED
-            if not order.loyalty_awarded and order.customer is not None:
-                _award_loyalty(order)
-                order.loyalty_awarded = True
-        order.version += 1
-        order.save(update_fields=["payment_status", "payment_method", "status", "loyalty_awarded", "version", "updated_at"])
-    elif total_paid > 0:
-        order.payment_status = "partially_paid"
-        order.version += 1
-        order.save(update_fields=["payment_status", "version", "updated_at"])
-
-    # Record idempotency
-    ProcessedClientMutation.objects.create(
-        merchant=merchant,
-        device=device,
-        client_mutation_id=client_mutation_id,
-        entity_type="payment",
-        operation="create",
-        server_object_id=payment.id,
-    )
+        ).first()
+        if existing_payment:
+            return Response(PosPaymentSerializer(existing_payment).data)
+        raise
 
     _audit(merchant, PosAuditLog.ACTION_PAYMENT,
            device=device, worker=worker, user=request.user,
@@ -1756,7 +1821,7 @@ def create_split_payment(request):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        order = Order.objects.get(
+        order = Order.objects.select_for_update().get(
             uuid=ser.validated_data["order_id"], merchant=merchant,
         )
     except Order.DoesNotExist:
@@ -1783,7 +1848,7 @@ def create_split_payment(request):
         device = PosDevice.objects.get(
             id=ser.validated_data["device_id"], merchant=merchant, is_active=True,
         )
-    except PosPayment.DoesNotExist:
+    except PosDevice.DoesNotExist:
         return Response({"error": "Device not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
@@ -3484,6 +3549,7 @@ def table_menu(request, token):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 @transaction.atomic
 def table_order(request, token):
     """
@@ -3520,6 +3586,20 @@ def table_order(request, token):
         except CustomerProfile.DoesNotExist:
             pass
 
+    # Validate all menu items exist before creating anything
+    menu_items_by_id = {
+        mi.id: mi
+        for mi in MenuItem.objects.filter(
+            id__in=[item_data["menu_item_id"] for item_data in items_data],
+            merchant=merchant,
+            is_available=True,
+        )
+    }
+    for item_data in items_data:
+        if item_data["menu_item_id"] not in menu_items_by_id:
+            return Response({"error": f"Menu item {item_data['menu_item_id']} not found."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
     # Build order
     order = Order(
         customer=customer,
@@ -3539,14 +3619,7 @@ def table_order(request, token):
     subtotal = 0
     points_earned = 0
     for item_data in items_data:
-        try:
-            menu_item = MenuItem.objects.get(
-                id=item_data["menu_item_id"], merchant=merchant, is_available=True,
-            )
-        except MenuItem.DoesNotExist:
-            order.delete()
-            return Response({"error": f"Menu item {item_data.get('menu_item_id')} not found."},
-                            status=status.HTTP_400_BAD_REQUEST)
+        menu_item = menu_items_by_id[item_data["menu_item_id"]]
 
         qty = item_data.get("quantity", 1)
         item_subtotal = float(menu_item.price) * qty
@@ -3595,6 +3668,9 @@ def table_order(request, token):
         "table": table.name,
         "total": str(subtotal),
     }, status=status.HTTP_201_CREATED)
+
+
+table_order.throttle_scope = "guest"
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -22,7 +22,7 @@ import { ZentroLoadingScreen } from "@/components/brand/ZentroLoadingScreen";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
-import { tokenStore } from "@/lib/django-api-base";
+import { getWsToken } from "@/lib/ws";
 
 // Routes that never require auth
 const PUBLIC_ROUTES = ["/auth", "/auth/merchant", "/auth/forgot-password", "/auth/reset-password"];
@@ -180,11 +180,15 @@ function GlobalNotificationToasts() {
   useEffect(() => {
     if (!user) return;
 
-    const token = tokenStore.getAccess();
-    if (!token) return;
-
     // Defer WebSocket connection until after page load to avoid blocking initial render
-    const connectWebSocket = () => {
+    const connectWebSocket = async (): Promise<WebSocket | undefined> => {
+      let token: string;
+      try {
+        token = await getWsToken();
+      } catch {
+        // Not authenticated or backend unreachable — retry on next mount.
+        return undefined;
+      }
       const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
       const apiHost =
         (import.meta.env.VITE_DJANGO_API_BASE_URL as string | undefined)
@@ -222,21 +226,33 @@ function GlobalNotificationToasts() {
     };
 
     let ws: WebSocket | undefined;
+    let cancelled = false;
+
+    const start = async () => {
+      const socket = await connectWebSocket();
+      if (cancelled) {
+        socket?.close();
+        return;
+      }
+      ws = socket;
+    };
 
     if (document.readyState === "complete") {
-      ws = connectWebSocket();
+      void start();
     } else {
       const onLoad = () => {
-        ws = connectWebSocket();
+        void start();
       };
       window.addEventListener("load", onLoad, { once: true });
       return () => {
+        cancelled = true;
         window.removeEventListener("load", onLoad);
         ws?.close();
       };
     }
 
     return () => {
+      cancelled = true;
       ws?.close();
     };
   }, [user, queryClient]);

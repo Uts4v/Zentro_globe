@@ -311,6 +311,10 @@ class PosPayment(models.Model):
     class Meta:
         db_table = "pos_payments"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["shift", "status"], name="pospay_shift_status_idx"),
+            models.Index(fields=["order", "status"], name="pospay_order_status_idx"),
+        ]
 
     def __str__(self):
         return f"Payment {self.id} — {self.payment_method} {self.amount}"

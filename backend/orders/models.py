@@ -294,6 +294,11 @@ class Order(models.Model):
     class Meta:
         db_table = "orders"
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["merchant", "-created_at"], name="orders_merchant_created_idx"),
+            models.Index(fields=["merchant", "status", "-created_at"], name="orders_merchant_status_idx"),
+            models.Index(fields=["customer", "-created_at"], name="orders_customer_created_idx"),
+        ]
 
     def __str__(self):
         customer_label = self.customer or "Walk-in"

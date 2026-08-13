@@ -15,6 +15,7 @@ from .views import (
     change_password,
     forgot_password,
     reset_password,
+    ws_token,
     upload_image,
 )
 
@@ -24,6 +25,7 @@ urlpatterns = [
     path("login/", LoginView.as_view(), name="auth-login"),
     path("token/refresh/", TokenRefreshView.as_view(), name="auth-token-refresh"),
     path("logout/", logout, name="auth-logout"),
+    path("ws-token/", ws_token, name="auth-ws-token"),
 
     # Profile
     path("me/", me, name="auth-me"),

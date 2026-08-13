@@ -19,7 +19,7 @@ from ..constants import (
     ARTIFACT_TYPE_DAILY_INSIGHT,
 )
 from ..use_cases.merchant_assistant import chat_with_merchant_assistant
-from ..tasks.generate_report import generate_merchant_report
+from ..tasks.generate_report import enqueue_merchant_report
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +101,7 @@ def generate_daily_insight_endpoint(request):
         prompt_version="1.0.0",
     )
 
-    generate_merchant_report(
+    enqueue_merchant_report(
         merchant.id, report_date.isoformat(), str(request_obj.id),
     )
 

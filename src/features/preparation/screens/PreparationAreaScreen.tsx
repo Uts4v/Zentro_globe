@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { usePosStore } from "@/features/pos/store";
 import { playOrderChime } from "@/lib/audio";
-import { tokenStore } from "@/lib/django-api-base";
+import { getWsToken } from "@/lib/ws";
 import {
   useAreaOrders,
   usePreparationAreas,
@@ -216,19 +216,30 @@ export default function PreparationAreaScreen({ areaId }: Props) {
     const merchant = usePosStore.getState().merchant;
     if (!merchant) return;
 
-    const ws = new WebSocket(
-      `${wsBase}/ws/preparation/${merchant.id}/${areaId}/?token=${tokenStore.getAccess() ?? ""}`,
-    );
+    let ws: WebSocket | undefined;
+    let cancelled = false;
 
-    ws.onmessage = () => {
-      refetch();
+    getWsToken()
+      .then((token) => {
+        if (cancelled) return;
+        ws = new WebSocket(
+          `${wsBase}/ws/preparation/${merchant.id}/${areaId}/?token=${token}`,
+        );
+        ws.onmessage = () => {
+          refetch();
+        };
+        ws.onerror = () => {
+          // Fall back to polling (already configured in useAreaOrders)
+        };
+      })
+      .catch(() => {
+        // Fall back to polling (already configured in useAreaOrders)
+      });
+
+    return () => {
+      cancelled = true;
+      ws?.close();
     };
-
-    ws.onerror = () => {
-      // Fall back to polling (already configured in useAreaOrders)
-    };
-
-    return () => ws.close();
   }, [areaId, refetch]);
 
   const handleOpenShift = useCallback(() => {

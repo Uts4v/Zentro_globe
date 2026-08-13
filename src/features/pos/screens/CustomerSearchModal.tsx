@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { posSearchCustomers, PosCustomer } from "../api";
 import { Search, User, Star, X, Loader2 } from "lucide-react";
+import { useDebouncedValue } from "@/lib/use-debounce";
 
 interface CustomerSearchModalProps {
   onSelect: (customer: PosCustomer) => void;
@@ -9,6 +10,7 @@ interface CustomerSearchModalProps {
 
 export default function CustomerSearchModal({ onSelect, onClose }: CustomerSearchModalProps) {
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebouncedValue(query, 350);
   const [results, setResults] = useState<PosCustomer[]>([]);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -18,25 +20,28 @@ export default function CustomerSearchModal({ onSelect, onClose }: CustomerSearc
   }, []);
 
   useEffect(() => {
-    if (query.length < 2) {
+    if (debouncedQuery.length < 2) {
       setResults([]);
       return;
     }
-    const timer = setTimeout(searchCustomers, 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-
-  async function searchCustomers() {
+    const controller = new AbortController();
+    let active = true;
     setLoading(true);
-    try {
-      const data = await posSearchCustomers(query);
-      setResults(data);
-    } catch {
-      setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }
+    posSearchCustomers(debouncedQuery, controller.signal)
+      .then((data) => {
+        if (active) setResults(data);
+      })
+      .catch((err) => {
+        if (active && (err as Error).name !== "AbortError") setResults([]);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [debouncedQuery]);
 
   const TIER_COLORS: Record<string, string> = {
     bronze: "bg-orange-100 text-orange-700",
