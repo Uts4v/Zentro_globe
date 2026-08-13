@@ -33,7 +33,7 @@ export function TodaySpecialPopup({ slug, onOrderItem, onViewReward }: Props) {
 
   function handleCTA() {
     if (special?.linked_menu_item && onOrderItem) {
-      onOrderItem(special.linked_menu_item);
+      onOrderItem(String(special.linked_menu_item));
     } else if (special?.linked_reward && onViewReward) {
       onViewReward(special.linked_reward);
     }

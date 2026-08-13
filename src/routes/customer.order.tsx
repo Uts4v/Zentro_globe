@@ -11,7 +11,12 @@ export const Route = createFileRoute("/customer/order")({
 });
 
 interface CartItem {
-  item: MenuItem;
+  item: Pick<MenuItem, "id" | "name" | "price" | "description" | "category"> & {
+    image_url?: string | null;
+    emoji?: string;
+    loyalty_reward?: boolean;
+    points_per_item?: number;
+  };
   qty: number;
 }
 
@@ -91,7 +96,7 @@ function CustomerOrder() {
     }
   }
 
-  function addToCart(item: MenuItem) {
+  function addToCart(item: CartItem["item"]) {
     setCart((prev) => {
       const existing = prev.find((c) => c.item.id === item.id);
       if (existing) return prev.map((c) => c.item.id === item.id ? { ...c, qty: c.qty + 1 } : c);
@@ -118,7 +123,7 @@ function CustomerOrder() {
   );
 
   const totalPoints = useMemo(
-    () => cart.reduce((sum, c) => sum + (c.item.loyalty_reward ? c.item.points_per_item * c.qty : 0), 0),
+    () => cart.reduce((sum, c) => sum + (c.item.loyalty_reward ? (c.item.points_per_item ?? 0) * c.qty : 0), 0),
     [cart]
   );
 
@@ -295,13 +300,13 @@ function CustomerOrder() {
                   onClick={() => {
                     if (special.linked_menu_item) {
                       addToCart({
-                        id: special.linked_menu_item,
+                        id: String(special.linked_menu_item),
                         name: special.linked_menu_item_name ?? "",
                         price: "0",
                         description: "",
                         category: "",
                         image_url: null,
-                      } as MenuItem);
+                      });
                       setCartOpen(true);
                     } else if (special.linked_reward) {
                       navigate({ to: "/rewards" as any });
@@ -417,7 +422,7 @@ function CustomerOrder() {
                     <p className="text-xs text-muted-foreground">
                       NPR {Number(item.price).toLocaleString()} each
                       {item.loyalty_reward && (
-                        <span className="ml-2 text-emerald-600">+{item.points_per_item * qty} pts</span>
+                        <span className="ml-2 text-emerald-600">+{(item.points_per_item ?? 0) * qty} pts</span>
                       )}
                     </p>
                   </div>

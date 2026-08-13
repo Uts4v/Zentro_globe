@@ -26,6 +26,7 @@ function MerchantAuth() {
       <div className="mt-12 grid gap-4 sm:grid-cols-2">
         <Link
           to="/auth/merchant/login"
+          search={{ redirect: undefined }}
           className="rounded-[2rem] border border-border bg-background px-6 py-8 text-left shadow-sm transition hover:border-ink/20 hover:shadow-md"
         >
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Merchant</p>
@@ -35,6 +36,7 @@ function MerchantAuth() {
 
         <Link
           to="/auth/merchant/signup"
+          search={{ redirect: undefined }}
           className="rounded-[2rem] border border-border bg-background px-6 py-8 text-left shadow-sm transition hover:border-ink/20 hover:shadow-md"
         >
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Merchant</p>
@@ -44,7 +46,7 @@ function MerchantAuth() {
       </div>
 
       <div className="mt-10 text-center text-xs text-muted-foreground">
-        <Link to="/auth/login" className="font-medium text-ink underline-offset-4 hover:underline">Customer sign in</Link>
+        <Link to="/auth/login" search={{ redirect: undefined }} className="font-medium text-ink underline-offset-4 hover:underline">Customer sign in</Link>
       </div>
     </div>
   );

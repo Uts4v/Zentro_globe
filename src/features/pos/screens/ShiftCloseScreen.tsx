@@ -59,7 +59,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
 
   // Use live summary data if available, fall back to stale store values
   const liveCashSales = summary ? Number(summary.total_cash_sales) : 0;
-  const liveOpeningCash = summary ? Number(summary.opening_cash) : Number(activeShift.opening_cash);
+  const liveOpeningCash = summary ? Number(summary.opening_cash) : activeShift ? Number(activeShift.opening_cash) : 0;
   const livePayouts = summary ? Number(summary.cash_payouts) : 0;
   const livePayins = summary ? Number(summary.cash_payins) : 0;
 

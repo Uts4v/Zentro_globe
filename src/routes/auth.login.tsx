@@ -72,10 +72,10 @@ function CustomerLogin() {
       </Link>
 
       <p className="mt-auto pt-8 text-center text-xs text-muted-foreground">
-        New to Zentro? <Link to="/auth/signup" className="font-medium text-ink underline-offset-4 hover:underline">Create an account</Link>
+        New to Zentro? <Link to="/auth/signup" search={{ redirect: undefined }} className="font-medium text-ink underline-offset-4 hover:underline">Create an account</Link>
       </p>
 
-      <Link to="/auth/merchant/login" className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline">
+      <Link to="/auth/merchant/login" search={{ redirect: undefined }} className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline">
         Are you a business? → Merchant sign in
       </Link>
     </div>

@@ -205,7 +205,7 @@ function SpecialModal({
         title,
         description,
         image_url: imageUrl,
-        linked_menu_item: linkedItem || null,
+        linked_menu_item: linkedItem === "" || linkedItem == null ? null : Number(linkedItem),
         linked_reward: linkedReward || null,
         is_active: initial?.is_active ?? true,
       });

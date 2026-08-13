@@ -67,7 +67,7 @@ type AuthContextType = {
     email: string,
     password: string,
     name: string,
-    meta?: { role?: Role; store_name?: string }
+    meta?: { role?: Role; store_name?: string; confirmPassword?: string }
   ) => Promise<{ error: string | null }>;
   signIn: (
     email: string,

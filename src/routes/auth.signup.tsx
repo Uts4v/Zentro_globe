@@ -78,10 +78,10 @@ function CustomerSignup() {
       </form>
 
       <p className="mt-auto pt-8 text-center text-xs text-muted-foreground">
-        Already have an account? <Link to="/auth/login" className="font-medium text-ink underline-offset-4 hover:underline">Sign in</Link>
+        Already have an account? <Link to="/auth/login" search={{ redirect: undefined }} className="font-medium text-ink underline-offset-4 hover:underline">Sign in</Link>
       </p>
 
-      <Link to="/auth/merchant/signup" className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline">
+      <Link to="/auth/merchant/signup" search={{ redirect: undefined }} className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline">
         Register your business →
       </Link>
     </div>
