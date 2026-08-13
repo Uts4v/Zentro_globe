@@ -47,18 +47,30 @@
 │                   │  (Django DRF)   │                                   │
 │                   ├─────────────────┤                                   │
 │                   │ PostgreSQL DB   │                                   │
-│                   │                 │                                   │
+│                   ├─────────────────┤                                   │
+│                   │ Redis           │                                   │
+│                   │ (cache, broker, │                                   │
+│                   │  WS channel     │                                   │
+│                   │  layer)         │                                   │
+│                   ├─────────────────┤                                   │
+│                   │ Celery workers  │                                   │
+│                   │ (async tasks:   │                                   │
+│                   │  AI reports)    │                                   │
 │                   └─────────────────┘                                   │
 │                                                                         │
-│  40 Django Models │ 157+ API Endpoints │ 47 Frontend Routes             │
-│  6 Django Apps    │ JWT Auth + Device  │ Zustand + React Query          │
-│                   │ WebSocket (Django Channels) │ TanStack Router       │
+│  40 Django Models │ ~178 API Endpoints │ 47 Frontend Routes             │
+│  8 Django Apps    │ JWT + WS-Token +   │ Zustand + React Query          │
+│                   │ Device-Token       │ TanStack Router                │
+│                   │ WebSocket (Django  │                               │
+│                   │ Channels)          │                               │
 └─────────────────────────────────────────────────────────────────────────┘
 
 Tech Stack:
 - Frontend: React 19, TanStack Router/Start (file-based), Zustand, TanStack Query, Tailwind CSS
-- Backend: Django 6, DRF, SimpleJWT, PostgreSQL, Django Channels (WebSocket)
-- Auth: JWT (customer + merchant), Device-Token (POS)
+- Backend: Django 6, DRF, SimpleJWT, PostgreSQL, Redis, Django Channels (WebSocket)
+- Async: Celery + Redis broker (shared_task) — replaces django-q2 for new work
+- Auth: JWT (customer + merchant), Short-Lived WS-Token (WebSocket only), Device-Token (POS)
+- Observability: RequestContextMiddleware (request_id, structured JSON-ish logs, slow-request alerts)
 - PWA: Service Worker, Install Prompt, Offline Fallback
 - Currency: Nepalese Rupees (NPR)
 ```
@@ -66,12 +78,14 @@ Tech Stack:
 ### Django Apps
 ```
 backend/
-├── accounts/       → User, CustomerProfile, PasswordResetToken
-├── merchants/      → MerchantProfile, MenuItem, MerchantTable
-├── loyalty/        → Wallets, Points, Punch Cards, Missions, Rewards, QR, Card Design, TodaySpecial
-├── orders/         → Order, OrderItem
-├── notifications/  → Notification
-└── pos/            → Devices, Workers, Shifts, Payments, Discounts, Credit/Debit, Schedules, Cash Movements
+├── config/       → Settings, Celery app, RequestContextMiddleware (request_id/logging)
+├── accounts/     → User, CustomerProfile, PasswordResetToken, WS-Token endpoint
+├── merchants/    → MerchantProfile, MenuItem, MerchantTable
+├── loyalty/      → Wallets, Points, Punch Cards, Missions, Rewards, QR, Card Design, TodaySpecial
+├── orders/       → Order, OrderItem
+├── notifications/→ Notification
+├── pos/          → Devices, Workers, Shifts, Payments, Discounts, Credit/Debit, Schedules, Cash Movements
+└── ai_core/      → AI insights (Celery async report generation)
 ```
 
 ### Frontend Route Structure (47 Routes)
@@ -163,6 +177,28 @@ src/
      ↓
   requireMerchant() guard on all /merchant/* routes
 ```
+
+#### WebSocket Token (WS-Auth)
+```
+GET /api/auth/ws-token/  (logged-in user, 60s lifetime)
+      │
+      ▼
+{ token: <short-lived JWT>, expires_in: 60 }
+  • Special claim: ws_auth = true
+  • Long-lived access tokens are NEVER placed in WS query strings
+      │
+      ▼
+Frontend connects:
+  /ws/notifications/?token=<ws-token>
+      │
+      ▼
+notifications/middleware.py:
+  ├── Rejects tokens lacking the ws_auth claim → AnonymousUser
+  └── Validates expiry (60s) → re-fetch on reconnect/reload
+```
+**Rate limiting (scoped DRF throttles):**
+`anon 500/hr · user 1000/day · pos 1200/hr · pin 20/min · login 10/min · otp 5/min · transfer 10/hr · redeem 10/min · guest 60/hr`
+Applied to: register, login, forgot/reset/change-password, worker PIN login, transfers, reward redemptions, guest order create, table QR ordering.
 
 #### POS Device Auth (Dual Path)
 ```
@@ -596,6 +632,17 @@ Same as Pickup but:
   │  }
   │                        │
   │                        ▼
+  │  SERVER (transactional):
+  │  ├── Validate: POS enabled, shift open, items exist
+  │  ├── Menu items fetched in ONE batch query (no N+1)
+  │  ├── Merchant row LOCKED (select_for_update) →
+  │  │   KOT number assigned sequentially per merchant
+  │  ├── OrderItems created via bulk_create (batch=200)
+  │  ├── Unique constraint on client_mutation_id →
+  │  │   duplicate retry returns the original order (idempotent)
+  │  └── IntegrityError caught → loser gets winner's order
+  │                        │
+  │                        ▼
   │  PREPARATION ROUTING (if enabled)
   │  ├── Each OrderItem routed to designated PreparationArea
   │  │   (Bar → Barista queue, Kitchen → Chef queue, etc.)
@@ -608,22 +655,31 @@ Same as Pickup but:
   │                        │
   │                        ▼
   │  POST /pos/payment/create/ {
-│    order_id (uuid), shift_id,
-│    payment_method, amount,
-│    change_amount, client_mutation_id
-│  }
-│                        │
-│                        ▼
-│  On Payment Complete:
-│  ├── Auto-completes Order (status → completed)
-│  ├── _award_loyalty() fires (if customer linked)
-│  │   ├── Points added to wallet
-│  │   ├── Streak updated
-│  │   ├── Punch card stamp added
-│  │   └── Mission progress updated
-│  ├── Cart cleared
-│  └── Receipt displayed (thermal print format)
-└─────────────────────────────────────────────────────────────┘
+  │    order_id (uuid), shift_id,
+  │    payment_method, amount,
+  │    change_amount, client_mutation_id
+  │  }
+  │                        │
+  │                        ▼
+  │  SERVER (transactional):
+  │  ├── Order row LOCKED (select_for_update)
+  │  ├── Debit: balance CHECKED BEFORE any row is created
+  │  │   (failed debit leaves NO orphan payment record)
+  │  ├── Payment inserted inside the same transaction
+  │  ├── Duplicate client_mutation_id → returns existing payment
+  │  └── Split payments: order locked, device lookup fixed
+  │                        │
+  │                        ▼
+  │  On Payment Complete:
+  │  ├── Auto-completes Order (status → completed)
+  │  ├── _award_loyalty() fires (if customer linked)
+  │  │   ├── Points added to wallet (row-locked, atomic)
+  │  │   ├── Streak updated
+  │  │   ├── Punch card stamp added
+  │  │   └── Mission progress updated
+  │  ├── Cart cleared
+  │  └── Receipt displayed (thermal print format)
+  └─────────────────────────────────────────────────────────────┘
 ```
 
 ### 7.3 Incoming Orders (from Customer App / Table QR)
@@ -667,7 +723,11 @@ Same as Pickup but:
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  _award_loyalty(order)                                      │
+│  _award_loyalty(order)  — runs inside transaction.atomic()   │
+│                                                             │
+│  0. Row locking (PostgreSQL)                                 │
+│     → Wallet row locked via _lock_wallet() (select_for_update)
+│     → Prevents double-award / race between concurrent orders │
 │                                                             │
 │  1. Get or Create Wallet                                    │
 │     → get_or_create_wallet(customer, merchant)              │
@@ -969,7 +1029,8 @@ Valid Transitions:
 │    table_token }                                            │
   │  → Server calculates subtotal from MenuItem prices         │
   │  → Server calculates points_earned from items              │
-  │  → Creates Order + OrderItems                               │
+  │  → Menu items fetched in ONE batch query (no per-item N+1) │
+  │  → Creates Order + OrderItems via bulk_create              │
   │  → prepare_order_items_for_routing() fires                  │
   │  │   (if merchant has preparation_routing_enabled)          │
   │  │   ├── Each item resolved to its PreparationArea         │
@@ -998,11 +1059,13 @@ Valid Transitions:
   │  → Server validates: POS enabled, shift active, items exist│
   │  → Server calculates prices from MenuItem (never trust client)│
   │  → Calculates points_earned from items + spend-based       │
+  │  → Batch menu lookup + OrderItems via bulk_create          │
+  │  → KOT number assigned under merchant row lock             │
   │  → Creates Order + OrderItems                               │
   │  → prepare_order_items_for_routing() fires                 │
   │  │   (if merchant has preparation_routing_enabled)          │
   │  → If customer_id: joins customer to merchant              │
-  │  → Idempotent via client_mutation_id                       │
+  │  → Idempotent via client_mutation_id (unique constraint)   │
   │  → Order status = "completed" (POS auto-completes on pay) │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -1037,12 +1100,15 @@ Valid Transitions:
 │    payment_method, amount, change_amount,                   │
 │    external_reference, client_mutation_id }                 │
 │                                                             │
-│  2. Validates:                                              │
+│  2. Validates (inside transaction, order row LOCKED):       │
 │     • Shift is open                                         │
 │     • Digital payments require external_reference          │
 │     • Cash: amount >= order total                          │
+│     • Debit: sufficient balance BEFORE creating any row    │
+│       (a failed debit leaves NO orphan payment)            │
 │                                                             │
-│  3. Creates PosPayment record                              │
+│  3. Creates PosPayment record (idempotent: duplicate        │
+│     client_mutation_id returns the existing payment)       │
 │                                                             │
 │  4. If order fully paid → auto-completes order             │
 │     → Triggers _award_loyalty()                            │
@@ -1437,8 +1503,10 @@ Valid Transitions:
 │  POST /pos/table/{token}/order/                             │
 │  { items, notes, customer_name }                            │
 │                                                             │
-│  • Public endpoint (no auth)                                │
+│  • Public endpoint (no auth) — rate limited (60/hr guest)  │
 │  • Server resolves table from token                        │
+│  • Menu items validated BEFORE order creation              │
+│  • Batch menu lookup (no N+1)                             │
 │  • Creates Order (source=table_qr, status=pending)        │
 │  • Server calculates prices from MenuItem                  │
 │  • Notifies POS (appears in IncomingOrdersPanel)           │
@@ -1474,15 +1542,16 @@ Valid Transitions:
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  SERVER PROCESSING                                          │
+│  SERVER PROCESSING (transactional + row locks)              │
 │                                                             │
 │  1. transfer_points(sender_wallet, receiver_wallet, amount) │
-│  2. Deduct from sender: points_balance -= amount           │
+│  2. Both wallet rows LOCKED (asc pk order → no deadlock)   │
+│  3. Deduct from sender: points_balance -= amount           │
 │     → PointTransaction (type=TRANSFER_SENT, points=-amount)│
-│  3. Add to receiver: points_balance += amount              │
+│  4. Add to receiver: points_balance += amount              │
 │     → PointTransaction (type=TRANSFER_RECEIVED)            │
-│  4. Both transactions linked by transfer_group UUID       │
-│  5. Notifications sent to both parties                     │
+│  5. Both transactions linked by transfer_group UUID       │
+│  6. Notifications sent to both parties                     │
 └─────────────────────────────────────────────────────────────┘
 
 QR SCANNER FLOW:
@@ -1711,6 +1780,9 @@ QR SCANNER FLOW:
 │  Delivery Methods:                                          │
 │  • Database persistence (all notifications)                │
 │  • WebSocket push (Django Channels) → real-time toasts    │
+│    ├── Connection uses a SHORT-LIVED WS-token (60s)       │
+│    │   from GET /api/auth/ws-token/ (ws_auth claim)       │
+│    └── Middleware rejects tokens without ws_auth claim    │
 │  • Toast notification via GlobalNotificationToasts component│
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -1754,6 +1826,9 @@ QR SCANNER FLOW:
 │  Django Channels → WebSocket connection                    │
 │  • Established in root component (__root.tsx)              │
 │  • GlobalNotificationToasts component listens             │
+│  • Auth via short-lived WS-token (60s, ws_auth claim)     │
+│  • Token fetched fresh per connect/reconnect via           │
+│    GET /api/auth/ws-token/ (src/lib/ws.ts)                 │
 │                                                             │
 │  Real-Time Events:                                          │
 │  • new_order → Merchant sees incoming order instantly      │
@@ -1861,7 +1936,7 @@ POS Infrastructure          │ PosAuditLog, ProcessedClientMutation,
 │ Feature Area                     │ Base URL   │ Endpoints│
 ├──────────────────────────────────┼────────────┼──────────┤
 │ System / Health                  │ /healthz/  │ 2        │
-│ Authentication & Accounts        │ /api/auth/ │ 9        │
+│ Authentication & Accounts        │ /api/auth/ │ 10       │
 │ Media Upload                     │ /api/media/│ 1        │
 │ Merchants & Menu                 │ /api/merchants/ │ 25  │
 │ Loyalty (general)                │ /api/loyalty/    │ 55  │
@@ -1870,8 +1945,10 @@ POS Infrastructure          │ PosAuditLog, ProcessedClientMutation,
 │ Notifications                    │ /api/notifications/ │ 5  │
 │ POS System                       │ /api/pos/  │ 58       │
 ├──────────────────────────────────┼────────────┼──────────┤
-│ GRAND TOTAL                      │            │ ~177     │
+│ GRAND TOTAL                      │            │ ~178     │
 └──────────────────────────────────┴────────────┴──────────┘
+
+New /api/auth/ws-token/ → issues 60s WS-only JWT (ws_auth claim) for WebSocket auth.
 ```
 
 ### Loyalty Endpoint Groups (Updated)
@@ -1963,6 +2040,63 @@ Notifications       │ 2         │ /pos/notifications/
 Staff Scheduling    │ 3         │ /pos/schedules/
 ────────────────────┼───────────┼─────────────────────────────
 POS TOTAL           │ 58        │
+```
+
+---
+
+## 23. Production Hardening & Operations
+
+### Concurrency & Correctness
+```
+✓ Transactional wallets   — transaction.atomic() + row locks (_lock_wallet)
+✓ Transfer safety         — both wallets locked in ascending pk order (no deadlock)
+✓ Reward redemption       — atomic balance deduction on completion only
+✓ POS order idempotency   — unique client_mutation_id; duplicate retries return
+                            the original order (IntegrityError → winner returned)
+✓ KOT numbering           — merchant row locked per create → sequential per store
+✓ Payment integrity       — order locked, debit balance verified BEFORE row insert,
+                            failed debit leaves no orphan payment
+✓ Split payments          — device lookup fixed (PosDevice.DoesNotExist)
+✓ Table QR order          — throttle + batch lookup + validate-before-create
+✓ PG FOR UPDATE           — select_for_update(of=("self",)) to avoid null-side
+                            outer-join error on nullable customer FK
+```
+
+### Security
+```
+✓ WS token auth (P0)      — 60s WS-only JWT (ws_auth claim), never long-lived
+                            access tokens in WS query strings
+✓ Scoped rate limiting    — pin/guest/login/otp/transfer/redeem scopes applied
+                            to register, login, password flows, worker PIN,
+                            guest & table ordering, transfers, redemptions
+```
+
+### Query Performance
+```
+✓ N+1 elimination         — order lists select_related; menu lookups batched;
+                            merchant customers single bulk wallet query
+✓ Pagination caps         — server-enforced (orders 200, transactions 200,
+                            customers, notifications 100); plain-list shape kept
+✓ Composite indexes       — Order, PointTransaction, PosPayment, Notification
+                            (4 new migrations) applied to PostgreSQL
+✓ Measurements (dev DB)   — store-orders 111→5 · merchant-history 110→5
+                            pos-orders 28→4 · merchant-customers 6→4 queries
+```
+
+### Observability
+```
+✓ RequestContextMiddleware — per-request request_id, structured log line
+  (path, method, status, duration_ms, user), X-Request-ID + X-Duration-Ms
+  response headers, slow-request warning threshold
+✓ Celery async            — AI report generation via @shared_task with sync
+  fallback when broker is unreachable
+```
+
+### Frontend Efficiency
+```
+✓ QueryClient defaults    — staleTime 30s, retry 1 (realtime hooks override)
+✓ Customer search         — 350ms debounce + AbortController + stale guard
+✓ WS token helper         — src/lib/ws.ts fetches fresh WS token per connect
 ```
 
 ---
