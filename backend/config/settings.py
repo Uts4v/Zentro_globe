@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     "orders",
     "notifications",
     "pos",
-    "django_q",
     "ai_core",
 ]
 
@@ -271,20 +270,6 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 # ── File upload limits ────────────────────────────────────────────────────────
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
-
-# ── Django-Q2 ─────────────────────────────────────────────────────────────────
-# django-q2 is present for existing functionality only; new background work
-# uses the Celery architecture. Do not add Redis broker wiring here.
-Q_CLUSTER = {
-    "name": "zentro-ai",
-    "orm": "default",
-    "retry": 300,
-    "timeout": 120,
-    "max_attempts": 3,
-    "poll": 5,
-    "save_limit": 100,
-    "catch_up": False,
-}
 
 # ── AI Core ───────────────────────────────────────────────────────────────────
 AI_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
