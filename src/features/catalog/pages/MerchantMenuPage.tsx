@@ -219,6 +219,15 @@ export function MerchantMenuPage() {
   const categories = ["All", ...Array.from(new Set(items.map((i) => i.category).filter(Boolean)))];
   const visible = filterCat === "All" ? items : items.filter((i) => i.category === filterCat);
 
+  const grouped = Array.from(
+    visible.reduce((map, item) => {
+      const key = item.category || "Uncategorized";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(item);
+      return map;
+    }, new Map<string, MenuItem[]>()).entries()
+  );
+
   const imgUploading = imgState.status === "processing" || imgState.status === "uploading";
   const imgPreviewUrl =
     imgState.status === "uploading" || imgState.status === "done"
@@ -287,19 +296,51 @@ export function MerchantMenuPage() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((item) => (
-            <ItemCard
-              key={item.id}
-              item={item}
-              onEdit={() => openEdit(item)}
-              onDelete={() => handleDelete(item.id)}
-              onToggle={() => handleToggle(item.id)}
-              deleting={deleting === item.id}
-              toggling={toggling === item.id}
-              catClass={catClass(item.category)}
-            />
-          ))}
+        <div className="space-y-10">
+          {filterCat === "All" ? (
+            grouped.map(([cat, catItems]) => (
+              <section key={cat}>
+                <div className="mb-4 flex items-center gap-2">
+                  <h2 className="font-display text-2xl text-foreground">{cat}</h2>
+                  <span className="rounded-full bg-mist px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+                    {catItems.length}
+                  </span>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${catClass(cat)}`}>
+                    {cat}
+                  </span>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {catItems.map((item) => (
+                    <ItemCard
+                      key={item.id}
+                      item={item}
+                      onEdit={() => openEdit(item)}
+                      onDelete={() => handleDelete(item.id)}
+                      onToggle={() => handleToggle(item.id)}
+                      deleting={deleting === item.id}
+                      toggling={toggling === item.id}
+                      catClass={catClass(item.category)}
+                    />
+                  ))}
+                </div>
+              </section>
+            ))
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {visible.map((item) => (
+                <ItemCard
+                  key={item.id}
+                  item={item}
+                  onEdit={() => openEdit(item)}
+                  onDelete={() => handleDelete(item.id)}
+                  onToggle={() => handleToggle(item.id)}
+                  deleting={deleting === item.id}
+                  toggling={toggling === item.id}
+                  catClass={catClass(item.category)}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
