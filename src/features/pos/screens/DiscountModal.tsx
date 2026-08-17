@@ -318,7 +318,7 @@ export default function DiscountModal({
         <button
           onClick={handleSubmit}
           disabled={!canSubmit}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ember py-3 text-sm font-bold text-white shadow-[var(--shadow-ember)] hover:brightness-105 disabled:opacity-40"
         >
           {submitting ? (
             <>

@@ -1,5 +1,5 @@
 // routes/index.tsx — Premium Zentro Home Screen
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useStore } from "@/lib/store";
 import {
   merchantApi,
@@ -51,6 +51,7 @@ export const Route = createFileRoute("/")({
 
 function Index() {
   const { add, selectedMerchantId, setSelectedMerchant } = useStore();
+  const navigate = useNavigate();
 
   // Data states
   const [merchantName, setMerchantName] = useState("");
@@ -229,7 +230,11 @@ function Index() {
   }
 
   async function handleJoin() {
-    if (!merchantSlug || joining) return;
+    if (joining) return;
+    if (!merchantSlug) {
+      navigate({ to: "/map" });
+      return;
+    }
     setJoining(true);
     try {
       const { wallet: w } = await customerApi.joinMerchant(merchantSlug);
@@ -645,26 +650,7 @@ function Index() {
           </section>
         )}
 
-        {/* No merchant selected */}
-        {!selectedMerchantId && !loading && (
-          <section className="px-5">
-            <div className="rounded-[24px] bg-card p-8 text-center" style={{ boxShadow: "var(--shadow-card)" }}>
-              <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-ember-soft">
-                <span className="text-2xl">✦</span>
-              </div>
-              <p className="mt-4 text-sm font-semibold text-foreground">Welcome to Zentro</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Browse stores to start earning loyalty points.
-              </p>
-              <Link
-                to="/map"
-                className="mt-5 inline-flex h-10 items-center justify-center rounded-full bg-foreground px-6 text-xs font-medium text-white transition-all active:scale-95"
-              >
-                Discover stores
-              </Link>
-            </div>
-          </section>
-        )}
+        {/* No merchant selected — Membership hero handles the empty state */}
       </div>
 
       {/* Punch card proof modal */}

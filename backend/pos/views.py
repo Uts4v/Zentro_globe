@@ -338,6 +338,7 @@ def pos_bootstrap(request):
         "manager_approval_threshold": str(merchant.manager_approval_threshold),
         "offline_discounts_allowed": merchant.offline_discounts_allowed,
         "offline_credit_allowed": merchant.offline_credit_allowed,
+        "tax_rate_percent": str(merchant.tax_rate_percent or 0),
     }
 
     # Tables
@@ -456,6 +457,7 @@ def pos_bootstrap_device(request):
         "manager_approval_threshold": str(merchant.manager_approval_threshold),
         "offline_discounts_allowed": merchant.offline_discounts_allowed,
         "offline_credit_allowed": merchant.offline_credit_allowed,
+        "tax_rate_percent": str(merchant.tax_rate_percent or 0),
     }
 
     # Tables
@@ -1422,10 +1424,16 @@ def create_pos_order(request):
 
     try:
         with transaction.atomic():
+            # Apply merchant VAT rate server-side (never trust frontend totals).
+            tax_rate = merchant.tax_rate_percent or 0
+            tax_amount = round(total_amount * (tax_rate / 100), 2)
+
             order = Order.objects.create(
                 customer=customer,
                 merchant=merchant,
-                total_amount=total_amount,
+                subtotal=total_amount,
+                tax_amount=tax_amount,
+                total_amount=total_amount + tax_amount,
                 points_earned=points_earned,
                 notes=data.get("notes", ""),
                 status=Order.STATUS_CONFIRMED,  # POS orders go directly to confirmed
@@ -3170,6 +3178,104 @@ def search_customers(request):
     return Response(results)
 
 
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+@transaction.atomic
+def create_customer(request):
+    """
+    Create (or match) a walk-in customer at the POS and link them to this merchant.
+
+    Body: { full_name, phone?, email? }
+
+    - If an existing customer account matches the email or phone, it is linked
+      to the merchant instead of creating a duplicate.
+    - Returns the same shape as search_customers for direct use at the POS.
+    """
+    import re
+    from loyalty.services import join_merchant
+    from loyalty.models import CustomerMerchantProfile
+
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response({"error": "POS is not enabled."},
+                        status=status.HTTP_403_FORBIDDEN)
+
+    full_name = (request.data.get("full_name") or "").strip()
+    phone = (request.data.get("phone") or "").strip()
+    email = (request.data.get("email") or "").strip().lower()
+
+    if not full_name:
+        return Response({"error": "full_name is required."},
+                        status=status.HTTP_400_BAD_REQUEST)
+    if not phone and not email:
+        return Response({"error": "Provide a phone number or email."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # Match an existing customer account by email, then by phone.
+    user = None
+    if email:
+        user = User.objects.filter(email__iexact=email, role=User.ROLE_CUSTOMER).first()
+    if user is None and phone:
+        user = User.objects.filter(phone=phone, role=User.ROLE_CUSTOMER).first()
+    if user is None and email:
+        if User.objects.filter(email__iexact=email).exists():
+            return Response(
+                {"error": "This email belongs to an existing account. Search and link it instead."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    if user is None:
+        # Create a new customer account with an unusable password. The account
+        # can be claimed later via the password-reset flow.
+        base_username = re.sub(r"[^a-z0-9_.@-]", "", (email or phone or full_name).lower())
+        if not base_username:
+            base_username = "customer"
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f"{base_username}{counter}"
+            counter += 1
+
+        name_parts = full_name.split(" ", 1)
+        user = User.objects.create_user(
+            username=username,
+            email=email or f"{username}@pos.local",
+            password=None,
+            first_name=name_parts[0],
+            last_name=name_parts[1] if len(name_parts) > 1 else "",
+            role=User.ROLE_CUSTOMER,
+            phone=phone,
+        )
+
+    profile, _created = CustomerProfile.objects.get_or_create(
+        user=user,
+        defaults={"full_name": full_name or user.email},
+    )
+    if not profile.full_name and full_name:
+        profile.full_name = full_name
+        profile.save(update_fields=["full_name", "updated_at"])
+
+    join_merchant(profile, merchant)
+
+    _audit(merchant, "customer_created", user=request.user,
+           entity_type="customer", entity_id=str(profile.id),
+           metadata={"full_name": full_name, "phone": phone, "email": email})
+
+    return Response({
+        "id": profile.id,
+        "full_name": profile.full_name,
+        "email": user.email,
+        "phone": user.phone,
+        "transfer_code": profile.transfer_code or "",
+        "membership_number": CustomerMerchantProfile.objects.filter(
+            customer=profile, merchant=merchant
+        ).values_list("membership_number", flat=True).first() or "",
+        "loyalty_points": profile.loyalty_points,
+        "tier": profile.tier,
+        "total_orders": profile.total_orders,
+    }, status=status.HTTP_201_CREATED)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # REFUND PROCESSING (Phase 27)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -3867,6 +3973,14 @@ def create_schedule(request):
 
     if not worker_id or not shift_date or not start_time or not end_time:
         return Response({"error": "worker_id, shift_date, start_time, end_time are required."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        shift_date = StaffSchedule._meta.get_field("shift_date").to_python(shift_date)
+        start_time = StaffSchedule._meta.get_field("start_time").to_python(start_time)
+        end_time = StaffSchedule._meta.get_field("end_time").to_python(end_time)
+    except (ValueError, TypeError):
+        return Response({"error": "Invalid shift_date, start_time or end_time format."},
                         status=status.HTTP_400_BAD_REQUEST)
 
     try:

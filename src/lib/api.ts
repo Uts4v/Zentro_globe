@@ -1224,3 +1224,28 @@ export const leaderboardApi = {
     return djangoFetch<any[]>(apiUrl(`/loyalty/leaderboard/?${qs}`));
   },
 };
+
+// ── Merchant customers ─────────────────────────────────────────────────────────
+
+export interface MerchantCustomer {
+  membership_id: number;
+  membership_number: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string;
+  points_balance: number;
+  lifetime_points: number;
+  tier: string;
+  joined_at: string;
+  status: string;
+  last_active_at: string | null;
+}
+
+export const merchantCustomersApi = {
+  list: async (): Promise<MerchantCustomer[]> => {
+    return djangoFetch<MerchantCustomer[]>(
+      apiUrl("/loyalty/merchant/customers/"),
+      { headers: authHeaders() },
+    );
+  },
+};

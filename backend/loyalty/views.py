@@ -1511,6 +1511,7 @@ def merchant_customer_list(request):
             "membership_number": m.membership_number,
             "customer_name": m.customer.full_name or m.customer.user.email,
             "customer_email": m.customer.user.email,
+            "customer_phone": m.customer.user.phone,
             "points_balance": wallet.points_balance if wallet else 0,
             "lifetime_points": wallet.lifetime_points if wallet else 0,
             "tier": wallet.tier_level if wallet else "bronze",

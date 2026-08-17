@@ -253,7 +253,7 @@ export default function OrderDetailScreen({
             )}
             {Number(order.tax_amount) > 0 && (
               <div className="flex justify-between text-muted-foreground">
-                <span>Tax</span>
+                <span>VAT</span>
                 <span>Rs {Number(order.tax_amount).toFixed(2)}</span>
               </div>
             )}

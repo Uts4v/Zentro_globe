@@ -192,40 +192,66 @@ export function MainPageLoyaltyCard({
   // Not-joined state
   if (!joined) {
     return (
-      <div className="relative pt-20">
-        <div className="pointer-events-none absolute right-4 top-0 z-20 animate-mascot-bounce">
+      <div className="relative pt-24">
+        <div className="pointer-events-none absolute right-2 top-0 z-20 animate-mascot-bounce">
           <ZentroMascot className="h-32 w-32 drop-shadow-2xl" waving />
         </div>
         <div
-          className="relative min-h-[320px] overflow-hidden rounded-[38px] p-8"
+          className="relative min-h-[360px] overflow-hidden rounded-[38px] p-8"
           style={{
-            background: `linear-gradient(145deg, ${lighten(primary, 0.2)} 0%, ${primary} 100%)`,
+            background: `linear-gradient(150deg, ${lighten(primary, 0.28)} 0%, ${lighten(primary, 0.1)} 45%, ${primary} 100%)`,
             color: textDark ? "#1A1A1A" : "#FFFFFF",
-            boxShadow: `0 48px 100px ${hexToRGBA(primary, 0.12)}, 0 24px 48px rgba(0,0,0,.06)`,
+            boxShadow: "0 24px 48px rgba(0,0,0,.08)",
           }}
         >
-          <div className="relative flex h-full flex-col items-start">
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: textDark ? "rgba(0,0,0,.45)" : "rgba(255,255,255,.6)" }}>
+          <div className="relative flex h-full min-h-[296px] flex-col">
+            {/* Membership pill badge */}
+            <div
+              className="inline-flex items-center gap-1.5 self-start rounded-full px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-[0.22em]"
+              style={{
+                background: textDark ? "rgba(0,0,0,.08)" : "rgba(255,255,255,.16)",
+                border: `1px solid ${textDark ? "rgba(0,0,0,.12)" : "rgba(255,255,255,.26)"}`,
+                backdropFilter: "blur(6px)",
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
               Membership
-            </p>
-            <h2 className="mt-1 text-[28px] font-extrabold tracking-[-0.04em]">
+            </div>
+
+            <h2 className="mt-4 text-[30px] font-black leading-tight tracking-[-0.04em]">
               {merchantName}
             </h2>
 
-            <p className="mt-6 max-w-[240px] text-[14px] leading-relaxed" style={{ color: textDark ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.75)" }}>
+            {/* Divider accent */}
+            <div
+              className="mt-5 h-px w-16"
+              style={{ background: textDark ? "rgba(0,0,0,.18)" : "rgba(255,255,255,.35)" }}
+            />
+
+            <p
+              className="mt-5 max-w-[250px] text-[14px] leading-relaxed"
+              style={{ color: textDark ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.8)" }}
+            >
               Join free to earn points, collect rewards and make every visit count.
             </p>
 
-            <button
-              type="button"
-              onClick={onJoin}
-              disabled={joining}
-              className="mt-auto inline-flex items-center gap-2 rounded-full bg-white px-7 py-3.5 text-[13px] font-bold shadow-xl transition hover:-translate-y-0.5 active:scale-95 disabled:opacity-60"
-              style={{ color: primary }}
-            >
-              {joining ? "Joining…" : "Join & start earning"}
-              <ArrowRight className="h-4 w-4" />
-            </button>
+            {/* Button pinned to bottom with generous spacing */}
+            <div className="mt-auto pt-10">
+              <button
+                type="button"
+                onClick={onJoin}
+                disabled={joining}
+                className="inline-flex items-center gap-2.5 rounded-full px-8 py-4 text-[14px] font-bold transition-all duration-200 hover:-translate-y-0.5 active:scale-95 disabled:opacity-60"
+                style={{
+                  color: primary,
+                  background: "linear-gradient(135deg, #FFFFFF 0%, #F2EEFF 100%)",
+                  boxShadow: `0 16px 40px ${hexToRGBA("#000000", 0.22)}`,
+                }}
+              >
+                {joining ? "Joining…" : "Join & start earning"}
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

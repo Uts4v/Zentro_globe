@@ -1,7 +1,8 @@
 import { usePosStore } from "../store";
-import { useState } from "react";
-import { PosReceiptData, PosCustomer } from "../api";
+import { useState, useMemo } from "react";
+import { PosReceiptData, PosCustomer, getTaxRate } from "../api";
 import CustomerSearchModal from "./CustomerSearchModal";
+import TableSelector from "./TableSelector";
 import {
   Minus,
   Plus,
@@ -9,11 +10,10 @@ import {
   MessageSquare,
   ShoppingBag,
   Percent,
-  CreditCard,
   FileText,
-  UserPlus,
   User,
-  Hash,
+  ChevronRight,
+  Check,
 } from "lucide-react";
 
 interface CartPanelProps {
@@ -28,6 +28,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const posSettings = usePosStore((s) => s.posSettings);
   const merchant = usePosStore((s) => s.merchant);
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const menu = usePosStore((s) => s.menu);
   const tables = usePosStore((s) => s.tables);
   const selectedTableId = usePosStore((s) => s.selectedTableId);
   const updateCartItemQty = usePosStore((s) => s.updateCartItemQty);
@@ -43,11 +44,22 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [linkedCustomer, setLinkedCustomer] = useState<PosCustomer | null>(null);
 
+  const menuItemById = useMemo(() => {
+    const map = new Map<number, any>();
+    if (menu) {
+      for (const items of Object.values(menu.categories)) {
+        for (const it of items) map.set(it.id, it);
+      }
+    }
+    return map;
+  }, [menu]);
+
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const taxRate = 0.06; // 6% SST
+  const taxRate = getTaxRate(posSettings);
   const tax = subtotal * taxRate;
   const total = subtotal + tax;
   const selectedTable = tables.find((t) => t.id === selectedTableId);
+  const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const isEmpty = cart.length === 0;
 
@@ -73,9 +85,11 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         phone: "",
         logo_url: merchant?.logo_url ?? "",
       },
-      table: selectedTable ? { name: selectedTable.name, number: selectedTable.table_number } : null,
+      table: selectedTable
+        ? { name: selectedTable.name, number: selectedTable.table_number }
+        : null,
       fulfillment_type: fulfillmentType,
-      customer_name: null,
+      customer_name: linkedCustomer?.full_name ?? null,
       worker_name: currentWorker?.display_name ?? null,
       items: cart.map((item) => ({
         name: item.name,
@@ -117,6 +131,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
           <div style="display: flex; justify-content: space-between;"><span>Type</span><span>${billData.fulfillment_type}</span></div>
           ${billData.table ? `<div style="display: flex; justify-content: space-between;"><span>Table</span><span>${billData.table.name || "#" + billData.table.number}</span></div>` : ""}
           ${billData.worker_name ? `<div style="display: flex; justify-content: space-between;"><span>Served by</span><span>${billData.worker_name}</span></div>` : ""}
+          ${billData.customer_name ? `<div style="display: flex; justify-content: space-between;"><span>Customer</span><span>${billData.customer_name}</span></div>` : ""}
         </div>
         <hr style="border: none; border-top: 2px solid #000; margin: 8px 0;">
         <div style="font-size: 11px;">
@@ -131,7 +146,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         <hr style="border: none; border-top: 1px dashed #000; margin: 6px 0;">
         <div style="font-size: 11px;">
           <div style="display: flex; justify-content: space-between;"><span>Subtotal</span><span>Rs ${subtotal.toFixed(2)}</span></div>
-          <div style="display: flex; justify-content: space-between;"><span>SST (6%)</span><span>Rs ${tax.toFixed(2)}</span></div>
+          ${tax > 0 ? `<div style="display: flex; justify-content: space-between;"><span>VAT (${(taxRate * 100).toFixed(0)}%)</span><span>Rs ${tax.toFixed(2)}</span></div>` : ""}
           <hr style="border: none; border-top: 2px solid #000; margin: 6px 0;">
           <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
             <span>TOTAL</span><span>Rs ${total.toFixed(2)}</span>
@@ -168,100 +183,112 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   return (
     <div className="flex h-full flex-col border-l border-border bg-background">
       {/* ── Header ── */}
-      <div className="shrink-0 border-b border-border px-4 py-3">
+      <div className="shrink-0 px-5 pb-4 pt-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <ShoppingBag className="h-4 w-4 text-ink" />
-            <h2 className="text-sm font-bold text-foreground">Current Order</h2>
+            <ShoppingBag className="h-4 w-4 text-ember" />
+            <h2 className="text-base font-bold text-foreground">
+              Current Order
+            </h2>
             {!isEmpty && (
-              <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-bold text-ink">
-                {cart.length} items
+              <span className="rounded-full bg-mist px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                {itemCount} {itemCount === 1 ? "item" : "items"}
               </span>
             )}
           </div>
           {!isEmpty && (
             <button
               onClick={clearCart}
-              className="text-xs text-destructive hover:underline"
+              className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors hover:bg-red-50"
             >
               Clear
             </button>
           )}
         </div>
 
-        {/* Fulfillment type */}
-        <div className="mt-3 flex gap-1.5">
-          {["dine-in", "takeaway", "delivery"].map((type) => (
+        {/* Order type segmented control */}
+        <div className="mt-4 flex gap-1.5 rounded-2xl bg-mist p-1.5">
+          {[
+            { key: "dine-in", label: "Dine-In" },
+            { key: "takeaway", label: "Takeaway" },
+            { key: "delivery", label: "Delivery" },
+          ].map(({ key, label }) => (
             <button
-              key={type}
+              key={key}
               onClick={() => {
-                setFulfillmentType(type);
-                if (type !== "dine-in") setSelectedTable(null);
+                setFulfillmentType(key);
+                if (key !== "dine-in") setSelectedTable(null);
               }}
-              className={`flex-1 rounded-lg py-1.5 text-[11px] font-medium capitalize transition-colors ${
-                fulfillmentType === type
-                  ? "bg-ink text-white"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+              className={`flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all ${
+                fulfillmentType === key
+                  ? "bg-ink text-white shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {type}
+              {label}
             </button>
           ))}
         </div>
 
         {/* Table selector for dine-in */}
         {fulfillmentType === "dine-in" && tables.length > 0 && (
-          <div className="mt-2">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Hash className="h-3 w-3 text-muted-foreground" />
-              <span className="text-[11px] font-medium text-muted-foreground">Table</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {tables.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setSelectedTable(selectedTableId === t.id ? null : t.id)}
-                  className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                    selectedTableId === t.id
-                      ? "bg-ink text-white"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
-                  }`}
-                >
-                  {t.name || `#${t.table_number}`}
-                </button>
-              ))}
-            </div>
+          <div className="mt-4">
+            <TableSelector />
           </div>
         )}
 
         {/* Customer link */}
-        <div className="mt-3">
+        <div className="mt-4">
           {linkedCustomer ? (
-            <div className="flex items-center justify-between rounded-xl bg-ink/5 px-3 py-2">
-              <div className="flex items-center gap-2">
-                <User className="h-3.5 w-3.5 text-ink" />
-                <div>
-                  <p className="text-xs font-medium text-foreground">{linkedCustomer.full_name}</p>
-                  <p className="text-[10px] text-muted-foreground">{linkedCustomer.tier} &middot; {linkedCustomer.loyalty_points} pts</p>
-                </div>
+            <div className="flex items-center gap-3 rounded-2xl border border-ember/30 bg-ember-soft/50 px-4 py-3">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ember text-white">
+                <User className="h-5 w-5" />
               </div>
-              <button
-                onClick={() => {
-                  setLinkedCustomer(null);
-                  setSelectedCustomer(null);
-                }}
-                className="text-[10px] text-destructive hover:underline"
-              >
-                Remove
-              </button>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-foreground">
+                  {linkedCustomer.full_name}
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {linkedCustomer.phone || linkedCustomer.email || "No contact"}
+                  {linkedCustomer.membership_number &&
+                    ` · ${linkedCustomer.membership_number}`}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col gap-1">
+                <button
+                  onClick={() => setShowCustomerSearch(true)}
+                  className="text-right text-[11px] font-semibold text-ember hover:underline"
+                >
+                  Change
+                </button>
+                <button
+                  onClick={() => {
+                    setLinkedCustomer(null);
+                    setSelectedCustomer(null);
+                  }}
+                  className="text-right text-[11px] font-medium text-muted-foreground hover:text-destructive"
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           ) : (
             <button
               onClick={() => setShowCustomerSearch(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-2 text-xs text-muted-foreground hover:bg-muted"
+              className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-[var(--shadow-card)] transition-all hover:border-ember/50 hover:bg-ember-soft/30"
             >
-              <UserPlus className="h-3.5 w-3.5" />
-              Link Customer
+              <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mist">
+                <User className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold text-foreground">
+                  Customer
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Link a customer to this order
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             </button>
           )}
         </div>
@@ -272,118 +299,161 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         <CustomerSearchModal
           onSelect={(customer) => {
             setLinkedCustomer(customer);
-            setSelectedCustomer(customer.id);
+            setSelectedCustomer(customer.id || null);
             setShowCustomerSearch(false);
           }}
           onClose={() => setShowCustomerSearch(false)}
         />
       )}
 
-      {/* ── Cart items ── */}
-      <div className="flex-1 overflow-y-auto">
+      {/* ── Order items ── */}
+      <div className="flex-1 overflow-y-auto border-y border-border">
         {isEmpty ? (
-          <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <ShoppingBag className="mb-3 h-10 w-10 opacity-30" />
-            <p className="text-sm">Cart is empty</p>
+          <div className="flex h-full flex-col items-center justify-center py-12 text-muted-foreground">
+            <ShoppingBag className="mb-3 h-12 w-12 opacity-25" />
+            <p className="text-sm font-medium">Cart is empty</p>
             <p className="mt-1 text-xs">Tap items on the menu to add</p>
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {cart.map((item, idx) => (
-              <div key={`${item.menu_item_id}-${idx}`} className="px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
+            {cart.map((item, idx) => {
+              const meta = menuItemById.get(item.menu_item_id);
+              return (
+                <div key={`${item.menu_item_id}-${idx}`} className="flex items-center gap-3 px-5 py-3.5">
+                  {/* Thumbnail */}
+                  <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-mist text-xl">
+                    {meta?.image_url ? (
+                      <img
+                        src={meta.image_url}
+                        alt={item.name}
+                        className="h-full w-full object-cover"
+                        crossOrigin="anonymous"
+                      />
+                    ) : (
+                      meta?.emoji || "🍽️"
+                    )}
+                  </div>
+
+                  {/* Details */}
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-foreground">
-                      {item.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="truncate text-sm font-semibold text-foreground">
+                        {item.name}
+                      </p>
+                      <p className="shrink-0 text-sm font-bold text-foreground">
+                        Rs {item.subtotal.toFixed(2)}
+                      </p>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
                       Rs {item.price.toFixed(2)} each
                     </p>
-                  </div>
-                  <p className="text-sm font-bold text-ink">
-                    Rs {item.subtotal.toFixed(2)}
-                  </p>
-                </div>
 
-                {/* Quantity controls */}
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex items-center rounded-lg border border-border">
-                    <button
-                      onClick={() =>
-                        item.quantity > 1
-                          ? updateCartItemQty(idx, item.quantity - 1)
-                          : removeItemFromCart(idx)
-                      }
-                      className="grid h-7 w-7 place-items-center text-muted-foreground hover:text-foreground"
-                    >
-                      {item.quantity === 1 ? (
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      ) : (
-                        <Minus className="h-3.5 w-3.5" />
-                      )}
-                    </button>
-                    <span className="w-8 text-center text-sm font-medium">
-                      {item.quantity}
-                    </span>
-                    <button
-                      onClick={() => updateCartItemQty(idx, item.quantity + 1)}
-                      className="grid h-7 w-7 place-items-center text-muted-foreground hover:text-foreground"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
+                    {/* Quantity controls */}
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="flex items-center rounded-xl border border-border bg-card">
+                        <button
+                          onClick={() =>
+                            item.quantity > 1
+                              ? updateCartItemQty(idx, item.quantity - 1)
+                              : removeItemFromCart(idx)
+                          }
+                          className="grid h-9 w-9 place-items-center rounded-l-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+                        >
+                          {item.quantity === 1 ? (
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          ) : (
+                            <Minus className="h-4 w-4" />
+                          )}
+                        </button>
+                        <span className="w-9 text-center text-sm font-semibold text-foreground">
+                          {item.quantity}
+                        </span>
+                        <button
+                          onClick={() => updateCartItemQty(idx, item.quantity + 1)}
+                          className="grid h-9 w-9 place-items-center rounded-r-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => removeItemFromCart(idx)}
+                        title="Remove item"
+                        className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-red-200 hover:bg-red-50 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
       {/* ── Notes ── */}
       {!isEmpty && (
-        <div className="shrink-0 border-t border-border px-4 py-2">
+        <div className="shrink-0 px-5 py-3">
           <button
             onClick={() => setShowNotes(!showNotes)}
-            className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-2 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <MessageSquare className="h-3.5 w-3.5" />
-            {showNotes ? "Hide notes" : "Add notes"}
+            {showNotes ? "Hide note" : "Add a note to order"}
           </button>
           {showNotes && (
             <textarea
               value={cartNotes}
               onChange={(e) => setCartNotes(e.target.value)}
-              placeholder="Special instructions..."
+              placeholder="No sugar, extra hot..."
               rows={2}
-              className="mt-2 w-full rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs placeholder:text-muted-foreground focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+              className="mt-2 w-full rounded-xl border border-border bg-card px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember"
             />
           )}
         </div>
       )}
 
-      {/* ── Totals ── */}
-      <div className="shrink-0 border-t border-border bg-muted/30 px-4 py-3 space-y-1.5">
-        <div className="flex justify-between text-xs text-muted-foreground">
+      {/* ── Pricing summary ── */}
+      <div className="shrink-0 space-y-2 border-t border-border bg-card px-5 py-4">
+        <div className="flex items-center justify-between text-[13px] text-muted-foreground">
           <span>Subtotal</span>
-          <span>Rs {subtotal.toFixed(2)}</span>
+          <span className="font-medium text-foreground">
+            Rs {subtotal.toFixed(2)}
+          </span>
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>SST (6%)</span>
-          <span>Rs {tax.toFixed(2)}</span>
-        </div>
-        <div className="flex justify-between border-t border-border pt-1.5 text-sm font-bold text-foreground">
-          <span>Total</span>
-          <span>Rs {total.toFixed(2)}</span>
+        {tax > 0 && (
+          <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+            <span>VAT ({(taxRate * 100).toFixed(0)}%)</span>
+            <span className="font-medium text-foreground">
+              Rs {tax.toFixed(2)}
+            </span>
+          </div>
+        )}
+        <button
+          onClick={onDiscount}
+          className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-ember"
+        >
+          <span className="flex items-center gap-1.5">
+            <Percent className="h-3.5 w-3.5" />
+            Discount
+          </span>
+          <span className="font-medium text-ember">Add</span>
+        </button>
+        <div className="flex items-end justify-between border-t border-border pt-2">
+          <span className="text-sm font-semibold text-foreground">Total</span>
+          <span className="text-2xl font-bold tracking-tight text-foreground">
+            Rs {total.toFixed(2)}
+          </span>
         </div>
       </div>
 
-      {/* ── Actions ── */}
-      <div className="shrink-0 space-y-2 border-t border-border px-4 py-3">
+      {/* ── Checkout actions ── */}
+      <div className="shrink-0 space-y-2 border-t border-border px-5 py-4">
         {!isEmpty && posSettings?.receipt_printing_enabled && (
           <button
             onClick={handlePrintBill}
             disabled={printingBill}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground transition-colors hover:bg-mist"
           >
             <FileText className="h-4 w-4" />
             {printingBill ? "Printing..." : "Print Bill"}
@@ -392,7 +462,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         {posSettings?.discounts_enabled && (
           <button
             onClick={onDiscount}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground transition-colors hover:bg-mist"
           >
             <Percent className="h-4 w-4" />
             Apply Discount
@@ -401,14 +471,17 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         <button
           onClick={onCheckout}
           disabled={isEmpty}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:opacity-40"
+          className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-ember text-base font-bold text-white shadow-[var(--shadow-ember)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
         >
-          <CreditCard className="h-4 w-4" />
-          {isEmpty
-            ? "Cart is empty"
-            : fulfillmentType === "dine-in"
-              ? `Place Order — Rs ${total.toFixed(2)}`
-              : `Pay Rs ${total.toFixed(2)}`}
+          <Check className="h-5 w-5" strokeWidth={2.5} />
+          {isEmpty ? (
+            "Add items to place order"
+          ) : (
+            <>
+              Place Order
+              <span className="font-extrabold">— Rs {total.toFixed(2)}</span>
+            </>
+          )}
         </button>
       </div>
     </div>

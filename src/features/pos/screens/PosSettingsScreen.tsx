@@ -83,6 +83,33 @@ export default function PosSettingsScreen() {
         {/* Discount settings */}
         <section className="rounded-2xl border border-border bg-card p-5">
           <h2 className="mb-4 text-sm font-bold text-foreground">
+            Billing
+          </h2>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                VAT Rate (%) — set 0 to disable
+              </label>
+              <input
+                type="number"
+                min={0}
+                value={settings.tax_rate_percent}
+                onChange={(e) =>
+                  setSettings((s) =>
+                    s
+                      ? { ...s, tax_rate_percent: e.target.value }
+                      : s
+                  )
+                }
+                className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Discount settings */}
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <h2 className="mb-4 text-sm font-bold text-foreground">
             Discount Limits
           </h2>
           <div className="space-y-4">

@@ -544,6 +544,13 @@ export interface PosReceiptData {
   sync_status: string;
 }
 
+// Safe tax-rate helper: never return NaN for missing/empty/invalid values.
+export function getTaxRate(settings?: PosSettings | null): number {
+  const raw = Number.parseFloat(settings?.tax_rate_percent ?? "");
+  if (!Number.isFinite(raw) || raw < 0) return 0;
+  return raw / 100;
+}
+
 export interface PosSettings {
   pos_enabled: boolean;
   offline_pos_enabled: boolean;
@@ -556,6 +563,7 @@ export interface PosSettings {
   manager_approval_threshold: string;
   offline_discounts_allowed: boolean;
   offline_credit_allowed: boolean;
+  tax_rate_percent: string;
 }
 
 export interface PosMenuSnapshot {
@@ -888,6 +896,19 @@ export const posSearchCustomers = (query: string, signal?: AbortSignal) =>
   djangoFetch<PosCustomer[]>(apiUrl(`/pos/customers/search/?q=${encodeURIComponent(query)}`), {
     headers: headers(),
     signal,
+  });
+
+export interface PosCreateCustomerPayload {
+  full_name: string;
+  phone?: string;
+  email?: string;
+}
+
+export const posCreateCustomer = (data: PosCreateCustomerPayload) =>
+  djangoFetch<PosCustomer>(apiUrl("/pos/customers/create/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(data),
   });
 
 export interface PosCustomer {

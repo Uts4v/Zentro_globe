@@ -23,6 +23,7 @@ import {
   LogOut,
   ChefHat,
   Bot,
+  Users,
 } from "lucide-react";
 import { MerchantNav } from "@/components/merchant-nav";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
@@ -50,6 +51,7 @@ const navItems = [
   { to: "/merchant/menu", label: "Menu", icon: UtensilsCrossed },
   { to: "/merchant/tables", label: "Tables & QR", icon: QrCode },
   { to: "/merchant/loyalty", label: "Loyalty", icon: Trophy },
+  { to: "/merchant/customers", label: "Customers", icon: Users },
   { to: "/merchant/specials", label: "Today's Special", icon: Sparkles },
   { to: "/merchant/preparation", label: "Preparation", icon: ChefHat },
   { to: "/merchant/analytics", label: "Analytics", icon: BarChart3 },

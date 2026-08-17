@@ -64,6 +64,7 @@ urlpatterns = [
 
     # Customer identification (Phase 26)
     path("customers/search/", views.search_customers, name="pos-customer-search"),
+    path("customers/create/", views.create_customer, name="pos-customer-create"),
 
     # Refund processing (Phase 27)
     path("refund/", views.process_refund, name="pos-refund"),

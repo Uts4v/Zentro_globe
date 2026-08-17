@@ -208,7 +208,7 @@ export default function Receipt({
           )}
           {Number(data.tax_amount) > 0 && (
             <div className="receipt-line">
-              <span>Tax</span>
+              <span>VAT</span>
               <span>{formatRM(data.tax_amount)}</span>
             </div>
           )}

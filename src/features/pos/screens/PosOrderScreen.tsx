@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
-import { posBootstrap } from "../api";
+import { posBootstrap, getTaxRate } from "../api";
 import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
 import PaymentSheet from "./PaymentSheet";
@@ -81,14 +81,18 @@ export default function PosOrderScreen() {
 
   return (
     <div className="flex h-full">
-      {/* Left: Menu grid */}
-      <div className="min-w-0 flex-1 overflow-y-auto">
-        <IncomingOrdersPanel />
-        <MenuGrid />
+      {/* Center: menu workspace */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="shrink-0 px-5 pt-4">
+          <IncomingOrdersPanel />
+        </div>
+        <div className="min-h-0 flex-1">
+          <MenuGrid />
+        </div>
       </div>
 
-      {/* Right: Cart panel */}
-      <div className="hidden w-80 shrink-0 lg:block xl:w-96">
+      {/* Right: current order panel */}
+      <div className="hidden w-[480px] shrink-0 lg:block xl:w-[500px]">
         <CartPanel
           onCheckout={() => setShowPayment(true)}
           onDiscount={() => setShowDiscount(true)}
@@ -136,11 +140,13 @@ function MobileCartButton({
   onDiscount: () => void;
 }) {
   const cart = usePosStore((s) => s.cart);
+  const posSettings = usePosStore((s) => s.posSettings);
   const [open, setOpen] = useState(false);
 
   const count = cart.reduce((sum, item) => sum + item.quantity, 0);
   const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const tax = total * 0.06;
+  const taxRate = getTaxRate(posSettings);
+  const tax = total * taxRate;
   const grandTotal = total + tax;
 
   if (count === 0) return null;

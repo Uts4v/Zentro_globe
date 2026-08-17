@@ -103,6 +103,10 @@ class MerchantProfile(models.Model):
         default=False,
         help_text="Enable prepaid debit accounts (customer wallet / stored value)",
     )
+    tax_rate_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=6.00,
+        help_text="VAT rate applied to POS orders (set to 0 to disable)",
+    )
 
     # ── Preparation routing ────────────────────────────────────────────────────
     preparation_routing_enabled = models.BooleanField(

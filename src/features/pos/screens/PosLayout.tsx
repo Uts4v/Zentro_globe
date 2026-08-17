@@ -14,7 +14,6 @@ import {
   LogOut,
   Wifi,
   WifiOff,
-  User,
   Wallet,
   CreditCard,
   BarChart3,
@@ -46,10 +45,10 @@ function NavItem({
   return (
     <Link
       to={to as any}
-      className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
+      className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-colors ${
         active
-          ? "bg-ink text-white"
-          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+          ? "bg-ember-soft font-semibold text-ember"
+          : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
       }`}
     >
       <Icon className="h-4 w-4" />
@@ -229,51 +228,55 @@ export default function PosLayout() {
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
       {/* ── Sidebar ── */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-background lg:flex">
-        {/* Logo */}
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-background lg:flex">
+        {/* Logo + notification */}
+        <div className="flex items-center justify-between px-5 py-5">
           <div className="flex items-center gap-2">
             <Link to="/" className="font-display text-xl text-foreground">
               zentro<span className="text-ember">.</span>
             </Link>
-            <span className="ml-1 rounded-md bg-ink/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-ink">
+            <span className="rounded-md bg-ember-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-ember">
               POS
             </span>
           </div>
           <NotificationBell />
         </div>
 
-        {/* Merchant + worker info */}
-        <div className="border-b border-border px-5 py-3">
-          {merchant && (
-            <p className="truncate text-xs font-medium text-foreground">
-              {merchant.business_name}
-            </p>
-          )}
-          {currentWorker && (
-            <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted-foreground">
-              <User className="h-3 w-3" />
-              {currentWorker.display_name}
-            </p>
-          )}
-          {/* Shift badge */}
-          {activeShift && (
-            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-green-50 px-2 py-1 text-[10px] font-medium text-green-700">
-              <Wallet className="h-3 w-3" />
+        {/* User / staff info */}
+        <div className="border-y border-border px-5 py-4">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-sm font-semibold text-white">
+              {(currentWorker?.display_name ?? "?").charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-foreground">
+                {currentWorker?.display_name ?? "Staff"}
+              </p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {merchant?.business_name}
+              </p>
+            </div>
+          </div>
+          {/* Shift status */}
+          {activeShift ? (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2 text-[11px] font-medium text-green-700">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
+              </span>
               Shift active — {activeShift.total_orders} orders
             </div>
-          )}
-          {!activeShift && (
-            <div className="mt-2 flex items-center gap-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-700">
-              <Wallet className="h-3 w-3" />
+          ) : (
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700">
+              <span className="h-2 w-2 rounded-full bg-amber-500" />
               No active shift
             </div>
           )}
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          <NavItem to="/pos" label="Order" icon={ShoppingCart} badge={cartCount} />
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+          <NavItem to="/pos" label="Order" icon={ShoppingCart} badge={cartCount} active={isOrderPage} />
           <NavItem to="/pos/orders" label="Orders" icon={Clock} />
           <NavItem to="/pos/preparation" label="Preparation" icon={AlertTriangle} />
           <NavItem to="/pos/accounts" label="Accounts" icon={CreditCard} />
@@ -287,17 +290,18 @@ export default function PosLayout() {
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-border px-3 py-3 space-y-2">
-          {/* Sync status */}
+        <div className="space-y-2 border-t border-border px-3 py-4">
+          <div className="px-1">
+            <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Theme
+            </p>
+            <ThemeToggle />
+          </div>
           <div className="px-1">
             <SyncStatusBar />
           </div>
-          {/* Theme toggle */}
-          <div className="px-1 py-1">
-            <ThemeToggle />
-          </div>
-          {/* Close shift button */}
-          {activeShift && (
+          {/* Close / Open shift */}
+          {activeShift ? (
             <button
               onClick={() => setShowShiftClose(true)}
               className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-50"
@@ -305,9 +309,7 @@ export default function PosLayout() {
               <Wallet className="h-4 w-4" />
               <span>Close Shift</span>
             </button>
-          )}
-          {/* Open shift button */}
-          {!activeShift && (
+          ) : (
             <button
               onClick={() => navigate({ to: "/pos" })}
               className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50"
@@ -316,16 +318,16 @@ export default function PosLayout() {
               <span>Open Shift</span>
             </button>
           )}
-          {/* Online/Offline indicator */}
-          <div className="flex items-center gap-2 px-3 text-xs text-muted-foreground">
+          {/* Online / offline */}
+          <div className="flex items-center gap-2 px-4 text-xs text-muted-foreground">
             {isOnline ? (
               <>
-                <Wifi className="h-3 w-3 text-green-500" />
+                <Wifi className="h-3.5 w-3.5 text-green-500" />
                 <span>Online</span>
               </>
             ) : (
               <>
-                <WifiOff className="h-3 w-3 text-amber-500" />
+                <WifiOff className="h-3.5 w-3.5 text-amber-500" />
                 <span className="text-amber-600">Offline</span>
               </>
             )}

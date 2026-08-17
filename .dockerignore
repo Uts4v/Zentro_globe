@@ -1,0 +1,48 @@
+# Git
+.git
+.gitignore
+
+# Dependencies (will be installed inside containers)
+node_modules
+.venv
+__pycache__
+
+# Build output (will be built inside containers)
+dist
+.output
+.tanstack
+
+# Database files
+*.sqlite3
+db.sqlite3*
+
+# IDE and editor files
+.vscode
+.idea
+*.suo
+*.sw?
+
+# Logs
+logs
+*.log
+
+# Environment files (use docker-compose env vars instead)
+.env
+.env.*
+!.env.example
+backend/.env
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Misc
+exit
+stats.html
+build-output*.txt
+test_register.py

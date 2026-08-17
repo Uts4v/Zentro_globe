@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
-import { posCreateOrder, posCreatePayment, posReceiptData, PosReceiptData, posListDebitAccounts, DebitAccount } from "../api";
+import { posCreateOrder, posCreatePayment, posReceiptData, PosReceiptData, posListDebitAccounts, DebitAccount, getTaxRate } from "../api";
 import Receipt from "../printing/Receipt";
 import {
   X,
@@ -70,8 +70,10 @@ export default function PaymentSheet({
 
   if (!open) return null;
 
+  const posSettings = usePosStore((s) => s.posSettings);
+
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const taxRate = 0.06;
+  const taxRate = getTaxRate(posSettings);
   const tax = subtotal * taxRate;
   const total = subtotal + tax;
   const cashAmount = parseFloat(cashReceived) || 0;
@@ -203,7 +205,7 @@ export default function PaymentSheet({
           <div className="border-t border-border px-6 py-4">
             <button
               onClick={() => { setOrderPlaced(false); onClose(); onPaid(); }}
-              className="flex w-full items-center justify-center rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90"
+              className="flex w-full items-center justify-center rounded-xl bg-ember py-3 text-sm font-bold text-white shadow-[var(--shadow-ember)] hover:brightness-105"
             >
               Done
             </button>
@@ -259,7 +261,7 @@ export default function PaymentSheet({
           <div className="flex gap-3 border-t border-border px-6 py-4">
             <button
               onClick={() => { setReceiptData(null); onClose(); onPaid(); }}
-              className="flex-1 rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90"
+              className="flex-1 rounded-xl bg-ember py-3 text-sm font-bold text-white shadow-[var(--shadow-ember)] hover:brightness-105"
             >
               Done
             </button>
@@ -312,7 +314,7 @@ export default function PaymentSheet({
             <button
               onClick={handlePlaceOrder}
               disabled={!canSubmit}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3.5 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:opacity-40"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-ember py-3.5 text-sm font-bold text-white shadow-[var(--shadow-ember)] transition-all hover:brightness-105 disabled:opacity-40"
             >
               {submitting ? (
                 <>
@@ -487,7 +489,7 @@ export default function PaymentSheet({
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3.5 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:opacity-40"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-ember py-3.5 text-sm font-bold text-white shadow-[var(--shadow-ember)] transition-all hover:brightness-105 disabled:opacity-40"
           >
             {submitting ? (
               <>

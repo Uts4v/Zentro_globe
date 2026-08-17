@@ -1,0 +1,49 @@
+# ── Stage 1: Build dependencies ───────────────────────────────────────────────
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+# Install system dependencies for PostgreSQL and image processing
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install Python dependencies
+COPY backend/requirements.txt ./
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ── Stage 2: Production runtime ───────────────────────────────────────────────
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Install runtime system dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libjpeg62-turbo \
+    zlib1g \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy installed Python packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy backend source code
+COPY backend/ ./
+
+# Create directories for static files and media
+RUN mkdir -p /app/staticfiles /app/media
+
+# Collect static files
+RUN DJANGO_SETTINGS_MODULE=config.settings SECRET_KEY=build-time-key \
+    python manage.py collectstatic --noinput 2>/dev/null || true
+
+ENV PYTHONUNBUFFERED=1
+ENV DJANGO_SETTINGS_MODULE=config.settings
+
+EXPOSE 8000
+
+# Run with Daphne (ASGI server for WebSocket support)
+CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
