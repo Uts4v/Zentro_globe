@@ -131,7 +131,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "mobile-web-app-capable", content: "yes" },
       { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { name: "theme-color", content: "#FA6A4A" },
     ],

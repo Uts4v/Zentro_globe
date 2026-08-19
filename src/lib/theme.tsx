@@ -39,8 +39,14 @@ function getStoredTheme(): Theme {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(getStoredTheme);
-  const [resolved, setResolved] = useState<"light" | "dark">(() => resolve(getStoredTheme()));
+  const [theme, setThemeState] = useState<Theme>("system");
+  const [resolved, setResolved] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const stored = getStoredTheme();
+    setThemeState(stored);
+    setResolved(resolve(stored));
+  }, []);
 
   const setTheme = useCallback((t: Theme) => {
     setThemeState(t);
