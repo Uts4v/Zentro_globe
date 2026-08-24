@@ -1,7 +1,8 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { usePosStore } from "../store";
 import { posWorkerLogin, ShiftWorker } from "../api";
-import { Lock, User, Delete, Loader2 } from "lucide-react";
+import { Lock, User, Delete, Loader2, UserPlus } from "lucide-react";
 
 interface WorkerPinPadProps {
   onLoggedIn: (worker: ShiftWorker) => void;
@@ -105,6 +106,21 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
                 <Lock className="h-4 w-4 text-muted-foreground" />
               </button>
             ))}
+
+            {workers.length === 0 && (
+              <div className="rounded-2xl border border-dashed border-border p-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  No staff added yet.
+                </p>
+                <Link
+                  to="/pos/staff"
+                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Add your first staff member
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       </div>
