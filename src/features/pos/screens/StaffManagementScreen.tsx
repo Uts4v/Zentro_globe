@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { usePosStore } from "../store";
 import { posListWorkers, posCreateWorker, posUpdateWorker, ShiftWorker } from "../api";
 import {
@@ -175,6 +176,7 @@ export default function StaffManagementScreen() {
   }
 
   const activeCount = workers.filter((w) => w.is_active).length;
+  const currentWorker = usePosStore((s) => s.currentWorker);
 
   return (
     <div className="mx-auto max-w-4xl p-4 lg:p-6">
@@ -186,9 +188,18 @@ export default function StaffManagementScreen() {
             <h1 className="text-xl font-bold text-foreground">Staff Management</h1>
             <p className="text-xs text-muted-foreground">
               {activeCount} active worker{activeCount !== 1 ? "s" : ""}
+              {!currentWorker && " — setup mode (no worker signed in)"}
             </p>
           </div>
         </div>
+        {!currentWorker && (
+          <Link
+            to="/pos"
+            className="mr-auto rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+          >
+            ← Back to terminal
+          </Link>
+        )}
         <button
           onClick={() => {
             resetForm();

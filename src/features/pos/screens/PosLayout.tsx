@@ -197,6 +197,13 @@ export default function PosLayout() {
 
   // ── Step 1: No worker logged in → show PIN pad ──
   if (!currentWorker) {
+    // Escape hatch for fresh installs: allow the merchant (JWT) into
+    // Staff Management while zero workers exist, so the first worker
+    // can be created instead of deadlocking on an empty PIN pad.
+    const pathname = routerState.location.pathname;
+    if (workers.length === 0 && pathname === "/pos/staff") {
+      return <Outlet />;
+    }
     return <WorkerPinPad onLoggedIn={(worker) => setCurrentWorker(worker)} />;
   }
 
