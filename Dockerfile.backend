@@ -45,5 +45,5 @@ ENV DJANGO_SETTINGS_MODULE=config.settings
 
 EXPOSE 8000
 
-# Run with Daphne (ASGI server for WebSocket support)
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+# Run migrations then start Daphne
+CMD ["sh", "-c", "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"]
