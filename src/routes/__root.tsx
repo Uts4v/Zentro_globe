@@ -17,12 +17,13 @@ import { MerchantThemeProvider } from "@/lib/merchant-theme";
 import { PwaProvider } from "@/features/pwa/PwaProvider";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { ZentroLoadingScreen } from "@/components/brand/ZentroLoadingScreen";
+import { ZentroSplashScreen } from "@/components/brand/ZentroSplashScreen";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { getWsToken } from "@/lib/ws";
+import { registerPushSubscription } from "@/lib/push";
 
 // Routes that never require auth
 const PUBLIC_ROUTES = ["/auth", "/auth/merchant", "/auth/forgot-password", "/auth/reset-password"];
@@ -140,12 +141,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "preload",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Instrument+Serif:ital@0;1&display=swap",
         as: "style",
       },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Instrument+Serif:ital@0;1&display=swap",
       },
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/manifest.webmanifest" },
@@ -257,6 +258,19 @@ function GlobalNotificationToasts() {
     };
   }, [user, queryClient]);
 
+  // Subscribe installed-PWA users to Web Push (OS-level notifications).
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const t = window.setTimeout(() => {
+      if (!cancelled) void registerPushSubscription(user.id);
+    }, 3000); // give the SW a moment to activate
+    return () => {
+      cancelled = true;
+      window.clearTimeout(t);
+    };
+  }, [user]);
+
   return null;
 }
 
@@ -297,7 +311,7 @@ function RootShell({ children }: { children: ReactNode }) {
       </head>
       <body>
         {showSplash && (
-          <ZentroLoadingScreen duration={2000} onComplete={() => setShowSplash(false)} />
+          <ZentroSplashScreen onFinish={() => setShowSplash(false)} autoUnmount={false} />
         )}
         {children}
         <Scripts />

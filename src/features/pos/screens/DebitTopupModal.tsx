@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { safeUuid } from "@/lib/utils";
 import { usePosStore } from "../store";
 import { posDebitTopup, DebitAccount } from "../api";
 import { X, Plus, Loader2, Check } from "lucide-react";
@@ -42,7 +43,7 @@ export default function DebitTopupModal({
         worker_id: currentWorker.id,
         device_id: device.id,
         amount: numAmount,
-        client_mutation_id: crypto.randomUUID(),
+        client_mutation_id: safeUuid(),
         note,
       });
       setSuccess(true);

@@ -135,13 +135,17 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         </div>
         <hr style="border: none; border-top: 2px solid #000; margin: 8px 0;">
         <div style="font-size: 11px;">
-          ${billData.items.map(item => `
+          ${billData.items
+            .map(
+              (item) => `
             <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
               <span style="font-weight: bold;">${item.quantity}x ${item.name}</span>
               <span>Rs ${Number(item.subtotal).toFixed(2)}</span>
             </div>
             ${item.quantity > 1 ? `<div style="text-align: right; font-size: 10px; color: #666;">@ Rs ${Number(item.price).toFixed(2)} each</div>` : ""}
-          `).join("")}
+          `,
+            )
+            .join("")}
         </div>
         <hr style="border: none; border-top: 1px dashed #000; margin: 6px 0;">
         <div style="font-size: 11px;">
@@ -187,9 +191,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShoppingBag className="h-4 w-4 text-ember" />
-            <h2 className="text-base font-bold text-foreground">
-              Current Order
-            </h2>
+            <h2 className="text-base font-bold text-foreground">Current Order</h2>
             {!isEmpty && (
               <span className="rounded-full bg-mist px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
                 {itemCount} {itemCount === 1 ? "item" : "items"}
@@ -250,8 +252,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                 </p>
                 <p className="truncate text-[11px] text-muted-foreground">
                   {linkedCustomer.phone || linkedCustomer.email || "No contact"}
-                  {linkedCustomer.membership_number &&
-                    ` · ${linkedCustomer.membership_number}`}
+                  {linkedCustomer.membership_number && ` · ${linkedCustomer.membership_number}`}
                 </p>
               </div>
               <div className="flex shrink-0 flex-col gap-1">
@@ -281,12 +282,8 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                 <User className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-foreground">
-                  Customer
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  Link a customer to this order
-                </p>
+                <p className="text-sm font-semibold text-foreground">Customer</p>
+                <p className="text-[11px] text-muted-foreground">Link a customer to this order</p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             </button>
@@ -319,7 +316,10 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
             {cart.map((item, idx) => {
               const meta = menuItemById.get(item.menu_item_id);
               return (
-                <div key={`${item.menu_item_id}-${idx}`} className="flex items-center gap-3 px-5 py-3.5">
+                <div
+                  key={`${item.menu_item_id}-${idx}`}
+                  className="flex items-center gap-3 px-5 py-3.5"
+                >
                   {/* Thumbnail */}
                   <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-mist text-xl">
                     {meta?.image_url ? (
@@ -337,14 +337,12 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                   {/* Details */}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <p className="truncate text-sm font-semibold text-foreground">
-                        {item.name}
-                      </p>
-                      <p className="shrink-0 text-sm font-bold text-foreground">
+                      <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
+                      <p className="numeric shrink-0 text-sm font-bold text-foreground">
                         Rs {item.subtotal.toFixed(2)}
                       </p>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="numeric text-[11px] text-muted-foreground">
                       Rs {item.price.toFixed(2)} each
                     </p>
 
@@ -417,16 +415,12 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
       <div className="shrink-0 space-y-2 border-t border-border bg-card px-5 py-4">
         <div className="flex items-center justify-between text-[13px] text-muted-foreground">
           <span>Subtotal</span>
-          <span className="font-medium text-foreground">
-            Rs {subtotal.toFixed(2)}
-          </span>
+          <span className="numeric font-medium text-foreground">Rs {subtotal.toFixed(2)}</span>
         </div>
         {tax > 0 && (
           <div className="flex items-center justify-between text-[13px] text-muted-foreground">
             <span>VAT ({(taxRate * 100).toFixed(0)}%)</span>
-            <span className="font-medium text-foreground">
-              Rs {tax.toFixed(2)}
-            </span>
+            <span className="numeric font-medium text-foreground">Rs {tax.toFixed(2)}</span>
           </div>
         )}
         <button
@@ -441,7 +435,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         </button>
         <div className="flex items-end justify-between border-t border-border pt-2">
           <span className="text-sm font-semibold text-foreground">Total</span>
-          <span className="text-2xl font-bold tracking-tight text-foreground">
+          <span className="numeric text-2xl font-bold tracking-tight text-foreground">
             Rs {total.toFixed(2)}
           </span>
         </div>

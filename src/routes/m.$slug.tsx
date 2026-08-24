@@ -6,6 +6,7 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2, ArrowRight, MapPin } from "lucide-react";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { merchantApi, type MerchantProfile } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
@@ -35,11 +36,19 @@ function MerchantEntryLayout() {
 
     merchantApi
       .bySlug(slug)
-      .then((m) => { if (!cancelled) setMerchant(m); })
-      .catch(() => { if (!cancelled) setError("We couldn't find that store. Check the link and try again."); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .then((m) => {
+        if (!cancelled) setMerchant(m);
+      })
+      .catch(() => {
+        if (!cancelled) setError("We couldn't find that store. Check the link and try again.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   // Redirect based on role (only for bare /m/$slug, not child routes)
@@ -104,8 +113,8 @@ function MerchantEntryLayout() {
   // ── Guest landing — not logged in (bare /m/$slug without table) ───────────
   return (
     <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col px-5 pb-10 pt-10">
-      <Link to="/" className="font-display text-2xl text-foreground">
-        zentro<span className="text-ember">.</span>
+      <Link to="/" className="inline-flex items-center text-foreground" aria-label="Zentro home">
+        <ZentroLogo className="h-7 w-auto" title="" />
       </Link>
 
       <div className="mt-12">
@@ -120,8 +129,8 @@ function MerchantEntryLayout() {
                   backgroundPosition: "center",
                 }
               : !merchant.store_theme_color
-              ? { backgroundColor: "var(--ink)" }
-              : {}),
+                ? { backgroundColor: "var(--ink)" }
+                : {}),
           }}
         >
           {!merchant.logo_url && "☕"}

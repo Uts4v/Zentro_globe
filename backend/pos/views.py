@@ -355,7 +355,7 @@ def pos_bootstrap(request):
     ).select_related("customer__user").prefetch_related("items")[:20]
 
     from orders.serializers import OrderSerializer
-    recent_orders_data = OrderSerializer(recent_orders, many=True).data
+    recent_orders_data = OrderSerializer(recent_orders, many=True, context={"request": request}).data
 
     # Incoming orders (pending/confirmed from online sources)
     incoming_orders = Order.objects.filter(
@@ -363,7 +363,7 @@ def pos_bootstrap(request):
         source__in=["customer_app", "table_qr"],
         status__in=["pending", "confirmed"],
     ).select_related("customer__user").prefetch_related("items")[:20]
-    incoming_orders_data = OrderSerializer(incoming_orders, many=True).data
+    incoming_orders_data = OrderSerializer(incoming_orders, many=True, context={"request": request}).data
 
     # Update last sync time
     device.last_sync_at = timezone.now()
@@ -474,7 +474,7 @@ def pos_bootstrap_device(request):
     ).select_related("customer__user").prefetch_related("items")[:20]
 
     from orders.serializers import OrderSerializer
-    recent_orders_data = OrderSerializer(recent_orders, many=True).data
+    recent_orders_data = OrderSerializer(recent_orders, many=True, context={"request": request}).data
 
     # Incoming orders (pending/confirmed from online sources)
     incoming_orders = Order.objects.filter(
@@ -482,7 +482,7 @@ def pos_bootstrap_device(request):
         source__in=["customer_app", "table_qr"],
         status__in=["pending", "confirmed"],
     ).select_related("customer__user").prefetch_related("items")[:20]
-    incoming_orders_data = OrderSerializer(incoming_orders, many=True).data
+    incoming_orders_data = OrderSerializer(incoming_orders, many=True, context={"request": request}).data
 
     device.last_sync_at = timezone.now()
     device.save(update_fields=["last_sync_at", "updated_at"])
@@ -1407,7 +1407,7 @@ def create_pos_order(request):
             try:
                 existing_order = Order.objects.get(id=existing.server_object_id)
                 from orders.serializers import OrderSerializer
-                return Response(OrderSerializer(existing_order).data)
+                return Response(OrderSerializer(existing_order, context={"request": request}).data)
             except Order.DoesNotExist:
                 pass
 
@@ -1478,7 +1478,7 @@ def create_pos_order(request):
         if existing_mutation and existing_mutation.server_object_id:
             try:
                 existing_order = Order.objects.get(id=existing_mutation.server_object_id)
-                return Response(OrderSerializer(existing_order).data)
+                return Response(OrderSerializer(existing_order, context={"request": request}).data)
             except Order.DoesNotExist:
                 pass
         raise
@@ -1493,7 +1493,7 @@ def create_pos_order(request):
            })
 
     from orders.serializers import OrderSerializer
-    return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+    return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
@@ -1572,7 +1572,7 @@ def update_order_status_uuid(request):
            metadata={"previous_status": list(allowed), "new_status": new_status})
 
     from orders.serializers import OrderSerializer
-    return Response(OrderSerializer(order).data)
+    return Response(OrderSerializer(order, context={"request": request}).data)
 
 
 @api_view(["GET"])
@@ -1608,7 +1608,7 @@ def pos_orders(request):
     ).prefetch_related("items")[:50]
 
     from orders.serializers import OrderSerializer
-    return Response(OrderSerializer(qs, many=True).data)
+    return Response(OrderSerializer(qs, many=True, context={"request": request}).data)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -1,14 +1,9 @@
 ﻿// src/routes/merchant.tsx
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useNavigate,
-  redirect,
-} from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { requireMerchant } from "@/lib/merchant-auth-guard";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import {
   LayoutDashboard,
   ShoppingBag,
@@ -79,10 +74,7 @@ function MerchantLayout() {
 
       {/* Mobile sidebar overlay */}
       {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 lg:hidden"
-          onClick={() => setMobileOpen(false)}
-        >
+        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileOpen(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <aside
             className="absolute bottom-0 left-0 top-0 flex w-64 flex-col bg-background shadow-2xl"
@@ -107,8 +99,12 @@ function MerchantLayout() {
           >
             <Menu className="h-4 w-4" />
           </button>
-          <Link to="/" className="font-display text-xl text-foreground">
-            zentro<span className="text-ember">.</span>
+          <Link
+            to="/"
+            className="inline-flex items-center text-foreground"
+            aria-label="Zentro home"
+          >
+            <ZentroLogo className="h-6 w-auto" title="" />
           </Link>
           <div className="ml-auto flex items-center gap-2">
             <ThemeCycleButton />

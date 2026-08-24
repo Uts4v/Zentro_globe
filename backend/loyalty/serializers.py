@@ -143,13 +143,18 @@ class TodaySpecialSerializer(serializers.ModelSerializer):
     linked_reward_name = serializers.CharField(
         source="linked_reward.name", read_only=True, default=None
     )
+    linked_menu_item_price = serializers.DecimalField(
+        source="linked_menu_item.price", max_digits=10, decimal_places=2,
+        read_only=True, default=None,
+    )
 
     class Meta:
         model = TodaySpecial
         fields = [
             "id", "title", "description", "image_url",
-            "linked_menu_item", "linked_menu_item_name",
+            "linked_menu_item", "linked_menu_item_name", "linked_menu_item_price",
             "linked_reward", "linked_reward_name",
+            "discount_type", "discount_value",
             "is_active", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]

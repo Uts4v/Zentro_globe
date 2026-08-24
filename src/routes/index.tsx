@@ -16,7 +16,18 @@ import {
   type Reward,
 } from "@/lib/api";
 import { MobileShell, TopBar } from "@/components/MobileShell";
-import { X as XIcon, QrCode, SendHorizontal, Loader2, Target, Check, Gift, Flame } from "lucide-react";
+import {
+  X as XIcon,
+  QrCode,
+  SendHorizontal,
+  Loader2,
+  Target,
+  Check,
+  Gift,
+  Flame,
+  Tag,
+  ArrowRight,
+} from "lucide-react";
 import { requireAuth } from "@/lib/auth-guard";
 import { lazy, Suspense, useState, useEffect, useMemo } from "react";
 import { TodaySpecialPopup } from "@/features/merchant-management/components/TodaySpecialPopup";
@@ -32,10 +43,10 @@ import { MainPageLoyaltyCard, MainPageLoyaltyCardSkeleton } from "@/components/M
 import { QuickActions } from "@/components/home/QuickActions";
 
 const PersonalQR = lazy(() =>
-  import("@/features/transfers/components/PersonalQR").then((m) => ({ default: m.PersonalQR }))
+  import("@/features/transfers/components/PersonalQR").then((m) => ({ default: m.PersonalQR })),
 );
 const TableQRScanner = lazy(() =>
-  import("@/features/pos/screens/TableQRScanner").then((m) => ({ default: m.TableQRScanner }))
+  import("@/features/pos/screens/TableQRScanner").then((m) => ({ default: m.TableQRScanner })),
 );
 
 export const Route = createFileRoute("/")({
@@ -72,7 +83,7 @@ function Index() {
   const [cardNumber, setCardNumber] = useState("•••• 0000");
   const [freeRewards, setFreeRewards] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [todaySpecial, setTodaySpecial] = useState<TodaySpecial | null>(null);
+  const [todaySpecials, setTodaySpecials] = useState<TodaySpecial[]>([]);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferMode, setTransferMode] = useState<"send" | "receive">("send");
   const [punchCards, setPunchCards] = useState<{
@@ -91,7 +102,7 @@ function Index() {
   // Resolve merchant theme preset
   const themePreset: MerchantThemePreset | null = useMemo(
     () => resolveMerchantPreset(merchantBusinessType),
-    [merchantBusinessType]
+    [merchantBusinessType],
   );
 
   // Load merchant data
@@ -174,16 +185,16 @@ function Index() {
       .catch(() => {});
   }, [selectedMerchantId, joined]);
 
-  // Load today's special
+  // Load today's specials
   useEffect(() => {
     if (!merchantSlug) {
-      setTodaySpecial(null);
+      setTodaySpecials([]);
       return;
     }
     specialApi
       .forSlug(merchantSlug)
-      .then((s) => setTodaySpecial(s?.is_active ? s : null))
-      .catch(() => setTodaySpecial(null));
+      .then((list) => setTodaySpecials(list.filter((s) => s.is_active)))
+      .catch(() => setTodaySpecials([]));
   }, [merchantSlug]);
 
   // Progress to next tier
@@ -195,7 +206,14 @@ function Index() {
       platinum: 5000,
     };
     const current = points;
-    const nextTier = tier === "bronze" ? "silver" : tier === "silver" ? "gold" : tier === "gold" ? "platinum" : "platinum";
+    const nextTier =
+      tier === "bronze"
+        ? "silver"
+        : tier === "silver"
+          ? "gold"
+          : tier === "gold"
+            ? "platinum"
+            : "platinum";
     const target = tierThresholds[nextTier] ?? 5000;
     return (current / target) * 100;
   }, [points, tier]);
@@ -218,14 +236,29 @@ function Index() {
       const res = await rewardApi.redeem(reward.id);
       toast.success(`Redeemed ${reward.name}! Code: ${res.code}`);
       if (selectedMerchantId) {
-        customerApi.getWallet(selectedMerchantId).then((w) => {
-          if (w) setPoints(w.points_balance);
-        }).catch(() => {});
+        customerApi
+          .getWallet(selectedMerchantId)
+          .then((w) => {
+            if (w) setPoints(w.points_balance);
+          })
+          .catch(() => {});
       }
     } catch (err: any) {
       toast.error(err.message || "Failed to redeem reward");
     } finally {
       setRedeemingRewardId(null);
+    }
+  }
+
+  function handleSpecialClick(s: TodaySpecial) {
+    if (s.linked_menu_item) {
+      add(String(s.linked_menu_item));
+      toast.success(`${s.linked_menu_item_name ?? "Today's special"} added to cart`);
+      navigate({ to: "/menu" });
+    } else if (s.linked_reward) {
+      navigate({ to: "/rewards" });
+    } else {
+      navigate({ to: "/menu" });
     }
   }
 
@@ -280,164 +313,62 @@ function Index() {
       <TopBar />
 
       {/* Today's Special popup */}
-      {merchantSlug && <TodaySpecialPopup slug={merchantSlug} />}
+      {merchantSlug && (
+        <TodaySpecialPopup
+          slug={merchantSlug}
+          onOrderItem={(menuItemId) => {
+            add(menuItemId);
+            navigate({ to: "/menu" });
+          }}
+          onViewReward={() => navigate({ to: "/rewards" })}
+        />
+      )}
 
       <div className="relative flex min-w-0 flex-col gap-5 overflow-x-hidden pb-6">
-
         {/* Hero Loyalty Card */}
         <section className="mx-auto w-[100%] max-w-[550px] px-2">
-        {loading ? (
-          <MainPageLoyaltyCardSkeleton />
-        ) : (
-          <MainPageLoyaltyCard
-            merchantName={merchantName || "Select a store"}
-            merchantLogo={merchantLogo}
-            merchantCategory={merchantCategory}
-            tier={tier}
-            points={points}
-            streak={streak}
-            ordersCount={ordersCount}
-            rewardsCount={freeRewards}
-            progressPercent={progressPercent}
-            pointsToNextTier={(() => {
-              const tierThresholds: Record<string, number> = { bronze: 500, silver: 1500, gold: 3000, platinum: 5000 };
-              const next = tier === "bronze" ? "silver" : tier === "silver" ? "gold" : tier === "gold" ? "platinum" : "";
-              return next ? Math.max(0, (tierThresholds[next] ?? 5000) - points) : 0;
-            })()}
-            memberName={memberName}
-            cardNumber={cardNumber}
-            theme={themePreset}
-            themeColor={merchantThemeColor}
-            cardDesign={cardDesign}
-            joined={joined}
-            joinedAt={joinedAt}
-            onJoin={handleJoin}
-            joining={joining}
-          />
-        )}
+          {loading ? (
+            <MainPageLoyaltyCardSkeleton />
+          ) : (
+            <MainPageLoyaltyCard
+              merchantName={merchantName || "Select a store"}
+              merchantLogo={merchantLogo}
+              merchantCategory={merchantCategory}
+              tier={tier}
+              points={points}
+              streak={streak}
+              ordersCount={ordersCount}
+              rewardsCount={freeRewards}
+              progressPercent={progressPercent}
+              pointsToNextTier={(() => {
+                const tierThresholds: Record<string, number> = {
+                  bronze: 500,
+                  silver: 1500,
+                  gold: 3000,
+                  platinum: 5000,
+                };
+                const next =
+                  tier === "bronze"
+                    ? "silver"
+                    : tier === "silver"
+                      ? "gold"
+                      : tier === "gold"
+                        ? "platinum"
+                        : "";
+                return next ? Math.max(0, (tierThresholds[next] ?? 5000) - points) : 0;
+              })()}
+              memberName={memberName}
+              cardNumber={cardNumber}
+              theme={themePreset}
+              themeColor={merchantThemeColor}
+              cardDesign={cardDesign}
+              joined={joined}
+              joinedAt={joinedAt}
+              onJoin={handleJoin}
+              joining={joining}
+            />
+          )}
         </section>
-
-        {/* Quick Actions */}
-        {joined && (
-          <QuickActions
-            onScanQR={() => setShowTableScanner(true)}
-            onTransfer={() => setShowTransfer(true)}
-            availablePoints={points}
-            merchantColor={merchantColor}
-          />
-        )}
-
-        {/* Transfer expanded panel */}
-        {showTransfer && selectedMerchantId && (
-          <section className="min-w-0 px-5">
-            <div className="overflow-hidden rounded-[24px] bg-card p-5" style={{ boxShadow: "var(--shadow-card)" }}>
-              <div className="flex min-w-0 items-center justify-between">
-                <h3 className="font-display min-w-0 truncate text-xl text-foreground">Transfer Points</h3>
-                <button
-                  onClick={() => setShowTransfer(false)}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mist text-muted-foreground transition-colors hover:bg-accent"
-                >
-                  <XIcon className="h-4 w-4" />
-                </button>
-              </div>
-              <div className="mt-3 flex gap-1.5 rounded-2xl bg-mist p-1">
-                <button
-                  onClick={() => setTransferMode("send")}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-[14px] py-2.5 text-xs font-medium transition-all ${
-                    transferMode === "send"
-                      ? "bg-card text-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                  style={transferMode === "send" ? { boxShadow: "0 1px 3px rgba(0,0,0,0.06)" } : {}}
-                >
-                  <SendHorizontal className="h-4 w-4" /> Send
-                </button>
-                <button
-                  onClick={() => setTransferMode("receive")}
-                  className={`flex flex-1 items-center justify-center gap-2 rounded-[14px] py-2.5 text-xs font-medium transition-all ${
-                    transferMode === "receive"
-                      ? "bg-card text-foreground"
-                      : "text-muted-foreground"
-                  }`}
-                  style={transferMode === "receive" ? { boxShadow: "0 1px 3px rgba(0,0,0,0.06)" } : {}}
-                >
-                  <QrCode className="h-4 w-4" /> Receive
-                </button>
-              </div>
-              <div className="mt-4 overflow-hidden">
-                {transferMode === "send" ? (
-                  <TransferForm
-                    compact
-                    preselectedMerchantId={selectedMerchantId}
-                    onSuccess={() => {
-                      customerApi.getWallet(selectedMerchantId).then((w) => {
-                        if (w) setPoints(w.points_balance);
-                      }).catch(() => {});
-                    }}
-                  />
-                ) : (
-                  <Suspense
-                    fallback={
-                      <div className="flex justify-center py-6">
-                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                      </div>
-                    }
-                  >
-                    <PersonalQR />
-                  </Suspense>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* Today's Special Banner (Ultra-Premium Modern Aesthetic) */}
-        {selectedMerchantId && todaySpecial && (
-          <section className="px-5">
-            <div
-              className="group relative overflow-hidden bg-card p-5 transition-all"
-              style={{
-                borderRadius: 30,
-                boxShadow: "var(--shadow-card)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <div className="flex items-center gap-4">
-                {todaySpecial.image_url ? (
-                  <img
-                    src={todaySpecial.image_url}
-                    alt={todaySpecial.title}
-                    className="h-20 w-20 shrink-0 rounded-2xl object-cover shadow-sm transition-transform group-hover:scale-105"
-                  />
-                ) : (
-                  <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-ember-soft text-3xl">
-                    <Flame className="h-8 w-8 text-ember" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="rounded-full bg-ember-soft px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-ember">
-                      Today's Special
-                    </span>
-                  </div>
-                  <h3 className="mt-2 truncate text-[17px] font-black leading-snug text-foreground">
-                    {todaySpecial.title}
-                  </h3>
-                  {todaySpecial.description && (
-                    <p className="mt-0.5 line-clamp-2 text-[12px] font-medium text-muted-foreground">
-                      {todaySpecial.description}
-                    </p>
-                  )}
-                  {(todaySpecial.linked_menu_item_name || todaySpecial.linked_reward_name) && (
-                    <span className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
-                      {todaySpecial.linked_menu_item_name ?? todaySpecial.linked_reward_name}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* Punch Cards (Original Interactive Stamp Punch Cards) */}
         {selectedMerchantId && allPunchCards.length > 0 && (
@@ -458,6 +389,199 @@ function Index() {
           </section>
         )}
 
+        {/* Quick Actions */}
+        {joined && (
+          <QuickActions
+            onScanQR={() => setShowTableScanner(true)}
+            onTransfer={() => setShowTransfer(true)}
+            availablePoints={points}
+            merchantColor={merchantColor}
+          />
+        )}
+
+        {/* Transfer expanded panel */}
+        {showTransfer && selectedMerchantId && (
+          <section className="min-w-0 px-5">
+            <div
+              className="overflow-hidden rounded-[24px] bg-card p-5"
+              style={{ boxShadow: "var(--shadow-card)" }}
+            >
+              <div className="flex min-w-0 items-center justify-between">
+                <h3 className="font-display min-w-0 truncate text-xl text-foreground">
+                  Transfer Points
+                </h3>
+                <button
+                  onClick={() => setShowTransfer(false)}
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mist text-muted-foreground transition-colors hover:bg-accent"
+                >
+                  <XIcon className="h-4 w-4" />
+                </button>
+              </div>
+              <div className="mt-3 flex gap-1.5 rounded-2xl bg-mist p-1">
+                <button
+                  onClick={() => setTransferMode("send")}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-[14px] py-2.5 text-xs font-medium transition-all ${
+                    transferMode === "send" ? "bg-card text-foreground" : "text-muted-foreground"
+                  }`}
+                  style={transferMode === "send" ? { boxShadow: "0 1px 3px rgba(0,0,0,0.06)" } : {}}
+                >
+                  <SendHorizontal className="h-4 w-4" /> Send
+                </button>
+                <button
+                  onClick={() => setTransferMode("receive")}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-[14px] py-2.5 text-xs font-medium transition-all ${
+                    transferMode === "receive" ? "bg-card text-foreground" : "text-muted-foreground"
+                  }`}
+                  style={
+                    transferMode === "receive" ? { boxShadow: "0 1px 3px rgba(0,0,0,0.06)" } : {}
+                  }
+                >
+                  <QrCode className="h-4 w-4" /> Receive
+                </button>
+              </div>
+              <div className="mt-4 overflow-hidden">
+                {transferMode === "send" ? (
+                  <TransferForm
+                    compact
+                    preselectedMerchantId={selectedMerchantId}
+                    onSuccess={() => {
+                      customerApi
+                        .getWallet(selectedMerchantId)
+                        .then((w) => {
+                          if (w) setPoints(w.points_balance);
+                        })
+                        .catch(() => {});
+                    }}
+                  />
+                ) : (
+                  <Suspense
+                    fallback={
+                      <div className="flex justify-center py-6">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    }
+                  >
+                    <PersonalQR />
+                  </Suspense>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Today's Special Carousel */}
+        {selectedMerchantId && todaySpecials.length > 0 && (
+          <section className="px-5">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
+                Today's Special{todaySpecials.length > 1 ? "s" : ""}
+              </p>
+              {todaySpecials.length > 1 && (
+                <span className="text-[11px] text-muted-foreground">Swipe to see more</span>
+              )}
+            </div>
+            <style>{`.today-specials-scroll::-webkit-scrollbar { display: none; }`}</style>
+            <div className="today-specials-scroll flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-smooth pb-2">
+              {todaySpecials.map((s) => {
+                const hasDiscount = s.discount_type !== "none" && s.discount_value != null;
+                const discountLabel = hasDiscount
+                  ? s.discount_type === "percentage"
+                    ? `${s.discount_value}% OFF`
+                    : `Rs. ${s.discount_value} OFF`
+                  : null;
+                const discountedPrice = (() => {
+                  if (!hasDiscount || !s.linked_menu_item_price) return null;
+                  const price = parseFloat(s.linked_menu_item_price);
+                  if (Number.isNaN(price)) return null;
+                  return s.discount_type === "percentage"
+                    ? (price * (1 - (s.discount_value ?? 0) / 100)).toFixed(0)
+                    : Math.max(0, price - (s.discount_value ?? 0)).toFixed(0);
+                })();
+                const ctaLabel = s.linked_menu_item
+                  ? "Order now"
+                  : s.linked_reward
+                    ? "View reward"
+                    : "Browse menu";
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => handleSpecialClick(s)}
+                    aria-label={`${ctaLabel}: ${s.title}`}
+                    className={`group relative shrink-0 snap-start overflow-hidden rounded-[26px] bg-card text-left transition-all duration-200 hover:-translate-y-0.5 active:scale-[0.98] ${
+                      todaySpecials.length > 1 ? "w-[85%]" : "w-full"
+                    }`}
+                    style={{
+                      boxShadow: "var(--shadow-card)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    {/* Banner */}
+                    <div className="relative h-32 w-full overflow-hidden">
+                      {s.image_url ? (
+                        <img
+                          src={s.image_url}
+                          alt={s.title}
+                          className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ember-soft via-card to-primary/10">
+                          <Flame className="h-10 w-10 text-ember" />
+                        </div>
+                      )}
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent" />
+                      {discountLabel && (
+                        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-extrabold text-white shadow-md">
+                          <Tag className="h-3 w-3" />
+                          {discountLabel}
+                        </span>
+                      )}
+                      <span className="absolute right-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wider text-ink shadow-sm backdrop-blur-sm">
+                        Today only
+                      </span>
+                    </div>
+
+                    {/* Body */}
+                    <div className="p-4">
+                      <h3 className="truncate text-[15px] font-black leading-snug text-foreground">
+                        {s.title}
+                      </h3>
+                      {s.description && (
+                        <p className="mt-1 line-clamp-2 text-[11.5px] font-medium leading-relaxed text-muted-foreground">
+                          {s.description}
+                        </p>
+                      )}
+                      {(s.linked_menu_item_name || s.linked_reward_name) && (
+                        <div className="mt-2.5 inline-flex max-w-full items-center gap-1.5 rounded-full bg-ember-soft px-2.5 py-1 text-[10px] font-bold text-ember">
+                          <span className="truncate">
+                            {s.linked_menu_item_name ?? s.linked_reward_name}
+                          </span>
+                          {discountedPrice && s.linked_menu_item_price && (
+                            <span className="shrink-0 whitespace-nowrap">
+                              <span className="line-through opacity-50">
+                                Rs. {s.linked_menu_item_price}
+                              </span>{" "}
+                              <span className="font-extrabold text-emerald-600">
+                                Rs. {discountedPrice}
+                              </span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
+                        <span className="text-[12px] font-extrabold text-primary">{ctaLabel}</span>
+                        <span className="grid h-7 w-7 place-items-center rounded-full bg-primary/10 text-primary transition-transform duration-200 group-hover:translate-x-0.5">
+                          <ArrowRight className="h-3.5 w-3.5" />
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
         {/* Real Missions Section (Ultra-Premium Modern Style) */}
         {selectedMerchantId && joined && (
           <section className="px-5">
@@ -465,30 +589,38 @@ function Index() {
               <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
                 Active Missions
               </p>
-              <Link to="/missions" className="text-[11px] font-extrabold text-primary hover:underline">
+              <Link
+                to="/missions"
+                className="text-[11px] font-extrabold text-primary hover:underline"
+              >
                 View all
               </Link>
             </div>
             {missions.length > 0 ? (
               <div className="space-y-3">
-                {missions.map((m) => (
-                  <div
-                    key={m.id}
-                    className="rounded-[26px] bg-card p-4.5 transition-all"
-                    style={{
-                      boxShadow: "var(--shadow-card)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
-                    <div className="flex items-start gap-3.5">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xl text-primary">
-                        {m.icon || "🎯"}
+                {missions.map((m) => {
+                  const pct = Math.min((m.current_count / m.target_count) * 100, 100);
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex items-center gap-3.5 rounded-[26px] bg-card p-4 transition-all"
+                      style={{
+                        boxShadow: "var(--shadow-card)",
+                        border: "1px solid var(--border)",
+                      }}
+                    >
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
+                        <span style={{ filter: "grayscale(1) brightness(0)" }}>
+                          {m.icon || "🎯"}
+                        </span>
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-extrabold text-foreground">{m.title}</p>
+                          <p className="truncate text-sm font-extrabold text-foreground">
+                            {m.title}
+                          </p>
                           {m.is_completed ? (
-                            <span className="shrink-0 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-500">
+                            <span className="shrink-0 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-500">
                               Done ✓
                             </span>
                           ) : (
@@ -498,65 +630,62 @@ function Index() {
                           )}
                         </div>
                         {m.description && (
-                          <p className="mt-0.5 line-clamp-1 text-[11.5px] font-medium text-muted-foreground">
+                          <p className="mt-0.5 truncate text-[11.5px] font-medium text-muted-foreground">
                             {m.description}
                           </p>
                         )}
                         {m.linked_menu_item_name && (
-                          <p className="mt-0.5 text-[11.5px] font-medium text-ember">
+                          <p className="mt-0.5 truncate text-[11.5px] font-medium text-ember">
                             Buy {m.linked_menu_item_name} {m.target_count}x
                           </p>
                         )}
-                        <div className="mt-2.5">
-                          <div className="mb-1 flex items-center justify-between text-[10px] font-extrabold text-muted-foreground">
-                            <span>
-                              {m.current_count} / {m.target_count}
-                            </span>
-                            <span className="capitalize">{m.mission_type.replace(/_/g, " ")}</span>
-                          </div>
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                        <div className="mt-2 flex items-center gap-2">
+                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                             <div
                               className="h-full rounded-full transition-all duration-500"
                               style={{
-                                width: `${Math.min(100, (m.current_count / m.target_count) * 100)}%`,
+                                width: `${pct}%`,
                                 background: m.is_completed
                                   ? "#10B981"
                                   : "linear-gradient(90deg, var(--primary) 0%, var(--primary) 100%)",
                               }}
                             />
                           </div>
+                          <span className="shrink-0 text-[10px] font-extrabold text-muted-foreground">
+                            {m.current_count}/{m.target_count}
+                          </span>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               /* Fallback Mission Display */
               <div
-                className="rounded-[26px] bg-card p-4.5"
+                className="flex items-center gap-3.5 rounded-[26px] bg-card p-4"
                 style={{ boxShadow: "var(--shadow-card)", border: "1px solid var(--border)" }}
               >
-                <div className="flex items-center gap-3.5">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-xl text-emerald-500">
-                    <Target className="h-5 w-5" />
+                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
+                  <span style={{ filter: "grayscale(1) brightness(0)" }}>🎯</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-extrabold text-foreground">Order any drink</p>
+                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
+                      +25 pts
+                    </span>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-extrabold text-foreground">Order any drink</p>
-                      <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
-                        +25 pts
-                      </span>
+                  <p className="mt-0.5 text-[11.5px] font-medium text-muted-foreground">
+                    Order 1 drink today to claim bonus points
+                  </p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full w-1/2 rounded-full bg-emerald-500" />
                     </div>
-                    <p className="mt-0.5 text-[11.5px] font-medium text-muted-foreground">
-                      Order 1 drink today to claim bonus points
-                    </p>
-                    <div className="mt-2.5 flex items-center justify-between text-[10px] font-extrabold text-muted-foreground">
-                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted mr-3">
-                        <div className="h-full w-1/2 rounded-full bg-emerald-500" />
-                      </div>
-                      <span>1 / 2</span>
-                    </div>
+                    <span className="shrink-0 text-[10px] font-extrabold text-muted-foreground">
+                      1 / 2
+                    </span>
                   </div>
                 </div>
               </div>
@@ -571,7 +700,10 @@ function Index() {
               <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
                 Available Rewards
               </p>
-              <Link to="/rewards" className="text-[11px] font-extrabold text-primary hover:underline">
+              <Link
+                to="/rewards"
+                className="text-[11px] font-extrabold text-primary hover:underline"
+              >
                 Explore all
               </Link>
             </div>
@@ -586,12 +718,16 @@ function Index() {
                       border: "1px solid var(--border)",
                     }}
                   >
-                    <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
-                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-2xl">
-                        {r.emoji || "🎁"}
+                    <div className="flex min-w-0 flex-1 items-center gap-3.5 pr-3">
+                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
+                        <span style={{ filter: "grayscale(1) brightness(0)" }}>
+                          {r.emoji || "🎁"}
+                        </span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-extrabold text-foreground">{r.name}</p>
+                        <p className="truncate text-[14px] font-extrabold text-foreground">
+                          {r.name}
+                        </p>
                         {r.description && (
                           <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
                             {r.description}
@@ -612,7 +748,11 @@ function Index() {
                           : "bg-muted text-muted-foreground cursor-not-allowed"
                       }`}
                     >
-                      {redeemingRewardId === r.id ? "Redeeming…" : points >= r.points_cost ? "Redeem" : "Locked"}
+                      {redeemingRewardId === r.id
+                        ? "Redeeming…"
+                        : points >= r.points_cost
+                          ? "Redeem"
+                          : "Locked"}
                     </button>
                   </div>
                 ))}
@@ -629,7 +769,9 @@ function Index() {
                       <Gift className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[14px] font-extrabold text-foreground">Free Special Chiya</p>
+                      <p className="truncate text-[14px] font-extrabold text-foreground">
+                        Free Special Chiya
+                      </p>
                       <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
                         1 Free cup of signature Chiya Tea
                       </p>

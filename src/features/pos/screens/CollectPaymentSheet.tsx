@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
+import { safeUuid } from "@/lib/utils";
 import { usePosStore } from "../store";
-import { posCreatePayment, posReceiptData, PosOrder, PosReceiptData, posListDebitAccounts, DebitAccount } from "../api";
+import {
+  posCreatePayment,
+  posReceiptData,
+  PosOrder,
+  PosReceiptData,
+  posListDebitAccounts,
+  DebitAccount,
+} from "../api";
 import Receipt from "../printing/Receipt";
 import {
   X,
@@ -34,11 +42,7 @@ interface CollectPaymentSheetProps {
   onPaid: () => void;
 }
 
-export default function CollectPaymentSheet({
-  order,
-  onClose,
-  onPaid,
-}: CollectPaymentSheetProps) {
+export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectPaymentSheetProps) {
   const merchant = usePosStore((s) => s.merchant);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
@@ -53,7 +57,9 @@ export default function CollectPaymentSheet({
 
   useEffect(() => {
     if (method === "debit" && debitAccounts.length === 0) {
-      posListDebitAccounts().then(setDebitAccounts).catch(() => {});
+      posListDebitAccounts()
+        .then(setDebitAccounts)
+        .catch(() => {});
     }
   }, [method]);
 
@@ -64,7 +70,10 @@ export default function CollectPaymentSheet({
   const cashAmount = parseFloat(cashReceived) || 0;
   const change = method === "cash" ? Math.max(0, cashAmount - total) : 0;
   const isCashValid = method === "cash" ? cashAmount >= total : true;
-  const isDebitValid = method !== "debit" || (selectedDebitAccount && debitAccounts.find((a) => a.id === selectedDebitAccount && Number(a.balance) >= total));
+  const isDebitValid =
+    method !== "debit" ||
+    (selectedDebitAccount &&
+      debitAccounts.find((a) => a.id === selectedDebitAccount && Number(a.balance) >= total));
   const canSubmit = !submitting && isCashValid && isDebitValid;
 
   async function handleSubmit() {
@@ -83,7 +92,7 @@ export default function CollectPaymentSheet({
         amount: total,
         change_amount: method === "cash" ? change : 0,
         debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
-        client_mutation_id: crypto.randomUUID(),
+        client_mutation_id: safeUuid(),
       });
 
       setLoadingReceipt(true);
@@ -113,7 +122,11 @@ export default function CollectPaymentSheet({
               <h3 className="text-base font-bold text-foreground">Payment Complete</h3>
             </div>
             <button
-              onClick={() => { setReceiptData(null); onClose(); onPaid(); }}
+              onClick={() => {
+                setReceiptData(null);
+                onClose();
+                onPaid();
+              }}
               className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
             >
               <X className="h-4 w-4" />
@@ -147,7 +160,11 @@ export default function CollectPaymentSheet({
 
           <div className="flex gap-3 border-t border-border px-6 py-4">
             <button
-              onClick={() => { setReceiptData(null); onClose(); onPaid(); }}
+              onClick={() => {
+                setReceiptData(null);
+                onClose();
+                onPaid();
+              }}
               className="flex-1 rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90"
             >
               Done
@@ -178,7 +195,9 @@ export default function CollectPaymentSheet({
 
         <div className="border-b border-border px-6 py-4 text-center">
           <p className="text-xs text-muted-foreground">Amount to pay</p>
-          <p className="mt-1 text-3xl font-bold text-ink">Rs {total.toFixed(2)}</p>
+          <p className="numeric mt-1 text-3xl font-bold tracking-tight text-ink">
+            Rs {total.toFixed(2)}
+          </p>
         </div>
 
         <div className="grid grid-cols-5 gap-2 px-6 py-4">
@@ -190,9 +209,7 @@ export default function CollectPaymentSheet({
                 key={pm.key}
                 onClick={() => setMethod(pm.key)}
                 className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-[11px] font-medium transition-colors ${
-                  active
-                    ? "bg-ink text-white"
-                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  active ? "bg-ink text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
                 <Icon className="h-5 w-5" />
@@ -261,8 +278,8 @@ export default function CollectPaymentSheet({
                         selectedDebitAccount === account.id
                           ? "border-ink bg-ink/5"
                           : sufficient
-                          ? "border-border hover:border-ink/50"
-                          : "border-border opacity-40"
+                            ? "border-border hover:border-ink/50"
+                            : "border-border opacity-40"
                       }`}
                     >
                       <div>
@@ -271,7 +288,9 @@ export default function CollectPaymentSheet({
                           <p className="text-xs text-muted-foreground">{account.contact_phone}</p>
                         )}
                       </div>
-                      <span className={sufficient ? "font-bold text-ink" : "text-red-500 font-bold"}>
+                      <span
+                        className={sufficient ? "font-bold text-ink" : "text-red-500 font-bold"}
+                      >
                         Rs {balance.toFixed(2)}
                       </span>
                     </button>
@@ -283,9 +302,7 @@ export default function CollectPaymentSheet({
         )}
 
         {error && (
-          <div className="mx-6 mb-2 rounded-xl bg-red-50 p-3 text-xs text-red-600">
-            {error}
-          </div>
+          <div className="mx-6 mb-2 rounded-xl bg-red-50 p-3 text-xs text-red-600">{error}</div>
         )}
 
         <div className="px-6 pb-6">

@@ -136,7 +136,7 @@ export const useStore = create<State>()(
         if (cart.length === 0) throw new Error("Cart is empty");
 
         const items = cart.map((c) => {
-  const item = menuItems.find((m) => m.id === c.itemId);
+  const item = menuItems.find((m) => String(m.id) === String(c.itemId));
   if (!item) throw new Error(`Item ${c.itemId} not found`);
   return {
     menu_item_id: c.itemId,
@@ -183,7 +183,7 @@ export const useStore = create<State>()(
         if (!activeTable) throw new Error("No table selected");
 
         const items = cart.map((c) => {
-          const item = menuItems.find((m) => m.id === c.itemId);
+          const item = menuItems.find((m) => String(m.id) === String(c.itemId));
           if (!item) throw new Error(`Item ${c.itemId} not found`);
           return {
             menu_item_id: c.itemId,
@@ -252,12 +252,12 @@ export const useStore = create<State>()(
 
 export const cartTotal = (cart: CartItem[], menuItems?: MenuItem[]) =>
   cart.reduce((sum, c) => {
-    const i = menuItems?.find((m) => m.id === c.itemId);
+    const i = menuItems?.find((m) => String(m.id) === String(c.itemId));
     return i ? sum + i.price * c.qty : sum;
   }, 0);
 
 export const cartPoints = (cart: CartItem[], menuItems?: MenuItem[]) =>
   cart.reduce((sum, c) => {
-    const i = menuItems?.find((m) => m.id === c.itemId);
+    const i = menuItems?.find((m) => String(m.id) === String(c.itemId));
     return i ? sum + (i.points_per_item || 0) * c.qty : sum;
   }, 0);

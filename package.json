@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build",
+    "build": "vite build && node scripts/copy-sw.mjs",
     "build:dev": "vite build --mode development",
-    "preview": "vite preview",
+    "start": "node .output/server/index.mjs",
+    "preview": "node .output/server/index.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

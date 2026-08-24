@@ -1,10 +1,11 @@
 from datetime import timedelta
+from django.conf import settings
 from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Notification
+from .models import Notification, PushSubscription
 from .serializers import NotificationSerializer
 
 
@@ -62,3 +63,51 @@ def clear_all(request):
     """DELETE /api/notifications/clear/ — delete all notifications for user"""
     Notification.objects.filter(user=request.user).delete()
     return Response({"status": "cleared"})
+
+
+# ── Web Push (PWA) ────────────────────────────────────────────────────────────
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def vapid_public_key(request):
+    """GET /api/notifications/vapid-public-key/"""
+    return Response({"public_key": getattr(settings, "VAPID_PUBLIC_KEY", "")})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def push_subscribe(request):
+    """POST /api/notifications/subscribe/
+    Body: { endpoint, keys: { p256dh, auth } }"""
+    endpoint = request.data.get("endpoint") or ""
+    keys = request.data.get("keys") or {}
+    p256dh = keys.get("p256dh") or ""
+    auth = keys.get("auth") or ""
+
+    if not endpoint or not p256dh or not auth:
+        return Response(
+            {"error": "endpoint, keys.p256dh and keys.auth are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    PushSubscription.objects.update_or_create(
+        endpoint=endpoint[:1000],
+        defaults={
+            "user": request.user,
+            "p256dh": p256dh,
+            "auth": auth,
+            "user_agent": (request.META.get("HTTP_USER_AGENT") or "")[:500],
+        },
+    )
+    return Response({"status": "subscribed"})
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def push_unsubscribe(request):
+    """POST /api/notifications/unsubscribe/  Body: { endpoint }"""
+    endpoint = request.data.get("endpoint") or ""
+    deleted, _ = PushSubscription.objects.filter(
+        user=request.user, endpoint=endpoint
+    ).delete()
+    return Response({"status": "unsubscribed", "removed": deleted})

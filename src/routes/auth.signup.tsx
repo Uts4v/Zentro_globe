@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-r
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Loader2, Mail, Lock, User } from "lucide-react";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 
 export const Route = createFileRoute("/auth/signup")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -35,7 +36,10 @@ function CustomerSignup() {
     setBusy(true);
 
     try {
-      const { error: err } = await signUp(email, password, name, { role: "customer", confirmPassword });
+      const { error: err } = await signUp(email, password, name, {
+        role: "customer",
+        confirmPassword,
+      });
       if (err) {
         setError(err);
         return;
@@ -48,25 +52,58 @@ function CustomerSignup() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col px-5 pb-10 pt-10">
-      <Link to="/" className="font-display text-2xl text-ink">
-        zentro<span className="text-ember">.</span>
+      <Link to="/" className="inline-flex items-center text-ink" aria-label="Zentro home">
+        <ZentroLogo className="h-7 w-auto" title="" />
       </Link>
 
       <div className="mt-12">
         <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">New here</p>
-        <h1 className="font-display mt-2 text-5xl leading-[1.05] text-ink">Join the loyalty club.</h1>
-        <p className="mt-3 max-w-[300px] text-sm text-muted-foreground">Earn from your first order. No card needed.</p>
+        <h1 className="font-editorial mt-2 text-5xl leading-[1.08] text-ink">
+          Join the loyalty club.
+        </h1>
+        <p className="mt-3 max-w-[300px] text-sm text-muted-foreground">
+          Earn from your first order. No card needed.
+        </p>
       </div>
 
       {error && (
-        <div className="mt-6 rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
+        <div className="mt-6 rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
       )}
 
       <form onSubmit={handleSubmit} className="mt-10 space-y-3">
-        <Field label="Name" placeholder="Maya Rivera" icon={<User className="h-4 w-4" />} value={name} onChange={setName} />
-        <Field label="Email" placeholder="you@maison.com" type="email" icon={<Mail className="h-4 w-4" />} value={email} onChange={setEmail} />
-        <Field label="Password" placeholder="••••••••" type="password" icon={<Lock className="h-4 w-4" />} value={password} onChange={setPassword} />
-        <Field label="Confirm password" placeholder="••••••••" type="password" icon={<Lock className="h-4 w-4" />} value={confirmPassword} onChange={setConfirmPassword} />
+        <Field
+          label="Name"
+          placeholder="Maya Rivera"
+          icon={<User className="h-4 w-4" />}
+          value={name}
+          onChange={setName}
+        />
+        <Field
+          label="Email"
+          placeholder="you@maison.com"
+          type="email"
+          icon={<Mail className="h-4 w-4" />}
+          value={email}
+          onChange={setEmail}
+        />
+        <Field
+          label="Password"
+          placeholder="••••••••"
+          type="password"
+          icon={<Lock className="h-4 w-4" />}
+          value={password}
+          onChange={setPassword}
+        />
+        <Field
+          label="Confirm password"
+          placeholder="••••••••"
+          type="password"
+          icon={<Lock className="h-4 w-4" />}
+          value={confirmPassword}
+          onChange={setConfirmPassword}
+        />
 
         <button
           type="submit"
@@ -78,17 +115,35 @@ function CustomerSignup() {
       </form>
 
       <p className="mt-auto pt-8 text-center text-xs text-muted-foreground">
-        Already have an account? <Link to="/auth/login" search={{ redirect: undefined }} className="font-medium text-ink underline-offset-4 hover:underline">Sign in</Link>
+        Already have an account?{" "}
+        <Link
+          to="/auth/login"
+          search={{ redirect: undefined }}
+          className="font-medium text-ink underline-offset-4 hover:underline"
+        >
+          Sign in
+        </Link>
       </p>
 
-      <Link to="/auth/merchant/signup" search={{ redirect: undefined }} className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline">
+      <Link
+        to="/auth/merchant/signup"
+        search={{ redirect: undefined }}
+        className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline"
+      >
         Register your business →
       </Link>
     </div>
   );
 }
 
-function Field({ label, placeholder, type = "text", icon, value, onChange }: {
+function Field({
+  label,
+  placeholder,
+  type = "text",
+  icon,
+  value,
+  onChange,
+}: {
   label: string;
   placeholder: string;
   type?: string;
@@ -100,7 +155,11 @@ function Field({ label, placeholder, type = "text", icon, value, onChange }: {
     <label className="block">
       <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
       <div className="relative mt-1.5">
-        {icon && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{icon}</span>}
+        {icon && (
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {icon}
+          </span>
+        )}
         <input
           type={type}
           placeholder={placeholder}

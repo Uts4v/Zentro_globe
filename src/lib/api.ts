@@ -18,8 +18,11 @@ export interface TodaySpecial {
   image_url: string;
   linked_menu_item: number | null;
   linked_menu_item_name: string | null;
+  linked_menu_item_price: string | null;
   linked_reward: string | null;
   linked_reward_name: string | null;
+  discount_type: "none" | "percentage" | "fixed";
+  discount_value: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -40,9 +43,9 @@ export interface MerchantDiscoveryItem {
 
 export const specialApi = {
   // Customer — public, no auth needed
-  forSlug: async (slug: string): Promise<TodaySpecial | null> => {
-    const data = await djangoFetch<TodaySpecial | null>(apiUrl(`/loyalty/specials/${slug}/`));
-    return data ?? null;
+  forSlug: async (slug: string): Promise<TodaySpecial[]> => {
+    const data = await djangoFetch<TodaySpecial[]>(apiUrl(`/loyalty/specials/${slug}/`));
+    return data ?? [];
   },
 
   // Merchant
@@ -191,6 +194,7 @@ export interface Order {
   table_id?: number | null;
   table_name_snapshot?: string;
   table_number_snapshot?: number | null;
+  can_add_items?: boolean;
   created_at: string;
   updated_at: string;
   order_items: OrderItem[];
@@ -566,6 +570,26 @@ export const orderApi = {
   get: async (id: string): Promise<Order> => {
     const data = await djangoFetch<any>(apiUrl(`/orders/${id}/`), {
       headers: authHeaders(),
+    });
+    return normaliseOrder(data);
+  },
+
+  addToOrder: async (
+    orderId: string,
+    items: { menu_item_id: string; quantity: number }[],
+    notes?: string,
+  ): Promise<Order> => {
+    const body = {
+      items: items.map((i) => ({
+        menu_item_id: Number(i.menu_item_id),
+        quantity: i.quantity,
+      })),
+      notes: notes ?? "",
+    };
+    const data = await djangoFetch<any>(apiUrl(`/orders/${orderId}/add-items/`), {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify(body),
     });
     return normaliseOrder(data);
   },

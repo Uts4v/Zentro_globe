@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Loader2, Store, User, Hash, Shield } from "lucide-react";
 import { publicQrApi, type MembershipQrResolve } from "@/lib/api";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 
 export const Route = createFileRoute("/loyalty/qr/$token")({
   head: () => ({ meta: [{ title: "Membership QR · Zentro" }] }),
@@ -61,8 +62,8 @@ function LoyaltyQrPage() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col items-center px-5 pb-10 pt-10">
-      <Link to="/" className="font-display text-2xl text-foreground">
-        zentro<span className="text-ember">.</span>
+      <Link to="/" className="inline-flex items-center text-foreground" aria-label="Zentro home">
+        <ZentroLogo className="h-7 w-auto" title="" />
       </Link>
 
       <div className="mt-16 w-full">

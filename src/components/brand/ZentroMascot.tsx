@@ -14,16 +14,9 @@ interface ZentroMascotProps {
  * - Holds dark purple circular coin badge with bold white "Z"
  * - Ambient gold star sparkles ✨ and accent lines around mascot
  */
-export function ZentroMascot({
-  className = "",
-}: ZentroMascotProps) {
+export function ZentroMascot({ className = "" }: ZentroMascotProps) {
   return (
-    <svg
-      viewBox="0 0 240 280"
-      className={className}
-      role="img"
-      aria-label="Zentro mascot"
-    >
+    <svg viewBox="0 0 240 280" className={className} role="img" aria-label="Zentro mascot">
       <defs>
         {/* Soft 3D White Marshmallow Body Gradient */}
         <linearGradient id="full-body-grad" x1="30%" y1="0%" x2="70%" y2="100%">
@@ -75,11 +68,20 @@ export function ZentroMascot({
         {/* ✦ 3-Leaf Dark Sprout Hair on Top of Head (Positioned safely at y=32) ✦ */}
         <g transform="translate(118, 30)">
           {/* Left leaf */}
-          <path d="M 0 0 C -12 -12, -18 -24, -10 -28 C -2 -30, 4 -18, 0 0 Z" fill="url(#full-sprout-grad)" />
+          <path
+            d="M 0 0 C -12 -12, -18 -24, -10 -28 C -2 -30, 4 -18, 0 0 Z"
+            fill="url(#full-sprout-grad)"
+          />
           {/* Middle leaf */}
-          <path d="M 0 0 C -4 -14, 0 -30, 8 -30 C 16 -30, 12 -14, 0 0 Z" fill="url(#full-sprout-grad)" />
+          <path
+            d="M 0 0 C -4 -14, 0 -30, 8 -30 C 16 -30, 12 -14, 0 0 Z"
+            fill="url(#full-sprout-grad)"
+          />
           {/* Right leaf */}
-          <path d="M 0 0 C 12 -10, 22 -20, 18 -26 C 12 -30, 2 -16, 0 0 Z" fill="url(#full-sprout-grad)" />
+          <path
+            d="M 0 0 C 12 -10, 22 -20, 18 -26 C 12 -30, 2 -16, 0 0 Z"
+            fill="url(#full-sprout-grad)"
+          />
         </g>
 
         {/* ✦ Main White Body ✦ */}
@@ -134,7 +136,15 @@ export function ZentroMascot({
         <ellipse cx="45" cy="148" rx="10" ry="14" fill="#FFFFFF" stroke="#E4D6F7" strokeWidth="1" />
 
         {/* ✦ Right Arm ✦ */}
-        <ellipse cx="195" cy="148" rx="10" ry="14" fill="#FFFFFF" stroke="#E4D6F7" strokeWidth="1" />
+        <ellipse
+          cx="195"
+          cy="148"
+          rx="10"
+          ry="14"
+          fill="#FFFFFF"
+          stroke="#E4D6F7"
+          strokeWidth="1"
+        />
 
         {/* ✦ Face Details ✦ */}
         <g>
@@ -168,7 +178,15 @@ export function ZentroMascot({
         {/* ✦ Dark Purple Circular Coin Badge ("Z") held by Mascot ✦ */}
         <g transform="translate(148, 168)">
           <circle cx="0" cy="0" r="22" fill="url(#full-coin-grad)" />
-          <circle cx="0" cy="0" r="22" fill="none" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.4" />
+          <circle
+            cx="0"
+            cy="0"
+            r="22"
+            fill="none"
+            stroke="#FFFFFF"
+            strokeWidth="1.5"
+            opacity="0.4"
+          />
           <text
             x="0"
             y="8"
@@ -176,7 +194,7 @@ export function ZentroMascot({
             fill="#FFFFFF"
             fontSize="22"
             fontWeight="800"
-            fontFamily="Inter, system-ui, sans-serif"
+            fontFamily="'Manrope', Inter, system-ui, sans-serif"
           >
             Z
           </text>

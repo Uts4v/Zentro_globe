@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   Plus, Pencil, Trash2, Loader2, X, Check,
-  ImageIcon, Upload, Sparkles,
+  ImageIcon, Upload, Sparkles, Percent, Tag,
 } from "lucide-react";
 import { specialApi, menuApi, loyaltyApi, type TodaySpecial, type MenuItem, type Reward } from "@/lib/api";
 import { uploadImage } from "@/lib/image-upload";
@@ -69,7 +69,7 @@ export function MerchantSpecialsPage() {
           <h1 className="font-display mt-1 text-5xl text-foreground">Today's Special</h1>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
             A popup banner shown to customers when they first open your store page.
-            Only one active special is shown at a time.
+            Add multiple specials — customers can swipe through them all.
           </p>
         </div>
         <button
@@ -117,6 +117,14 @@ export function MerchantSpecialsPage() {
                       <p className="mt-2 text-[11px] text-ember">
                         Linked to: {s.linked_menu_item_name ?? s.linked_reward_name}
                       </p>
+                    )}
+                    {s.discount_type !== "none" && s.discount_value != null && (
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        <Tag className="h-3 w-3" />
+                        {s.discount_type === "percentage"
+                          ? `${s.discount_value}% off`
+                          : `Rs. ${s.discount_value} off`}
+                      </div>
                     )}
                   </div>
                   <div className="flex shrink-0 gap-1">
@@ -170,6 +178,12 @@ function SpecialModal({
   const [imageUrl, setImageUrl] = useState(initial?.image_url ?? "");
   const [linkedItem, setLinkedItem] = useState(initial?.linked_menu_item ?? "");
   const [linkedReward, setLinkedReward] = useState(initial?.linked_reward ?? "");
+  const [discountType, setDiscountType] = useState<"none" | "percentage" | "fixed">(
+    initial?.discount_type ?? "none"
+  );
+  const [discountValue, setDiscountValue] = useState(
+    initial?.discount_value != null ? String(initial.discount_value) : ""
+  );
   const [saving, setSaving] = useState(false);
   const [imgState, setImgState] = useState<
     "idle" | "processing" | "uploading" | "done" | "error"
@@ -207,6 +221,8 @@ function SpecialModal({
         image_url: imageUrl,
         linked_menu_item: linkedItem === "" || linkedItem == null ? null : Number(linkedItem),
         linked_reward: linkedReward || null,
+        discount_type: discountType,
+        discount_value: discountType === "none" ? null : discountValue ? Number(discountValue) : null,
         is_active: initial?.is_active ?? true,
       });
     } finally {
@@ -353,6 +369,52 @@ function SpecialModal({
                 <option key={r.id} value={r.id}>{r.emoji} {r.name}</option>
               ))}
             </select>
+          </div>
+
+          {/* Discount (optional) */}
+          <div className="rounded-2xl border border-dashed border-border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Percent className="h-3.5 w-3.5 text-muted-foreground" />
+              <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Discount (optional)
+              </label>
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={discountType}
+                onChange={(e) => {
+                  setDiscountType(e.target.value as "none" | "percentage" | "fixed");
+                  if (e.target.value === "none") setDiscountValue("");
+                }}
+                className="h-11 w-36 rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
+              >
+                <option value="none">No discount</option>
+                <option value="percentage">Percentage %</option>
+                <option value="fixed">Fixed amount</option>
+              </select>
+              {discountType !== "none" && (
+                <div className="relative flex-1">
+                  {discountType === "fixed" && (
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rs.</span>
+                  )}
+                  <input
+                    type="number"
+                    min="0"
+                    max={discountType === "percentage" ? "100" : undefined}
+                    step={discountType === "percentage" ? "1" : "0.01"}
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    placeholder={discountType === "percentage" ? "0-100" : "Amount"}
+                    className={`h-11 w-full rounded-2xl bg-mist text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40 ${
+                      discountType === "fixed" ? "pl-8 pr-4" : "px-4"
+                    }`}
+                  />
+                  {discountType === "percentage" && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

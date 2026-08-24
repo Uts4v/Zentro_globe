@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { safeUuid } from "@/lib/utils";
 import { usePosStore } from "../store";
 import { posCreateOrder, posCreatePayment, posReceiptData, PosReceiptData, posListDebitAccounts, DebitAccount, getTaxRate } from "../api";
 import Receipt from "../printing/Receipt";
@@ -61,6 +62,7 @@ export default function PaymentSheet({
   const [receiptData, setReceiptData] = useState<PosReceiptData | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
+  const posSettings = usePosStore((s) => s.posSettings);
 
   useEffect(() => {
     if (method === "debit" && debitAccounts.length === 0) {
@@ -69,8 +71,6 @@ export default function PaymentSheet({
   }, [method]);
 
   if (!open) return null;
-
-  const posSettings = usePosStore((s) => s.posSettings);
 
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
   const taxRate = getTaxRate(posSettings);
@@ -104,7 +104,7 @@ export default function PaymentSheet({
         shift_id: activeShift?.id ?? undefined,
         worker_id: currentWorker.id,
         device_id: device.id,
-        client_mutation_id: crypto.randomUUID(),
+        client_mutation_id: safeUuid(),
       });
 
       clearCart();
@@ -136,7 +136,7 @@ export default function PaymentSheet({
         shift_id: activeShift?.id ?? undefined,
         worker_id: currentWorker.id,
         device_id: device.id,
-        client_mutation_id: crypto.randomUUID(),
+        client_mutation_id: safeUuid(),
       });
 
       await posCreatePayment({
@@ -148,7 +148,7 @@ export default function PaymentSheet({
         amount: total,
         change_amount: method === "cash" ? change : 0,
         debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
-        client_mutation_id: crypto.randomUUID(),
+        client_mutation_id: safeUuid(),
       });
 
       clearCart();

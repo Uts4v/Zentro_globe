@@ -1,9 +1,11 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 import { VitePWA } from "vite-plugin-pwa";
-
 export default defineConfig({
   nitro: {
     preset: "node-server",
+    // Serve the PWA service worker artifacts emitted to dist/ by
+    // vite-plugin-pwa (they are not part of the client bundle).
+    publicAssets: [{ dir: "dist" }],
   },
   tanstackStart: {
     server: {
@@ -11,6 +13,9 @@ export default defineConfig({
     },
   },
   vite: {
+    server: {
+      allowedHosts: [".devtunnels.ms"],
+    },
     build: {
       rollupOptions: {
         output: {

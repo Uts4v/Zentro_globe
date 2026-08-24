@@ -3,9 +3,9 @@ import { djangoHeaders as authHeaders } from "@/lib/auth";
 import type { TodaySpecial } from "./types";
 
 export const specialApi = {
-  forSlug: async (slug: string): Promise<TodaySpecial | null> => {
-    const data = await djangoFetch<TodaySpecial | null>(apiUrl(`/loyalty/specials/${slug}/`));
-    return data ?? null;
+  forSlug: async (slug: string): Promise<TodaySpecial[]> => {
+    const data = await djangoFetch<TodaySpecial[]>(apiUrl(`/loyalty/specials/${slug}/`));
+    return data ?? [];
   },
 
   list: async (): Promise<TodaySpecial[]> => {

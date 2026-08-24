@@ -67,8 +67,11 @@ function CustomerOrder() {
 
     let cancelled = false;
     specialApi.forSlug(selectedMerchant.slug)
-      .then((s) => {
-        if (!cancelled) setSpecial(s?.is_active ? s : null);
+      .then((list) => {
+        if (!cancelled) {
+          const active = list.filter((s) => s.is_active);
+          setSpecial(active.length > 0 ? active[0] : null);
+        }
       })
       .catch(() => {
         if (!cancelled) setSpecial(null);
@@ -302,7 +305,7 @@ function CustomerOrder() {
                       addToCart({
                         id: String(special.linked_menu_item),
                         name: special.linked_menu_item_name ?? "",
-                        price: "0",
+                        price: special.linked_menu_item_price ?? "0",
                         description: "",
                         category: "",
                         image_url: null,

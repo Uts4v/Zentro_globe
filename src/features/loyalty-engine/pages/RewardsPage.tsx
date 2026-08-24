@@ -10,8 +10,11 @@ export function RewardsPage() {
   const [points, setPoints] = useState(0);
   const [loading, setLoading] = useState(true);
   const [redeeming, setRedeeming] = useState<string | null>(null);
-  const [successId, setSuccessId] = useState<string | null>(null);
-  const [redemptionCode, setRedemptionCode] = useState<{ code: string; rewardName: string; rewardEmoji: string } | null>(null);
+  const [redemptionCode, setRedemptionCode] = useState<{
+    code: string;
+    rewardName: string;
+    rewardEmoji: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!selectedMerchantId) {
@@ -23,8 +26,14 @@ export function RewardsPage() {
 
     setLoading(true);
     Promise.all([
-      rewardApi.list(selectedMerchantId).then(setRewards).catch(() => setRewards([])),
-      customerApi.getWallet(selectedMerchantId).then((w) => setPoints(w?.points_balance ?? 0)).catch(() => {}),
+      rewardApi
+        .list(selectedMerchantId)
+        .then(setRewards)
+        .catch(() => setRewards([])),
+      customerApi
+        .getWallet(selectedMerchantId)
+        .then((w) => setPoints(w?.points_balance ?? 0))
+        .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, [selectedMerchantId]);
 
@@ -36,7 +45,7 @@ export function RewardsPage() {
         const wallet = await customerApi.getWallet(selectedMerchantId);
         setPoints(wallet?.points_balance ?? 0);
       }
-      const reward = rewards.find(r => r.id === rewardId);
+      const reward = rewards.find((r) => r.id === rewardId);
       setRedemptionCode({
         code: result.code || "",
         rewardName: reward?.name || "Reward",
@@ -61,59 +70,78 @@ export function RewardsPage() {
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 px-5 pb-8">
+      <div className="mt-6 pb-8">
         {!selectedMerchantId && !loading && (
-          <p className="col-span-2 text-center text-sm text-muted-foreground">
+          <p className="px-5 text-center text-sm text-muted-foreground">
             Scan a store QR code or open a merchant link to see rewards.
           </p>
         )}
         {selectedMerchantId && loading && (
-          <p className="col-span-2 text-center text-sm text-muted-foreground">Loading rewards…</p>
+          <p className="px-5 text-center text-sm text-muted-foreground">Loading rewards…</p>
         )}
-        {!loading && rewards.length === 0 && (
-          <div className="col-span-2 glass rounded-3xl py-16 text-center">
+        {!loading && rewards.length === 0 && selectedMerchantId && (
+          <div className="glass mx-5 rounded-3xl py-16 text-center">
             <p className="text-4xl">🎁</p>
             <p className="mt-3 text-sm text-muted-foreground">No rewards available yet.</p>
           </div>
         )}
-        {rewards.map((r) => {
-          const affordable = points >= r.points_cost;
-          const isRedeeming = redeeming === r.id;
-          const justRedeemed = successId === r.id;
-          return (
-            <article
-              key={r.id}
-              className={`glass relative flex flex-col rounded-3xl p-4 ${!affordable ? "opacity-70" : ""}`}
-            >
-              {!affordable && (
-                <div className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-ink/80 text-primary-foreground">
-                  <Lock className="h-3 w-3" />
-                </div>
-              )}
-              <div className="grid h-24 place-items-center rounded-2xl bg-mist text-5xl">
-                {r.emoji || "🎁"}
-              </div>
-              <h3 className="mt-3 text-sm font-semibold text-foreground">{r.name}</h3>
-              <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>
-              <div className="mt-3 flex items-center justify-between">
-                <span className="font-display text-xl text-foreground">{r.points_cost} pts</span>
-                <button
-                  disabled={!affordable || isRedeeming}
-                  onClick={() => handleRedeem(r.id)}
-                  className={`rounded-full px-3 py-1.5 text-[11px] font-medium uppercase tracking-widest transition-all ${
-                    justRedeemed
-                      ? "bg-emerald-500 text-white"
-                      : affordable
-                      ? "bg-ink text-primary-foreground hover:opacity-90"
-                      : "bg-mist text-muted-foreground"
+        {rewards.length > 0 && (
+          <div className="space-y-3 px-5 pb-2">
+            {rewards.map((r) => {
+              const affordable = points >= r.points_cost;
+              const isRedeeming = redeeming === r.id;
+              return (
+                <article
+                  key={r.id}
+                  className={`flex items-center justify-between rounded-[26px] bg-card p-4 transition-all ${
+                    !affordable ? "opacity-70" : ""
                   }`}
+                  style={{
+                    boxShadow: "var(--shadow-card)",
+                    border: "1px solid var(--border)",
+                  }}
                 >
-                  {isRedeeming ? "…" : justRedeemed ? "✓" : affordable ? "Redeem" : "Locked"}
-                </button>
-              </div>
-            </article>
-          );
-        })}
+                  <div className="flex min-w-0 flex-1 items-center gap-3.5 pr-3">
+                    <div className="relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
+                      <span style={{ filter: "grayscale(1) brightness(0)" }}>
+                        {r.emoji || "🎁"}
+                      </span>
+                      {!affordable && (
+                        <div className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-ink/80 text-primary-foreground">
+                          <Lock className="h-2.5 w-2.5" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[14px] font-extrabold text-foreground">
+                        {r.name}
+                      </p>
+                      {r.description && (
+                        <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
+                          {r.description}
+                        </p>
+                      )}
+                      <span className="mt-1 inline-block font-display text-base text-primary">
+                        {r.points_cost} pts
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    disabled={!affordable || isRedeeming}
+                    onClick={() => handleRedeem(r.id)}
+                    className={`shrink-0 rounded-full px-4 py-2 text-[11px] font-extrabold transition-all active:scale-95 ${
+                      affordable
+                        ? "bg-primary text-primary-foreground shadow-md hover:opacity-90"
+                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                    }`}
+                  >
+                    {isRedeeming ? "…" : affordable ? "Redeem" : "Locked"}
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {redemptionCode && (
@@ -132,12 +160,16 @@ export function RewardsPage() {
               <p className="font-display mt-2 text-3xl">Reward Redeemed!</p>
             </div>
             <div className="-mt-6 mx-6 rounded-2xl bg-background p-6 shadow-lg text-center">
-              <p className="text-4xl">{redemptionCode.rewardEmoji}</p>
+              <p className="text-4xl" style={{ filter: "grayscale(1) brightness(0)" }}>
+                {redemptionCode.rewardEmoji}
+              </p>
               <p className="mt-3 font-medium text-foreground">{redemptionCode.rewardName}</p>
               {redemptionCode.code && (
                 <>
                   <div className="mt-4 rounded-xl bg-mist p-4">
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-1">Redemption Code</p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-1">
+                      Redemption Code
+                    </p>
                     <p className="font-mono text-4xl font-bold tracking-[0.3em] text-ink">
                       {redemptionCode.code}
                     </p>

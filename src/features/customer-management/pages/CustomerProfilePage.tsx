@@ -11,8 +11,10 @@ import {
   LogOut,
   Loader2,
   ArrowLeftRight,
+  Download,
 } from "lucide-react";
 import { customerApi, orderApi, type Order, type CustomerProfile } from "@/lib/api";
+import { usePwa } from "@/features/pwa/PwaProvider";
 import { useState, useEffect } from "react";
 
 export function CustomerProfilePage() {
@@ -137,6 +139,7 @@ export function CustomerProfilePage() {
 
       <section className="mt-6 px-5">
         <div className="glass-strong divide-y divide-border rounded-3xl">
+          <InstallAppRow />
           <Link to="/notifications" className="block">
             <Row icon={Bell} label="Notifications" />
           </Link>
@@ -173,5 +176,45 @@ function Row({ icon: Icon, label }: { icon: typeof Bell; label: string }) {
       <span className="flex-1 text-sm text-foreground">{label}</span>
       <ChevronRight className="h-4 w-4 text-muted-foreground" />
     </button>
+  );
+}
+
+function InstallAppRow() {
+  const { isInstallable, isInstalled, isStandalone, platform, promptInstall } = usePwa();
+  const [showIosHint, setShowIosHint] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [installed, setInstalled] = useState(false);
+
+  if (installed || isInstalled || isStandalone || !isInstallable) return null;
+
+  async function handleClick() {
+    if (platform === "ios") {
+      setShowIosHint((v) => !v);
+      return;
+    }
+    setInstalling(true);
+    try {
+      if (await promptInstall()) setInstalled(true);
+    } finally {
+      setInstalling(false);
+    }
+  }
+
+  return (
+    <div>
+      <button onClick={handleClick} disabled={installing} className="flex w-full items-center gap-3 p-4 text-left">
+        <Download className="h-4 w-4 text-muted-foreground" />
+        <span className="flex-1 text-sm text-foreground">
+          {installing ? "Installing…" : "Download app"}
+        </span>
+        <ChevronRight className="h-4 w-4 text-muted-foreground rotate-90" />
+      </button>
+      {platform === "ios" && showIosHint && (
+        <p className="px-4 pb-4 -mt-1 text-xs leading-relaxed text-muted-foreground">
+          In Safari, tap the <span className="font-medium text-foreground">Share</span> icon, then{" "}
+          <span className="font-medium text-foreground">Add to Home Screen</span>.
+        </p>
+      )}
+    </div>
   );
 }

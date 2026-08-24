@@ -27,7 +27,7 @@ from notifications.services import send_notification
 from notifications.models import Notification
 
 from .models import Order, OrderItem
-from .serializers import OrderSerializer, CreateOrderSerializer, CreateGuestOrderSerializer
+from .serializers import OrderSerializer, CreateOrderSerializer, CreateGuestOrderSerializer, AddItemsToOrderSerializer
 from .services.preparation import prepare_order_items_for_routing
 
 logger = logging.getLogger(__name__)
@@ -91,6 +91,8 @@ def _award_loyalty(order: Order):
     customer = order.customer
     wallet   = get_or_create_wallet(customer, order.merchant)
 
+    old_balance = wallet.points_balance
+
     if order.points_earned > 0:
         award_wallet_points(
             wallet, order.points_earned,
@@ -102,6 +104,60 @@ def _award_loyalty(order: Order):
     wallet.order_count += 1
     wallet.save(update_fields=["order_count", "updated_at"])
     streak_incremented = update_wallet_streak(wallet)
+
+    user = customer.user
+
+    # ── Customer notifications (web toast + PWA push) ──
+    def _notify_completion():
+        # 1. Points earned
+        if order.points_earned > 0:
+            _notify_safe(
+                user=user,
+                title=f"You earned {order.points_earned} points! 🎉",
+                message=f"Order #{order.id} at {order.merchant.business_name} — balance: {wallet.points_balance} pts.",
+                notification_type=Notification.TYPE_POINTS_EARNED,
+                merchant_name=order.merchant.business_name,
+                context_url=f"/customer/merchant/{order.merchant.slug}",
+                order_id=order.id,
+                merchant_id=order.merchant.id,
+            )
+        else:
+            _notify_safe(
+                user=user,
+                title="Order complete! ✅",
+                message=f"Your order #{order.id} at {order.merchant.business_name} is complete.",
+                notification_type=Notification.TYPE_ORDER_UPDATE,
+                merchant_name=order.merchant.business_name,
+                context_url=f"/customer/merchant/{order.merchant.slug}",
+                order_id=order.id,
+                merchant_id=order.merchant.id,
+            )
+
+        # 2. Newly unlocked rewards (balance crossed a reward's threshold)
+        new_balance = wallet.points_balance
+        if new_balance > old_balance:
+            unlocked = (
+                order.merchant.rewards.filter(
+                    is_active=True,
+                    points_cost__gt=max(0, old_balance),
+                    points_cost__lte=new_balance,
+                )
+                .order_by("points_cost")
+                .first()
+            )
+            if unlocked:
+                _notify_safe(
+                    user=user,
+                    title=f"Reward unlocked: {unlocked.name} 🎁",
+                    message=f"You can now redeem it for {unlocked.points_cost} points.",
+                    notification_type=Notification.TYPE_REWARD_REDEEMED,
+                    merchant_name=order.merchant.business_name,
+                    context_url="/rewards",
+                    reward_id=unlocked.id,
+                    merchant_id=order.merchant.id,
+                )
+
+    transaction.on_commit(_notify_completion)
 
     # Punch cards
     for merchant_card in MerchantPunchCard.objects.filter(
@@ -219,7 +275,7 @@ def my_orders(request):
         .order_by("-created_at")
     )
     orders = _paginate(request, orders)
-    return Response(OrderSerializer(orders, many=True).data)
+    return Response(OrderSerializer(orders, many=True, context={"request": request}).data)
 
 
 @api_view(["GET"])
@@ -241,7 +297,7 @@ def store_orders(request):
         qs = qs.filter(status=filter_status)
 
     qs = _paginate(request, qs)
-    return Response(OrderSerializer(qs, many=True).data)
+    return Response(OrderSerializer(qs, many=True, context={"request": request}).data)
 
 
 @api_view(["POST"])
@@ -383,7 +439,7 @@ def create_order(request):
         merchant_id=merchant.id,
     ))
 
-    return Response(OrderSerializer(order).data, status=status.HTTP_201_CREATED)
+    return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
@@ -543,7 +599,7 @@ def order_detail(request, pk):
     if not is_owner and not user.is_staff:
         return Response({"error": "Not authorised."}, status=status.HTTP_403_FORBIDDEN)
 
-    return Response(OrderSerializer(order).data)
+    return Response(OrderSerializer(order, context={"request": request}).data)
 
 
 @api_view(["PATCH"])
@@ -626,8 +682,14 @@ def update_order_status(request, pk):
         "completed": "Order complete!",
     }.get(new_status, f"Your order is now {new_status}.")
 
-    # Notify customer (only if order has an associated customer)
-    if order.customer and order.customer.user:
+    # Notify customer (only if order has an associated customer).
+    # Completed regular orders are skipped here — _award_loyalty already
+    # sent a richer points/completion notification.
+    is_regular_completion = (
+        new_status == Order.STATUS_COMPLETED
+        and order.order_type != Order.ORDER_TYPE_REWARD_REDEMPTION
+    )
+    if order.customer and order.customer.user and not is_regular_completion:
         transaction.on_commit(lambda: _notify_safe(
             user=order.customer.user,
             title="Order update",
@@ -712,8 +774,126 @@ def cancel_order(request, pk):
             order_id=order.id,
             merchant_id=order.merchant.id,
         ))
-
     return Response(OrderSerializer(order).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@transaction.atomic
+def add_items_to_order(request, pk):
+    """Append items to an existing order (same bill). Only for pending/confirmed orders."""
+    try:
+        order = Order.objects.select_for_update(of=("self",)).select_related(
+            "customer__user", "merchant"
+        ).prefetch_related("items").get(pk=pk)
+    except Order.DoesNotExist:
+        return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        customer = request.user.customer_profile
+    except CustomerProfile.DoesNotExist:
+        customer = None
+
+    is_customer_owner = customer is not None and order.customer == customer
+
+    try:
+        merchant_profile = request.user.merchant_profile
+    except MerchantProfile.DoesNotExist:
+        merchant_profile = None
+
+    is_merchant_owner = merchant_profile is not None and order.merchant == merchant_profile
+
+    if not is_customer_owner and not is_merchant_owner:
+        return Response({"error": "Not authorised."}, status=status.HTTP_403_FORBIDDEN)
+
+    if order.status not in (Order.STATUS_PENDING, Order.STATUS_CONFIRMED, Order.STATUS_PREPARING):
+        return Response(
+            {"error": "Items can only be added to pending, confirmed, or preparing orders."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    serializer = AddItemsToOrderSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+    merchant = order.merchant
+
+    menu_items_by_id = {
+        mi.id: mi
+        for mi in MenuItem.objects.filter(
+            id__in=[i["menu_item_id"] for i in data["items"]],
+            merchant=merchant,
+            is_available=True,
+        )
+    }
+
+    new_total_added = 0
+    new_points_added = 0
+    new_items_data = []
+
+    for item_data in data["items"]:
+        menu_item = menu_items_by_id.get(item_data["menu_item_id"])
+        if menu_item is None:
+            return Response(
+                {"error": f"Menu item {item_data['menu_item_id']} not found or unavailable."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        quantity = item_data["quantity"]
+        subtotal = menu_item.price * quantity
+        new_total_added += subtotal
+
+        if menu_item.loyalty_reward:
+            new_points_added += menu_item.points_per_item * quantity
+
+        new_items_data.append({
+            "menu_item": menu_item,
+            "name": menu_item.name,
+            "price": menu_item.price,
+            "quantity": quantity,
+            "subtotal": subtotal,
+        })
+
+    # Apply preparation routing for new items
+    new_items_data = prepare_order_items_for_routing(order, new_items_data)
+
+    OrderItem.objects.bulk_create(
+        [OrderItem(order=order, **item) for item in new_items_data],
+        batch_size=200,
+    )
+
+    # Recalculate order totals
+    order.subtotal = sum(item.subtotal for item in order.items.all())
+    order.total_amount = order.subtotal - order.discount_amount + order.tax_amount + order.service_charge
+    order.points_earned += new_points_added
+    order.version += 1
+    order.save(update_fields=["subtotal", "total_amount", "points_earned", "version", "updated_at"])
+
+    # Append notes if provided
+    new_notes = data.get("notes", "").strip()
+    if new_notes:
+        if order.notes:
+            order.notes = f"{order.notes}\n{new_notes}"
+        else:
+            order.notes = new_notes
+        order.save(update_fields=["notes", "updated_at"])
+
+    # Notify merchant
+    added_by = "merchant" if is_merchant_owner else "customer"
+    transaction.on_commit(lambda: _notify_safe(
+        user=merchant.user,
+        title="Order updated 🔄",
+        message=f"Order #{order.id} — {len(new_items_data)} item(s) added by {added_by}",
+        notification_type=Notification.TYPE_NEW_ORDER,
+        merchant_name=merchant.business_name,
+        context_url="/merchant/orders",
+        order_id=order.id,
+        merchant_id=merchant.id,
+    ))
+
+    return Response(OrderSerializer(order, context={"request": request}).data)
+
 
 # Add these two views to orders/views.py
 # They enforce the 1-month (customer) and 2-month (merchant) limits
@@ -749,7 +929,7 @@ def customer_order_history(request):
 
     qs = _paginate(request, qs)
     from .serializers import OrderSerializer
-    return Response(OrderSerializer(qs, many=True).data)
+    return Response(OrderSerializer(qs, many=True, context={"request": request}).data)
 
 
 @api_view(["DELETE"])

@@ -30,8 +30,14 @@ function Rewards() {
 
     setLoading(true);
     Promise.all([
-      rewardApi.list(selectedMerchantId).then(setRewards).catch(() => setRewards([])),
-      customerApi.getWallet(selectedMerchantId).then((w) => setPoints(w?.points_balance ?? 0)).catch(() => {}),
+      rewardApi
+        .list(selectedMerchantId)
+        .then(setRewards)
+        .catch(() => setRewards([])),
+      customerApi
+        .getWallet(selectedMerchantId)
+        .then((w) => setPoints(w?.points_balance ?? 0))
+        .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, [selectedMerchantId]);
 
@@ -64,17 +70,17 @@ function Rewards() {
         </div>
       </div>
 
-      <div className="mt-6 grid grid-cols-2 gap-3 px-5 pb-8">
+      <div className="mt-6 space-y-3 px-5 pb-8">
         {!selectedMerchantId && !loading && (
-          <p className="col-span-2 text-center text-sm text-muted-foreground">
+          <p className="text-center text-sm text-muted-foreground">
             Scan a store QR code or open a merchant link to see rewards.
           </p>
         )}
         {selectedMerchantId && loading && (
-          <p className="col-span-2 text-center text-sm text-muted-foreground">Loading rewards…</p>
+          <p className="text-center text-sm text-muted-foreground">Loading rewards…</p>
         )}
         {!loading && rewards.length === 0 && (
-          <div className="col-span-2 glass rounded-3xl py-16 text-center">
+          <div className="glass rounded-3xl py-16 text-center">
             <p className="text-4xl">🎁</p>
             <p className="mt-3 text-sm text-muted-foreground">No rewards available yet.</p>
           </div>
@@ -86,37 +92,53 @@ function Rewards() {
           return (
             <article
               key={r.id}
-              className={`glass relative flex flex-col rounded-3xl p-4 ${!affordable ? "opacity-70" : ""}`}
+              className={`flex items-center justify-between rounded-[26px] bg-card p-4 transition-all ${
+                !affordable ? "opacity-70" : ""
+              }`}
+              style={{
+                boxShadow: "var(--shadow-card)",
+                border: "1px solid var(--border)",
+              }}
             >
-              {!affordable && (
-                <div className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-ink/80 text-primary-foreground">
-                  <Lock className="h-3 w-3" />
+              <div className="flex min-w-0 flex-1 items-center gap-3.5 pr-3">
+                <div className="relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
+                  <span style={{ filter: "grayscale(1) brightness(0)" }}>{r.emoji || "🎁"}</span>
+                  {!affordable && (
+                    <div className="absolute -right-1 -top-1 grid h-5 w-5 place-items-center rounded-full bg-ink/80 text-primary-foreground">
+                      <Lock className="h-2.5 w-2.5" />
+                    </div>
+                  )}
                 </div>
-              )}
-              <div className="grid h-24 place-items-center rounded-2xl bg-mist text-5xl">
-                {r.emoji || "🎁"}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[14px] font-extrabold text-foreground">{r.name}</p>
+                  {r.description && (
+                    <p className="truncate text-[11px] font-medium text-muted-foreground">
+                      {r.description}
+                    </p>
+                  )}
+                  {r.linked_menu_item_name && (
+                    <p className="truncate text-[11px] font-medium text-ember">
+                      {r.linked_menu_item_name}
+                    </p>
+                  )}
+                  <span className="mt-1 inline-block font-display text-base text-primary">
+                    {r.points_cost} pts
+                  </span>
+                </div>
               </div>
-              <h3 className="mt-3 text-sm font-semibold text-foreground">{r.name}</h3>
-              <p className="mt-1 text-xs text-muted-foreground">{r.description}</p>
-              {r.linked_menu_item_name && (
-                <p className="mt-1 text-xs font-medium text-ember">{r.linked_menu_item_name}</p>
-              )}
-              <div className="mt-3 flex items-center justify-between">
-                <span className="font-display text-xl text-foreground">{r.points_cost} pts</span>
-                <button
-                  disabled={!affordable || isRedeeming}
-                  onClick={() => handleRedeem(r.id)}
-                  className={`rounded-full px-3 py-1.5 text-[11px] font-medium uppercase tracking-widest transition-all ${
-                    justRedeemed
-                      ? "bg-emerald-500 text-white"
-                      : affordable
-                      ? "bg-ink text-primary-foreground hover:opacity-90"
-                      : "bg-mist text-muted-foreground"
-                  }`}
-                >
-                  {isRedeeming ? "…" : justRedeemed ? "✓" : affordable ? "Redeem" : "Locked"}
-                </button>
-              </div>
+              <button
+                disabled={!affordable || isRedeeming}
+                onClick={() => handleRedeem(r.id)}
+                className={`shrink-0 rounded-full px-4 py-2 text-[11px] font-extrabold transition-all active:scale-95 ${
+                  justRedeemed
+                    ? "bg-emerald-500 text-white"
+                    : affordable
+                      ? "bg-primary text-primary-foreground shadow-md hover:opacity-90"
+                      : "bg-muted text-muted-foreground cursor-not-allowed"
+                }`}
+              >
+                {isRedeeming ? "…" : justRedeemed ? "✓" : affordable ? "Redeem" : "Locked"}
+              </button>
             </article>
           );
         })}

@@ -2,7 +2,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type OrderStatus } from "@/lib/store";
 import { MobileShell, TopBar } from "@/components/MobileShell";
-import { ArrowLeft, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, Check, Loader2, Plus } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { requireAuth } from "@/lib/auth-guard";
 import { orderApi, type Order } from "@/lib/api";
@@ -204,35 +204,20 @@ function OrderPage() {
         </div>
       )}
       {isCancelled && (
-  <div className="mt-6 px-5">
-    <div className="glass-strong rounded-3xl p-5 text-center">
-      <p className="text-4xl">❌</p>
-      <p className="mt-3 font-medium text-foreground">This order was cancelled</p>
-      {order.cancellation_reason && (
-        <p className="mt-1 text-sm text-muted-foreground">
-          Reason: {order.cancellation_reason.replace("_", " ")}
-        </p>
-      )}
-      {order.cancelled_by && (
-        <p className="mt-1 text-xs text-muted-foreground capitalize">
-          Cancelled by: {order.cancelled_by}
-        </p>
-      )}
-      <Link
-        to="/"
-        className="mt-4 inline-flex h-10 items-center justify-center rounded-full bg-ink px-5 text-xs font-medium text-primary-foreground"
-      >
-        Order again
-      </Link>
-    </div>
-  </div>
-)}
-
-      {isCancelled && (
         <div className="mt-6 px-5">
           <div className="glass-strong rounded-3xl p-5 text-center">
             <p className="text-4xl">❌</p>
-            <p className="mt-3 text-sm text-muted-foreground">This order was cancelled.</p>
+            <p className="mt-3 font-medium text-foreground">This order was cancelled</p>
+            {order.cancellation_reason && (
+              <p className="mt-1 text-sm text-muted-foreground">
+                Reason: {order.cancellation_reason.replace("_", " ")}
+              </p>
+            )}
+            {order.cancelled_by && (
+              <p className="mt-1 text-xs text-muted-foreground capitalize">
+                Cancelled by: {order.cancelled_by}
+              </p>
+            )}
             <Link
               to="/"
               className="mt-4 inline-flex h-10 items-center justify-center rounded-full bg-ink px-5 text-xs font-medium text-primary-foreground"
@@ -264,6 +249,18 @@ function OrderPage() {
             </span>
           </div>
         </div>
+
+        {/* Add More button */}
+        {order.can_add_items && (
+          <Link
+            to="/orders/add-to-order/$id"
+            params={{ id: order.id }}
+            className="mt-3 flex items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors hover:border-ink/30 hover:text-foreground"
+          >
+            <Plus className="h-4 w-4" />
+            Add more items
+          </Link>
+        )}
       </div>
 
       <div className="mt-4 px-5 pb-8">

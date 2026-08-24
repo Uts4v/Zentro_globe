@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
@@ -22,12 +23,13 @@ export function MerchantNav({ navItems, onSignOut, onLinkClick }: MerchantNavPro
   return (
     <div className="flex h-full flex-col gap-1 p-4">
       {/* Logo */}
-          <Link
+      <Link
         to="/"
-        className="mb-4 flex items-center px-2 py-1 font-display text-2xl text-foreground"
+        className="mb-4 flex items-center px-2 py-1 text-foreground"
         onClick={onLinkClick}
+        aria-label="Zentro home"
       >
-        zentro<span className="text-ember">.</span>
+        <ZentroLogo className="h-7 w-auto" title="" />
       </Link>
 
       {/* Nav links */}
@@ -47,7 +49,7 @@ export function MerchantNav({ navItems, onSignOut, onLinkClick }: MerchantNavPro
                 "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
                 isActive
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               <Icon className="h-4 w-4 shrink-0" />

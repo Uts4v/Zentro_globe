@@ -44,6 +44,7 @@ export default function IncomingOrdersPanel() {
   const currentWorker = usePosStore((s) => s.currentWorker);
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const knownOrderIds = useRef<Set<number>>(new Set());
 
   // Customer linking state
@@ -159,7 +160,11 @@ export default function IncomingOrdersPanel() {
     <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/50 p-4">
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
+        <button
+          onClick={() => setCollapsed((c) => !c)}
+          className="flex items-center gap-2 text-left"
+          aria-expanded={!collapsed}
+        >
           <div className="relative">
             <Bell className="h-5 w-5 text-amber-600" />
             <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
@@ -167,7 +172,10 @@ export default function IncomingOrdersPanel() {
             </span>
           </div>
           <h3 className="text-sm font-bold text-foreground">Incoming Orders</h3>
-        </div>
+          <ChevronRight
+            className={`h-4 w-4 text-muted-foreground transition-transform ${collapsed ? "" : "rotate-90"}`}
+          />
+        </button>
         <button
           onClick={fetchOrders}
           disabled={loading}
@@ -178,7 +186,8 @@ export default function IncomingOrdersPanel() {
       </div>
 
       {/* Order cards */}
-      <div className="space-y-2 max-h-96 overflow-y-auto">
+      {!collapsed && (
+      <div className="space-y-2 max-h-[38vh] overflow-y-auto">
         {incomingOrders.map((order) => {
           const isExpanded = expandedId === order.id;
           const createdAgo = order.created_at ? formatTimeAgo(order.created_at) : "";
@@ -391,6 +400,7 @@ export default function IncomingOrdersPanel() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }

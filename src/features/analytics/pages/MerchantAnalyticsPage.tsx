@@ -393,7 +393,9 @@ export function MerchantAnalyticsPage() {
             <div className="mt-5 grid grid-cols-2 gap-2">
               {statusRows.map(([status, count]) => (
                 <div key={status} className="rounded-2xl bg-mist p-3 text-center">
-                  <p className="font-display text-2xl text-foreground">{count}</p>
+                  <p className="numeric text-2xl font-semibold tracking-tight text-foreground">
+                    {count}
+                  </p>
                   <p
                     className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] capitalize ${STATUS_COLOR[status as OrderStatus]}`}
                   >
@@ -808,7 +810,7 @@ function Kpi({
         <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="font-display mt-2 text-3xl text-foreground">{value}</p>
+      <p className="numeric mt-2 text-3xl font-bold tracking-tight text-foreground">{value}</p>
       {delta !== undefined && (
         <div className="mt-2">
           <Delta value={delta} />
@@ -826,7 +828,7 @@ function StatRow({ label, value, hint }: { label: string; value: string; hint?: 
         <p className="text-xs text-foreground">{label}</p>
         {hint && <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>}
       </div>
-      <p className="font-display text-xl text-foreground">{value}</p>
+      <p className="numeric text-xl font-semibold tracking-tight text-foreground">{value}</p>
     </div>
   );
 }

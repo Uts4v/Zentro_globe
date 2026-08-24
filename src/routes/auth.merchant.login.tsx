@@ -3,6 +3,7 @@ import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-r
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Loader2, Mail, Lock } from "lucide-react";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 
 export const Route = createFileRoute("/auth/merchant/login")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -40,24 +41,48 @@ function MerchantLogin() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col px-5 pb-10 pt-10">
-      <Link to="/" className="font-display text-2xl text-ink">
-        zentro<span className="text-ember">.</span>
-        <span className="ml-2 text-[10px] uppercase tracking-[0.2em] text-muted-foreground">for business</span>
+      <Link
+        to="/"
+        className="inline-flex items-center gap-2 text-ink"
+        aria-label="Zentro for business"
+      >
+        <ZentroLogo className="h-7 w-auto" title="" />
+        <span className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+          for business
+        </span>
       </Link>
 
       <div className="mt-12">
         <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Welcome back</p>
         <h1 className="font-display mt-2 text-5xl leading-[1.05] text-ink">Manage your store.</h1>
-        <p className="mt-3 max-w-[300px] text-sm text-muted-foreground">Orders, loyalty, and analytics — all in one place.</p>
+        <p className="mt-3 max-w-[300px] text-sm text-muted-foreground">
+          Orders, loyalty, and analytics — all in one place.
+        </p>
       </div>
 
       {error && (
-        <div className="mt-6 rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">{error}</div>
+        <div className="mt-6 rounded-2xl bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
       )}
 
       <form onSubmit={handleSubmit} className="mt-10 space-y-3">
-        <Field label="Business email" placeholder="hello@maison.com" type="email" icon={<Mail className="h-4 w-4" />} value={email} onChange={setEmail} />
-        <Field label="Password" placeholder="••••••••" type="password" icon={<Lock className="h-4 w-4" />} value={password} onChange={setPassword} />
+        <Field
+          label="Business email"
+          placeholder="hello@maison.com"
+          type="email"
+          icon={<Mail className="h-4 w-4" />}
+          value={email}
+          onChange={setEmail}
+        />
+        <Field
+          label="Password"
+          placeholder="••••••••"
+          type="password"
+          icon={<Lock className="h-4 w-4" />}
+          value={password}
+          onChange={setPassword}
+        />
 
         <button
           type="submit"
@@ -69,21 +94,44 @@ function MerchantLogin() {
       </form>
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
-        <Link to="/auth/forgot-password" className="font-medium text-ink underline-offset-4 hover:underline">Forgot password?</Link>
+        <Link
+          to="/auth/forgot-password"
+          className="font-medium text-ink underline-offset-4 hover:underline"
+        >
+          Forgot password?
+        </Link>
       </p>
 
       <p className="mt-auto pt-8 text-center text-xs text-muted-foreground">
-        New to Zentro? <Link to="/auth/merchant/signup" search={{ redirect: undefined }} className="font-medium text-ink underline-offset-4 hover:underline">Register your business</Link>
+        New to Zentro?{" "}
+        <Link
+          to="/auth/merchant/signup"
+          search={{ redirect: undefined }}
+          className="font-medium text-ink underline-offset-4 hover:underline"
+        >
+          Register your business
+        </Link>
       </p>
 
-      <Link to="/auth/login" search={{ redirect: undefined }} className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline">
+      <Link
+        to="/auth/login"
+        search={{ redirect: undefined }}
+        className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline"
+      >
         Customer sign in →
       </Link>
     </div>
   );
 }
 
-function Field({ label, placeholder, type = "text", icon, value, onChange }: {
+function Field({
+  label,
+  placeholder,
+  type = "text",
+  icon,
+  value,
+  onChange,
+}: {
   label: string;
   placeholder: string;
   type?: string;
@@ -95,7 +143,11 @@ function Field({ label, placeholder, type = "text", icon, value, onChange }: {
     <label className="block">
       <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
       <div className="relative mt-1.5">
-        {icon && <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">{icon}</span>}
+        {icon && (
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
+            {icon}
+          </span>
+        )}
         <input
           type={type}
           placeholder={placeholder}

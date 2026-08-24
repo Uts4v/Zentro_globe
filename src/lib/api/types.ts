@@ -7,8 +7,11 @@ export interface TodaySpecial {
   image_url: string;
   linked_menu_item: number | null;
   linked_menu_item_name: string | null;
+  linked_menu_item_price: string | null;
   linked_reward: string | null;
   linked_reward_name: string | null;
+  discount_type: "none" | "percentage" | "fixed";
+  discount_value: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -90,6 +93,7 @@ export interface Order {
   guest_session_id?: string;
   guest_name_snapshot?: string;
   kot_number?: number | null;
+  can_add_items?: boolean;
   created_at: string;
   updated_at: string;
   order_items: OrderItem[];

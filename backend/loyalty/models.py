@@ -31,6 +31,15 @@ def _generate_membership_number(slug: str) -> str:
     return f"{prefix}-{random_part}"
 
 class TodaySpecial(models.Model):
+    DISCOUNT_NONE = "none"
+    DISCOUNT_PERCENTAGE = "percentage"
+    DISCOUNT_FIXED = "fixed"
+    DISCOUNT_CHOICES = [
+        (DISCOUNT_NONE, "No discount"),
+        (DISCOUNT_PERCENTAGE, "Percentage"),
+        (DISCOUNT_FIXED, "Fixed amount"),
+    ]
+
     merchant = models.ForeignKey(
         "merchants.MerchantProfile",
         on_delete=models.CASCADE,
@@ -50,6 +59,18 @@ class TodaySpecial(models.Model):
         on_delete=models.SET_NULL,
         null=True, blank=True,
         related_name="specials",
+    )
+    discount_type = models.CharField(
+        max_length=20,
+        choices=DISCOUNT_CHOICES,
+        default=DISCOUNT_NONE,
+    )
+    discount_value = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Percentage (0-100) or fixed amount depending on discount_type",
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -1,6 +1,7 @@
 // customerorderpage.tsx 
 import { useState, useEffect } from "react";
-import { Loader2, ChevronDown, ChevronUp, X } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Loader2, ChevronDown, ChevronUp, X, Plus } from "lucide-react";
 import { orderApi, type Order, type OrderStatus } from "@/lib/api";
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
@@ -219,6 +220,18 @@ function OrderRow({
               </li>
             ))}
           </ul>
+
+          {/* Add More button */}
+          {order.can_add_items && (
+            <Link
+              to="/orders/add-to-order/$id"
+              params={{ id: order.id }}
+              className="flex items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border py-2.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ink/30 hover:text-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add more items
+            </Link>
+          )}
 
           {order.notes && (
             <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700 border border-amber-100">

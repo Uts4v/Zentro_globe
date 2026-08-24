@@ -40,6 +40,21 @@ class OrderSerializer(serializers.ModelSerializer):
         source="processed_by_worker.display_name", read_only=True, default=None
     )
 
+    can_add_items = serializers.SerializerMethodField()
+
+    def get_can_add_items(self, obj):
+        if obj.status not in (Order.STATUS_PENDING, Order.STATUS_CONFIRMED, Order.STATUS_PREPARING):
+            return False
+        request = self.context.get("request")
+        if not request or not request.user or not request.user.is_authenticated:
+            return False
+        user = request.user
+        if hasattr(user, "customer_profile") and obj.customer == user.customer_profile:
+            return True
+        if hasattr(user, "merchant_profile") and obj.merchant == user.merchant_profile:
+            return True
+        return False
+
     class Meta:
         model = Order
         fields = [
@@ -60,6 +75,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "guest_session_id", "guest_name_snapshot",
             "kot_number",
             "version", "client_mutation_id", "client_created_at",
+            "can_add_items",
             "created_at", "updated_at",
         ]
         read_only_fields = [
@@ -103,4 +119,14 @@ class CreateGuestOrderSerializer(serializers.Serializer):
     def validate_items(self, value):
         if not value:
             raise serializers.ValidationError("Order must contain at least one item.")
+        return value
+
+
+class AddItemsToOrderSerializer(serializers.Serializer):
+    items = CreateOrderItemSerializer(many=True)
+    notes = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_items(self, value):
+        if not value:
+            raise serializers.ValidationError("Must contain at least one item.")
         return value

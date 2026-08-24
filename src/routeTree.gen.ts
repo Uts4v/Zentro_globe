@@ -64,6 +64,7 @@ import { Route as AuthForgotPasswordRouteImport } from './routes/auth.forgot-pas
 import { Route as TableTokenOrderRouteImport } from './routes/table.$token.order'
 import { Route as PosReportsZReportRouteImport } from './routes/pos.reports.z-report'
 import { Route as PosPreparationAreaIdRouteImport } from './routes/pos.preparation.$areaId'
+import { Route as OrdersAddToOrderIdRouteImport } from './routes/orders.add-to-order.$id'
 import { Route as LoyaltyQrTokenRouteImport } from './routes/loyalty.qr.$token'
 import { Route as GuestMerchantSlugRouteImport } from './routes/guest.merchant.$slug'
 import { Route as CustomerMerchantSlugRouteImport } from './routes/customer.merchant.$slug'
@@ -346,6 +347,11 @@ const PosPreparationAreaIdRoute = PosPreparationAreaIdRouteImport.update({
   path: '/$areaId',
   getParentRoute: () => PosPreparationRoute,
 } as any)
+const OrdersAddToOrderIdRoute = OrdersAddToOrderIdRouteImport.update({
+  id: '/orders/add-to-order/$id',
+  path: '/orders/add-to-order/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoyaltyQrTokenRoute = LoyaltyQrTokenRouteImport.update({
   id: '/qr/$token',
   path: '/qr/$token',
@@ -435,6 +441,7 @@ export interface FileRoutesByFullPath {
   '/customer/merchant/$slug': typeof CustomerMerchantSlugRoute
   '/guest/merchant/$slug': typeof GuestMerchantSlugRoute
   '/loyalty/qr/$token': typeof LoyaltyQrTokenRoute
+  '/orders/add-to-order/$id': typeof OrdersAddToOrderIdRoute
   '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
@@ -496,6 +503,7 @@ export interface FileRoutesByTo {
   '/customer/merchant/$slug': typeof CustomerMerchantSlugRoute
   '/guest/merchant/$slug': typeof GuestMerchantSlugRoute
   '/loyalty/qr/$token': typeof LoyaltyQrTokenRoute
+  '/orders/add-to-order/$id': typeof OrdersAddToOrderIdRoute
   '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
@@ -560,6 +568,7 @@ export interface FileRoutesById {
   '/customer/merchant/$slug': typeof CustomerMerchantSlugRoute
   '/guest/merchant/$slug': typeof GuestMerchantSlugRoute
   '/loyalty/qr/$token': typeof LoyaltyQrTokenRoute
+  '/orders/add-to-order/$id': typeof OrdersAddToOrderIdRoute
   '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
@@ -625,6 +634,7 @@ export interface FileRouteTypes {
     | '/customer/merchant/$slug'
     | '/guest/merchant/$slug'
     | '/loyalty/qr/$token'
+    | '/orders/add-to-order/$id'
     | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
@@ -686,6 +696,7 @@ export interface FileRouteTypes {
     | '/customer/merchant/$slug'
     | '/guest/merchant/$slug'
     | '/loyalty/qr/$token'
+    | '/orders/add-to-order/$id'
     | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
@@ -749,6 +760,7 @@ export interface FileRouteTypes {
     | '/customer/merchant/$slug'
     | '/guest/merchant/$slug'
     | '/loyalty/qr/$token'
+    | '/orders/add-to-order/$id'
     | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
@@ -781,6 +793,7 @@ export interface RootRouteChildren {
   StoresIdRoute: typeof StoresIdRoute
   CustomerMerchantSlugRoute: typeof CustomerMerchantSlugRoute
   GuestMerchantSlugRoute: typeof GuestMerchantSlugRoute
+  OrdersAddToOrderIdRoute: typeof OrdersAddToOrderIdRoute
   TableTokenOrderRoute: typeof TableTokenOrderRoute
 }
 
@@ -1171,6 +1184,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PosPreparationAreaIdRouteImport
       parentRoute: typeof PosPreparationRoute
     }
+    '/orders/add-to-order/$id': {
+      id: '/orders/add-to-order/$id'
+      path: '/orders/add-to-order/$id'
+      fullPath: '/orders/add-to-order/$id'
+      preLoaderRoute: typeof OrdersAddToOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/loyalty/qr/$token': {
       id: '/loyalty/qr/$token'
       path: '/qr/$token'
@@ -1393,6 +1413,7 @@ const rootRouteChildren: RootRouteChildren = {
   StoresIdRoute: StoresIdRoute,
   CustomerMerchantSlugRoute: CustomerMerchantSlugRoute,
   GuestMerchantSlugRoute: GuestMerchantSlugRoute,
+  OrdersAddToOrderIdRoute: OrdersAddToOrderIdRoute,
   TableTokenOrderRoute: TableTokenOrderRoute,
 }
 export const routeTree = rootRouteImport

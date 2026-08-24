@@ -65,24 +65,28 @@ function OrderCard({
       {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div>
-          <div className="text-lg font-bold">Order {order.order_number}</div>
-          <div className="text-sm text-gray-600">
+          <div className="numeric text-2xl font-bold tracking-tight">
+            Order {order.order_number}
+          </div>
+          <div className="mt-0.5 text-base font-semibold text-gray-700">
             {order.table_name
               ? order.table_name
               : order.fulfillment_type === "pickup"
                 ? "Pickup"
                 : "Dine-in"}
             {order.customer_name && (
-              <span className="ml-2 text-gray-400">· {order.customer_name}</span>
+              <span className="ml-2 font-medium text-gray-400">· {order.customer_name}</span>
             )}
           </div>
         </div>
         <div className="text-right">
-          <div className={`text-sm ${getElapsedClass(order.elapsed_seconds)}`}>
+          <div className={`numeric text-base ${getElapsedClass(order.elapsed_seconds)}`}>
             {formatElapsed(order.elapsed_seconds)}
           </div>
           {order.payment_status !== "paid" && order.payment_status !== "unpaid" && (
-            <div className="text-xs text-orange-500">{order.payment_status}</div>
+            <div className="text-[13px] font-semibold capitalize text-orange-500">
+              {order.payment_status}
+            </div>
           )}
         </div>
       </div>
@@ -100,8 +104,9 @@ function OrderCard({
                   : ""
             }`}
           >
-            <span className="text-sm">
-              <span className="font-semibold">{item.quantity}×</span> {item.name}
+            <span className="text-lg">
+              <span className="font-bold">{item.quantity}×</span>{" "}
+              <span className="font-semibold">{item.name}</span>
             </span>
             <span className="text-xs text-gray-400">
               {item.preparation_status === "preparing" ? (
@@ -222,9 +227,7 @@ export default function PreparationAreaScreen({ areaId }: Props) {
     getWsToken()
       .then((token) => {
         if (cancelled) return;
-        ws = new WebSocket(
-          `${wsBase}/ws/preparation/${merchant.id}/${areaId}/?token=${token}`,
-        );
+        ws = new WebSocket(`${wsBase}/ws/preparation/${merchant.id}/${areaId}/?token=${token}`);
         ws.onmessage = () => {
           refetch();
         };

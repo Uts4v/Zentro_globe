@@ -1,12 +1,31 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useStore, cartTotal, cartPoints, type MenuItem } from "@/lib/store";
 import { TopBar, MobileShell } from "@/components/MobileShell";
-import { Minus, Plus, ArrowLeft, Loader2, AlertCircle, Utensils, ShoppingBag, Truck, Scan } from "lucide-react";
+import {
+  Minus,
+  Plus,
+  ArrowLeft,
+  Loader2,
+  AlertCircle,
+  Utensils,
+  ShoppingBag,
+  Truck,
+  Scan,
+} from "lucide-react";
 import { menuApi } from "@/lib/api";
 import { useState, useEffect } from "react";
 
 export function CartPage() {
-  const { cart, add, remove, placeOrder, selectedMerchantId, activeTable, fulfillmentType, setFulfillmentType } = useStore();
+  const {
+    cart,
+    add,
+    remove,
+    placeOrder,
+    selectedMerchantId,
+    activeTable,
+    fulfillmentType,
+    setFulfillmentType,
+  } = useStore();
   const nav = useNavigate();
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +55,7 @@ export function CartPage() {
           points_per_item: i.points_per_item,
           is_available: i.is_available,
           image_url: i.image_url,
-        }))
+        })),
       );
     } catch {
       // cart calculations will skip unknown items
@@ -93,20 +112,18 @@ export function CartPage() {
             Order type
           </p>
           <div className="flex gap-2">
-            {([
+            {[
               { key: "dine_in" as const, label: "Dine-in", icon: Utensils, needsTable: true },
               { key: "pickup" as const, label: "Pickup", icon: ShoppingBag, needsTable: false },
               { key: "delivery" as const, label: "Delivery", icon: Truck, needsTable: false },
-            ]).map((opt) => {
+            ].map((opt) => {
               const isActive = fulfillmentType === opt.key;
               return (
                 <button
                   key={opt.key}
                   onClick={() => setFulfillmentType(opt.key)}
                   className={`flex-1 flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-medium transition-colors ${
-                    isActive
-                      ? "bg-foreground text-background"
-                      : "bg-muted text-muted-foreground"
+                    isActive ? "bg-foreground text-background" : "bg-muted text-muted-foreground"
                   }`}
                 >
                   <opt.icon className="h-3.5 w-3.5" />
@@ -156,12 +173,9 @@ export function CartPage() {
 
       <div className="mt-6 space-y-3 px-5">
         {cart.map((c) => {
-          const item = menuItems.find((m) => m.id === c.itemId);
+          const item = menuItems.find((m) => String(m.id) === String(c.itemId));
           return (
-            <div
-              key={c.itemId}
-              className="glass flex items-center gap-3 rounded-2xl p-3"
-            >
+            <div key={c.itemId} className="glass flex items-center gap-3 rounded-2xl p-3">
               <div className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-mist text-2xl">
                 {item?.emoji || "🍽️"}
               </div>
@@ -251,24 +265,14 @@ export function CartPage() {
   );
 }
 
-function Row({
-  label,
-  value,
-  bold,
-}: {
-  label: string;
-  value: string;
-  bold?: boolean;
-}) {
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <div className="flex items-center justify-between py-1">
-      <span
-        className={`text-sm ${bold ? "font-medium text-foreground" : "text-muted-foreground"}`}
-      >
+      <span className={`text-sm ${bold ? "font-medium text-foreground" : "text-muted-foreground"}`}>
         {label}
       </span>
       <span
-        className={`${bold ? "font-display text-2xl text-foreground" : "text-sm text-foreground"}`}
+        className={`numeric ${bold ? "text-2xl font-bold tracking-tight text-foreground" : "text-sm text-foreground"}`}
       >
         {value}
       </span>

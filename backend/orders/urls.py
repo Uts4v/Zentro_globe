@@ -15,6 +15,7 @@ urlpatterns = [
     path("<int:pk>/", views.order_detail, name="order-detail"),
     path("<int:pk>/update-status/", views.update_order_status, name="update-order-status"),
     path("<int:pk>/cancel/", views.cancel_order, name="cancel-order"),
+    path("<int:pk>/add-items/", views.add_items_to_order, name="add-items-to-order"),
 
     # ── Preparation routing ────────────────────────────────────────────────────
     path(

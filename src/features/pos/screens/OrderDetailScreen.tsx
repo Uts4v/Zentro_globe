@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
-import { posListOrders, posReceiptData, posUpdateOrderStatus, PosOrder, PosReceiptData } from "../api";
+import { posListOrders, posReceiptData, posUpdateOrderStatus, posAddItemsToOrder, PosOrder, PosReceiptData } from "../api";
+import { menuApi, type MenuItem } from "@/lib/api";
 import Receipt from "../printing/Receipt";
 import RefundModal from "./RefundModal";
 import CollectPaymentSheet from "./CollectPaymentSheet";
@@ -20,6 +21,9 @@ import {
   Play,
   PackageCheck,
   CreditCard,
+  Plus,
+  Minus,
+  X,
 } from "lucide-react";
 import CustomerSearchModal from "./CustomerSearchModal";
 
@@ -49,6 +53,7 @@ export default function OrderDetailScreen({
   const [showRefund, setShowRefund] = useState(false);
   const [showCollectPayment, setShowCollectPayment] = useState(false);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+  const [showAddItems, setShowAddItems] = useState(false);
   const [statusLoading, setStatusLoading] = useState(false);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
@@ -265,6 +270,17 @@ export default function OrderDetailScreen({
 
           {/* Actions */}
           <div className="mt-6 space-y-3">
+            {/* Add Items button for active orders */}
+            {["pending", "confirmed", "preparing"].includes(order.status) && (
+              <button
+                onClick={() => setShowAddItems(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink/30 py-2.5 text-sm font-bold text-ink hover:bg-ink/5"
+              >
+                <Plus className="h-4 w-4" />
+                Add Items to This Order
+              </button>
+            )}
+
             {/* Status transition buttons */}
             {getNextActions(order.status).length > 0 && (
               <div className="flex gap-2">
@@ -349,9 +365,28 @@ export default function OrderDetailScreen({
           <CustomerSearchModal
             onSelect={(customer) => {
               setShowCustomerSearch(false);
-              // Customer linked - in a real app this would update the order
             }}
             onClose={() => setShowCustomerSearch(false)}
+          />
+        )}
+
+        {/* Add Items Modal */}
+        {showAddItems && selectedOrder && (
+          <AddItemsModal
+            order={selectedOrder}
+            onAdded={async () => {
+              setShowAddItems(false);
+              setLoading(true);
+              try {
+                const fresh = await posListOrders();
+                setOrders(fresh);
+                const updated = fresh.find((o) => o.id === selectedOrder.id);
+                if (updated) setSelectedOrder(updated);
+              } catch { /* ignore */ } finally {
+                setLoading(false);
+              }
+            }}
+            onClose={() => setShowAddItems(false)}
           />
         )}
       </div>
@@ -425,7 +460,7 @@ export default function OrderDetailScreen({
                       )}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {order.items.length} item(s) — Rs{" "}
+                      {order.customer_name || "Walk-in"} · {order.items.length} item(s) — Rs{" "}
                       {Number(order.total_amount).toFixed(2)}
                     </p>
                   </div>
@@ -440,6 +475,184 @@ export default function OrderDetailScreen({
             ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Add Items Modal ─────────────────────────────────────────────────────────
+function AddItemsModal({
+  order,
+  onAdded,
+  onClose,
+}: {
+  order: PosOrder;
+  onAdded: () => void;
+  onClose: () => void;
+}) {
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [cart, setCart] = useState<{ item: MenuItem; qty: number }[]>([]);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const items = await menuApi.forMerchant(String(order.merchant));
+        setMenu(items.filter((i) => i.is_available));
+      } catch {
+        setError("Failed to load menu");
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [order.merchant]);
+
+  function addToCart(item: MenuItem) {
+    setCart((prev) => {
+      const existing = prev.find((c) => c.item.id === item.id);
+      if (existing) return prev.map((c) => c.item.id === item.id ? { ...c, qty: c.qty + 1 } : c);
+      return [...prev, { item, qty: 1 }];
+    });
+  }
+
+  function removeFromCart(itemId: string) {
+    setCart((prev) => {
+      const existing = prev.find((c) => c.item.id === itemId);
+      if (!existing) return prev;
+      if (existing.qty === 1) return prev.filter((c) => c.item.id !== itemId);
+      return prev.map((c) => c.item.id === itemId ? { ...c, qty: c.qty - 1 } : c);
+    });
+  }
+
+  const total = cart.reduce((sum, c) => sum + Number(c.item.price) * c.qty, 0);
+
+  async function handleSubmit() {
+    if (cart.length === 0) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await posAddItemsToOrder(order.id, cart.map((c) => ({
+        menu_item_id: Number(c.item.id),
+        quantity: c.qty,
+      })));
+      onAdded();
+    } catch (e: any) {
+      setError(e.message || "Failed to add items");
+      setSubmitting(false);
+    }
+  }
+
+  const filtered = search
+    ? menu.filter((i) => i.name.toLowerCase().includes(search.toLowerCase()))
+    : menu;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-card shadow-2xl">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+          <div>
+            <h3 className="text-sm font-bold text-foreground">Add items to #{order.id}</h3>
+            <p className="text-[11px] text-muted-foreground">Current total: Rs {Number(order.total_amount).toFixed(2)}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="border-b border-border px-4 py-2">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              placeholder="Search menu..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-8 pr-3 text-xs placeholder:text-muted-foreground focus:border-ink focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {/* Menu items */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2">
+          {loading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : error && menu.length === 0 ? (
+            <p className="py-8 text-center text-xs text-red-500">{error}</p>
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-xs text-muted-foreground">No items found</p>
+          ) : (
+            <div className="space-y-1.5">
+              {filtered.map((item) => {
+                const inCart = cart.find((c) => c.item.id === item.id);
+                return (
+                  <div key={item.id} className="flex items-center gap-3 rounded-xl border border-border px-3 py-2">
+                    <span className="text-lg">{item.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-foreground truncate">{item.name}</p>
+                      <p className="text-[11px] text-muted-foreground">Rs {Number(item.price).toFixed(2)}</p>
+                    </div>
+                    {inCart ? (
+                      <div className="flex items-center gap-1.5">
+                        <button onClick={() => removeFromCart(item.id)} className="grid h-6 w-6 place-items-center rounded-md bg-muted text-foreground">
+                          <Minus className="h-3 w-3" />
+                        </button>
+                        <span className="w-5 text-center text-xs font-bold">{inCart.qty}</span>
+                        <button onClick={() => addToCart(item)} className="grid h-6 w-6 place-items-center rounded-md bg-ink text-white">
+                          <Plus className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => addToCart(item)} className="rounded-lg bg-ink/10 px-3 py-1 text-[10px] font-bold text-ink hover:bg-ink/20">
+                        Add
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Cart summary + submit */}
+        {cart.length > 0 && (
+          <div className="border-t border-border px-4 py-3">
+            <div className="mb-2 space-y-1 text-xs">
+              {cart.map((c) => (
+                <div key={c.item.id} className="flex justify-between">
+                  <span className="text-muted-foreground">{c.qty}× {c.item.name}</span>
+                  <span className="font-medium">Rs {(Number(c.item.price) * c.qty).toFixed(2)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between border-t border-border pt-1 font-bold text-foreground">
+                <span>New items</span>
+                <span>Rs {total.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-foreground">
+                <span>New total</span>
+                <span>Rs {(Number(order.total_amount) + total).toFixed(2)}</span>
+              </div>
+            </div>
+            {error && (
+              <p className="mb-2 text-xs text-red-500">{error}</p>
+            )}
+            <button
+              onClick={handleSubmit}
+              disabled={submitting}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+            >
+              {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Add to order · Rs {total.toFixed(2)}
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

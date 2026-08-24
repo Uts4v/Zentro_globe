@@ -57,3 +57,24 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.user} — {self.title}"
+
+
+class PushSubscription(models.Model):
+    """Web-Push subscription (one per browser/PWA install per user)."""
+
+    user = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="push_subscriptions",
+    )
+    endpoint = models.URLField(max_length=1000, unique=True)
+    p256dh = models.CharField(max_length=255)
+    auth = models.CharField(max_length=255)
+    user_agent = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "push_subscriptions"
+
+    def __str__(self):
+        return f"{self.user} — {self.endpoint[:60]}"

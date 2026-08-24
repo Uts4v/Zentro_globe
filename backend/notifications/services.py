@@ -59,4 +59,12 @@ def send_notification(
             },
         )
 
+    # Web-Push for PWA/installed-app users (no-op if VAPID not configured)
+    from .push import send_web_push
+
+    try:
+        send_web_push(user, payload)
+    except Exception:
+        pass
+
     return notification

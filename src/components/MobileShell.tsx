@@ -16,13 +16,14 @@ import { useTheme } from "@/lib/theme";
 import { useQuery } from "@tanstack/react-query";
 import { notificationApi } from "@/lib/api";
 import type { ReactNode } from "react";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 
 type NavItem = { to: string; label: string; icon: typeof Home; center?: boolean };
 const nav: NavItem[] = [
   { to: "/", label: "Home", icon: Home },
   { to: "/map", label: "Discover", icon: Map },
   { to: "/menu", label: "Menu", icon: UtensilsCrossed },
-  { to: "/cards", label: "Scan", icon: ScanLine, center: true },
+  { to: "/cards", label: "Cards", icon: ScanLine, center: true },
   { to: "/rewards", label: "Rewards", icon: Gift },
   { to: "/leaderboard", label: "Ranks", icon: Trophy },
   { to: "/profile", label: "Profile", icon: User },
@@ -31,10 +32,7 @@ const nav: NavItem[] = [
 /** Dark, icon-only floating capsule nav, modeled on the current Instagram tab bar. */
 function IgStyleNav({ path }: { path: string }) {
   return (
-    <nav
-      className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[460px]"
-      aria-label="Primary"
-    >
+    <nav className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-[460px]" aria-label="Primary">
       <div className="mx-3 mb-[max(10px,env(safe-area-inset-bottom))]">
         <div className="relative flex h-16 items-center justify-between rounded-[32px] bg-card px-2 shadow-elevated border border-border">
           {nav.map((item) => {
@@ -76,9 +74,7 @@ function IgStyleNav({ path }: { path: string }) {
                 >
                   {item.label}
                 </span>
-                {active && (
-                  <span className="mt-0.5 h-1 w-1 rounded-full bg-foreground" />
-                )}
+                {active && <span className="mt-0.5 h-1 w-1 rounded-full bg-foreground" />}
               </Link>
             );
           })}
@@ -87,7 +83,13 @@ function IgStyleNav({ path }: { path: string }) {
     </nav>
   );
 }
-export function MobileShell({ children, homeMode = false }: { children: ReactNode; homeMode?: boolean }) {
+export function MobileShell({
+  children,
+  homeMode = false,
+}: {
+  children: ReactNode;
+  homeMode?: boolean;
+}) {
   const path = useRouterState({ select: (state) => state.location.pathname });
 
   if (homeMode) {
@@ -101,9 +103,7 @@ export function MobileShell({ children, homeMode = false }: { children: ReactNod
 
   return (
     <div className="relative mx-auto flex min-h-dvh max-w-[460px] flex-col overflow-x-hidden bg-background pb-28">
-      <div className="relative z-10 flex min-h-dvh flex-col">
-        {children}
-      </div>
+      <div className="relative z-10 flex min-h-dvh flex-col">{children}</div>
       <IgStyleNav path={path} />
     </div>
   );
@@ -121,7 +121,15 @@ function getInitial(name: string | null | undefined): string {
   return name.trim().charAt(0).toUpperCase();
 }
 
-export function TopBar({ title, right, homeMode = false }: { title?: string; right?: ReactNode; homeMode?: boolean }) {
+export function TopBar({
+  title,
+  right,
+  homeMode = false,
+}: {
+  title?: string;
+  right?: ReactNode;
+  homeMode?: boolean;
+}) {
   const { user, loading } = useAuth();
   const { data } = useQuery({
     queryKey: ["notifications", "unreadCount"],
@@ -146,7 +154,13 @@ export function TopBar({ title, right, homeMode = false }: { title?: string; rig
     return (
       <header className="zh-header">
         <div className="zh-header-copy">
-          <Link to="/" className="zh-brand">zentro<span>.</span></Link>
+          <Link
+            to="/"
+            className="zh-brand inline-flex items-center text-foreground"
+            aria-label="Zentro home"
+          >
+            <ZentroLogo className="h-7 w-auto" title="" />
+          </Link>
           {title ? (
             <h1 className="zh-page-title">{title}</h1>
           ) : loading ? (
@@ -154,22 +168,37 @@ export function TopBar({ title, right, homeMode = false }: { title?: string; rig
           ) : (
             <div className="zh-greeting">
               <p>{getGreeting()},</p>
-              <h1>{firstName || "Welcome"} <span aria-hidden>👋</span></h1>
+              <h1>
+                {firstName || "Welcome"} <span aria-hidden>👋</span>
+              </h1>
             </div>
           )}
         </div>
 
         <div className="zh-header-actions">
           {right}
-          <button type="button" onClick={cycleTheme} aria-label="Change appearance" className="zh-circle-button">
+          <button
+            type="button"
+            onClick={cycleTheme}
+            aria-label="Change appearance"
+            className="zh-circle-button"
+          >
             {resolved === "dark" ? <Moon size={20} /> : <Sun size={20} />}
           </button>
-          <Link to={"/notifications" as any} aria-label="Notifications" className="zh-circle-button zh-bell-button">
+          <Link
+            to={"/notifications" as any}
+            aria-label="Notifications"
+            className="zh-circle-button zh-bell-button"
+          >
             <Bell size={22} />
             {unreadCount > 0 && <span>{unreadCount > 9 ? "9+" : unreadCount}</span>}
           </Link>
           <Link to={"/profile" as any} aria-label="Profile" className="zh-avatar">
-            {user?.avatar_url ? <img src={user.avatar_url} alt="Profile" /> : <span>{initial}</span>}
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} alt="Profile" />
+            ) : (
+              <span>{initial}</span>
+            )}
           </Link>
         </div>
       </header>
@@ -183,25 +212,51 @@ export function TopBar({ title, right, homeMode = false }: { title?: string; rig
         <div className="min-w-0 flex-1">
           <Link
             to="/"
-            className="inline-flex items-center text-[18px] font-extrabold tracking-[-0.03em] text-foreground"
+            className="inline-flex items-center text-foreground"
+            aria-label="Zentro home"
           >
-            zentro<span className="text-primary">.</span>
+            <ZentroLogo className="h-6 w-auto" title="" />
           </Link>
           {title ? (
             <h1 className="mt-3 text-[28px] font-semibold text-foreground">{title}</h1>
           ) : (
             <div className="mt-2">
-              <p className="text-[15px] font-medium text-muted-foreground">
-                {getGreeting()},
-              </p>
+              <p className="text-[15px] font-medium text-muted-foreground">{getGreeting()},</p>
               <h1 className="mt-0.5 text-[36px] font-extrabold leading-tight tracking-[-0.04em] text-foreground">
                 {firstName || "Welcome"}{" "}
                 <span className="relative inline-block" aria-hidden>
                   👋
-                  <svg className="absolute -top-3.5 left-0.5 h-4 w-4 opacity-75" viewBox="0 0 24 24">
-                    <line x1="12" y1="2" x2="12" y2="8" stroke="#8D7CFF" strokeWidth="3" strokeLinecap="round" />
-                    <line x1="4" y1="8" x2="9" y2="12" stroke="#8D7CFF" strokeWidth="3" strokeLinecap="round" />
-                    <line x1="20" y1="8" x2="15" y2="12" stroke="#8D7CFF" strokeWidth="3" strokeLinecap="round" />
+                  <svg
+                    className="absolute -top-3.5 left-0.5 h-4 w-4 opacity-75"
+                    viewBox="0 0 24 24"
+                  >
+                    <line
+                      x1="12"
+                      y1="2"
+                      x2="12"
+                      y2="8"
+                      stroke="#8D7CFF"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <line
+                      x1="4"
+                      y1="8"
+                      x2="9"
+                      y2="12"
+                      stroke="#8D7CFF"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
+                    <line
+                      x1="20"
+                      y1="8"
+                      x2="15"
+                      y2="12"
+                      stroke="#8D7CFF"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                    />
                   </svg>
                 </span>
               </h1>

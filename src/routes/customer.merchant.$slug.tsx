@@ -7,6 +7,7 @@
 // 4. Returning customer → join (idempotent) → dashboard directly
 
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { useEffect, useState } from "react";
 import {
   Loader2,
@@ -158,8 +159,8 @@ function CustomerMerchantDashboard() {
   return (
     <MobileShell>
       <div className="px-5 pt-6">
-        <Link to="/" className="font-display text-xl text-foreground">
-          zentro<span className="text-ember">.</span>
+        <Link to="/" className="inline-flex items-center text-foreground" aria-label="Zentro home">
+          <ZentroLogo className="h-6 w-auto" title="" />
         </Link>
 
         <div className="mt-8">

@@ -6,6 +6,7 @@ import ShiftOpenScreen from "./ShiftOpenScreen";
 import ShiftCloseScreen from "./ShiftCloseScreen";
 import SyncStatusBar from "./SyncStatusBar";
 import NotificationBell from "./NotificationBell";
+import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { useBackgroundSync } from "../offline/hooks";
 import {
   ShoppingCart,
@@ -123,11 +124,7 @@ export default function PosLayout() {
         // Step 2: No device or device stale — authorize new one (requires JWT)
         const platform = navigator.userAgent.includes("Mobile") ? "mobile" : "desktop";
         const deviceName = `POS-${platform}-${Date.now()}`;
-        const result = await posAuthorizeDevice(
-          deviceName,
-          platform,
-          navigator.userAgent,
-        );
+        const result = await posAuthorizeDevice(deviceName, platform, navigator.userAgent);
 
         localStorage.setItem("pos_device_id", result.device.id);
         localStorage.setItem("pos_device_token", result.device_token);
@@ -200,11 +197,7 @@ export default function PosLayout() {
 
   // ── Step 1: No worker logged in → show PIN pad ──
   if (!currentWorker) {
-    return (
-      <WorkerPinPad
-        onLoggedIn={(worker) => setCurrentWorker(worker)}
-      />
-    );
+    return <WorkerPinPad onLoggedIn={(worker) => setCurrentWorker(worker)} />;
   }
 
   // ── Determine which page the user is on ──
@@ -232,8 +225,12 @@ export default function PosLayout() {
         {/* Logo + notification */}
         <div className="flex items-center justify-between px-5 py-5">
           <div className="flex items-center gap-2">
-            <Link to="/" className="font-display text-xl text-foreground">
-              zentro<span className="text-ember">.</span>
+            <Link
+              to="/"
+              className="inline-flex items-center text-foreground"
+              aria-label="Zentro home"
+            >
+              <ZentroLogo className="h-6 w-auto" title="" />
             </Link>
             <span className="rounded-md bg-ember-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-ember">
               POS
@@ -276,7 +273,13 @@ export default function PosLayout() {
 
         {/* Nav */}
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          <NavItem to="/pos" label="Order" icon={ShoppingCart} badge={cartCount} active={isOrderPage} />
+          <NavItem
+            to="/pos"
+            label="Order"
+            icon={ShoppingCart}
+            badge={cartCount}
+            active={isOrderPage}
+          />
           <NavItem to="/pos/orders" label="Orders" icon={Clock} />
           <NavItem to="/pos/preparation" label="Preparation" icon={AlertTriangle} />
           <NavItem to="/pos/accounts" label="Accounts" icon={CreditCard} />
@@ -346,8 +349,12 @@ export default function PosLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile header */}
         <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background px-4 py-3 lg:hidden">
-          <Link to="/" className="font-display text-xl text-foreground">
-            zentro<span className="text-ember">.</span>
+          <Link
+            to="/"
+            className="inline-flex items-center text-foreground"
+            aria-label="Zentro home"
+          >
+            <ZentroLogo className="h-6 w-auto" title="" />
           </Link>
           <span className="rounded-md bg-ink/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-ink">
             POS
@@ -388,9 +395,7 @@ export default function PosLayout() {
           {/* If on order page and no active shift, show shift open screen */}
           {isShiftRequiredPage && !activeShift ? (
             <div className="flex h-full items-center justify-center">
-              <ShiftOpenScreen
-                onShiftOpened={(shift) => setActiveShift(shift)}
-              />
+              <ShiftOpenScreen onShiftOpened={(shift) => setActiveShift(shift)} />
             </div>
           ) : (
             <Outlet />

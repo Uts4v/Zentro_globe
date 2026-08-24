@@ -337,3 +337,9 @@ LOGGING = {
         "django.channels.server": {"handlers": ["console"], "level": "INFO", "propagate": False},
     },
 }
+
+# ── Web Push (PWA notifications) ─────────────────────────────────────────────
+# Generate once via: python manage.py generate_vapid_keys
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "")
+VAPID_SUBJECT = os.getenv("VAPID_SUBJECT", "mailto:dev@zentro.local")

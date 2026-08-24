@@ -95,7 +95,7 @@ export function TableQRScanner({ onClose }: TableQRScannerProps) {
         setReady(true);
       })
       .catch((err) => {
-        setError(err?.message || "Camera access denied or unavailable");
+        setError(err?.message || "Camera access denied or unavailable. You can also use your smartphone camera to scan the QR code.");
         setReady(true);
       });
 

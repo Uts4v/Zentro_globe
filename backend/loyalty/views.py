@@ -80,16 +80,14 @@ def _paginate(request, qs, default=50, max_limit=200):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def customer_today_special(request, slug):
-    """GET /api/loyalty/specials/<slug>/ — public, returns active special for a merchant."""
+    """GET /api/loyalty/specials/<slug>/ — public, returns all active specials for a merchant."""
     try:
         merchant = MerchantProfile.objects.get(slug=slug)
     except MerchantProfile.DoesNotExist:
         return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    special = TodaySpecial.objects.filter(merchant=merchant, is_active=True).first()
-    if not special:
-        return Response(None)
-    return Response(TodaySpecialSerializer(special).data)
+    specials = TodaySpecial.objects.filter(merchant=merchant, is_active=True)
+    return Response(TodaySpecialSerializer(specials, many=True).data)
 
 
 @api_view(["GET", "POST"])

@@ -174,7 +174,7 @@ export function MainPageLoyaltyCard({
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold tracking-[-0.02em]">{merchantName}</p>
-          <p className="text-[10px] text-white/70">{points.toLocaleString()} points</p>
+          <p className="numeric text-[10px] text-white/70">{points.toLocaleString()} points</p>
         </div>
         <span
           className="rounded-full px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.12em]"
@@ -279,22 +279,53 @@ export function MainPageLoyaltyCard({
         <div className="pointer-events-none absolute -left-3.5 top-[68%] z-20 h-7 w-7 rounded-full bg-[#FAF8F4] dark:bg-[#0F0F0F]" />
 
         {/* Ticket Dashed Divider Line */}
-        <div className="pointer-events-none absolute bottom-24 left-6 top-16 z-10 w-0 border-r-2 border-dashed" style={{ borderColor: hexToRGBA(primary, 0.12) }} />
+        <div
+          className="pointer-events-none absolute bottom-24 left-6 top-16 z-10 w-0 border-r-2 border-dashed"
+          style={{ borderColor: hexToRGBA(primary, 0.12) }}
+        />
 
         {/* Inner Card Section */}
         <div className="relative min-h-[340px] px-6 pb-0 pt-6">
           {/* Translucent Layer Blobs */}
-          <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-100" aria-hidden viewBox="0 0 400 350">
-            <path d="M -10,-10 C 100,35 220,-10 380,25 C 420,35 440,-10 440,-10 Z" fill="#FFFFFF" opacity="0.25" />
-            <path d="M -20,50 C 100,80 150,150 90,230 C 30,310 -30,250 -20,50 Z" fill={primary} opacity="0.08" />
-            <path d="M 150,70 C 270,20 370,110 330,210 C 290,310 170,250 150,70 Z" fill="#FFFFFF" opacity="0.20" />
-            <circle cx="330" cy="40" r="110" fill="#FFFFFF" opacity="0.30" style={{ filter: "blur(30px)" }} />
+          <svg
+            className="pointer-events-none absolute inset-0 h-full w-full opacity-100"
+            aria-hidden
+            viewBox="0 0 400 350"
+          >
+            <path
+              d="M -10,-10 C 100,35 220,-10 380,25 C 420,35 440,-10 440,-10 Z"
+              fill="#FFFFFF"
+              opacity="0.25"
+            />
+            <path
+              d="M -20,50 C 100,80 150,150 90,230 C 30,310 -30,250 -20,50 Z"
+              fill={primary}
+              opacity="0.08"
+            />
+            <path
+              d="M 150,70 C 270,20 370,110 330,210 C 290,310 170,250 150,70 Z"
+              fill="#FFFFFF"
+              opacity="0.20"
+            />
+            <circle
+              cx="330"
+              cy="40"
+              r="110"
+              fill="#FFFFFF"
+              opacity="0.30"
+              style={{ filter: "blur(30px)" }}
+            />
           </svg>
 
           {/* Faded Botanical Leaf Illustration Branch */}
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.06] mix-blend-soft-light filter blur-[0.3px]">
             <svg viewBox="0 0 200 240" className="h-52 w-52">
-              <path d="M 100 20 C 95 80, 105 140, 100 220" fill="none" stroke={primary} strokeWidth="2.5" />
+              <path
+                d="M 100 20 C 95 80, 105 140, 100 220"
+                fill="none"
+                stroke={primary}
+                strokeWidth="2.5"
+              />
               <path d="M 100 50 Q 140 30, 145 20 C 130 50, 110 55, 100 50" fill={primary} />
               <path d="M 100 90 Q 145 70, 150 60 C 135 90, 110 95, 100 90" fill={primary} />
               <path d="M 100 130 Q 140 110, 145 100 C 130 130, 110 135, 100 130" fill={primary} />
@@ -340,13 +371,22 @@ export function MainPageLoyaltyCard({
             <div className="mt-4 grid grid-cols-[1fr_auto] items-start gap-3 pl-4">
               {/* Left Column: Store Info & Elevated Logo */}
               <div className="min-w-0">
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.22em]" style={{ color: primary }}>
+                <p
+                  className="text-[11px] font-extrabold uppercase tracking-[0.22em]"
+                  style={{ color: primary }}
+                >
                   {cardDesign?.card_title || "MEMBERSHIP"}
                 </p>
-                <h2 className="mt-1 truncate text-[28px] font-black tracking-[-0.04em]" style={{ color: cardText }}>
+                <h2
+                  className="mt-1 truncate text-[28px] font-black tracking-[-0.04em]"
+                  style={{ color: cardText }}
+                >
                   {merchantName}
                 </h2>
-                <p className="mt-0.5 flex items-center gap-1 truncate text-[12px] font-bold" style={{ color: cardTextMuted }}>
+                <p
+                  className="mt-0.5 flex items-center gap-1 truncate text-[12px] font-bold"
+                  style={{ color: cardTextMuted }}
+                >
                   <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: primary }} />
                   {merchantCategory || "Lazimpat, Kathmandu"}
                 </p>
@@ -359,14 +399,24 @@ export function MainPageLoyaltyCard({
                   }}
                 >
                   {merchantLogo ? (
-                    <img src={merchantLogo} alt="" className="h-full w-full rounded-full object-cover" />
+                    <img
+                      src={merchantLogo}
+                      alt=""
+                      className="h-full w-full rounded-full object-cover"
+                    />
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-[#FAF8F5] text-center">
                       <svg viewBox="0 0 32 32" className="h-5 w-5 text-[#10B981]">
-                        <path d="M16 4 C10 8 6 14 6 22 C14 22 20 18 26 12 C26 7 21 4 16 4 Z" fill="currentColor" opacity="0.85" />
+                        <path
+                          d="M16 4 C10 8 6 14 6 22 C14 22 20 18 26 12 C26 7 21 4 16 4 Z"
+                          fill="currentColor"
+                          opacity="0.85"
+                        />
                         <path d="M16 4 L16 22" stroke="#FFFFFF" strokeWidth="1.5" />
                       </svg>
-                      <span className="mt-0.5 text-[9px] font-black uppercase tracking-wider text-[#18102B]">CHIYA</span>
+                      <span className="mt-0.5 text-[9px] font-black uppercase tracking-wider text-[#18102B]">
+                        CHIYA
+                      </span>
                       <span className="text-[7.5px] font-bold text-[#7D7D9C]">CAFE</span>
                     </div>
                   )}
@@ -375,14 +425,22 @@ export function MainPageLoyaltyCard({
 
               {/* Right Column: Points & Next Tier Capsule */}
               <div className="shrink-0 text-right pr-1">
-                <p className="text-[12px] font-extrabold uppercase tracking-[0.16em]" style={{ color: cardTextMuted }}>
+                <p
+                  className="text-[12px] font-extrabold uppercase tracking-[0.16em]"
+                  style={{ color: cardTextMuted }}
+                >
                   {cardDesign?.points_label || "Your Points"}
                 </p>
                 <div className="mt-0.5 flex items-baseline justify-end gap-1">
-                  <p className="text-[62px] font-black leading-none tracking-[-0.075em]" style={{ color: primary }}>
+                  <p
+                    className="numeric text-[48px] font-bold leading-none tracking-[-0.03em]"
+                    style={{ color: primary }}
+                  >
                     {points.toLocaleString()}
                   </p>
-                  <span className="text-[22px] font-extrabold" style={{ color: cardTextMuted }}>pts</span>
+                  <span className="text-[20px] font-semibold" style={{ color: cardTextMuted }}>
+                    pts
+                  </span>
                 </div>
 
                 {/* Next Tier Capsule Badge */}
@@ -421,7 +479,10 @@ export function MainPageLoyaltyCard({
                 >
                   <div
                     className="absolute inset-x-0 top-0 h-[50%] rounded-full"
-                    style={{ background: "linear-gradient(180deg, rgba(255,255,255,.6) 0%, transparent 100%)" }}
+                    style={{
+                      background:
+                        "linear-gradient(180deg, rgba(255,255,255,.6) 0%, transparent 100%)",
+                    }}
                   />
                 </div>
               </div>
@@ -454,11 +515,19 @@ export function MainPageLoyaltyCard({
           </div>
 
           {/* Section 2: Rewards */}
-          <div className="flex flex-col items-center justify-center gap-1 border-x text-center" style={{ borderColor: hexToRGBA(primary, 0.1) }}>
-            <span className="grid h-10 w-10 place-items-center rounded-full shadow-sm" style={{ background: hexToRGBA(primary, 0.1) }}>
+          <div
+            className="flex flex-col items-center justify-center gap-1 border-x text-center"
+            style={{ borderColor: hexToRGBA(primary, 0.1) }}
+          >
+            <span
+              className="grid h-10 w-10 place-items-center rounded-full shadow-sm"
+              style={{ background: hexToRGBA(primary, 0.1) }}
+            >
               <Gift className="h-5 w-5" style={{ color: primary }} />
             </span>
-            <span className="text-[20px] font-black leading-none text-[#18102B]">{rewardsCount}</span>
+            <span className="text-[20px] font-black leading-none text-[#18102B]">
+              {rewardsCount}
+            </span>
             <span className="text-[10px] font-semibold text-[#7D7D9C]">Rewards</span>
           </div>
 
@@ -467,7 +536,9 @@ export function MainPageLoyaltyCard({
             <span className="grid h-10 w-10 place-items-center rounded-full bg-[#DFF7EC] shadow-sm">
               <ShoppingBag className="h-5 w-5 text-[#10B981]" />
             </span>
-            <span className="text-[20px] font-black leading-none text-[#18102B]">{ordersCount ?? 6}</span>
+            <span className="text-[20px] font-black leading-none text-[#18102B]">
+              {ordersCount ?? 6}
+            </span>
             <span className="text-[10px] font-semibold text-[#7D7D9C]">Orders</span>
           </div>
         </div>

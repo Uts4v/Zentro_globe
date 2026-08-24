@@ -15,6 +15,7 @@ import { tableApi, menuApi, type TableResolution } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useStore, cartTotal, type MenuItem } from "@/lib/store";
+import { safeUuid } from "@/lib/utils";
 
 export const Route = createFileRoute("/m/$slug/table/$token")({
   head: () => ({ meta: [{ title: "Order · Zentro" }] }),
@@ -147,7 +148,7 @@ function TableQRScanPage() {
     if (!user || user.role !== "customer") {
       if (!guestSession) {
         setGuestSession({
-          guestId: crypto.randomUUID(),
+          guestId: safeUuid(),
           guestName: "",
           joinedAt: Date.now(),
         });

@@ -121,6 +121,26 @@ export const orderApi = {
     return normaliseOrder(data);
   },
 
+  addToOrder: async (
+    orderId: string,
+    items: { menu_item_id: string; quantity: number }[],
+    notes?: string,
+  ): Promise<Order> => {
+    const body = {
+      items: items.map((i) => ({
+        menu_item_id: Number(i.menu_item_id),
+        quantity: i.quantity,
+      })),
+      notes: notes ?? "",
+    };
+    const data = await djangoFetch<any>(apiUrl(`/orders/${orderId}/add-items/`), {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify(body),
+    });
+    return normaliseOrder(data);
+  },
+
   merchantHistory: async (params?: {
     search?: string;
     status?: string;

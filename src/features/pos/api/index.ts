@@ -223,6 +223,16 @@ export const posUpdateOrderStatus = (
     }),
   });
 
+export const posAddItemsToOrder = (
+  orderId: number,
+  items: { menu_item_id: number; quantity: number }[],
+) =>
+  djangoFetch<any>(apiUrl(`/orders/${orderId}/add-items/`), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({ items }),
+  });
+
 export const posAssignCustomerToOrder = (orderId: string, customerId: string) =>
   djangoFetch<{ message: string; points_earned: number }>(apiUrl("/pos/order/assign-customer/"), {
     method: "POST",
