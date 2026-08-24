@@ -43,8 +43,9 @@ RUN DJANGO_SETTINGS_MODULE=config.settings SECRET_KEY=build-time-key \
 
 ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=config.settings
+ENV PORT=8000
 
 EXPOSE 8000
 
-# Run migrations then start Daphne
-CMD ["sh", "-c", "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p 8000 config.asgi:application"]
+# Run migrations then start Daphne (use $PORT so Railway's health check works)
+CMD ["sh", "-c", "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p ${PORT:-8000} config.asgi:application"]
