@@ -128,16 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       setUser(me);
 
-      // If merchant, fetch merchant profile
       if (me.role === "merchant") {
-        try {
-          const mp = await djangoFetch<MerchantProfile>(apiUrl("/merchants/me/"), {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          setMerchantProfile(mp);
-        } catch {
-          setMerchantProfile(null);
-        }
+        djangoFetch<MerchantProfile>(apiUrl("/merchants/me/"), {
+          headers: { Authorization: `Bearer ${token}` },
+        }).then(setMerchantProfile).catch(() => setMerchantProfile(null));
       } else {
         setMerchantProfile(null);
       }
