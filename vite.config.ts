@@ -3,11 +3,6 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   nitro: {
     preset: "node-server",
-    runtimeConfig: {
-      port: process.env.PORT || 3000,
-    },
-    // Serve the PWA service worker artifacts emitted to dist/ by
-    // vite-plugin-pwa (they are not part of the client bundle).
     publicAssets: [{ dir: "dist" }],
   },
   tanstackStart: {
