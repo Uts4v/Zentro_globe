@@ -1,4 +1,5 @@
 from django.contrib import admin
+from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from .models import (
     PosDevice, ShiftWorker, CashShift, PosPayment,
     PosDiscount, PosAuditLog, ProcessedClientMutation,
@@ -10,7 +11,7 @@ from .models import (
 
 
 @admin.register(PosDevice)
-class PosDeviceAdmin(admin.ModelAdmin):
+class PosDeviceAdmin(UnfoldModelAdmin):
     list_display = ["id", "name", "merchant", "platform", "is_active", "last_seen_at", "created_at"]
     list_filter = ["is_active", "platform"]
     search_fields = ["name", "merchant__business_name"]
@@ -18,7 +19,7 @@ class PosDeviceAdmin(admin.ModelAdmin):
 
 
 @admin.register(ShiftWorker)
-class ShiftWorkerAdmin(admin.ModelAdmin):
+class ShiftWorkerAdmin(UnfoldModelAdmin):
     list_display = ["id", "display_name", "merchant", "role", "is_active",
                     "can_apply_discount", "can_process_refund", "can_close_shift",
                     "failed_pin_attempts", "created_at"]
@@ -28,7 +29,7 @@ class ShiftWorkerAdmin(admin.ModelAdmin):
 
 
 @admin.register(CashShift)
-class CashShiftAdmin(admin.ModelAdmin):
+class CashShiftAdmin(UnfoldModelAdmin):
     list_display = ["id", "merchant", "device", "opened_by", "closed_by",
                     "opening_cash", "closing_cash", "total_sales",
                     "status", "opened_at", "closed_at"]
@@ -40,7 +41,7 @@ class CashShiftAdmin(admin.ModelAdmin):
 
 
 @admin.register(PosPayment)
-class PosPaymentAdmin(admin.ModelAdmin):
+class PosPaymentAdmin(UnfoldModelAdmin):
     list_display = ["id", "order", "payment_method", "amount", "status",
                     "shift", "worker", "created_at"]
     list_filter = ["payment_method", "status"]
@@ -49,7 +50,7 @@ class PosPaymentAdmin(admin.ModelAdmin):
 
 
 @admin.register(PosDiscount)
-class PosDiscountAdmin(admin.ModelAdmin):
+class PosDiscountAdmin(UnfoldModelAdmin):
     list_display = ["id", "order", "discount_type", "discount_value",
                     "discount_amount", "worker", "authorized_by", "created_at"]
     list_filter = ["discount_type"]
@@ -57,7 +58,7 @@ class PosDiscountAdmin(admin.ModelAdmin):
 
 
 @admin.register(PosAuditLog)
-class PosAuditLogAdmin(admin.ModelAdmin):
+class PosAuditLogAdmin(UnfoldModelAdmin):
     list_display = ["id", "action", "entity_type", "entity_id",
                     "merchant", "worker", "created_at"]
     list_filter = ["action"]
@@ -66,7 +67,7 @@ class PosAuditLogAdmin(admin.ModelAdmin):
 
 
 @admin.register(ProcessedClientMutation)
-class ProcessedClientMutationAdmin(admin.ModelAdmin):
+class ProcessedClientMutationAdmin(UnfoldModelAdmin):
     list_display = ["id", "client_mutation_id", "entity_type", "operation",
                     "server_object_id", "merchant", "device", "processed_at"]
     list_filter = ["entity_type", "operation"]
@@ -74,7 +75,7 @@ class ProcessedClientMutationAdmin(admin.ModelAdmin):
 
 
 @admin.register(CreditAccount)
-class CreditAccountAdmin(admin.ModelAdmin):
+class CreditAccountAdmin(UnfoldModelAdmin):
     list_display = ["id", "merchant", "customer", "contact_name",
                     "credit_limit", "current_balance", "is_active", "created_at"]
     list_filter = ["is_active"]
@@ -83,7 +84,7 @@ class CreditAccountAdmin(admin.ModelAdmin):
 
 
 @admin.register(CreditTransaction)
-class CreditTransactionAdmin(admin.ModelAdmin):
+class CreditTransactionAdmin(UnfoldModelAdmin):
     list_display = ["id", "account", "transaction_type", "amount",
                     "balance_before", "balance_after", "worker", "created_at"]
     list_filter = ["transaction_type"]
@@ -92,7 +93,7 @@ class CreditTransactionAdmin(admin.ModelAdmin):
 
 
 @admin.register(DebitAccount)
-class DebitAccountAdmin(admin.ModelAdmin):
+class DebitAccountAdmin(UnfoldModelAdmin):
     list_display = ["id", "merchant", "customer", "contact_name",
                     "balance", "is_active", "created_at"]
     list_filter = ["is_active"]
@@ -101,7 +102,7 @@ class DebitAccountAdmin(admin.ModelAdmin):
 
 
 @admin.register(DebitTransaction)
-class DebitTransactionAdmin(admin.ModelAdmin):
+class DebitTransactionAdmin(UnfoldModelAdmin):
     list_display = ["id", "account", "transaction_type", "amount",
                     "balance_before", "balance_after", "worker", "created_at"]
     list_filter = ["transaction_type"]
@@ -110,7 +111,7 @@ class DebitTransactionAdmin(admin.ModelAdmin):
 
 
 @admin.register(StaffSchedule)
-class StaffScheduleAdmin(admin.ModelAdmin):
+class StaffScheduleAdmin(UnfoldModelAdmin):
     list_display = ["id", "merchant", "worker", "shift_date", "start_time",
                     "end_time", "role", "status", "created_at"]
     list_filter = ["status", "shift_date", "role"]
@@ -119,7 +120,7 @@ class StaffScheduleAdmin(admin.ModelAdmin):
 
 
 @admin.register(PosCashMovement)
-class PosCashMovementAdmin(admin.ModelAdmin):
+class PosCashMovementAdmin(UnfoldModelAdmin):
     list_display = ["id", "shift", "worker", "movement_type", "amount",
                     "reason", "created_at"]
     list_filter = ["movement_type"]

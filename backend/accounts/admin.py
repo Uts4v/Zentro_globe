@@ -4,11 +4,12 @@ accounts/admin.py — register models with Django admin.
 
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
+from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from .models import User, CustomerProfile, PasswordResetToken
 
 
 @admin.register(User)
-class UserAdmin(BaseUserAdmin):
+class UserAdmin(BaseUserAdmin, UnfoldModelAdmin):
     list_display = ["email", "username", "role", "is_active", "date_joined"]
     list_filter = ["role", "is_active", "is_staff"]
     search_fields = ["email", "username", "first_name", "last_name"]
@@ -19,7 +20,7 @@ class UserAdmin(BaseUserAdmin):
 
 
 @admin.register(CustomerProfile)
-class CustomerProfileAdmin(admin.ModelAdmin):
+class CustomerProfileAdmin(UnfoldModelAdmin):
     list_display = ["user", "full_name", "loyalty_points", "tier", "streak_days", "total_orders"]
     list_filter = ["tier"]
     search_fields = ["user__email", "full_name"]
@@ -27,7 +28,7 @@ class CustomerProfileAdmin(admin.ModelAdmin):
 
 
 @admin.register(PasswordResetToken)
-class PasswordResetTokenAdmin(admin.ModelAdmin):
+class PasswordResetTokenAdmin(UnfoldModelAdmin):
     list_display = ["user", "created_at", "used"]
     list_filter = ["used"]
     readonly_fields = ["token", "created_at"]

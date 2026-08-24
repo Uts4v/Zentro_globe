@@ -18,15 +18,28 @@ load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # ── Security ──────────────────────────────────────────────────────────────────
-SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-dev-key-CHANGE-THIS-in-production")
-DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "yes")
-ALLOWED_HOSTS = os.getenv("ALLOWED_HOSTS", "*").split(",")
+DEBUG = os.getenv("DEBUG", "False").lower() in ("true", "1", "yes")
+
+SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-dev-key-CHANGE-THIS-in-production"
+    else:
+        raise RuntimeError(
+            "SECRET_KEY must be set via environment variable in production."
+        )
+
+ALLOWED_HOSTS = [h.strip() for h in os.getenv(
+    "ALLOWED_HOSTS", "localhost,127.0.0.1"
+).split(",") if h.strip()]
 
 # ── Custom user model ─────────────────────────────────────────────────────────
 AUTH_USER_MODEL = "accounts.User"
 
 # ── Installed apps ────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
+    "unfold",                        # ← modern admin theme (before django.contrib.admin)
+    "unfold.contrib.filters",        # ← Unfold sidebar filters
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -209,6 +222,30 @@ _raw_cors = os.getenv(
 )
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _raw_cors.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
+
+# ── CSRF ──────────────────────────────────────────────────────────────────────
+_raw_csrf = os.getenv(
+    "CSRF_TRUSTED_ORIGINS",
+    "http://localhost:8000,http://localhost:5173,http://127.0.0.1:8000",
+)
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in _raw_csrf.split(",") if o.strip()]
+
+# ── HTTPS / security hardening (production only) ─────────────────────────────
+if not DEBUG:
+    # Railway terminates TLS and forwards via X-Forwarded-Proto
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = os.getenv("SECURE_SSL_REDIRECT", "True").lower() in ("true", "1", "yes")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(os.getenv("SECURE_HSTS_SECONDS", "3600"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    REFERRER_POLICY = "same-origin"
+    SECURE_REFERRER_POLICY = "same-origin"
+    X_FRAME_OPTIONS = "DENY"
+    SESSION_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_HTTPONLY = True
+    SECURE_BROWSER_XSS_FILTER = True
 CORS_ALLOW_HEADERS = [
     "accept",
     "accept-encoding",
@@ -236,6 +273,17 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",
     ],
+}
+
+# ── Unfold (admin theme) ──────────────────────────────────────────────────────
+UNFOLD = {
+    "SITE_TITLE": "Zentro Admin",
+    "SITE_HEADER": "Zentro Loyalty",
+    "SITE_SYMBOLS": True,
+    "SIDEBAR": {
+        "show_search": True,
+        "show_all_apps": True,
+    },
 }
 
 # ── Simple JWT ────────────────────────────────────────────────────────────────

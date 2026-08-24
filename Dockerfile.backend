@@ -47,5 +47,5 @@ ENV PORT=8000
 
 EXPOSE 8000
 
-# Run migrations then start Daphne (use $PORT so Railway's health check works)
-CMD ["sh", "-c", "python manage.py migrate --noinput && daphne -b 0.0.0.0 -p ${PORT:-8000} config.asgi:application"]
+# Run migrations, provision superuser (never blocks startup), then start Daphne
+CMD ["sh", "-c", "python manage.py migrate --noinput && { python manage.py ensure_superuser || echo 'superuser skipped (env vars not set)'; }; exec daphne -b 0.0.0.0 -p ${PORT:-8000} config.asgi:application"]

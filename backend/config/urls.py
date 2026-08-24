@@ -5,9 +5,9 @@ All API routes are prefixed with /api/.
 
 from django.contrib import admin
 from django.http import JsonResponse
-from django.urls import path, include
+from django.urls import path, re_path, include
 from django.conf import settings
-from django.conf.urls.static import static
+from django.views.static import serve as static_serve
 from accounts.views import upload_image
 
 
@@ -27,7 +27,16 @@ urlpatterns = [
     path("api/notifications/", include("notifications.urls")),
     path("api/pos/", include("pos.urls")),
     path("api/ai/", include("ai_core.api.urls")),
+    # Serve static (admin UI) and media (uploads) in all modes — required
+    # when DEBUG=False since Django stops auto-serving them.
+    re_path(
+        r"^static/(?P<path>.*)$",
+        static_serve,
+        {"document_root": settings.STATIC_ROOT},
+    ),
+    re_path(
+        r"^media/(?P<path>.*)$",
+        static_serve,
+        {"document_root": settings.MEDIA_ROOT},
+    ),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

@@ -3,6 +3,7 @@ loyalty/admin.py
 """
 
 from django.contrib import admin
+from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from .models import (
     LoyaltyRules,
     Mission,
@@ -20,14 +21,14 @@ from .models import (
 
 
 @admin.register(CustomerMerchantProfile)
-class CustomerMerchantProfileAdmin(admin.ModelAdmin):
+class CustomerMerchantProfileAdmin(UnfoldModelAdmin):
     list_display = ["customer", "merchant", "status", "joined_at"]
     list_filter = ["status"]
     search_fields = ["customer__full_name", "merchant__business_name"]
 
 
 @admin.register(CustomerMerchantWallet)
-class CustomerMerchantWalletAdmin(admin.ModelAdmin):
+class CustomerMerchantWalletAdmin(UnfoldModelAdmin):
     list_display = [
         "customer",
         "merchant",
@@ -42,34 +43,34 @@ class CustomerMerchantWalletAdmin(admin.ModelAdmin):
 
 
 @admin.register(LoyaltyRules)
-class LoyaltyRulesAdmin(admin.ModelAdmin):
+class LoyaltyRulesAdmin(UnfoldModelAdmin):
     list_display = ["merchant", "points_per_npr", "streak_multiplier", "welcome_bonus", "updated_at"]
     readonly_fields = ["updated_at"]
 
 
 @admin.register(MerchantPunchCard)
-class MerchantPunchCardAdmin(admin.ModelAdmin):
+class MerchantPunchCardAdmin(UnfoldModelAdmin):
     list_display = ["name", "merchant", "mode", "stamps_required", "is_active", "created_at"]
     list_filter = ["mode", "is_active"]
     search_fields = ["name", "merchant__business_name"]
 
 
 @admin.register(CustomerPunchCard)
-class CustomerPunchCardAdmin(admin.ModelAdmin):
+class CustomerPunchCardAdmin(UnfoldModelAdmin):
     list_display = ["customer", "punch_card", "current_stamps", "is_completed", "is_redeemed"]
     list_filter = ["is_completed", "is_redeemed"]
     search_fields = ["customer__full_name", "punch_card__name"]
 
 
 @admin.register(PointTransaction)
-class PointTransactionAdmin(admin.ModelAdmin):
+class PointTransactionAdmin(UnfoldModelAdmin):
     list_display = ["transaction_type", "customer", "merchant", "points", "status", "created_at"]
     list_filter = ["transaction_type", "status"]
     search_fields = ["customer__full_name", "merchant__business_name"]
 
 
 @admin.register(Mission)
-class MissionAdmin(admin.ModelAdmin):
+class MissionAdmin(UnfoldModelAdmin):
     list_display = ["title", "required_merchant", "mission_type", "target_count", "reward_points", "is_active"]
     list_filter = ["is_active", "mission_type"]
     search_fields = ["title", "required_merchant__store_name"]
@@ -77,14 +78,14 @@ class MissionAdmin(admin.ModelAdmin):
 
 
 @admin.register(CustomerMission)
-class CustomerMissionAdmin(admin.ModelAdmin):
+class CustomerMissionAdmin(UnfoldModelAdmin):
     list_display = ["customer", "mission", "current_count", "is_completed", "completed_at"]
     list_filter = ["is_completed"]
     readonly_fields = ["created_at", "updated_at"]
 
 
 @admin.register(Reward)
-class RewardAdmin(admin.ModelAdmin):
+class RewardAdmin(UnfoldModelAdmin):
     list_display = ["name", "merchant", "points_cost", "stock", "is_active"]
     list_filter = ["is_active"]
     search_fields = ["name", "merchant__store_name"]
@@ -92,7 +93,7 @@ class RewardAdmin(admin.ModelAdmin):
 
 
 @admin.register(Redemption)
-class RedemptionAdmin(admin.ModelAdmin):
+class RedemptionAdmin(UnfoldModelAdmin):
     list_display = ["code", "customer", "reward", "points_spent", "status", "created_at"]
     list_filter = ["status"]
     search_fields = ["code", "customer__full_name", "reward__name"]
@@ -100,7 +101,7 @@ class RedemptionAdmin(admin.ModelAdmin):
 
 
 @admin.register(MembershipQrToken)
-class MembershipQrTokenAdmin(admin.ModelAdmin):
+class MembershipQrTokenAdmin(UnfoldModelAdmin):
     list_display = ["public_token", "membership", "token_version", "is_active", "created_at"]
     list_filter = ["is_active"]
     search_fields = ["public_token", "membership__membership_number"]
@@ -108,7 +109,7 @@ class MembershipQrTokenAdmin(admin.ModelAdmin):
 
 
 @admin.register(MerchantMembershipCardDesign)
-class MerchantMembershipCardDesignAdmin(admin.ModelAdmin):
+class MerchantMembershipCardDesignAdmin(UnfoldModelAdmin):
     list_display = [
         "merchant", "card_title", "primary_color", "accent_color",
         "is_published", "updated_at",
