@@ -26,8 +26,8 @@ class GroqAdapter:
     BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
 
     def __init__(self):
-        self.api_key = getattr(settings, "GROQ_API_KEY", "")
-        if not self.api_key:
+        self.api_key = getattr(settings, "GROQ_API_KEY", "") or ""
+        if not self.api_key.strip():
             raise AIConfigurationError("GROQ_API_KEY is not configured")
 
     @property
