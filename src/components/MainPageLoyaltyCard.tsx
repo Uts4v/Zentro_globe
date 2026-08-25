@@ -140,17 +140,17 @@ export function MainPageLoyaltyCard({
   onQrTap,
   variant = "merchant",
 }: LoyaltyCardProps) {
-  const merchantName = card?.merchant?.name || merchantNameProp || "Chiya Cafe";
+  const merchantName = card?.merchant?.name || merchantNameProp || "";
   const merchantLogo = card?.merchant?.logo ?? merchantLogoProp ?? null;
   const tier = card?.wallet?.tier ?? tierProp ?? "bronze";
-  const points = card?.wallet?.points_balance ?? pointsProp ?? 60;
-  const streak = card?.wallet?.streak_days ?? streakProp ?? 2;
-  const memberName = memberNameProp || "Utsav Shrestha";
-  const cardNumber = cardNumberProp || "•••• VAD6Y9";
+  const points = card?.wallet?.points_balance ?? pointsProp ?? 0;
+  const streak = card?.wallet?.streak_days ?? streakProp ?? 0;
+  const memberName = memberNameProp || "";
+  const cardNumber = cardNumberProp || "";
   const joinedAt = joinedAtProp ?? card?.membership?.joined_at ?? null;
   const cardDesign = cardDesignProp ?? card?.card_design ?? null;
 
-  const safeProgress = Math.max(0, Math.min(100, progressPercent > 0 ? progressPercent : 45));
+  const safeProgress = Math.max(0, Math.min(100, progressPercent));
 
   // ── Theme color resolution (priority: cardDesign > theme > themeColor > fallback) ──
   const primary = cardDesign?.primary_color || theme?.primary || themeColor || "#6E57FF";
@@ -453,7 +453,7 @@ export function MainPageLoyaltyCard({
                 >
                   <Sparkles className="h-4 w-4 text-[#FFD700]" />
                   <span className="whitespace-nowrap">
-                    {pointsToNextTier > 0 ? pointsToNextTier : 1440} pts to {nextTier(tier)}
+                    {pointsToNextTier} pts to {nextTier(tier)}
                   </span>
                 </div>
               </div>
