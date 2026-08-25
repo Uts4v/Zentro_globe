@@ -80,6 +80,7 @@ export interface LoyaltyCardProps {
   merchantName?: string;
   merchantLogo?: string | null;
   merchantCategory?: string | null;
+  merchantLocation?: string | null;
   tier?: string;
   points?: number;
   streak?: number;
@@ -120,6 +121,7 @@ export function MainPageLoyaltyCard({
   merchantName: merchantNameProp,
   merchantLogo: merchantLogoProp,
   merchantCategory,
+  merchantLocation,
   tier: tierProp,
   points: pointsProp,
   streak: streakProp,
@@ -388,7 +390,7 @@ export function MainPageLoyaltyCard({
                   style={{ color: cardTextMuted }}
                 >
                   <MapPin className="h-3.5 w-3.5 shrink-0" style={{ color: primary }} />
-                  {merchantCategory || "Lazimpat, Kathmandu"}
+                  {merchantLocation || merchantCategory || ""}
                 </p>
 
                 {/* Floating Brand Logo Circle (76px Elevated White Circle) */}
@@ -405,20 +407,9 @@ export function MainPageLoyaltyCard({
                       className="h-full w-full rounded-full object-cover"
                     />
                   ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center rounded-full bg-[#FAF8F5] text-center">
-                      <svg viewBox="0 0 32 32" className="h-5 w-5 text-[#10B981]">
-                        <path
-                          d="M16 4 C10 8 6 14 6 22 C14 22 20 18 26 12 C26 7 21 4 16 4 Z"
-                          fill="currentColor"
-                          opacity="0.85"
-                        />
-                        <path d="M16 4 L16 22" stroke="#FFFFFF" strokeWidth="1.5" />
-                      </svg>
-                      <span className="mt-0.5 text-[9px] font-black uppercase tracking-wider text-[#18102B]">
-                        CHIYA
-                      </span>
-                      <span className="text-[7.5px] font-bold text-[#7D7D9C]">CAFE</span>
-                    </div>
+                    <span className="text-[26px] font-black uppercase" style={{ color: primary }}>
+                      {(merchantName || "?")[0]}
+                    </span>
                   )}
                 </div>
               </div>

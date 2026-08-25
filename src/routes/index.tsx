@@ -69,6 +69,7 @@ function Index() {
   const [merchantSlug, setMerchantSlug] = useState<string | null>(null);
   const [merchantLogo, setMerchantLogo] = useState<string | null>(null);
   const [merchantCategory, setMerchantCategory] = useState<string | null>(null);
+  const [merchantLocation, setMerchantLocation] = useState<string | null>(null);
   const [merchantThemeColor, setMerchantThemeColor] = useState("");
   const [merchantBusinessType, setMerchantBusinessType] = useState<string | null>(null);
   const [cardTextColor, setCardTextColor] = useState("");
@@ -79,8 +80,8 @@ function Index() {
   const [streak, setStreak] = useState(0);
   const [ordersCount, setOrdersCount] = useState(0);
   const [tier, setTier] = useState("bronze");
-  const [memberName, setMemberName] = useState("Member");
-  const [cardNumber, setCardNumber] = useState("•••• 0000");
+  const [memberName, setMemberName] = useState("");
+  const [cardNumber, setCardNumber] = useState("");
   const [freeRewards, setFreeRewards] = useState(0);
   const [loading, setLoading] = useState(true);
   const [todaySpecials, setTodaySpecials] = useState<TodaySpecial[]>([]);
@@ -129,6 +130,7 @@ function Index() {
           setMerchantLogo(m.logo_url ?? null);
           setMerchantThemeColor(m.store_theme_color || "");
           setMerchantCategory(m.business_type ?? null);
+          setMerchantLocation(m.address ?? null);
           setMerchantBusinessType(m.business_type ?? null);
           setCardTextColor(m.card_text_color || "");
           setCardBackgroundImage(m.card_background_image || "");
@@ -334,6 +336,7 @@ function Index() {
               merchantName={merchantName || "Select a store"}
               merchantLogo={merchantLogo}
               merchantCategory={merchantCategory}
+              merchantLocation={merchantLocation}
               tier={tier}
               points={points}
               streak={streak}
