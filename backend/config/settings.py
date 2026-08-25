@@ -29,9 +29,13 @@ if not SECRET_KEY:
             "SECRET_KEY must be set via environment variable in production."
         )
 
-ALLOWED_HOSTS = [h.strip() for h in os.getenv(
+_railway_domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+_allowed_hosts = os.getenv(
     "ALLOWED_HOSTS", "localhost,127.0.0.1"
-).split(",") if h.strip()]
+).split(",")
+if _railway_domain:
+    _allowed_hosts.append(_railway_domain)
+ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts if h.strip()]
 
 # ── Custom user model ─────────────────────────────────────────────────────────
 AUTH_USER_MODEL = "accounts.User"
@@ -228,7 +232,10 @@ _raw_csrf = os.getenv(
     "CSRF_TRUSTED_ORIGINS",
     "http://localhost:8000,http://localhost:5173,http://127.0.0.1:8000",
 )
-CSRF_TRUSTED_ORIGINS = [o.strip() for o in _raw_csrf.split(",") if o.strip()]
+_csrf_origins = [o.strip() for o in _raw_csrf.split(",") if o.strip()]
+if _railway_domain:
+    _csrf_origins.append(f"https://{_railway_domain}")
+CSRF_TRUSTED_ORIGINS = _csrf_origins
 
 # ── HTTPS / security hardening (production only) ─────────────────────────────
 if not DEBUG:
