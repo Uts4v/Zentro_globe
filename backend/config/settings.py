@@ -39,6 +39,9 @@ ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts if h.strip()]
 
 # ── Custom user model ─────────────────────────────────────────────────────────
 AUTH_USER_MODEL = "accounts.User"
+AUTHENTICATION_BACKENDS = [
+    "accounts.authentication.EmailOrUsernameBackend",
+]
 
 # ── Installed apps ────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
