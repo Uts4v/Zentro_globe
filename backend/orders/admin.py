@@ -5,6 +5,7 @@ orders/admin.py
 from django.contrib import admin
 from unfold.admin import ModelAdmin as UnfoldModelAdmin, TabularInline as UnfoldTabularInline
 from .models import Order, OrderItem
+from config.admin import FastAdminMixin
 
 
 class OrderItemInline(UnfoldTabularInline):
@@ -14,7 +15,7 @@ class OrderItemInline(UnfoldTabularInline):
 
 
 @admin.register(Order)
-class OrderAdmin(UnfoldModelAdmin):
+class OrderAdmin(FastAdminMixin, UnfoldModelAdmin):
     list_display   = ["id", "customer", "merchant", "status", "order_type", "fulfillment_type", "table_name_snapshot", "total_amount", "points_earned", "created_at"]
     list_filter    = ["status", "order_type", "fulfillment_type"]
     search_fields  = ["customer__full_name", "merchant__business_name", "table_name_snapshot"]
@@ -24,6 +25,6 @@ class OrderAdmin(UnfoldModelAdmin):
 
 
 @admin.register(OrderItem)
-class OrderItemAdmin(UnfoldModelAdmin):
+class OrderItemAdmin(FastAdminMixin, UnfoldModelAdmin):
     list_display  = ["id", "order", "name", "quantity", "price", "subtotal"]
     search_fields = ["name", "order__id"]

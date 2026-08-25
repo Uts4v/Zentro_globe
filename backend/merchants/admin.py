@@ -2,10 +2,11 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin as UnfoldModelAdmin
 from .models import MerchantProfile, MenuItem, MerchantTable
+from config.admin import FastAdminMixin
 
 
 @admin.register(MerchantProfile)
-class MerchantProfileAdmin(UnfoldModelAdmin):
+class MerchantProfileAdmin(FastAdminMixin, UnfoldModelAdmin):
     list_display = [
         "business_name",   # was store_name
         "slug",            # was store_slug
@@ -23,7 +24,7 @@ class MerchantProfileAdmin(UnfoldModelAdmin):
 
 
 @admin.register(MenuItem)
-class MenuItemAdmin(UnfoldModelAdmin):
+class MenuItemAdmin(FastAdminMixin, UnfoldModelAdmin):
     list_display = [
         "name",
         "merchant",
@@ -38,7 +39,7 @@ class MenuItemAdmin(UnfoldModelAdmin):
 
 
 @admin.register(MerchantTable)
-class MerchantTableAdmin(UnfoldModelAdmin):
+class MerchantTableAdmin(FastAdminMixin, UnfoldModelAdmin):
     list_display = [
         "name", "merchant", "table_number", "public_token",
         "is_active", "created_at",
