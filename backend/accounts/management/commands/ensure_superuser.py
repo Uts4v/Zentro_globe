@@ -19,7 +19,7 @@ import os
 import sys
 
 from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 
 class Command(BaseCommand):
@@ -52,6 +52,10 @@ class Command(BaseCommand):
             )
             created = True
         else:
+            if User.objects.exclude(pk=user.pk).filter(username=username).exists():
+                raise CommandError(f"Username already exists: {username}")
+            user.username = username
+            user.email = email
             user.is_staff = True
             user.is_superuser = True
 
