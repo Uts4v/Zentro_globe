@@ -32,6 +32,7 @@ try:
 except ImportError:  # older pymupdf versions expose the classic `fitz` alias
     import fitz
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
 from django.db.models import Avg, Count, Min, Sum
@@ -95,8 +96,15 @@ def _haversine_km(lat1, lon1, lat2, lon2):
 @permission_classes([AllowAny])
 def merchant_list(request):
     """GET /api/merchants/ — all approved merchants (public)."""
-    merchants = MerchantProfile.objects.filter(is_approved=True).order_by("business_name")
-    return Response(MerchantPublicSerializer(merchants, many=True).data)
+    data = cache.get_or_set(
+        "zentro:merchants_list",
+        lambda: MerchantPublicSerializer(
+            MerchantProfile.objects.filter(is_approved=True).order_by("business_name"),
+            many=True,
+        ).data,
+        120,
+    )
+    return Response(data)
 
 
 @api_view(["GET"])
@@ -147,7 +155,13 @@ def merchant_detail(request, pk):
         merchant = MerchantProfile.objects.get(pk=pk)
     except MerchantProfile.DoesNotExist:
         return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
-    return Response(MerchantPublicSerializer(merchant).data)
+    return Response(
+        cache.get_or_set(
+            f"zentro:pk:{pk}",
+            lambda: MerchantPublicSerializer(merchant).data,
+            120,
+        )
+    )
 
 
 @api_view(["GET"])
@@ -158,7 +172,13 @@ def merchant_by_slug(request, slug):
         merchant = MerchantProfile.objects.get(slug=slug)
     except MerchantProfile.DoesNotExist:
         return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
-    return Response(MerchantPublicSerializer(merchant).data)
+    return Response(
+        cache.get_or_set(
+            f"zentro:slug:{slug}",
+            lambda: MerchantPublicSerializer(merchant).data,
+            120,
+        )
+    )
 
 
 @api_view(["GET"])
@@ -232,7 +252,13 @@ def merchant_menu(request, pk):
     except MerchantProfile.DoesNotExist:
         return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
     items = merchant.menu_items.filter(is_available=True).order_by("category", "name")
-    return Response(MenuItemSerializer(items, many=True).data)
+    return Response(
+        cache.get_or_set(
+            f"zentro:menu:{pk}",
+            lambda: MenuItemSerializer(items, many=True).data,
+            120,
+        )
+    )
 
 
 # ── Menu items ────────────────────────────────────────────────────────────────
@@ -388,6 +414,12 @@ def merchant_analytics(request):
     else:
         period_start = today_start - timedelta(days=days - 1)
         period_end = today_start + timedelta(days=1)
+
+    # Heavy aggregation below — serve a short-lived cache when possible.
+    analytics_key = f"zentro:analytics:{merchant.id}:{days}:{d_from or ''}:{d_to or ''}"
+    cached = cache.get(analytics_key)
+    if cached is not None:
+        return Response(cached)
 
     # Non-cancelled orders define revenue/orders; cancelled orders are excluded.
     orders_qs = Order.objects.filter(
@@ -556,7 +588,7 @@ def merchant_analytics(request):
         order_type=Order.ORDER_TYPE_PUNCH_REDEMPTION,
     ).count()
 
-    return Response({
+    data = {
         "period_days": days,
         "total_revenue": float(agg["total_revenue"] or 0),
         "total_orders": agg["total_orders"] or 0,
@@ -593,7 +625,9 @@ def merchant_analytics(request):
             "rewards_redeemed": rewards_redeemed,
             "punch_cards_redeemed": punch_cards_redeemed,
         },
-    })
+    }
+    cache.set(analytics_key, data, 120)
+    return Response(data)
 
 
 # ── Table management ──────────────────────────────────────────────────────────

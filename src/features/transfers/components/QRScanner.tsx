@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Html5Qrcode } from "html5-qrcode";
+import type { Html5Qrcode } from "html5-qrcode";
 import { CameraOff, X, Loader2 } from "lucide-react";
 
 interface QRScannerProps {
@@ -20,34 +20,44 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     const el = document.getElementById(SCANNER_ID);
     if (!el) return;
 
-    const scanner = new Html5Qrcode(SCANNER_ID);
-    scannerRef.current = scanner;
+    let cancelled = false;
 
-    scanner
-      .start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        (decodedText) => {
-          let code = decodedText;
-          if (code.startsWith(QR_PREFIX)) {
-            code = code.slice(QR_PREFIX.length);
-          }
-          startedRef.current = false;
-          onScan(code.toUpperCase());
-          onClose();
-        },
-        () => {},
-      )
-      .then(() => {
+    (async () => {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      if (cancelled) return;
+
+      const scanner = new Html5Qrcode(SCANNER_ID);
+      scannerRef.current = scanner;
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText: string) => {
+            let code = decodedText;
+            if (code.startsWith(QR_PREFIX)) {
+              code = code.slice(QR_PREFIX.length);
+            }
+            startedRef.current = false;
+            onScan(code.toUpperCase());
+            onClose();
+          },
+          () => {},
+        );
         startedRef.current = true;
         setReady(true);
-      })
-      .catch((err) => {
-        setError(err?.message || "Camera access denied or unavailable. You can also use your smartphone camera to scan the QR code.");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(
+          message ||
+            "Camera access denied or unavailable. You can also use your smartphone camera to scan the QR code.",
+        );
         setReady(true);
-      });
+      }
+    })();
 
     return () => {
+      cancelled = true;
       if (scannerRef.current && startedRef.current) {
         scannerRef.current.stop().catch(() => {});
       }

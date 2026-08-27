@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Html5Qrcode } from "html5-qrcode";
+import type { Html5Qrcode } from "html5-qrcode";
 import { CameraOff, X, Loader2 } from "lucide-react";
 import { tableApi } from "@/lib/api";
 import { useStore } from "@/lib/store";
@@ -15,10 +15,7 @@ function extractTableFromUrl(text: string): { slug: string; token: string } | nu
   // Handle full URLs: https://example.com/m/<slug>/table/<token>
   // Handle relative paths: /m/<slug>/table/<token>
   // Handle bare slug/table/token patterns
-  const patterns = [
-    /\/m\/([^/]+)\/table\/([^/?#]+)/,
-    /\/table\/([^/?#]+)/,
-  ];
+  const patterns = [/\/m\/([^/]+)\/table\/([^/?#]+)/, /\/table\/([^/?#]+)/];
 
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -31,7 +28,10 @@ function extractTableFromUrl(text: string): { slug: string; token: string } | nu
   }
 
   // Try to find slug and token as path segments anywhere
-  const parts = text.replace(/^https?:\/\/[^/]+/, "").split("/").filter(Boolean);
+  const parts = text
+    .replace(/^https?:\/\/[^/]+/, "")
+    .split("/")
+    .filter(Boolean);
   for (let i = 0; i < parts.length - 1; i++) {
     if (parts[i] === "m" && parts[i + 2] === "table" && parts[i + 3]) {
       return { slug: parts[i + 1], token: parts[i + 3] };
@@ -54,52 +54,66 @@ export function TableQRScanner({ onClose }: TableQRScannerProps) {
     const el = document.getElementById(SCANNER_ID);
     if (!el) return;
 
-    const scanner = new Html5Qrcode(SCANNER_ID);
-    scannerRef.current = scanner;
+    let cancelled = false;
 
-    scanner
-      .start(
-        { facingMode: "environment" },
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        async (decodedText) => {
-          if (resolving) return;
-          const match = extractTableFromUrl(decodedText);
-          if (!match) {
-            setError("Invalid table QR code. Please scan a table QR.");
-            return;
-          }
+    (async () => {
+      const { Html5Qrcode } = await import("html5-qrcode");
+      if (cancelled) return;
 
-          setResolving(true);
-          try {
-            const resolution = await tableApi.resolve(match.slug, match.token);
-            setActiveTable({
-              merchantSlug: match.slug,
-              tableToken: match.token,
-              tableId: resolution.table.id,
-              tableName: resolution.table.name,
-              scannedAt: Date.now(),
-            });
-            setSelectedMerchant(String(resolution.merchant.id));
-            startedRef.current = false;
-            await scanner.stop().catch(() => {});
-            navigate({ to: "/customer/merchant/$slug", params: { slug: match.slug }, replace: true });
-          } catch {
-            setError("Table not found. Please scan again.");
-            setResolving(false);
-          }
-        },
-        () => {},
-      )
-      .then(() => {
+      const scanner = new Html5Qrcode(SCANNER_ID);
+      scannerRef.current = scanner;
+
+      try {
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          async (decodedText: string) => {
+            if (resolving) return;
+            const match = extractTableFromUrl(decodedText);
+            if (!match) {
+              setError("Invalid table QR code. Please scan a table QR.");
+              return;
+            }
+
+            setResolving(true);
+            try {
+              const resolution = await tableApi.resolve(match.slug, match.token);
+              setActiveTable({
+                merchantSlug: match.slug,
+                tableToken: match.token,
+                tableId: resolution.table.id,
+                tableName: resolution.table.name,
+                scannedAt: Date.now(),
+              });
+              setSelectedMerchant(String(resolution.merchant.id));
+              startedRef.current = false;
+              await scanner.stop().catch(() => {});
+              navigate({
+                to: "/customer/merchant/$slug",
+                params: { slug: match.slug },
+                replace: true,
+              });
+            } catch {
+              setError("Table not found. Please scan again.");
+              setResolving(false);
+            }
+          },
+          () => {},
+        );
         startedRef.current = true;
         setReady(true);
-      })
-      .catch((err) => {
-        setError(err?.message || "Camera access denied or unavailable. You can also use your smartphone camera to scan the QR code.");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(
+          message ||
+            "Camera access denied or unavailable. You can also use your smartphone camera to scan the QR code.",
+        );
         setReady(true);
-      });
+      }
+    })();
 
     return () => {
+      cancelled = true;
       if (scannerRef.current && startedRef.current) {
         scannerRef.current.stop().catch(() => {});
       }

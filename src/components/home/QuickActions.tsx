@@ -1,6 +1,5 @@
 // src/components/home/QuickActions.tsx
 // Two minimalist action tiles matching clean design system: Scan QR + Transfer Points
-import { motion } from "framer-motion";
 import { ScanLine, ArrowLeftRight, ArrowRight } from "lucide-react";
 
 interface QuickActionsProps {
@@ -15,17 +14,14 @@ export function QuickActions({ onScanQR, onTransfer, availablePoints }: QuickAct
     <section className="px-5">
       <div className="grid grid-cols-2 gap-3">
         {/* Scan to Order (Clean Minimal White Tile) */}
-        <motion.button
+        <button
           onClick={onScanQR}
-          className="group relative overflow-hidden bg-card p-4.5 pb-12 text-left transition-all"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          whileTap={{ scale: 0.97 }}
+          className="group animate-card-enter relative overflow-hidden bg-card p-4.5 pb-12 text-left transition-all active:scale-[0.97]"
           style={{
             borderRadius: 28,
             boxShadow: "var(--shadow-card)",
             border: "1px solid var(--border)",
+            animationDelay: "0.1s",
           }}
         >
           <div className="relative mb-3.5 flex h-11 w-11 items-center justify-center rounded-2xl bg-ember-soft text-ember transition-transform duration-300 group-active:scale-95">
@@ -40,20 +36,17 @@ export function QuickActions({ onScanQR, onTransfer, availablePoints }: QuickAct
           <span className="absolute bottom-4 right-4 flex h-7 w-7 items-center justify-center rounded-full bg-muted text-foreground transition-all group-hover:translate-x-0.5">
             <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
           </span>
-        </motion.button>
+        </button>
 
         {/* Transfer Points (Clean Minimal White Tile) */}
-        <motion.button
+        <button
           onClick={onTransfer}
-          className="group relative overflow-hidden bg-card p-4.5 pb-12 text-left transition-all"
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2, ease: [0.22, 1, 0.36, 1] }}
-          whileTap={{ scale: 0.97 }}
+          className="group animate-card-enter relative overflow-hidden bg-card p-4.5 pb-12 text-left transition-all active:scale-[0.97]"
           style={{
             borderRadius: 28,
             boxShadow: "var(--shadow-card)",
             border: "1px solid var(--border)",
+            animationDelay: "0.2s",
           }}
         >
           {/* Points Balance Badge */}
@@ -73,7 +66,7 @@ export function QuickActions({ onScanQR, onTransfer, availablePoints }: QuickAct
           <span className="absolute bottom-4 right-4 flex h-7 w-7 items-center justify-center rounded-full bg-muted text-foreground transition-all group-hover:translate-x-0.5">
             <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
           </span>
-        </motion.button>
+        </button>
       </div>
     </section>
   );

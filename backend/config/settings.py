@@ -112,7 +112,12 @@ THROTTLE_CACHE = "default"
 # ── Celery (production background tasks) ──────────────────────────────────────
 CELERY_BROKER_URL = _redis_url or "redis://127.0.0.1:6379/1"
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL if _redis_url else None
-CELERY_TASK_ALWAYS_EAGER = bool(os.getenv("CELERY_TASK_ALWAYS_EAGER", "False").lower() in ("true", "1", "yes"))
+# Without a broker (no REDIS_URL) tasks run eagerly/inline — never attempt the
+# unreachable localhost broker, which would stall requests with connection retries.
+CELERY_TASK_ALWAYS_EAGER = (
+    not _redis_url
+    or os.getenv("CELERY_TASK_ALWAYS_EAGER", "False").lower() in ("true", "1", "yes")
+)
 CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
@@ -169,7 +174,8 @@ if DATABASE_URL:
             "PASSWORD": url.password or "",
             "HOST": url.hostname or "localhost",
             "PORT": url.port or 5432,
-            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
+            "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {
                 "sslmode": os.getenv("DB_SSLMODE", "require"),
                 "connect_timeout": 10,
@@ -185,7 +191,8 @@ elif os.getenv("DB_ENGINE") == "django.db.backends.postgresql":
             "PASSWORD": os.getenv("DB_PASSWORD", ""),
             "HOST": os.getenv("DB_HOST", "localhost"),
             "PORT": os.getenv("DB_PORT", "5432"),
-            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "60")),
+            "CONN_MAX_AGE": int(os.getenv("DB_CONN_MAX_AGE", "600")),
+            "CONN_HEALTH_CHECKS": True,
             "OPTIONS": {
                 "sslmode": os.getenv("DB_SSLMODE", "prefer"),
             },
