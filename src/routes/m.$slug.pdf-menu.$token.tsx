@@ -24,7 +24,7 @@ function PdfMenuPage() {
       try {
         const res = await pdfMenuApi.resolve(slug, token);
         if (!cancelled) {
-          if (res.has_pdf && res.pdf_url) {
+          if (res.has_pdf && (res.pdf_url || res.pages?.length)) {
             setResolution(res);
           } else {
             setError("This merchant hasn't uploaded a PDF menu yet.");
@@ -52,7 +52,7 @@ function PdfMenuPage() {
     );
   }
 
-  if (error || !resolution?.pdf_url) {
+  if (error || (!resolution?.pdf_url && !resolution?.pages?.length)) {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-5 text-center bg-background">
         <p className="text-5xl">🍽️</p>
@@ -70,6 +70,7 @@ function PdfMenuPage() {
   }
 
   const merchant = resolution.merchant;
+  const pages = resolution.pages ?? [];
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
@@ -116,14 +117,30 @@ function PdfMenuPage() {
         </div>
       </div>
 
-      {/* PDF embed */}
-      <div className="flex flex-1 items-stretch bg-mist/40">
-        <iframe
-          src={resolution.pdf_url}
-          title={`${merchant.name} — Menu`}
-          className="h-[calc(100dvh-72px)] w-full border-0"
-        />
-      </div>
+      {/* Menu content — image pages when available, else PDF embed fallback */}
+      {pages.length > 0 ? (
+        <div className="flex-1 overflow-y-auto bg-mist/40">
+          <div className="flex flex-col items-stretch gap-1">
+            {pages.map((page) => (
+              <img
+                key={page.index}
+                src={page.url}
+                alt={`${merchant.name} — menu, page ${page.index + 1}`}
+                className="block w-full bg-white"
+                loading={page.index === 0 ? "eager" : "lazy"}
+              />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-1 items-stretch bg-mist/40">
+          <iframe
+            src={resolution.pdf_url ?? undefined}
+            title={`${merchant.name} — Menu`}
+            className="h-[calc(100dvh-72px)] w-full border-0"
+          />
+        </div>
+      )}
 
       {/* Bottom bar */}
       <div className="flex items-center justify-between border-t border-border bg-background px-5 py-3">

@@ -27,6 +27,10 @@ from datetime import date, datetime, timedelta, time as dt_time
 from zoneinfo import ZoneInfo
 
 import qrcode
+try:
+    import pymupdf as fitz
+except ImportError:  # older pymupdf versions expose the classic `fitz` alias
+    import fitz
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
@@ -835,9 +839,10 @@ def merchant_pdf_menu(request):
 
     if request.method == "DELETE":
         if merchant.pdf_menu_url:
-            _delete_pdf_menu_file(merchant.pdf_menu_url)
+            _delete_pdf_menu_file(merchant.pdf_menu_url, merchant.pdf_menu_page_count)
         merchant.pdf_menu_url = ""
-        merchant.save(update_fields=["pdf_menu_url", "updated_at"])
+        merchant.pdf_menu_page_count = 0
+        merchant.save(update_fields=["pdf_menu_url", "pdf_menu_page_count", "updated_at"])
         return Response(_pdf_menu_payload(merchant, request), status=status.HTTP_200_OK)
 
     # POST — upload/replace
@@ -853,14 +858,15 @@ def merchant_pdf_menu(request):
 
     # Remove any previous PDF to avoid orphaned files
     if merchant.pdf_menu_url:
-        _delete_pdf_menu_file(merchant.pdf_menu_url)
+        _delete_pdf_menu_file(merchant.pdf_menu_url, merchant.pdf_menu_page_count)
 
     filename = f"menus/{uuid_module.uuid4().hex}.pdf"
     saved_path = default_storage.save(filename, ContentFile(file.read()))
     file_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
 
     merchant.pdf_menu_url = file_url
-    merchant.save(update_fields=["pdf_menu_url", "updated_at"])
+    merchant.pdf_menu_page_count = _render_pdf_menu_pages(saved_path, request, merchant)
+    merchant.save(update_fields=["pdf_menu_url", "pdf_menu_page_count", "updated_at"])
 
     return Response(_pdf_menu_payload(merchant, request), status=status.HTTP_201_CREATED)
 
@@ -893,6 +899,7 @@ def public_pdf_menu(request, slug, public_token):
             },
             "has_pdf": False,
             "pdf_url": None,
+            "pages": [],
         }, status=status.HTTP_200_OK)
 
     return Response({
@@ -906,6 +913,10 @@ def public_pdf_menu(request, slug, public_token):
         },
         "has_pdf": True,
         "pdf_url": _pdf_menu_file_url(request, merchant),
+        "pages": [
+            {"index": i, "url": url}
+            for i, url in enumerate(_pdf_menu_page_urls(request, merchant))
+        ],
     })
 
 
@@ -959,6 +970,48 @@ def _pdf_menu_file_url(request, merchant) -> str:
     )
 
 
+def _render_pdf_menu_pages(pdf_rel_path, request, merchant):
+    """
+    Render the merchant's PDF menu into per-page JPEG images (scaled ~2x / ~144dpi)
+    so phones can view the menu inline like a photo gallery — avoiding the browser's
+    PDF 'Open' prompt on iOS. Returns the number of pages rendered (0 on failure).
+    """
+    try:
+        opened = default_storage.open(pdf_rel_path, "rb")
+    except FileNotFoundError:
+        return 0
+
+    base_name = pdf_rel_path[:-4] if pdf_rel_path.endswith(".pdf") else pdf_rel_path
+    count = 0
+    try:
+        with fitz.open(stream=opened.read(), filetype="pdf") as doc:
+            count = doc.page_count
+            matrix = fitz.Matrix(2.0, 2.0)  # ~144dpi for crisp text on phones
+            for i in range(count):
+                pix = doc.load_page(i).get_pixmap(matrix=matrix)
+                default_storage.save(f"{base_name}_p{i}.jpg", ContentFile(pix.tobytes("jpeg")))
+    except Exception:
+        # Never break the upload if rendering fails — the PDF embed remains as a fallback.
+        return 0
+    finally:
+        opened.close()
+    return count
+
+
+def _pdf_menu_page_urls(request, merchant):
+    """Absolute URLs of the image-rendered pages of the merchant's PDF menu."""
+    if not merchant.pdf_menu_url or merchant.pdf_menu_page_count <= 0:
+        return []
+    rel = merchant.pdf_menu_url.split(settings.MEDIA_URL, 1)[1] if settings.MEDIA_URL in merchant.pdf_menu_url else None
+    if not rel or not rel.endswith(".pdf"):
+        return []
+    base = rel[:-4]
+    return [
+        request.build_absolute_uri(f"{settings.MEDIA_URL}{base}_p{i}.jpg")
+        for i in range(merchant.pdf_menu_page_count)
+    ]
+
+
 def _pdf_menu_payload(merchant, request):
     frontend_url = getattr(settings, "FRONTEND_URL", f"{request.scheme}://{request.get_host()}")
     pdf_menu_page_url = f"{frontend_url.rstrip('/')}/m/{merchant.slug}/pdf-menu/{merchant.pdf_menu_token}"
@@ -970,11 +1023,14 @@ def _pdf_menu_payload(merchant, request):
     }
 
 
-def _delete_pdf_menu_file(file_url):
-    """Best-effort removal of a previously stored PDF menu file."""
+def _delete_pdf_menu_file(file_url, page_count=0):
+    """Best-effort removal of a previously stored PDF menu file and its rendered pages."""
     try:
         if file_url and settings.MEDIA_URL in file_url:
             rel = file_url.split(settings.MEDIA_URL, 1)[1]
             default_storage.delete(rel)
+            if rel.endswith(".pdf") and page_count > 0:
+                base = rel[:-4]
+                default_storage.delete([f"{base}_p{i}.jpg" for i in range(page_count)])
     except Exception:
         pass

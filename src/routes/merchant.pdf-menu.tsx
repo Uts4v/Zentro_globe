@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { pdfMenuApi, type PdfMenuInfo } from "@/lib/api/pdf-menu";
+import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/merchant/pdf-menu")({
@@ -24,11 +25,17 @@ export const Route = createFileRoute("/merchant/pdf-menu")({
 });
 
 function MerchantPdfMenuPage() {
+  const { merchantProfile } = useAuth();
   const [info, setInfo] = useState<PdfMenuInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadingProgress, setUploadingProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const pageUrl =
+    info?.pdf_menu_token && merchantProfile?.slug
+      ? `${window.location.origin}/m/${encodeURIComponent(merchantProfile.slug)}/pdf-menu/${info.pdf_menu_token}`
+      : info?.pdf_menu_page_url ?? "";
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -81,7 +88,7 @@ function MerchantPdfMenuPage() {
   }
 
   async function handleDownloadQR() {
-    if (!info?.pdf_menu_page_url) return;
+    if (!pageUrl) return;
     const svgEl = document.getElementById("pdf-menu-qr")?.querySelector("svg");
     if (!svgEl) return;
     const svgData = new XMLSerializer().serializeToString(svgEl);
@@ -102,7 +109,7 @@ function MerchantPdfMenuPage() {
         ctx.fillText("Scan to view menu", 200, 410);
         ctx.font = "18px system-ui, sans-serif";
         ctx.fillStyle = "#555555";
-        ctx.fillText(info.pdf_menu_page_url, 200, 445);
+        ctx.fillText(pageUrl, 200, 445);
       }
       const link = document.createElement("a");
       link.download = "pdf-menu-qr.png";
@@ -113,9 +120,9 @@ function MerchantPdfMenuPage() {
   }
 
   async function handleCopyUrl() {
-    if (!info?.pdf_menu_page_url) return;
+    if (!pageUrl) return;
     try {
-      await navigator.clipboard.writeText(info.pdf_menu_page_url);
+      await navigator.clipboard.writeText(pageUrl);
       toast.success("Menu link copied");
     } catch {
       toast.error("Could not copy link");
@@ -214,7 +221,7 @@ function MerchantPdfMenuPage() {
           <QrCode className="h-4 w-4 text-ember" />
           Customer QR code
         </h2>
-        {info?.pdf_menu_page_url ? (
+        {info?.has_pdf ? (
           <>
             <p className="mt-1 text-xs text-muted-foreground">
               Print this QR code and place it on tables, at the counter, or on your
@@ -226,11 +233,11 @@ function MerchantPdfMenuPage() {
                 id="pdf-menu-qr"
                 className="rounded-2xl border border-border bg-white p-4"
               >
-                <QRCodeSVG value={info.pdf_menu_page_url} size={240} />
+                <QRCodeSVG value={pageUrl} size={240} />
               </div>
               <div className="flex flex-col gap-2">
                 <a
-                  href={info.pdf_menu_page_url}
+                  href={pageUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-mist"
@@ -256,7 +263,7 @@ function MerchantPdfMenuPage() {
             </div>
 
             <p className="mt-4 rounded-xl bg-mist px-3 py-2 text-[11px] break-all text-muted-foreground">
-              {info.pdf_menu_page_url}
+              {pageUrl}
             </p>
           </>
         ) : (

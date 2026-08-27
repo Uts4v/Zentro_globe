@@ -8,6 +8,11 @@ export interface PdfMenuInfo {
   pdf_menu_page_url: string;
 }
 
+export interface PublicPdfPage {
+  index: number;
+  url: string;
+}
+
 export interface PublicPdfMenuResolution {
   merchant: {
     id: number;
@@ -19,6 +24,7 @@ export interface PublicPdfMenuResolution {
   };
   has_pdf: boolean;
   pdf_url: string | null;
+  pages: PublicPdfPage[];
 }
 
 export const pdfMenuApi = {

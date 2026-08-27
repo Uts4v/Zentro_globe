@@ -170,6 +170,10 @@ class MerchantProfile(models.Model):
         editable=False,
         help_text="Public token for accessing the PDF menu via QR",
     )
+    pdf_menu_page_count = models.IntegerField(
+        default=0,
+        help_text="Number of pages rendered as images from the uploaded PDF menu",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
