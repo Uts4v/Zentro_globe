@@ -324,7 +324,8 @@ EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "Zentro <noreply@zentro.app>")
 
 # ── Frontend URL ──────────────────────────────────────────────────────────────
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+# The QR codes (tables, PDF menu) point here. Dev frontend runs on :8080.
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8080")
 
 # ── File upload limits ────────────────────────────────────────────────────────
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { safeUuid } from "@/lib/utils";
+import { formatCurrency } from "@/lib/currency";
 import { usePosStore } from "../store";
 import { posDebitTopup, DebitAccount } from "../api";
 import { X, Plus, Loader2, Check } from "lucide-react";
@@ -21,6 +22,8 @@ export default function DebitTopupModal({
 }: DebitTopupModalProps) {
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -69,10 +72,10 @@ export default function DebitTopupModal({
           </div>
           <h3 className="text-lg font-bold text-foreground">Top-up Complete</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Rs {numAmount.toFixed(2)} added to {account.contact_name || "account"}
+            {formatCurrency(numAmount, currencySymbol)} added to {account.contact_name || "account"}
           </p>
           <p className="mt-3 text-2xl font-bold text-ink">
-            New Balance: Rs {newBalance.toFixed(2)}
+            New Balance: {formatCurrency(newBalance, currencySymbol)}
           </p>
         </div>
       </div>
@@ -89,8 +92,7 @@ export default function DebitTopupModal({
               Top-up Wallet
             </h3>
             <p className="text-xs text-muted-foreground">
-              {account.contact_name || "Walk-in"} — Balance: Rs{" "}
-              {Number(account.balance).toFixed(2)}
+              {account.contact_name || "Walk-in"} — Balance: {formatCurrency(account.balance, currencySymbol)}
             </p>
           </div>
           <button
@@ -104,7 +106,7 @@ export default function DebitTopupModal({
         {/* Amount input */}
         <div className="mb-4">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Amount (Rs)
+            Amount ({currencySymbol})
           </label>
           <input
             type="number"
@@ -130,7 +132,7 @@ export default function DebitTopupModal({
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              Rs {amt}
+              {formatCurrency(amt, currencySymbol)}
             </button>
           ))}
         </div>
@@ -167,7 +169,7 @@ export default function DebitTopupModal({
           ) : (
             <>
               <Plus className="h-4 w-4" />
-              Top Up Rs {numAmount > 0 ? numAmount.toFixed(2) : "0.00"}
+              Top Up {formatCurrency(numAmount || 0, currencySymbol)}
             </>
           )}
         </button>

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import { posCreditRepayment, CreditAccount } from "../api";
 import { Loader2, X, CheckCircle, Minus } from "lucide-react";
 
@@ -17,6 +18,8 @@ export default function CreditRepaymentModal({
   onClose,
 }: Props) {
   const worker = usePosStore((s) => s.currentWorker);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [amount, setAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [note, setNote] = useState("");
@@ -36,7 +39,7 @@ export default function CreditRepaymentModal({
       return;
     }
     if (amt > owed) {
-      setError(`Amount exceeds owed balance of Rs ${owed.toFixed(2)}`);
+      setError(`Amount exceeds owed balance of ${formatCurrency(owed, currencySymbol)}`);
       return;
     }
     if (!worker) {
@@ -72,7 +75,7 @@ export default function CreditRepaymentModal({
             <CheckCircle className="mb-3 h-12 w-12 text-green-500" />
             <p className="text-lg font-bold text-foreground">Payment Recorded</p>
             <p className="text-sm text-muted-foreground">
-              Remaining balance: Rs {Number(newBalance || 0).toFixed(2)}
+              Remaining balance: {formatCurrency(newBalance || 0, currencySymbol)}
             </p>
           </div>
         ) : (
@@ -91,13 +94,13 @@ export default function CreditRepaymentModal({
               <p className="text-xs text-muted-foreground">Account</p>
               <p className="text-sm font-bold text-foreground">{account.contact_name}</p>
               <p className="text-xs text-red-600">
-                Amount owed: Rs {owed.toFixed(2)}
+                Amount owed: {formatCurrency(owed, currencySymbol)}
               </p>
             </div>
 
             <div className="mb-4">
               <label className="mb-1 block text-xs font-medium text-foreground">
-                Amount (Rs)
+                Amount ({currencySymbol})
               </label>
               <input
                 type="number"

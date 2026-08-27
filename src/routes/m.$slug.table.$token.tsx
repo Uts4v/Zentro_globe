@@ -89,7 +89,7 @@ function TableQRScanPage() {
   const slug = params.slug;
   const token = params.token;
   const navigate = useNavigate();
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const { resolved: themeResolved, setTheme } = useTheme();
   const {
     cart, add, remove, setActiveTable, setSelectedMerchant, setGuestSession,
@@ -219,6 +219,7 @@ function TableQRScanPage() {
       setGuestName(guestName);
       const orderId = await placeGuestOrder(menuItems, notes, guestName);
       setOrderSuccess({ orderId });
+      setShowCheckout(false);
     } catch (err: any) {
       alert(err?.message || "Failed to place order");
     } finally {
@@ -226,8 +227,9 @@ function TableQRScanPage() {
     }
   }
 
-  // Loading state
-  if (loading || authLoading) {
+  // Loading state — only block on table resolution, not auth.
+  // The page handles logged-in vs guest states after resolution.
+  if (loading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">

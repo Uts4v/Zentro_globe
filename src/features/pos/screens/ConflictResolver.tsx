@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import {
   posListConflicts,
   posResolveConflict,
@@ -24,6 +26,8 @@ export default function ConflictResolver() {
   const [clearing, setClearing] = useState(false);
   const [localQueueCount, setLocalQueueCount] = useState(0);
   const [clearingLocal, setClearingLocal] = useState(false);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   useEffect(() => {
     loadConflicts();
@@ -172,8 +176,7 @@ export default function ConflictResolver() {
                           Order #{order.id}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {order.status} &middot; Rs{" "}
-                          {Number(order.total_amount).toFixed(2)} &middot; v{order.version}
+                          {order.status} &middot; {formatCurrency(Number(order.total_amount), currencySymbol)} &middot; v{order.version}
                         </p>
                       </div>
                       {resolving === order.uuid && (
@@ -222,7 +225,7 @@ export default function ConflictResolver() {
                           Payment {payment.payment_method}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Rs {Number(payment.amount).toFixed(2)} &middot;{" "}
+                          {formatCurrency(Number(payment.amount), currencySymbol)} &middot;{" "}
                           {payment.status}
                         </p>
                       </div>

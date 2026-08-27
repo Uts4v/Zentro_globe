@@ -414,7 +414,14 @@ class PosSettingsSerializer(serializers.Serializer):
     manager_approval_threshold = serializers.DecimalField(max_digits=10, decimal_places=2)
     offline_discounts_allowed = serializers.BooleanField()
     offline_credit_allowed = serializers.BooleanField()
+    tax_enabled = serializers.BooleanField(required=False)
     tax_rate_percent = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    currency_code = serializers.CharField(max_length=3, required=False)
+    currency_symbol = serializers.CharField(max_length=5, required=False)
+    tax_components = serializers.ListField(
+        child=serializers.DictField(), required=False,
+        help_text='[{"name":"VAT","rate":13}] or [{"name":"CGST","rate":9},{"name":"SGST","rate":9}]',
+    )
 
 
 # ── Cash Movements ────────────────────────────────────────────────────────────

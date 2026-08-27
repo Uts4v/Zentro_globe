@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import {
   Check,
   Search,
@@ -17,6 +18,8 @@ export default function TableSelector() {
   const setSelectedTable = usePosStore((s) => s.setSelectedTable);
   const recentOrders = usePosStore((s) => s.recentOrders);
   const incomingOrders = usePosStore((s) => s.incomingOrders);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
 
@@ -121,7 +124,7 @@ export default function TableSelector() {
               </span>
               {occupied && info && (
                 <span className="text-[10px] font-bold text-amber-700">
-                  Rs {Number(info.amount).toFixed(2)}
+                  {formatCurrency(info.amount, currencySymbol)}
                 </span>
               )}
             </button>

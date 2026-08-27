@@ -2,14 +2,16 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { X, ArrowRight, ChevronLeft, ChevronRight, Tag } from "lucide-react";
 import { specialApi, type TodaySpecial } from "@/lib/api";
+import { formatCurrency } from "@/lib/currency";
 
 interface Props {
   slug: string;
+  currencySymbol?: string;
   onOrderItem?: (menuItemId: string) => void;
   onViewReward?: (rewardId: string) => void;
 }
 
-export function TodaySpecialPopup({ slug, onOrderItem, onViewReward }: Props) {
+export function TodaySpecialPopup({ slug, currencySymbol = "Rs", onOrderItem, onViewReward }: Props) {
   const [specials, setSpecials] = useState<TodaySpecial[]>([]);
   const [visible, setVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -72,7 +74,7 @@ export function TodaySpecialPopup({ slug, onOrderItem, onViewReward }: Props) {
   function getDiscountLabel(special: TodaySpecial): string | null {
     if (special.discount_type === "none" || special.discount_value == null) return null;
     if (special.discount_type === "percentage") return `${special.discount_value}% OFF`;
-    return `Rs. ${special.discount_value} OFF`;
+    return `${formatCurrency(special.discount_value, currencySymbol, 0)} OFF`;
   }
 
   function getDiscountedPrice(special: TodaySpecial): string | null {
@@ -139,6 +141,7 @@ export function TodaySpecialPopup({ slug, onOrderItem, onViewReward }: Props) {
                   onCTA={() => handleCTA(special)}
                   discountLabel={getDiscountLabel(special)}
                   discountedPrice={getDiscountedPrice(special)}
+                  currencySymbol={currencySymbol}
                   carousel
                 />
               ))}
@@ -181,6 +184,7 @@ export function TodaySpecialPopup({ slug, onOrderItem, onViewReward }: Props) {
             onCTA={() => handleCTA(specials[0])}
             discountLabel={getDiscountLabel(specials[0])}
             discountedPrice={getDiscountedPrice(specials[0])}
+            currencySymbol={currencySymbol}
           />
         )}
       </div>
@@ -194,12 +198,14 @@ function SpecialCard({
   onCTA,
   discountLabel,
   discountedPrice,
+  currencySymbol,
   carousel,
 }: {
   special: TodaySpecial;
   onCTA: () => void;
   discountLabel: string | null;
   discountedPrice: string | null;
+  currencySymbol: string;
   carousel?: boolean;
 }) {
   const hasCTA = !!(special.linked_menu_item || special.linked_reward);
@@ -253,9 +259,9 @@ function SpecialCard({
             {discountedPrice && special.linked_menu_item_price && (
               <span className="ml-1">
                 <span className="line-through opacity-50">
-                  Rs. {special.linked_menu_item_price}
+                  {formatCurrency(parseFloat(special.linked_menu_item_price), currencySymbol)}
                 </span>{" "}
-                <span className="font-bold text-emerald-600">Rs. {discountedPrice}</span>
+                <span className="font-bold text-emerald-600">{formatCurrency(parseFloat(discountedPrice), currencySymbol)}</span>
               </span>
             )}
           </div>

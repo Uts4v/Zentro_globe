@@ -919,3 +919,58 @@ class StaffShiftArea(models.Model):
 
     def __str__(self):
         return f"{self.shift.worker.display_name} → {self.preparation_area.name}"
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# REPORT HISTORY
+# ══════════════════════════════════════════════════════════════════════════════
+
+class ReportHistory(models.Model):
+    REPORT_TYPE_CHOICES = [
+        ("sales", "Sales Report"),
+        ("tax", "Tax Report"),
+        ("fiscal", "Fiscal Report"),
+        ("payment", "Payment Report"),
+        ("cash", "Cash Report"),
+        ("online_payment", "Online Payment Report"),
+        ("product", "Product Sales Report"),
+        ("category", "Category Sales Report"),
+        ("refund", "Refund Report"),
+        ("discount", "Discount Report"),
+        ("order", "Order Report"),
+        ("analytics", "Analytics Report"),
+    ]
+
+    FORMAT_CHOICES = [
+        ("pdf", "PDF"),
+        ("xlsx", "Spreadsheet"),
+    ]
+
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="report_history",
+    )
+    report_name = models.CharField(max_length=255)
+    report_type = models.CharField(max_length=30, choices=REPORT_TYPE_CHOICES)
+    date_from = models.DateField(null=True, blank=True)
+    date_to = models.DateField(null=True, blank=True)
+    format = models.CharField(max_length=10, choices=FORMAT_CHOICES)
+    generated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="generated_reports",
+    )
+    filters = models.JSONField(
+        default=dict, blank=True,
+        help_text="Snapshot of the filters used when generating this report",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "pos_report_history"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.report_name} ({self.report_type}) — {self.created_at}"

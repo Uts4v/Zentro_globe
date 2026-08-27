@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import {
   posCloseShift,
   posListCashMovements,
@@ -30,6 +31,8 @@ const QUICK_CASH = [0, 50, 100, 200, 500];
 export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
   const activeShift = usePosStore((s) => s.activeShift);
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [closingCash, setClosingCash] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,8 +114,8 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
             {difference === 0
               ? "Drawer is balanced"
               : difference > 0
-                ? `Over by Rs ${difference.toFixed(2)}`
-                : `Short by Rs ${Math.abs(difference).toFixed(2)}`}
+                ? `Over by ${formatCurrency(difference, currencySymbol)}`
+                : `Short by ${formatCurrency(Math.abs(difference), currencySymbol)}`}
           </p>
           <div className="mt-6 space-y-3">
             <a
@@ -159,17 +162,17 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Opening Cash</span>
-              <span className="font-medium text-foreground">Rs {liveOpeningCash.toFixed(2)}</span>
+              <span className="font-medium text-foreground">{formatCurrency(liveOpeningCash, currencySymbol)}</span>
             </div>
             <div className="flex justify-between text-muted-foreground">
               <span>Cash Sales ({summary?.total_orders ?? 0} orders)</span>
-              <span className="font-medium text-green-600">+Rs {liveCashSales.toFixed(2)}</span>
+              <span className="font-medium text-green-600">+{formatCurrency(liveCashSales, currencySymbol)}</span>
             </div>
             {summary && Number(summary.total_card_sales) > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>Card Sales</span>
                 <span className="font-medium text-foreground">
-                  Rs {Number(summary.total_card_sales).toFixed(2)}
+                  {formatCurrency(summary.total_card_sales, currencySymbol)}
                 </span>
               </div>
             )}
@@ -179,7 +182,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
                   <ArrowUpFromLine className="h-3 w-3 text-red-500" />
                   Pay-outs
                 </span>
-                <span className="font-medium text-red-600">-Rs {totalPayouts.toFixed(2)}</span>
+                <span className="font-medium text-red-600">-{formatCurrency(totalPayouts, currencySymbol)}</span>
               </div>
             )}
             {totalPayins > 0 && (
@@ -188,12 +191,12 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
                   <ArrowDownToLine className="h-3 w-3 text-green-500" />
                   Pay-ins
                 </span>
-                <span className="font-medium text-green-600">+Rs {totalPayins.toFixed(2)}</span>
+                <span className="font-medium text-green-600">+{formatCurrency(totalPayins, currencySymbol)}</span>
               </div>
             )}
             <div className="border-t border-border pt-2 flex justify-between font-bold text-foreground">
               <span>Expected in Drawer</span>
-              <span>Rs {expectedCash.toFixed(2)}</span>
+              <span>{formatCurrency(expectedCash, currencySymbol)}</span>
             </div>
           </div>
         </div>
@@ -224,7 +227,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
                   {m.reason || m.movement_type}
                 </span>
                 <span className={m.movement_type === "payout" ? "text-red-600" : "text-green-600"}>
-                  {m.movement_type === "payout" ? "-" : "+"} Rs {Number(m.amount).toFixed(2)}
+                  {m.movement_type === "payout" ? "-" : "+"} {formatCurrency(m.amount, currencySymbol)}
                 </span>
               </div>
             ))}
@@ -234,7 +237,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
         {/* Closing cash input */}
         <div className="mb-4">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Closing Cash (Rs)
+            Closing Cash ({currencySymbol})
           </label>
           <input
             type="number"
@@ -260,7 +263,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              {amt === 0 ? "Empty" : `Rs ${amt}`}
+              {amt === 0 ? "Empty" : formatCurrency(amt, currencySymbol)}
             </button>
           ))}
         </div>
@@ -279,8 +282,8 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
             {difference === 0
               ? "Drawer is balanced"
               : difference > 0
-                ? `Over by Rs ${difference.toFixed(2)}`
-                : `Short by Rs ${Math.abs(difference).toFixed(2)}`}
+                ? `Over by ${formatCurrency(difference, currencySymbol)}`
+                : `Short by ${formatCurrency(Math.abs(difference), currencySymbol)}`}
           </div>
         )}
 

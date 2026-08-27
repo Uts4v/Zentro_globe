@@ -441,6 +441,7 @@ export interface PosOrder {
   discount_value: string;
   discount_amount: string;
   tax_amount: string;
+  tax_breakdown: Array<{ name: string; rate: number; amount: number }>;
   service_charge: string;
   total_amount: string;
   points_earned: number;
@@ -536,6 +537,7 @@ export interface PosReceiptData {
   }>;
   discount_amount: string;
   tax_amount: string;
+  tax_breakdown: Array<{ name: string; rate: number; amount: number }>;
   service_charge: string;
   total_amount: string;
   payments: Array<{
@@ -555,10 +557,27 @@ export interface PosReceiptData {
 }
 
 // Safe tax-rate helper: never return NaN for missing/empty/invalid values.
+// Uses tax_components when available, falls back to legacy tax_rate_percent.
 export function getTaxRate(settings?: PosSettings | null): number {
+  if (!settings) return 0;
+
+  // Prefer tax_components if present
+  if (settings.tax_components && settings.tax_components.length > 0) {
+    return settings.tax_components.reduce((sum, c) => {
+      const rate = Number.parseFloat(String(c.rate)) || 0;
+      return sum + (rate > 0 ? rate / 100 : 0);
+    }, 0);
+  }
+
+  // Fallback to legacy field
   const raw = Number.parseFloat(settings?.tax_rate_percent ?? "");
   if (!Number.isFinite(raw) || raw < 0) return 0;
   return raw / 100;
+}
+
+export interface TaxComponent {
+  name: string;
+  rate: number;
 }
 
 export interface PosSettings {
@@ -573,7 +592,11 @@ export interface PosSettings {
   manager_approval_threshold: string;
   offline_discounts_allowed: boolean;
   offline_credit_allowed: boolean;
+  tax_enabled: boolean;
   tax_rate_percent: string;
+  currency_code: string;
+  currency_symbol: string;
+  tax_components: TaxComponent[];
 }
 
 export interface PosMenuSnapshot {

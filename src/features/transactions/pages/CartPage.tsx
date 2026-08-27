@@ -12,7 +12,7 @@ import {
   Truck,
   Scan,
 } from "lucide-react";
-import { menuApi } from "@/lib/api";
+import { menuApi, merchantApi } from "@/lib/api";
 import { useState, useEffect } from "react";
 
 export function CartPage() {
@@ -31,6 +31,7 @@ export function CartPage() {
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
   const [error, setError] = useState("");
+  const [sym, setSym] = useState("Rs");
 
   useEffect(() => {
     loadMenu();
@@ -57,6 +58,12 @@ export function CartPage() {
           image_url: i.image_url,
         })),
       );
+      try {
+        const merchant = await merchantApi.get(selectedMerchantId);
+        if (merchant?.currency_symbol) setSym(merchant.currency_symbol);
+      } catch {
+        // use default "Rs"
+      }
     } catch {
       // cart calculations will skip unknown items
     } finally {
@@ -184,7 +191,11 @@ export function CartPage() {
                   {item?.name || "Unknown item"}
                 </p>
                 <p className="font-display text-lg text-foreground">
-                  NPR {item ? (item.price * c.qty).toLocaleString() : "—"}
+                  {item && item.price === 0 ? (
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-sm font-bold text-emerald-700">FREE</span>
+                  ) : (
+                    `NPR ${item ? (item.price * c.qty).toLocaleString() : "—"}`
+                  )}
                 </p>
               </div>
               <div className="glass flex shrink-0 items-center gap-1 rounded-full p-1">
@@ -229,10 +240,10 @@ export function CartPage() {
               )}
             </div>
 
-            <Row label="Subtotal" value={`NPR ${total.toLocaleString()}`} />
+            <Row label="Subtotal" value={`${sym} ${total.toLocaleString()}`} />
             <Row label="Service" value="—" />
             <div className="my-3 border-t border-border" />
-            <Row label="Total" value={`NPR ${total.toLocaleString()}`} bold />
+            <Row label="Total" value={`${sym} ${total.toLocaleString()}`} bold />
             <div className="mt-3 flex items-center justify-between rounded-2xl bg-ember-soft px-4 py-3">
               <span className="text-xs text-foreground">You'll earn</span>
               <span className="font-display text-lg text-ember">+{points} pts</span>
@@ -255,7 +266,7 @@ export function CartPage() {
                   <Loader2 className="h-4 w-4 animate-spin" /> Placing order…
                 </>
               ) : (
-                `Place order · NPR ${total.toLocaleString()}`
+                `Place order · ${sym} ${total.toLocaleString()}`
               )}
             </button>
           </div>

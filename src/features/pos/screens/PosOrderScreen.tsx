@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
-import { posBootstrap, getTaxRate } from "../api";
+import { posBootstrap } from "../api";
+import { formatCurrency, calculateTax } from "@/lib/currency";
 import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
 import PaymentSheet from "./PaymentSheet";
@@ -142,12 +143,12 @@ function MobileCartButton({
   const cart = usePosStore((s) => s.cart);
   const posSettings = usePosStore((s) => s.posSettings);
   const [open, setOpen] = useState(false);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   const count = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const total = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const taxRate = getTaxRate(posSettings);
-  const tax = total * taxRate;
-  const grandTotal = total + tax;
+  const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
+  const { total: tax } = calculateTax(subtotal, posSettings?.tax_components || []);
+  const grandTotal = subtotal + tax;
 
   if (count === 0) return null;
 
@@ -161,7 +162,7 @@ function MobileCartButton({
         <span className="grid h-6 w-6 place-items-center rounded-full bg-white/20 text-xs font-bold">
           {count}
         </span>
-        <span className="text-sm font-bold">Rs {grandTotal.toFixed(2)}</span>
+        <span className="text-sm font-bold">{formatCurrency(grandTotal, currencySymbol)}</span>
       </button>
 
       {/* Mobile cart drawer */}

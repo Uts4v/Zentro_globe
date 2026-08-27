@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { safeUuid } from "@/lib/utils";
+import { formatCurrency } from "@/lib/currency";
 import { usePosStore } from "../store";
 import {
   posCreatePayment,
@@ -47,6 +48,8 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
   const activeShift = usePosStore((s) => s.activeShift);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [cashReceived, setCashReceived] = useState("");
@@ -140,7 +143,7 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
             <div>
               <p className="text-sm font-bold text-green-800">Payment successful</p>
               {method === "cash" && change > 0 && (
-                <p className="text-xs text-green-600">Change to give: Rs {change.toFixed(2)}</p>
+                <p className="text-xs text-green-600">Change to give: {formatCurrency(change, currencySymbol)}</p>
               )}
             </div>
           </div>
@@ -153,7 +156,7 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
               </div>
             ) : receiptData ? (
               <div className="flex justify-center">
-                <Receipt data={receiptData} showPrintButton={true} />
+                <Receipt data={receiptData} showPrintButton={true} currencySymbol={currencySymbol} />
               </div>
             ) : null}
           </div>
@@ -196,7 +199,7 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
         <div className="border-b border-border px-6 py-4 text-center">
           <p className="text-xs text-muted-foreground">Amount to pay</p>
           <p className="numeric mt-1 text-3xl font-bold tracking-tight text-ink">
-            Rs {total.toFixed(2)}
+            {formatCurrency(total, currencySymbol)}
           </p>
         </div>
 
@@ -240,18 +243,18 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
                   onClick={() => setCashReceived(amt.toFixed(2))}
                   className="flex-1 rounded-lg bg-muted py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80"
                 >
-                  {amt === total ? "Exact" : `Rs ${amt}`}
+                  {amt === total ? "Exact" : formatCurrency(amt, currencySymbol)}
                 </button>
               ))}
             </div>
             {cashAmount > 0 && cashAmount < total && (
               <p className="mt-2 text-xs text-destructive">
-                Insufficient — need Rs {(total - cashAmount).toFixed(2)} more
+                Insufficient — need {formatCurrency(total - cashAmount, currencySymbol)} more
               </p>
             )}
             {change > 0 && (
               <p className="mt-2 rounded-xl bg-green-50 p-2 text-center text-sm font-bold text-green-700">
-                Change: Rs {change.toFixed(2)}
+                Change: {formatCurrency(change, currencySymbol)}
               </p>
             )}
           </div>
@@ -291,7 +294,7 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
                       <span
                         className={sufficient ? "font-bold text-ink" : "text-red-500 font-bold"}
                       >
-                        Rs {balance.toFixed(2)}
+                        {formatCurrency(balance, currencySymbol)}
                       </span>
                     </button>
                   );
@@ -319,7 +322,7 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                Confirm Payment — Rs {total.toFixed(2)}
+                Confirm Payment — {formatCurrency(total, currencySymbol)}
               </>
             )}
           </button>

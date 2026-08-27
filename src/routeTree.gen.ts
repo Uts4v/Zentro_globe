@@ -43,7 +43,10 @@ import { Route as OrdersIdRouteImport } from './routes/orders.$id'
 import { Route as MerchantTablesRouteImport } from './routes/merchant.tables'
 import { Route as MerchantStoreRouteImport } from './routes/merchant.store'
 import { Route as MerchantSpecialsRouteImport } from './routes/merchant.specials'
+import { Route as MerchantSettingsRouteImport } from './routes/merchant.settings'
+import { Route as MerchantReportsRouteImport } from './routes/merchant.reports'
 import { Route as MerchantPreparationRouteImport } from './routes/merchant.preparation'
+import { Route as MerchantPdfMenuRouteImport } from './routes/merchant.pdf-menu'
 import { Route as MerchantOrdersRouteImport } from './routes/merchant.orders'
 import { Route as MerchantOnboardingRouteImport } from './routes/merchant.onboarding'
 import { Route as MerchantMenuRouteImport } from './routes/merchant.menu'
@@ -71,6 +74,7 @@ import { Route as CustomerMerchantSlugRouteImport } from './routes/customer.merc
 import { Route as AuthMerchantSignupRouteImport } from './routes/auth.merchant.signup'
 import { Route as AuthMerchantLoginRouteImport } from './routes/auth.merchant.login'
 import { Route as MSlugTableTokenRouteImport } from './routes/m.$slug.table.$token'
+import { Route as MSlugPdfMenuTokenRouteImport } from './routes/m.$slug.pdf-menu.$token'
 
 const TransfersRoute = TransfersRouteImport.update({
   id: '/transfers',
@@ -242,9 +246,24 @@ const MerchantSpecialsRoute = MerchantSpecialsRouteImport.update({
   path: '/specials',
   getParentRoute: () => MerchantRoute,
 } as any)
+const MerchantSettingsRoute = MerchantSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => MerchantRoute,
+} as any)
+const MerchantReportsRoute = MerchantReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => MerchantRoute,
+} as any)
 const MerchantPreparationRoute = MerchantPreparationRouteImport.update({
   id: '/preparation',
   path: '/preparation',
+  getParentRoute: () => MerchantRoute,
+} as any)
+const MerchantPdfMenuRoute = MerchantPdfMenuRouteImport.update({
+  id: '/pdf-menu',
+  path: '/pdf-menu',
   getParentRoute: () => MerchantRoute,
 } as any)
 const MerchantOrdersRoute = MerchantOrdersRouteImport.update({
@@ -382,6 +401,11 @@ const MSlugTableTokenRoute = MSlugTableTokenRouteImport.update({
   path: '/table/$token',
   getParentRoute: () => MSlugRoute,
 } as any)
+const MSlugPdfMenuTokenRoute = MSlugPdfMenuTokenRouteImport.update({
+  id: '/pdf-menu/$token',
+  path: '/pdf-menu/$token',
+  getParentRoute: () => MSlugRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -418,7 +442,10 @@ export interface FileRoutesByFullPath {
   '/merchant/menu': typeof MerchantMenuRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
+  '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
   '/merchant/preparation': typeof MerchantPreparationRoute
+  '/merchant/reports': typeof MerchantReportsRoute
+  '/merchant/settings': typeof MerchantSettingsRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
@@ -445,6 +472,7 @@ export interface FileRoutesByFullPath {
   '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
+  '/m/$slug/pdf-menu/$token': typeof MSlugPdfMenuTokenRoute
   '/m/$slug/table/$token': typeof MSlugTableTokenRoute
 }
 export interface FileRoutesByTo {
@@ -480,7 +508,10 @@ export interface FileRoutesByTo {
   '/merchant/menu': typeof MerchantMenuRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
+  '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
   '/merchant/preparation': typeof MerchantPreparationRoute
+  '/merchant/reports': typeof MerchantReportsRoute
+  '/merchant/settings': typeof MerchantSettingsRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
@@ -507,6 +538,7 @@ export interface FileRoutesByTo {
   '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
+  '/m/$slug/pdf-menu/$token': typeof MSlugPdfMenuTokenRoute
   '/m/$slug/table/$token': typeof MSlugTableTokenRoute
 }
 export interface FileRoutesById {
@@ -545,7 +577,10 @@ export interface FileRoutesById {
   '/merchant/menu': typeof MerchantMenuRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
+  '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
   '/merchant/preparation': typeof MerchantPreparationRoute
+  '/merchant/reports': typeof MerchantReportsRoute
+  '/merchant/settings': typeof MerchantSettingsRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
@@ -572,6 +607,7 @@ export interface FileRoutesById {
   '/pos/preparation/$areaId': typeof PosPreparationAreaIdRoute
   '/pos/reports/z-report': typeof PosReportsZReportRoute
   '/table/$token/order': typeof TableTokenOrderRoute
+  '/m/$slug/pdf-menu/$token': typeof MSlugPdfMenuTokenRoute
   '/m/$slug/table/$token': typeof MSlugTableTokenRoute
 }
 export interface FileRouteTypes {
@@ -611,7 +647,10 @@ export interface FileRouteTypes {
     | '/merchant/menu'
     | '/merchant/onboarding'
     | '/merchant/orders'
+    | '/merchant/pdf-menu'
     | '/merchant/preparation'
+    | '/merchant/reports'
+    | '/merchant/settings'
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
@@ -638,6 +677,7 @@ export interface FileRouteTypes {
     | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
+    | '/m/$slug/pdf-menu/$token'
     | '/m/$slug/table/$token'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -673,7 +713,10 @@ export interface FileRouteTypes {
     | '/merchant/menu'
     | '/merchant/onboarding'
     | '/merchant/orders'
+    | '/merchant/pdf-menu'
     | '/merchant/preparation'
+    | '/merchant/reports'
+    | '/merchant/settings'
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
@@ -700,6 +743,7 @@ export interface FileRouteTypes {
     | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
+    | '/m/$slug/pdf-menu/$token'
     | '/m/$slug/table/$token'
   id:
     | '__root__'
@@ -737,7 +781,10 @@ export interface FileRouteTypes {
     | '/merchant/menu'
     | '/merchant/onboarding'
     | '/merchant/orders'
+    | '/merchant/pdf-menu'
     | '/merchant/preparation'
+    | '/merchant/reports'
+    | '/merchant/settings'
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
@@ -764,6 +811,7 @@ export interface FileRouteTypes {
     | '/pos/preparation/$areaId'
     | '/pos/reports/z-report'
     | '/table/$token/order'
+    | '/m/$slug/pdf-menu/$token'
     | '/m/$slug/table/$token'
   fileRoutesById: FileRoutesById
 }
@@ -1037,11 +1085,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MerchantSpecialsRouteImport
       parentRoute: typeof MerchantRoute
     }
+    '/merchant/settings': {
+      id: '/merchant/settings'
+      path: '/settings'
+      fullPath: '/merchant/settings'
+      preLoaderRoute: typeof MerchantSettingsRouteImport
+      parentRoute: typeof MerchantRoute
+    }
+    '/merchant/reports': {
+      id: '/merchant/reports'
+      path: '/reports'
+      fullPath: '/merchant/reports'
+      preLoaderRoute: typeof MerchantReportsRouteImport
+      parentRoute: typeof MerchantRoute
+    }
     '/merchant/preparation': {
       id: '/merchant/preparation'
       path: '/preparation'
       fullPath: '/merchant/preparation'
       preLoaderRoute: typeof MerchantPreparationRouteImport
+      parentRoute: typeof MerchantRoute
+    }
+    '/merchant/pdf-menu': {
+      id: '/merchant/pdf-menu'
+      path: '/pdf-menu'
+      fullPath: '/merchant/pdf-menu'
+      preLoaderRoute: typeof MerchantPdfMenuRouteImport
       parentRoute: typeof MerchantRoute
     }
     '/merchant/orders': {
@@ -1233,6 +1302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MSlugTableTokenRouteImport
       parentRoute: typeof MSlugRoute
     }
+    '/m/$slug/pdf-menu/$token': {
+      id: '/m/$slug/pdf-menu/$token'
+      path: '/pdf-menu/$token'
+      fullPath: '/m/$slug/pdf-menu/$token'
+      preLoaderRoute: typeof MSlugPdfMenuTokenRouteImport
+      parentRoute: typeof MSlugRoute
+    }
   }
 }
 
@@ -1297,7 +1373,10 @@ interface MerchantRouteChildren {
   MerchantMenuRoute: typeof MerchantMenuRoute
   MerchantOnboardingRoute: typeof MerchantOnboardingRoute
   MerchantOrdersRoute: typeof MerchantOrdersRoute
+  MerchantPdfMenuRoute: typeof MerchantPdfMenuRoute
   MerchantPreparationRoute: typeof MerchantPreparationRoute
+  MerchantReportsRoute: typeof MerchantReportsRoute
+  MerchantSettingsRoute: typeof MerchantSettingsRoute
   MerchantSpecialsRoute: typeof MerchantSpecialsRoute
   MerchantStoreRoute: typeof MerchantStoreRoute
   MerchantTablesRoute: typeof MerchantTablesRoute
@@ -1312,7 +1391,10 @@ const MerchantRouteChildren: MerchantRouteChildren = {
   MerchantMenuRoute: MerchantMenuRoute,
   MerchantOnboardingRoute: MerchantOnboardingRoute,
   MerchantOrdersRoute: MerchantOrdersRoute,
+  MerchantPdfMenuRoute: MerchantPdfMenuRoute,
   MerchantPreparationRoute: MerchantPreparationRoute,
+  MerchantReportsRoute: MerchantReportsRoute,
+  MerchantSettingsRoute: MerchantSettingsRoute,
   MerchantSpecialsRoute: MerchantSpecialsRoute,
   MerchantStoreRoute: MerchantStoreRoute,
   MerchantTablesRoute: MerchantTablesRoute,
@@ -1378,10 +1460,12 @@ const PosRouteChildren: PosRouteChildren = {
 const PosRouteWithChildren = PosRoute._addFileChildren(PosRouteChildren)
 
 interface MSlugRouteChildren {
+  MSlugPdfMenuTokenRoute: typeof MSlugPdfMenuTokenRoute
   MSlugTableTokenRoute: typeof MSlugTableTokenRoute
 }
 
 const MSlugRouteChildren: MSlugRouteChildren = {
+  MSlugPdfMenuTokenRoute: MSlugPdfMenuTokenRoute,
   MSlugTableTokenRoute: MSlugTableTokenRoute,
 }
 

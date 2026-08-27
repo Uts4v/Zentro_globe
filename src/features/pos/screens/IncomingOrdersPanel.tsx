@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import {
   posListOrders,
   posUpdateOrderStatus,
@@ -42,6 +43,8 @@ export default function IncomingOrdersPanel() {
   const incomingOrders = usePosStore((s) => s.incomingOrders);
   const setIncomingOrders = usePosStore((s) => s.setIncomingOrders);
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -94,9 +97,8 @@ export default function IncomingOrdersPanel() {
     if (!currentWorker) return;
     try {
       await posUpdateOrderStatus(order.uuid, "confirmed", currentWorker.id);
+      setIncomingOrders(incomingOrders.filter((o) => o.uuid !== order.uuid));
     } catch {
-      // handled by toast in api layer
-    } finally {
       fetchOrders();
     }
   }
@@ -105,9 +107,8 @@ export default function IncomingOrdersPanel() {
     if (!currentWorker) return;
     try {
       await posUpdateOrderStatus(order.uuid, "cancelled", currentWorker.id);
+      setIncomingOrders(incomingOrders.filter((o) => o.uuid !== order.uuid));
     } catch {
-      // silent
-    } finally {
       fetchOrders();
     }
   }
@@ -115,10 +116,9 @@ export default function IncomingOrdersPanel() {
   async function handleMarkReady(order: PosOrder) {
     if (!currentWorker) return;
     try {
-      await posUpdateOrderStatus(order.uuid, "ready", currentWorker.id);
+      const updated = await posUpdateOrderStatus(order.uuid, "ready", currentWorker.id);
+      setIncomingOrders(incomingOrders.map((o) => o.uuid === order.uuid ? { ...o, ...updated } : o));
     } catch {
-      // silent
-    } finally {
       fetchOrders();
     }
   }
@@ -241,7 +241,7 @@ export default function IncomingOrdersPanel() {
                   </div>
                 </div>
                 <span className="text-sm font-bold text-foreground whitespace-nowrap">
-                  Rs {Number(order.total_amount).toFixed(2)}
+                  {formatCurrency(Number(order.total_amount), currencySymbol)}
                 </span>
               </div>
 
@@ -275,7 +275,7 @@ export default function IncomingOrdersPanel() {
                       <span className="text-muted-foreground">
                         {item.quantity}× {item.name}
                       </span>
-                      <span className="font-medium">Rs {Number(item.subtotal).toFixed(2)}</span>
+                      <span className="font-medium">{formatCurrency(Number(item.subtotal), currencySymbol)}</span>
                     </div>
                   ))}
                   {order.notes && (

@@ -72,8 +72,8 @@ function buildOverviewStats(data: AnalyticsResponse): OverviewStats {
   };
 }
 
-function formatMoney(value: number | string | null | undefined) {
-  return `NPR ${Number(value ?? 0).toLocaleString()}`;
+function formatMoney(value: number | string | null | undefined, sym = "Rs") {
+  return `${sym} ${Number(value ?? 0).toLocaleString()}`;
 }
 
 function getGreeting() {
@@ -87,6 +87,8 @@ function getGreeting() {
 
 function Overview() {
   const { merchantProfile } = useAuth();
+
+  const sym = merchantProfile?.currency_symbol || "Rs";
 
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [topItems, setTopItems] = useState<TopItem[]>([]);
@@ -150,7 +152,7 @@ function Overview() {
     () => [
       {
         label: "Today's revenue",
-        value: formatMoney(today.revenue),
+        value: formatMoney(today.revenue, sym),
         icon: TrendingUp,
       },
       {
@@ -165,11 +167,11 @@ function Overview() {
       },
       {
         label: "Average order",
-        value: formatMoney(averageOrderValue),
+        value: formatMoney(averageOrderValue, sym),
         icon: ShoppingBag,
       },
     ],
-    [today.orders, today.revenue, activeMembers, averageOrderValue],
+    [today.orders, today.revenue, activeMembers, averageOrderValue, sym],
   );
 
   if (!merchantProfile || loading) {
@@ -208,7 +210,7 @@ function Overview() {
             <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
               Your store has received <span className="font-medium text-ink">{today.orders}</span>{" "}
               orders today with{" "}
-              <span className="font-medium text-ink">{formatMoney(today.revenue)}</span> in revenue.
+              <span className="font-medium text-ink">{formatMoney(today.revenue, sym)}</span> in revenue.
             </p>
           </div>
 

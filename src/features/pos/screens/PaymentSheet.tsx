@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { safeUuid } from "@/lib/utils";
 import { usePosStore } from "../store";
-import { posCreateOrder, posCreatePayment, posReceiptData, PosReceiptData, posListDebitAccounts, DebitAccount, getTaxRate } from "../api";
+import { posCreateOrder, posCreatePayment, posReceiptData, PosReceiptData, posListDebitAccounts, DebitAccount } from "../api";
+import { formatCurrency, calculateTax } from "@/lib/currency";
 import Receipt from "../printing/Receipt";
 import {
   X,
@@ -63,6 +64,7 @@ export default function PaymentSheet({
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   useEffect(() => {
     if (method === "debit" && debitAccounts.length === 0) {
@@ -73,8 +75,7 @@ export default function PaymentSheet({
   if (!open) return null;
 
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const taxRate = getTaxRate(posSettings);
-  const tax = subtotal * taxRate;
+  const { total: tax } = calculateTax(subtotal, posSettings?.tax_components || []);
   const total = subtotal + tax;
   const cashAmount = parseFloat(cashReceived) || 0;
   const change = method === "cash" ? Math.max(0, cashAmount - total) : 0;
@@ -240,7 +241,7 @@ export default function PaymentSheet({
             <div>
               <p className="text-sm font-bold text-green-800">Payment successful</p>
               {method === "cash" && change > 0 && (
-                <p className="text-xs text-green-600">Change to give: Rs {change.toFixed(2)}</p>
+                <p className="text-xs text-green-600">Change to give: {formatCurrency(change, currencySymbol)}</p>
               )}
             </div>
           </div>
@@ -253,7 +254,7 @@ export default function PaymentSheet({
               </div>
             ) : receiptData ? (
               <div className="flex justify-center">
-                <Receipt data={receiptData} showPrintButton={true} />
+                <Receipt data={receiptData} showPrintButton={true} currencySymbol={currencySymbol} />
               </div>
             ) : null}
           </div>
@@ -290,7 +291,7 @@ export default function PaymentSheet({
 
           <div className="border-b border-border px-6 py-4 text-center">
             <p className="text-xs text-muted-foreground">Order total</p>
-            <p className="mt-1 text-3xl font-bold text-ink">Rs {total.toFixed(2)}</p>
+            <p className="mt-1 text-3xl font-bold text-ink">{formatCurrency(total, currencySymbol)}</p>
             {selectedTableId && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Table will be assigned on order
@@ -324,7 +325,7 @@ export default function PaymentSheet({
               ) : (
                 <>
                   <Check className="h-4 w-4" />
-                  Place Order — Rs {total.toFixed(2)}
+                  Place Order — {formatCurrency(total, currencySymbol)}
                 </>
               )}
             </button>
@@ -356,7 +357,7 @@ export default function PaymentSheet({
         <div className="border-b border-border px-6 py-4 text-center">
           <p className="text-xs text-muted-foreground">Amount to pay</p>
           <p className="mt-1 text-3xl font-bold text-ink">
-            Rs {total.toFixed(2)}
+            {formatCurrency(total, currencySymbol)}
           </p>
         </div>
 
@@ -402,18 +403,18 @@ export default function PaymentSheet({
                   onClick={() => setCashReceived(amt.toFixed(2))}
                   className="flex-1 rounded-lg bg-muted py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80"
                 >
-                  {amt === total ? "Exact" : `Rs ${amt}`}
+                  {amt === total ? "Exact" : formatCurrency(amt, currencySymbol)}
                 </button>
               ))}
             </div>
             {cashAmount > 0 && cashAmount < total && (
               <p className="mt-2 text-xs text-destructive">
-                Insufficient — need Rs {(total - cashAmount).toFixed(2)} more
+                Insufficient — need {formatCurrency(total - cashAmount, currencySymbol)} more
               </p>
             )}
             {change > 0 && (
               <p className="mt-2 rounded-xl bg-green-50 p-2 text-center text-sm font-bold text-green-700">
-                Change: Rs {change.toFixed(2)}
+                Change: {formatCurrency(change, currencySymbol)}
               </p>
             )}
           </div>
@@ -464,7 +465,7 @@ export default function PaymentSheet({
                         )}
                       </div>
                       <span className={sufficient ? "font-bold text-ink" : "text-red-500 font-bold"}>
-                        Rs {balance.toFixed(2)}
+                        {formatCurrency(balance, currencySymbol)}
                       </span>
                     </button>
                   );
@@ -473,7 +474,7 @@ export default function PaymentSheet({
             )}
             {selectedDebitAccount && (
               <p className="mt-2 text-xs text-muted-foreground">
-                Total: Rs {total.toFixed(2)}
+                Total: {formatCurrency(total, currencySymbol)}
               </p>
             )}
           </div>
@@ -499,7 +500,7 @@ export default function PaymentSheet({
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                Confirm Payment — Rs {total.toFixed(2)}
+                Confirm Payment — {formatCurrency(total, currencySymbol)}
               </>
             )}
           </button>

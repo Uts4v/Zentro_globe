@@ -1,9 +1,25 @@
 // src/lib/django-api-base.ts
 // Shared helpers for talking to the Django loyalty backend.
 
-export const DJANGO_BASE =
-  (import.meta.env.VITE_DJANGO_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ||
-  "http://127.0.0.1:8000/api";
+declare global {
+  interface Window {
+    __DJANGO_API_BASE__?: string;
+  }
+}
+
+// Build-time default (baked by Vite). Overridden at runtime when the SSR server
+// injects `window.__DJANGO_API_BASE__` from the DJANGO_API_BASE_URL env var.
+const BUILD_BASE = (import.meta.env.VITE_DJANGO_API_BASE_URL as string | undefined);
+
+function resolveBase(): string {
+  const injected =
+    typeof window !== "undefined" && window.__DJANGO_API_BASE__
+      ? window.__DJANGO_API_BASE__
+      : undefined;
+  return injected || BUILD_BASE || "http://127.0.0.1:8000/api";
+}
+
+export const DJANGO_BASE = resolveBase().replace(/\/$/, "");
 
 export function apiUrl(path: string): string {
   const p = path.startsWith("/") ? path : `/${path}`;
@@ -27,7 +43,7 @@ export async function djangoFetch<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(url, options);
+  const res = await fetch(url, { cache: "no-store", ...options });
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

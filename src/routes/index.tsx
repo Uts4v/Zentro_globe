@@ -31,6 +31,7 @@ import {
 import { requireAuth } from "@/lib/auth-guard";
 import { lazy, Suspense, useState, useEffect, useMemo } from "react";
 import { TodaySpecialPopup } from "@/features/merchant-management/components/TodaySpecialPopup";
+import { formatCurrency } from "@/lib/currency";
 import { TransferForm } from "@/features/transfers/components/TransferForm";
 import { PremiumPunchCard } from "@/components/PremiumPunchCard";
 import { PunchCardProofModal } from "@/components/PunchCardProofModal";
@@ -72,6 +73,7 @@ function Index() {
   const [merchantLocation, setMerchantLocation] = useState<string | null>(null);
   const [merchantThemeColor, setMerchantThemeColor] = useState("");
   const [merchantBusinessType, setMerchantBusinessType] = useState<string | null>(null);
+  const [currencySymbol, setCurrencySymbol] = useState("Rs");
   const [cardTextColor, setCardTextColor] = useState("");
   const [cardBackgroundImage, setCardBackgroundImage] = useState("");
   const [cardDesign, setCardDesign] = useState<MembershipCardDesign | null>(null);
@@ -132,6 +134,7 @@ function Index() {
           setMerchantCategory(m.business_type ?? null);
           setMerchantLocation(m.address ?? null);
           setMerchantBusinessType(m.business_type ?? null);
+          setCurrencySymbol(m.currency_symbol || "Rs");
           setCardTextColor(m.card_text_color || "");
           setCardBackgroundImage(m.card_background_image || "");
         })
@@ -318,6 +321,7 @@ function Index() {
       {merchantSlug && (
         <TodaySpecialPopup
           slug={merchantSlug}
+          currencySymbol={currencySymbol}
           onOrderItem={(menuItemId) => {
             add(menuItemId);
             navigate({ to: "/menu" });
@@ -490,7 +494,7 @@ function Index() {
                 const discountLabel = hasDiscount
                   ? s.discount_type === "percentage"
                     ? `${s.discount_value}% OFF`
-                    : `Rs. ${s.discount_value} OFF`
+                    : `${formatCurrency(s.discount_value ?? 0, currencySymbol, 0)} OFF`
                   : null;
                 const discountedPrice = (() => {
                   if (!hasDiscount || !s.linked_menu_item_price) return null;
@@ -562,10 +566,10 @@ function Index() {
                           {discountedPrice && s.linked_menu_item_price && (
                             <span className="shrink-0 whitespace-nowrap">
                               <span className="line-through opacity-50">
-                                Rs. {s.linked_menu_item_price}
+                                {formatCurrency(parseFloat(s.linked_menu_item_price), currencySymbol)}
                               </span>{" "}
                               <span className="font-extrabold text-emerald-600">
-                                Rs. {discountedPrice}
+                                {formatCurrency(parseFloat(discountedPrice), currencySymbol)}
                               </span>
                             </span>
                           )}

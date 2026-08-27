@@ -4,6 +4,7 @@ pos/urls.py — mounted at /api/pos/
 
 from django.urls import path
 from . import views
+from . import reporting_views
 
 urlpatterns = [
     # Health
@@ -116,4 +117,15 @@ urlpatterns = [
     path("schedules/", views.list_schedules, name="pos-schedules"),
     path("schedules/create/", views.create_schedule, name="pos-schedule-create"),
     path("schedules/<int:schedule_id>/delete/", views.delete_schedule, name="pos-schedule-delete"),
+
+    # ── Reporting & Analytics ─────────────────────────────────────────────────
+    path("reports/sales/", reporting_views.sales_report, name="pos-reports-sales"),
+    path("reports/fiscal/", reporting_views.fiscal_report, name="pos-reports-fiscal"),
+    path("reports/items/", reporting_views.item_analytics, name="pos-reports-items"),
+    path("reports/payments/", reporting_views.payment_analytics, name="pos-reports-payments"),
+    path("reports/analytics/", reporting_views.enhanced_analytics, name="pos-reports-analytics"),
+    path("reports/history/", reporting_views.report_history, name="pos-reports-history"),
+    path("reports/record-export/", reporting_views.record_report_export, name="pos-reports-record-export"),
+    path("reports/export/csv/", reporting_views.export_csv, name="pos-reports-export-csv"),
+    path("reports/export/pdf/", reporting_views.export_pdf, name="pos-reports-export-pdf"),
 ]

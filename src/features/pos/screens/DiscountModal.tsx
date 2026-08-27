@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import {
   posApplyDiscount,
   posWorkerLogin,
@@ -30,6 +31,7 @@ export default function DiscountModal({
 }: DiscountModalProps) {
   const currentWorker = usePosStore((s) => s.currentWorker);
   const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [type, setType] = useState<"percentage" | "fixed">("percentage");
   const [value, setValue] = useState("");
   const [reason, setReason] = useState("");
@@ -251,18 +253,18 @@ export default function DiscountModal({
             }`}
           >
             <DollarSign className="h-4 w-4" />
-            Fixed (Rs)
+            Fixed ({currencySymbol})
           </button>
         </div>
 
         {/* Value input */}
         <div className="mb-4">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            {type === "percentage" ? "Discount %" : "Amount (Rs)"}
+            {type === "percentage" ? "Discount %" : `Amount (${currencySymbol})`}
           </label>
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-lg font-bold text-muted-foreground">
-              {type === "percentage" ? "%" : "Rs"}
+              {type === "percentage" ? "%" : currencySymbol}
             </span>
             <input
               type="number"

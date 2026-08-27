@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import { posOpenShift, posGetLastClosedShift, CashShift } from "../api";
 import { Wallet, Loader2, ArrowRight, AlertTriangle } from "lucide-react";
 
@@ -12,6 +13,8 @@ const QUICK_CASH = [0, 50, 100, 200, 500];
 export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
   const device = usePosStore((s) => s.device);
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [openingCash, setOpeningCash] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +63,7 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
         {/* Opening cash input */}
         <div className="mb-4">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Opening Cash (Rs)
+            Opening Cash ({currencySymbol})
           </label>
           <input
             type="number"
@@ -86,7 +89,7 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              {amt === 0 ? "Empty" : `Rs ${amt}`}
+              {amt === 0 ? "Empty" : formatCurrency(amt, currencySymbol)}
             </button>
           ))}
         </div>
@@ -94,7 +97,7 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
         {/* Expected cash from previous shift */}
         {expectedCash !== null && (
           <div className="mb-4 rounded-xl bg-muted/50 px-4 py-2.5 text-center text-xs text-muted-foreground">
-            Previous shift closing cash: <span className="font-bold text-foreground">Rs {expectedCash.toFixed(2)}</span>
+            Previous shift closing cash: <span className="font-bold text-foreground">{formatCurrency(expectedCash, currencySymbol)}</span>
           </div>
         )}
 
@@ -103,8 +106,8 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
           <div className="mb-4 flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-700">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             {cash > expectedCash
-              ? `Over by Rs ${(cash - expectedCash).toFixed(2)} from previous shift`
-              : `Short by Rs ${(expectedCash - cash).toFixed(2)} from previous shift`}
+              ? `Over by ${formatCurrency(cash - expectedCash, currencySymbol)} from previous shift`
+              : `Short by ${formatCurrency(expectedCash - cash, currencySymbol)} from previous shift`}
           </div>
         )}
 

@@ -1,6 +1,8 @@
 import { usePosStore } from "../store";
 import { useState, useMemo } from "react";
-import { PosReceiptData, PosCustomer, getTaxRate } from "../api";
+import { PosReceiptData, PosCustomer, posCreateOrder } from "../api";
+import { safeUuid } from "@/lib/utils";
+import { formatCurrency, calculateTax } from "@/lib/currency";
 import CustomerSearchModal from "./CustomerSearchModal";
 import TableSelector from "./TableSelector";
 import {
@@ -14,6 +16,7 @@ import {
   User,
   ChevronRight,
   Check,
+  Gift,
 } from "lucide-react";
 
 interface CartPanelProps {
@@ -28,6 +31,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const posSettings = usePosStore((s) => s.posSettings);
   const merchant = usePosStore((s) => s.merchant);
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const device = usePosStore((s) => s.device);
   const menu = usePosStore((s) => s.menu);
   const tables = usePosStore((s) => s.tables);
   const selectedTableId = usePosStore((s) => s.selectedTableId);
@@ -39,10 +43,16 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const setSelectedTable = usePosStore((s) => s.setSelectedTable);
   const setSelectedCustomer = usePosStore((s) => s.setSelectedCustomer);
 
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
+
   const [showNotes, setShowNotes] = useState(false);
   const [printingBill, setPrintingBill] = useState(false);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [linkedCustomer, setLinkedCustomer] = useState<PosCustomer | null>(null);
+  const activeShift = usePosStore((s) => s.activeShift);
+  const [showFreeConfirm, setShowFreeConfirm] = useState(false);
+  const [freeOrderLoading, setFreeOrderLoading] = useState(false);
+  const [freeOrderError, setFreeOrderError] = useState<string | null>(null);
 
   const menuItemById = useMemo(() => {
     const map = new Map<number, any>();
@@ -55,8 +65,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   }, [menu]);
 
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const taxRate = getTaxRate(posSettings);
-  const tax = subtotal * taxRate;
+  const { total: tax, breakdown: taxBreakdown } = calculateTax(subtotal, posSettings?.tax_components || []);
   const total = subtotal + tax;
   const selectedTable = tables.find((t) => t.id === selectedTableId);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -101,6 +110,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
       discounts: [],
       discount_amount: "0.00",
       tax_amount: String(tax),
+      tax_breakdown: taxBreakdown,
       service_charge: "0.00",
       total_amount: String(total),
       payments: [],
@@ -140,20 +150,20 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
               (item) => `
             <div style="display: flex; justify-content: space-between; margin-bottom: 3px;">
               <span style="font-weight: bold;">${item.quantity}x ${item.name}</span>
-              <span>Rs ${Number(item.subtotal).toFixed(2)}</span>
+              <span>${Number(item.price) === 0 ? "FREE" : formatCurrency(Number(item.subtotal), currencySymbol)}</span>
             </div>
-            ${item.quantity > 1 ? `<div style="text-align: right; font-size: 10px; color: #666;">@ Rs ${Number(item.price).toFixed(2)} each</div>` : ""}
+            ${item.quantity > 1 && Number(item.price) > 0 ? `<div style="text-align: right; font-size: 10px; color: #666;">@ ${formatCurrency(Number(item.price), currencySymbol)} each</div>` : ""}
           `,
             )
             .join("")}
         </div>
         <hr style="border: none; border-top: 1px dashed #000; margin: 6px 0;">
         <div style="font-size: 11px;">
-          <div style="display: flex; justify-content: space-between;"><span>Subtotal</span><span>Rs ${subtotal.toFixed(2)}</span></div>
-          ${tax > 0 ? `<div style="display: flex; justify-content: space-between;"><span>VAT (${(taxRate * 100).toFixed(0)}%)</span><span>Rs ${tax.toFixed(2)}</span></div>` : ""}
+          <div style="display: flex; justify-content: space-between;"><span>Subtotal</span><span>${formatCurrency(subtotal, currencySymbol)}</span></div>
+          ${taxBreakdown.map((item) => `<div style="display: flex; justify-content: space-between;"><span>${item.name} (${item.rate}%)</span><span>${formatCurrency(item.amount, currencySymbol)}</span></div>`).join("")}
           <hr style="border: none; border-top: 2px solid #000; margin: 6px 0;">
           <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
-            <span>TOTAL</span><span>Rs ${total.toFixed(2)}</span>
+            <span>TOTAL</span><span>${formatCurrency(total, currencySymbol)}</span>
           </div>
         </div>
         <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;">
@@ -182,6 +192,34 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
     `);
     printWindow.document.close();
     setPrintingBill(false);
+  }
+
+  async function handleStaffFreeOrder() {
+    if (!merchant || !currentWorker || !device || cart.length === 0) return;
+    setFreeOrderLoading(true);
+    setFreeOrderError(null);
+    try {
+      await posCreateOrder({
+        merchant_id: merchant.id,
+        items: cart.map((item) => ({
+          menu_item_id: item.menu_item_id,
+          quantity: item.quantity,
+        })),
+        notes: `Staff free order — ${cartNotes || "No notes"}`,
+        fulfillment_type: fulfillmentType,
+        order_type: "staff_comp",
+        shift_id: activeShift?.id ?? undefined,
+        worker_id: currentWorker.id,
+        device_id: device.id,
+        client_mutation_id: safeUuid(),
+      });
+      clearCart();
+      setShowFreeConfirm(false);
+    } catch (err: any) {
+      setFreeOrderError(err?.message || "Failed to create free order");
+    } finally {
+      setFreeOrderLoading(false);
+    }
   }
 
   return (
@@ -338,12 +376,18 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
-                      <p className="numeric shrink-0 text-sm font-bold text-foreground">
-                        Rs {item.subtotal.toFixed(2)}
-                      </p>
+                      {item.price === 0 ? (
+                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                          FREE
+                        </span>
+                      ) : (
+                        <p className="numeric shrink-0 text-sm font-bold text-foreground">
+                          {formatCurrency(item.subtotal, currencySymbol)}
+                        </p>
+                      )}
                     </div>
                     <p className="numeric text-[11px] text-muted-foreground">
-                      Rs {item.price.toFixed(2)} each
+                      {item.price === 0 ? "No charge" : `${formatCurrency(item.price, currencySymbol)} each`}
                     </p>
 
                     {/* Quantity controls */}
@@ -415,14 +459,14 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
       <div className="shrink-0 space-y-2 border-t border-border bg-card px-5 py-4">
         <div className="flex items-center justify-between text-[13px] text-muted-foreground">
           <span>Subtotal</span>
-          <span className="numeric font-medium text-foreground">Rs {subtotal.toFixed(2)}</span>
+          <span className="numeric font-medium text-foreground">{formatCurrency(subtotal, currencySymbol)}</span>
         </div>
-        {tax > 0 && (
-          <div className="flex items-center justify-between text-[13px] text-muted-foreground">
-            <span>VAT ({(taxRate * 100).toFixed(0)}%)</span>
-            <span className="numeric font-medium text-foreground">Rs {tax.toFixed(2)}</span>
+        {taxBreakdown.map((item, i) => (
+          <div key={i} className="flex items-center justify-between text-[13px] text-muted-foreground">
+            <span>{item.name} ({item.rate}%)</span>
+            <span className="numeric font-medium text-foreground">{formatCurrency(item.amount, currencySymbol)}</span>
           </div>
-        )}
+        ))}
         <button
           onClick={onDiscount}
           className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-ember"
@@ -436,7 +480,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         <div className="flex items-end justify-between border-t border-border pt-2">
           <span className="text-sm font-semibold text-foreground">Total</span>
           <span className="numeric text-2xl font-bold tracking-tight text-foreground">
-            Rs {total.toFixed(2)}
+            {formatCurrency(total, currencySymbol)}
           </span>
         </div>
       </div>
@@ -462,6 +506,15 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
             Apply Discount
           </button>
         )}
+        {!isEmpty && (
+          <button
+            onClick={() => setShowFreeConfirm(true)}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-300 bg-emerald-50 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+          >
+            <Gift className="h-4 w-4" />
+            Staff Free Order
+          </button>
+        )}
         <button
           onClick={onCheckout}
           disabled={isEmpty}
@@ -473,11 +526,48 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
           ) : (
             <>
               Place Order
-              <span className="font-extrabold">— Rs {total.toFixed(2)}</span>
+              <span className="font-extrabold">— {formatCurrency(total, currencySymbol)}</span>
             </>
           )}
         </button>
       </div>
+
+      {/* ── Staff Free Order Confirmation ── */}
+      {showFreeConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-sm rounded-3xl border border-border bg-background p-6 shadow-xl">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
+              <Gift className="h-6 w-6 text-emerald-600" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground">Staff Free Order</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Create a free order for staff. All items will be recorded at Rs 0 — no payment required.
+            </p>
+            <div className="mt-3 rounded-xl bg-mist px-4 py-3 text-xs text-muted-foreground">
+              {cart.length} item{cart.length !== 1 && "s"} · Total: <span className="font-bold text-foreground">{formatCurrency(total, currencySymbol)}</span> → <span className="font-bold text-emerald-600">FREE</span>
+            </div>
+            {freeOrderError && (
+              <p className="mt-2 text-xs text-rose-600">{freeOrderError}</p>
+            )}
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => { setShowFreeConfirm(false); setFreeOrderError(null); }}
+                disabled={freeOrderLoading}
+                className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-mist"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStaffFreeOrder}
+                disabled={freeOrderLoading}
+                className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+              >
+                {freeOrderLoading ? "Creating..." : "Confirm Free"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

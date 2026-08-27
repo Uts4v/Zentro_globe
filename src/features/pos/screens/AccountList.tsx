@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import {
   posListDebitAccounts,
   posListCreditAccounts,
@@ -36,6 +37,7 @@ export default function AccountList({
   onCreateCredit,
 }: AccountListProps) {
   const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [tab, setTab] = useState<Tab>("debit");
   const [debitAccounts, setDebitAccounts] = useState<DebitAccountType[]>([]);
   const [creditAccounts, setCreditAccounts] = useState<CreditAccountType[]>([]);
@@ -194,7 +196,7 @@ export default function AccountList({
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold text-ink">
-                    Rs {Number(account.balance).toFixed(2)}
+                    {formatCurrency(account.balance, currencySymbol)}
                   </p>
                   <p className="text-[10px] text-muted-foreground">balance</p>
                 </div>
@@ -265,19 +267,19 @@ export default function AccountList({
                   <div className="rounded-lg bg-muted/50 p-2">
                     <p className="text-muted-foreground">Limit</p>
                     <p className="font-bold text-foreground">
-                      Rs {Number(account.credit_limit).toFixed(2)}
+                      {formatCurrency(account.credit_limit, currencySymbol)}
                     </p>
                   </div>
                   <div className="rounded-lg bg-red-50 p-2">
                     <p className="text-red-600">Owed</p>
                     <p className="font-bold text-red-700">
-                      Rs {Number(account.current_balance).toFixed(2)}
+                      {formatCurrency(account.current_balance, currencySymbol)}
                     </p>
                   </div>
                   <div className="rounded-lg bg-green-50 p-2">
                     <p className="text-green-600">Available</p>
                     <p className="font-bold text-green-700">
-                      Rs {Number(account.available_credit).toFixed(2)}
+                      {formatCurrency(account.available_credit, currencySymbol)}
                     </p>
                   </div>
                 </div>

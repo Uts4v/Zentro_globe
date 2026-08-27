@@ -63,7 +63,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "merchant", "merchant_id", "merchant_name",
             "status", "order_type", "source", "fulfillment_type",
             "subtotal", "discount_type", "discount_value", "discount_amount",
-            "tax_amount", "service_charge",
+            "tax_amount", "tax_breakdown", "service_charge",
             "total_amount", "points_earned",
             "payment_status", "payment_method",
             "notes", "items",

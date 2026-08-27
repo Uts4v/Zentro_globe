@@ -9,6 +9,7 @@ interface NavItem {
   to: string;
   label: string;
   icon: LucideIcon;
+  section?: string;
 }
 
 interface MerchantNavProps {
@@ -19,6 +20,8 @@ interface MerchantNavProps {
 
 export function MerchantNav({ navItems, onSignOut, onLinkClick }: MerchantNavProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  let lastSection = "";
 
   return (
     <div className="flex h-full flex-col gap-1 p-4">
@@ -34,27 +37,36 @@ export function MerchantNav({ navItems, onSignOut, onLinkClick }: MerchantNavPro
 
       {/* Nav links */}
       <nav className="flex flex-1 flex-col gap-1">
-        {navItems.map(({ to, label, icon: Icon }) => {
+        {navItems.map(({ to, label, icon: Icon, section }) => {
           const isActive =
             to === "/merchant/"
               ? pathname === "/merchant" || pathname === "/merchant/"
               : pathname.startsWith(to);
 
+          const showSection = section && section !== lastSection;
+          if (section) lastSection = section;
+
           return (
-            <Link
-              key={to}
-              to={to as any}
-              onClick={onLinkClick}
-              className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
-                isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            <div key={to}>
+              {showSection && (
+                <p className="mt-3 mb-1 px-3 text-[9px] uppercase tracking-[0.2em] text-muted-foreground/60 font-medium">
+                  {section}
+                </p>
               )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              {label}
-            </Link>
+              <Link
+                to={to as any}
+                onClick={onLinkClick}
+                className={cn(
+                  "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
+                  isActive
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                {label}
+              </Link>
+            </div>
           );
         })}
       </nav>

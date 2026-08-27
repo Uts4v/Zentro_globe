@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { posTableMenu, posTableOrder, PosTableMenu } from "../api";
+import { formatCurrency } from "@/lib/currency";
 import { Loader2, Plus, Minus, ShoppingCart, Check, AlertCircle } from "lucide-react";
 
 interface CartItem {
@@ -23,6 +24,7 @@ export default function TableOrderScreen() {
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placing, setPlacing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const currencySymbol = "Rs";
 
   useEffect(() => {
     loadMenu();
@@ -197,7 +199,7 @@ export default function TableOrderScreen() {
               >
                 <div className="mb-2 text-2xl">{item.emoji || "🍽️"}</div>
                 <p className="text-sm font-medium text-foreground line-clamp-2">{item.name}</p>
-                <p className="mt-1 text-sm font-bold text-ink">Rs {Number(item.price).toFixed(2)}</p>
+                <p className="mt-1 text-sm font-bold text-ink">{formatCurrency(item.price, currencySymbol)}</p>
                 {inCart && (
                   <div className="mt-2 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -216,7 +218,7 @@ export default function TableOrderScreen() {
                       </button>
                     </div>
                     <span className="text-xs font-bold text-ink">
-                      Rs {(parseFloat(item.price) * inCart.quantity).toFixed(2)}
+                      {formatCurrency(parseFloat(item.price) * inCart.quantity, currencySymbol)}
                     </span>
                   </div>
                 )}
@@ -251,7 +253,7 @@ export default function TableOrderScreen() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">{cartCount} items</p>
-              <p className="text-lg font-bold text-foreground">Rs {cartTotal.toFixed(2)}</p>
+              <p className="text-lg font-bold text-foreground">{formatCurrency(cartTotal, currencySymbol)}</p>
             </div>
             <button
               onClick={placeOrder}

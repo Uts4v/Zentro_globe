@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import {
   posCreateCashMovement,
   posListCashMovements,
@@ -26,6 +27,8 @@ const TYPE_CONFIG: Record<MovementType, { label: string; icon: any; color: strin
 export default function CashMovementsScreen() {
   const activeShift = usePosStore((s) => s.activeShift);
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [movements, setMovements] = useState<PosCashMovement[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -136,19 +139,19 @@ export default function CashMovementsScreen() {
           <div className="rounded-2xl border border-border bg-card p-4">
             <p className="text-[10px] font-bold uppercase text-muted-foreground">Pay-ins</p>
             <p className="mt-1 text-lg font-bold text-green-600">
-              Rs {totalPayins.toFixed(2)}
+              {formatCurrency(totalPayins, currencySymbol)}
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4">
             <p className="text-[10px] font-bold uppercase text-muted-foreground">Pay-outs</p>
             <p className="mt-1 text-lg font-bold text-red-600">
-              Rs {totalPayouts.toFixed(2)}
+              {formatCurrency(totalPayouts, currencySymbol)}
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4">
             <p className="text-[10px] font-bold uppercase text-muted-foreground">Net</p>
             <p className={`mt-1 text-lg font-bold ${totalPayins - totalPayouts >= 0 ? "text-green-600" : "text-red-600"}`}>
-              Rs {(totalPayins - totalPayouts).toFixed(2)}
+              {formatCurrency(totalPayins - totalPayouts, currencySymbol)}
             </p>
           </div>
         </div>
@@ -193,7 +196,7 @@ export default function CashMovementsScreen() {
                   </p>
                 </div>
                 <p className={`text-lg font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>
-                  {isPositive ? "+" : "-"} Rs {Number(m.amount).toFixed(2)}
+                  {isPositive ? "+" : "-"} {formatCurrency(m.amount, currencySymbol)}
                 </p>
               </div>
             );
@@ -239,7 +242,7 @@ export default function CashMovementsScreen() {
                 {/* Amount */}
                 <div className="mb-4">
                   <label className="mb-1 block text-xs font-medium text-foreground">
-                    Amount (Rs)
+                    Amount ({currencySymbol})
                   </label>
                   <input
                     type="number"

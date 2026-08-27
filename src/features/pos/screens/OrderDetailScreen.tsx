@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
 import { posListOrders, posReceiptData, posUpdateOrderStatus, posAddItemsToOrder, PosOrder, PosReceiptData } from "../api";
 import { menuApi, type MenuItem } from "@/lib/api";
+import { formatCurrency } from "@/lib/currency";
 import Receipt from "../printing/Receipt";
 import RefundModal from "./RefundModal";
 import CollectPaymentSheet from "./CollectPaymentSheet";
@@ -57,6 +58,8 @@ export default function OrderDetailScreen({
   const [statusLoading, setStatusLoading] = useState(false);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   useEffect(() => {
     loadOrders();
@@ -94,22 +97,24 @@ export default function OrderDetailScreen({
   async function handleStatusChange(order: PosOrder, newStatus: string) {
     setStatusLoading(true);
     try {
-      await posUpdateOrderStatus(
+      const updatedOrder = await posUpdateOrderStatus(
         String(order.uuid),
         newStatus,
         currentWorker?.id,
         device?.id
       );
+      setOrders((prev) => prev.map((o) => o.uuid === order.uuid ? { ...o, ...updatedOrder } : o));
+      setSelectedOrder((prev) => prev?.uuid === order.uuid ? { ...prev, ...updatedOrder } : prev);
     } catch (err: any) {
       // Backend saves status before audit log, so a 500 from audit
       // means the status WAS updated. Always refresh to get truth.
-    } finally {
       const updated = await posListOrders();
       setOrders(updated);
       if (orderId || selectedOrder) {
         const refreshed = updated.find((o) => o.id === (selectedOrder?.id ?? orderId));
         setSelectedOrder(refreshed ?? null);
       }
+    } finally {
       setStatusLoading(false);
     }
   }
@@ -144,7 +149,7 @@ export default function OrderDetailScreen({
           Back to orders
         </button>
         <div className="flex justify-center">
-          <Receipt data={receiptData} showPrintButton={true} />
+          <Receipt data={receiptData} showPrintButton={true} currencySymbol={currencySymbol} />
         </div>
       </div>
     );
@@ -233,11 +238,11 @@ export default function OrderDetailScreen({
                       {item.name}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {item.quantity} x Rs {Number(item.price).toFixed(2)}
+                      {item.quantity} x {formatCurrency(Number(item.price), currencySymbol)}
                     </p>
                   </div>
                   <p className="text-sm font-bold text-ink">
-                    Rs {Number(item.subtotal).toFixed(2)}
+                    {formatCurrency(Number(item.subtotal), currencySymbol)}
                   </p>
                 </div>
               ))}
@@ -248,23 +253,23 @@ export default function OrderDetailScreen({
           <div className="space-y-1.5 border-t border-border pt-4 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Subtotal</span>
-              <span>Rs {Number(order.subtotal).toFixed(2)}</span>
+              <span>{formatCurrency(Number(order.subtotal), currencySymbol)}</span>
             </div>
             {Number(order.discount_amount) > 0 && (
               <div className="flex justify-between text-green-600">
                 <span>Discount</span>
-                <span>-Rs {Number(order.discount_amount).toFixed(2)}</span>
+                <span>-{formatCurrency(Number(order.discount_amount), currencySymbol)}</span>
               </div>
             )}
             {Number(order.tax_amount) > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span>VAT</span>
-                <span>Rs {Number(order.tax_amount).toFixed(2)}</span>
+                <span>{formatCurrency(Number(order.tax_amount), currencySymbol)}</span>
               </div>
             )}
             <div className="flex justify-between border-t border-border pt-1.5 font-bold text-foreground">
               <span>Total</span>
-              <span>Rs {Number(order.total_amount).toFixed(2)}</span>
+              <span>{formatCurrency(Number(order.total_amount), currencySymbol)}</span>
             </div>
           </div>
 
@@ -312,7 +317,7 @@ export default function OrderDetailScreen({
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700"
               >
                 <CreditCard className="h-4 w-4" />
-                Collect Payment — Rs {Number(order.total_amount).toFixed(2)}
+                Collect Payment — {formatCurrency(Number(order.total_amount), currencySymbol)}
               </button>
             )}
 
@@ -460,8 +465,7 @@ export default function OrderDetailScreen({
                       )}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {order.customer_name || "Walk-in"} · {order.items.length} item(s) — Rs{" "}
-                      {Number(order.total_amount).toFixed(2)}
+                      {order.customer_name || "Walk-in"} · {order.items.length} item(s) — {formatCurrency(Number(order.total_amount), currencySymbol)}
                     </p>
                   </div>
                   <span className="text-xs text-muted-foreground">
@@ -495,6 +499,8 @@ function AddItemsModal({
   const [error, setError] = useState("");
   const [cart, setCart] = useState<{ item: MenuItem; qty: number }[]>([]);
   const [search, setSearch] = useState("");
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   useEffect(() => {
     async function load() {
@@ -556,7 +562,7 @@ function AddItemsModal({
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
             <h3 className="text-sm font-bold text-foreground">Add items to #{order.id}</h3>
-            <p className="text-[11px] text-muted-foreground">Current total: Rs {Number(order.total_amount).toFixed(2)}</p>
+            <p className="text-[11px] text-muted-foreground">Current total: {formatCurrency(Number(order.total_amount), currencySymbol)}</p>
           </div>
           <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
             <X className="h-4 w-4" />
@@ -596,7 +602,7 @@ function AddItemsModal({
                     <span className="text-lg">{item.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-foreground truncate">{item.name}</p>
-                      <p className="text-[11px] text-muted-foreground">Rs {Number(item.price).toFixed(2)}</p>
+                      <p className="text-[11px] text-muted-foreground">{formatCurrency(Number(item.price), currencySymbol)}</p>
                     </div>
                     {inCart ? (
                       <div className="flex items-center gap-1.5">
@@ -627,16 +633,16 @@ function AddItemsModal({
               {cart.map((c) => (
                 <div key={c.item.id} className="flex justify-between">
                   <span className="text-muted-foreground">{c.qty}× {c.item.name}</span>
-                  <span className="font-medium">Rs {(Number(c.item.price) * c.qty).toFixed(2)}</span>
+                  <span className="font-medium">{formatCurrency(Number(c.item.price) * c.qty, currencySymbol)}</span>
                 </div>
               ))}
               <div className="flex justify-between border-t border-border pt-1 font-bold text-foreground">
                 <span>New items</span>
-                <span>Rs {total.toFixed(2)}</span>
+                <span>{formatCurrency(total, currencySymbol)}</span>
               </div>
               <div className="flex justify-between font-bold text-foreground">
                 <span>New total</span>
-                <span>Rs {(Number(order.total_amount) + total).toFixed(2)}</span>
+                <span>{formatCurrency(Number(order.total_amount) + total, currencySymbol)}</span>
               </div>
             </div>
             {error && (
@@ -648,7 +654,7 @@ function AddItemsModal({
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Add to order · Rs {total.toFixed(2)}
+              Add to order · {formatCurrency(total, currencySymbol)}
             </button>
           </div>
         )}

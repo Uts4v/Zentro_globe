@@ -19,6 +19,9 @@ import {
   ChefHat,
   Bot,
   Users,
+  FileText,
+  Settings,
+  FileType,
 } from "lucide-react";
 import { MerchantNav } from "@/components/merchant-nav";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
@@ -41,18 +44,21 @@ export const Route = createFileRoute("/merchant")({
 });
 
 const navItems = [
-  { to: "/merchant/", label: "Overview", icon: LayoutDashboard },
-  { to: "/merchant/orders", label: "Orders", icon: ShoppingBag },
-  { to: "/merchant/menu", label: "Menu", icon: UtensilsCrossed },
-  { to: "/merchant/tables", label: "Tables & QR", icon: QrCode },
-  { to: "/merchant/loyalty", label: "Loyalty", icon: Trophy },
-  { to: "/merchant/customers", label: "Customers", icon: Users },
-  { to: "/merchant/specials", label: "Today's Special", icon: Sparkles },
-  { to: "/merchant/preparation", label: "Preparation", icon: ChefHat },
-  { to: "/merchant/analytics", label: "Analytics", icon: BarChart3 },
-  { to: "/merchant/ai", label: "AI Assistant", icon: Bot },
-  { to: "/merchant/store", label: "Store", icon: Store },
-  { to: "/pos", label: "POS Terminal", icon: Monitor },
+  { to: "/merchant/", label: "Overview", icon: LayoutDashboard, section: "Dashboard" },
+  { to: "/merchant/analytics", label: "Analytics", icon: BarChart3, section: "Dashboard" },
+  { to: "/merchant/reports", label: "Reports", icon: FileText, section: "Dashboard" },
+  { to: "/merchant/orders", label: "Orders", icon: ShoppingBag, section: "Operations" },
+  { to: "/merchant/preparation", label: "Preparation", icon: ChefHat, section: "Operations" },
+  { to: "/merchant/tables", label: "Tables & QR", icon: QrCode, section: "Operations" },
+  { to: "/pos", label: "POS Terminal", icon: Monitor, section: "Operations" },
+  { to: "/merchant/menu", label: "Menu", icon: UtensilsCrossed, section: "Products" },
+  { to: "/merchant/pdf-menu", label: "PDF Menu", icon: FileType, section: "Products" },
+  { to: "/merchant/specials", label: "Today's Special", icon: Sparkles, section: "Products" },
+  { to: "/merchant/customers", label: "Customers", icon: Users, section: "Customers" },
+  { to: "/merchant/loyalty", label: "Loyalty", icon: Trophy, section: "Customers" },
+  { to: "/merchant/ai", label: "AI Assistant", icon: Bot, section: "Tools" },
+  { to: "/merchant/settings", label: "Settings", icon: Settings, section: "Account" },
+  { to: "/merchant/store", label: "Storefront", icon: Store, section: "Account" },
 ];
 
 function MerchantLayout() {

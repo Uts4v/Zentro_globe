@@ -1,5 +1,6 @@
 import { usePosStore } from "../store";
 import { useState, useEffect, useRef } from "react";
+import { formatCurrency } from "@/lib/currency";
 import {
   Search,
   Plus,
@@ -8,6 +9,7 @@ import {
   Check,
   SlidersHorizontal,
   Command,
+  Gift,
 } from "lucide-react";
 
 type MenuItem = {
@@ -27,6 +29,8 @@ type MenuItem = {
 export default function MenuGrid() {
   const menu = usePosStore((s) => s.menu);
   const addItemToCart = usePosStore((s) => s.addItemToCart);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showUnavailable, setShowUnavailable] = useState(false);
@@ -170,6 +174,7 @@ export default function MenuGrid() {
             onAdd={handleAdd}
             lastAddedId={lastAddedId}
             emptyText="No items match your search"
+            currencySymbol={currencySymbol}
           />
         ) : (
           <div className="space-y-8">
@@ -195,6 +200,7 @@ export default function MenuGrid() {
                     items={items}
                     onAdd={handleAdd}
                     lastAddedId={lastAddedId}
+                    currencySymbol={currencySymbol}
                   />
                 </section>
               );
@@ -222,11 +228,13 @@ function ProductGrid({
   onAdd,
   lastAddedId,
   emptyText,
+  currencySymbol,
 }: {
   items: MenuItem[];
   onAdd: (item: MenuItem) => void;
   lastAddedId: number | null;
   emptyText?: string;
+  currencySymbol: string;
 }) {
   if (items.length === 0) {
     return (
@@ -264,6 +272,12 @@ function ProductGrid({
 
               {/* Badges */}
               <div className="absolute left-2 top-2 flex gap-1.5">
+                {Number(item.price) === 0 && (
+                  <span className="flex items-center gap-0.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                    <Gift className="h-2.5 w-2.5" />
+                    Free
+                  </span>
+                )}
                 {item.is_featured && (
                   <span className="rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
                     Popular
@@ -310,9 +324,13 @@ function ProductGrid({
                 </p>
               )}
               <div className="mt-auto flex items-center justify-between pt-1">
-                <p className="text-sm font-bold text-foreground">
-                  Rs {Number(item.price).toFixed(2)}
-                </p>
+                {Number(item.price) === 0 ? (
+                  <span className="text-sm font-bold text-emerald-600">FREE</span>
+                ) : (
+                  <p className="text-sm font-bold text-foreground">
+                    {formatCurrency(Number(item.price), currencySymbol)}
+                  </p>
+                )}
                 {item.points_per_item > 0 && (
                   <span className="flex items-center gap-0.5 text-[10px] font-medium text-amber-600">
                     <Star className="h-3 w-3 fill-amber-400 text-amber-400" />

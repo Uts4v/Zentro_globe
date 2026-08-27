@@ -172,6 +172,22 @@ export interface MerchantProfile {
   allow_delivery?: boolean;
   allow_dine_in?: boolean;
   preparation_routing_enabled?: boolean;
+  currency_code?: string;
+  currency_symbol?: string;
+  tax_enabled?: boolean;
+  tax_rate_percent?: string;
+  tax_components?: Array<{ name: string; rate: number }>;
+  pos_enabled?: boolean;
+  offline_pos_enabled?: boolean;
+  credit_accounts_enabled?: boolean;
+  debit_accounts_enabled?: boolean;
+  discounts_enabled?: boolean;
+  shift_management_enabled?: boolean;
+  receipt_printing_enabled?: boolean;
+  max_worker_discount_percent?: number;
+  manager_approval_threshold?: number;
+  offline_discounts_allowed?: boolean;
+  offline_credit_allowed?: boolean;
 }
 
 export interface MerchantTable {

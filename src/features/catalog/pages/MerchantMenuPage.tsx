@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Star, X, Check, Loader2, ImageIcon, Upload } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Plus, Pencil, Trash2, Eye, EyeOff, Star, X, Check, Loader2, ImageIcon, Upload, FileType, ArrowRight } from "lucide-react";
 import { menuApi, merchantApi, type MenuItem } from "@/lib/api";
 import { optimizeImage } from "@/lib/image-optimize";
 import { uploadImage } from "@/lib/image-upload";
@@ -256,6 +257,24 @@ export function MerchantMenuPage() {
         </div>
       )}
 
+      <Link
+        to="/merchant/pdf-menu"
+        className="group flex items-center gap-3 rounded-2xl border border-border bg-gradient-to-r from-ember/10 via-ember/5 to-transparent px-4 py-3 transition-colors hover:border-ember/30"
+      >
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-ember/15 text-ember">
+          <FileType className="h-4.5 w-4.5" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-foreground">
+            Give customers your menu as a PDF
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Upload a PDF and get a QR code your customers can scan — no app needed.
+          </p>
+        </div>
+        <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </Link>
+
       {categories.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {categories.map((cat) => (
@@ -498,6 +517,7 @@ export function MerchantMenuPage() {
                     placeholder="350.00"
                     className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   />
+                  <p className="mt-1 text-[10px] text-muted-foreground">Set to 0 for free / comp items (e.g. staff food)</p>
                 </div>
                 <div>
                   <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Category</label>
@@ -634,7 +654,13 @@ function ItemCard({
               )}
             </div>
           </div>
-          <p className="font-display shrink-0 text-xl text-foreground">NPR {Number(item.price).toLocaleString()}</p>
+          <p className="font-display shrink-0 text-xl text-foreground">
+            {Number(item.price) === 0 ? (
+              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-sm font-bold text-emerald-700">FREE</span>
+            ) : (
+              `NPR ${Number(item.price).toLocaleString()}`
+            )}
+          </p>
         </div>
         {item.description && (
           <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{item.description}</p>

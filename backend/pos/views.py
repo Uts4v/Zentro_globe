@@ -1,5 +1,6 @@
 import logging
 import uuid
+from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Sum, Count, Q, F
@@ -177,6 +178,8 @@ def pos_login(request):
             "credit_accounts_enabled": merchant.credit_accounts_enabled,
             "debit_accounts_enabled": merchant.debit_accounts_enabled,
             "receipt_printing_enabled": merchant.receipt_printing_enabled,
+            "currency_code": merchant.currency_code,
+            "currency_symbol": merchant.currency_symbol,
         },
     })
 
@@ -339,6 +342,9 @@ def pos_bootstrap(request):
         "offline_discounts_allowed": merchant.offline_discounts_allowed,
         "offline_credit_allowed": merchant.offline_credit_allowed,
         "tax_rate_percent": str(merchant.tax_rate_percent or 0),
+        "currency_code": merchant.currency_code,
+        "currency_symbol": merchant.currency_symbol,
+        "tax_components": merchant.tax_components or [],
     }
 
     # Tables
@@ -458,6 +464,9 @@ def pos_bootstrap_device(request):
         "offline_discounts_allowed": merchant.offline_discounts_allowed,
         "offline_credit_allowed": merchant.offline_credit_allowed,
         "tax_rate_percent": str(merchant.tax_rate_percent or 0),
+        "currency_code": merchant.currency_code,
+        "currency_symbol": merchant.currency_symbol,
+        "tax_components": merchant.tax_components or [],
     }
 
     # Tables
@@ -1339,6 +1348,12 @@ def create_pos_order(request):
     points_earned = 0
     order_items_data = []
 
+    # Determine order type early so staff_comp orders can zero prices
+    order_type = data.get("order_type", Order.ORDER_TYPE_REGULAR)
+    if order_type not in dict(Order.ORDER_TYPE_CHOICES):
+        order_type = Order.ORDER_TYPE_REGULAR
+    is_staff_comp = order_type == Order.ORDER_TYPE_STAFF_COMP
+
     for item_data in items_data:
         menu_item_id = item_data.get("menu_item_id")
         quantity = item_data.get("quantity", 1)
@@ -1350,16 +1365,18 @@ def create_pos_order(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        subtotal = menu_item.price * quantity
+        # Staff comp orders are free — override price to 0
+        item_price = Decimal("0") if is_staff_comp else menu_item.price
+        subtotal = item_price * quantity
         total_amount += subtotal
 
-        if menu_item.loyalty_reward:
+        if menu_item.loyalty_reward and not is_staff_comp:
             points_earned += menu_item.points_per_item * quantity
 
         order_items_data.append({
             "menu_item": menu_item,
             "name": menu_item.name,
-            "price": menu_item.price,
+            "price": item_price,
             "quantity": quantity,
             "subtotal": subtotal,
         })
@@ -1391,7 +1408,6 @@ def create_pos_order(request):
         from loyalty.services import join_merchant
         join_merchant(customer, merchant)
 
-    order_type = data.get("order_type", Order.ORDER_TYPE_REGULAR)
     source = data.get("source", "pos_online")
     if source not in ("pos_online", "pos_offline"):
         source = "pos_online"
@@ -1424,15 +1440,16 @@ def create_pos_order(request):
 
     try:
         with transaction.atomic():
-            # Apply merchant VAT rate server-side (never trust frontend totals).
-            tax_rate = merchant.tax_rate_percent or 0
-            tax_amount = round(total_amount * (tax_rate / 100), 2)
+            # Apply merchant tax components server-side (never trust frontend totals).
+            from config.tax_utils import calculate_tax
+            tax_amount, tax_breakdown = calculate_tax(total_amount, merchant)
 
             order = Order.objects.create(
                 customer=customer,
                 merchant=merchant,
                 subtotal=total_amount,
                 tax_amount=tax_amount,
+                tax_breakdown=tax_breakdown,
                 total_amount=total_amount + tax_amount,
                 points_earned=points_earned,
                 notes=data.get("notes", ""),
@@ -2563,7 +2580,25 @@ def update_pos_settings(request):
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    for attr, val in ser.validated_data.items():
+    data = ser.validated_data
+
+    # Validate tax_components format
+    tax_components = data.pop("tax_components", None)
+    if tax_components is not None:
+        validated_components = []
+        for comp in tax_components:
+            name = str(comp.get("name", "Tax")).strip()[:50]
+            rate = comp.get("rate", 0)
+            try:
+                rate = float(rate)
+            except (TypeError, ValueError):
+                continue
+            if rate < 0 or rate > 100:
+                continue
+            validated_components.append({"name": name, "rate": rate})
+        merchant.tax_components = validated_components
+
+    for attr, val in data.items():
         setattr(merchant, attr, val)
     merchant.save()
 
@@ -2745,6 +2780,7 @@ def receipt_data(request, order_id):
         "discounts": discounts,
         "discount_amount": str(order.discount_amount),
         "tax_amount": str(order.tax_amount),
+        "tax_breakdown": order.tax_breakdown or [],
         "service_charge": str(order.service_charge),
         "total_amount": str(order.total_amount),
 
@@ -3755,7 +3791,15 @@ def table_order(request, token):
     order.total_amount = subtotal
     order.points_earned = points_earned
     order.customer_name_snapshot = customer_name
-    order.save(update_fields=["subtotal", "total_amount", "points_earned", "customer_name_snapshot", "updated_at"])
+
+    # Apply tax
+    from config.tax_utils import calculate_tax
+    tax_amount, tax_breakdown = calculate_tax(subtotal, merchant)
+    order.tax_amount = tax_amount
+    order.tax_breakdown = tax_breakdown
+    order.total_amount = subtotal + tax_amount
+
+    order.save(update_fields=["subtotal", "total_amount", "tax_amount", "tax_breakdown", "points_earned", "customer_name_snapshot", "updated_at"])
 
     _audit(merchant, PosAuditLog.ACTION_ORDER_CREATE,
            entity_type="order", entity_id=order.id,
@@ -3764,7 +3808,7 @@ def table_order(request, token):
     _notify_safe(
         merchant=merchant,
         title=f"New Table Order — {table.name}",
-        message=f"Table {table.table_number}: {len(items_data)} items, Rs {subtotal:.2f}",
+        message=f"Table {table.table_number}: {len(items_data)} items, {merchant.currency_symbol} {subtotal:.2f}",
         notification_type="pos_new_order",
     )
 

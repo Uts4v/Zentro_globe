@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { usePosStore } from "../store";
 import { posListOrders, posListDebitAccounts, PosOrder, DebitAccount } from "../api";
+import { formatCurrency } from "@/lib/currency";
 import {
   BarChart3,
   TrendingUp,
@@ -18,6 +19,8 @@ import {
 export default function ReportsScreen() {
   const activeShift = usePosStore((s) => s.activeShift);
   const merchant = usePosStore((s) => s.merchant);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [orders, setOrders] = useState<PosOrder[]>([]);
   const [debitAccounts, setDebitAccounts] = useState<DebitAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -73,19 +76,19 @@ export default function ReportsScreen() {
     },
     {
       label: "Revenue",
-      value: `Rs ${totalRevenue.toFixed(2)}`,
+      value: formatCurrency(totalRevenue, currencySymbol),
       icon: DollarSign,
       color: "bg-green-100 text-green-600",
     },
     {
       label: "Avg Order",
-      value: `Rs ${avgOrderValue.toFixed(2)}`,
+      value: formatCurrency(avgOrderValue, currencySymbol),
       icon: TrendingUp,
       color: "bg-purple-100 text-purple-600",
     },
     {
       label: "Debit Balances",
-      value: `Rs ${totalDebitBalance.toFixed(2)}`,
+      value: formatCurrency(totalDebitBalance, currencySymbol),
       icon: Wallet,
       color: "bg-amber-100 text-amber-600",
     },
@@ -146,19 +149,19 @@ export default function ReportsScreen() {
             <div>
               <p className="text-[10px] text-muted-foreground">Opening</p>
               <p className="text-sm font-bold">
-                Rs {Number(activeShift.opening_cash).toFixed(2)}
+                {formatCurrency(Number(activeShift.opening_cash), currencySymbol)}
               </p>
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground">Cash Sales</p>
               <p className="text-sm font-bold text-green-600">
-                Rs {Number(activeShift.total_cash_sales).toFixed(2)}
+                {formatCurrency(Number(activeShift.total_cash_sales), currencySymbol)}
               </p>
             </div>
             <div>
               <p className="text-[10px] text-muted-foreground">Card Sales</p>
               <p className="text-sm font-bold text-blue-600">
-                Rs {Number(activeShift.total_card_sales).toFixed(2)}
+                {formatCurrency(Number(activeShift.total_card_sales), currencySymbol)}
               </p>
             </div>
             <div>
@@ -205,7 +208,7 @@ export default function ReportsScreen() {
                         <span className="capitalize text-foreground">
                           {method.replace("_", " ")}
                         </span>
-                        <span className="font-medium">Rs {amount.toFixed(2)}</span>
+                        <span className="font-medium">{formatCurrency(amount, currencySymbol)}</span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-muted">
                         <div

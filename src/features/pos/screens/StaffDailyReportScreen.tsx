@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import {
   posStaffDailyReport,
   posListWorkers,
@@ -20,6 +21,8 @@ import {
 
 export default function StaffDailyReportScreen() {
   const merchant = usePosStore((s) => s.merchant);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   const params = new URLSearchParams(window.location.search);
   const dateParam = params.get("date") || undefined;
@@ -137,7 +140,7 @@ export default function StaffDailyReportScreen() {
           <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatCard
               label="Total Revenue"
-              value={`Rs ${Number(data.totals.total_revenue).toFixed(2)}`}
+              value={formatCurrency(data.totals.total_revenue, currencySymbol)}
               icon={DollarSign}
               color="bg-green-100 text-green-600"
             />
@@ -155,7 +158,7 @@ export default function StaffDailyReportScreen() {
             />
             <StatCard
               label="Discounts"
-              value={`Rs ${Number(data.totals.total_discount).toFixed(2)}`}
+              value={formatCurrency(data.totals.total_discount, currencySymbol)}
               icon={ArrowDown}
               color="bg-amber-100 text-amber-600"
             />
@@ -223,19 +226,19 @@ export default function StaffDailyReportScreen() {
                             {s.items_sold}
                           </td>
                           <td className="p-4 text-right font-bold text-foreground">
-                            Rs {Number(s.total_revenue).toFixed(2)}
+                            {formatCurrency(s.total_revenue, currencySymbol)}
                           </td>
                           <td className="hidden p-4 text-right text-green-600 sm:table-cell">
-                            Rs {Number(s.cash_amount).toFixed(2)}
+                            {formatCurrency(s.cash_amount, currencySymbol)}
                           </td>
                           <td className="hidden p-4 text-right text-blue-600 sm:table-cell">
-                            Rs {Number(s.card_amount).toFixed(2)}
+                            {formatCurrency(s.card_amount, currencySymbol)}
                           </td>
                           <td className="hidden p-4 text-right text-amber-600 sm:table-cell">
-                            Rs {Number(s.credit_amount).toFixed(2)}
+                            {formatCurrency(s.credit_amount, currencySymbol)}
                           </td>
                           <td className="hidden p-4 text-right text-muted-foreground sm:table-cell">
-                            Rs {Number(s.total_discount).toFixed(2)}
+                            {formatCurrency(s.total_discount, currencySymbol)}
                           </td>
                         </tr>
                       );
@@ -247,28 +250,28 @@ export default function StaffDailyReportScreen() {
                       <td className="p-4 text-right">{data.totals.total_orders}</td>
                       <td className="p-4 text-right">{data.totals.total_items_sold}</td>
                       <td className="p-4 text-right text-foreground">
-                        Rs {Number(data.totals.total_revenue).toFixed(2)}
+                        {formatCurrency(data.totals.total_revenue, currencySymbol)}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
-                        Rs{" "}
-                        {data.staff
-                          .reduce((s, w) => s + Number(w.cash_amount), 0)
-                          .toFixed(2)}
+                        {formatCurrency(
+                          data.staff.reduce((s, w) => s + Number(w.cash_amount), 0),
+                          currencySymbol
+                        )}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
-                        Rs{" "}
-                        {data.staff
-                          .reduce((s, w) => s + Number(w.card_amount), 0)
-                          .toFixed(2)}
+                        {formatCurrency(
+                          data.staff.reduce((s, w) => s + Number(w.card_amount), 0),
+                          currencySymbol
+                        )}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
-                        Rs{" "}
-                        {data.staff
-                          .reduce((s, w) => s + Number(w.credit_amount), 0)
-                          .toFixed(2)}
+                        {formatCurrency(
+                          data.staff.reduce((s, w) => s + Number(w.credit_amount), 0),
+                          currencySymbol
+                        )}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
-                        Rs {Number(data.totals.total_discount).toFixed(2)}
+                        {formatCurrency(data.totals.total_discount, currencySymbol)}
                       </td>
                     </tr>
                   </tfoot>
@@ -296,7 +299,7 @@ export default function StaffDailyReportScreen() {
                   </div>
                   <div className="ml-auto text-right">
                     <p className="text-lg font-bold text-foreground">
-                      Rs {Number(s.total_revenue).toFixed(2)}
+                      {formatCurrency(s.total_revenue, currencySymbol)}
                     </p>
                     <p className="text-[10px] text-muted-foreground">revenue</p>
                   </div>
@@ -304,19 +307,19 @@ export default function StaffDailyReportScreen() {
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="rounded-lg bg-green-50 p-2 text-center">
                     <p className="font-bold text-green-700">
-                      Rs {Number(s.cash_amount).toFixed(2)}
+                      {formatCurrency(s.cash_amount, currencySymbol)}
                     </p>
                     <p className="text-green-600">Cash</p>
                   </div>
                   <div className="rounded-lg bg-blue-50 p-2 text-center">
                     <p className="font-bold text-blue-700">
-                      Rs {Number(s.card_amount).toFixed(2)}
+                      {formatCurrency(s.card_amount, currencySymbol)}
                     </p>
                     <p className="text-blue-600">Card</p>
                   </div>
                   <div className="rounded-lg bg-amber-50 p-2 text-center">
                     <p className="font-bold text-amber-700">
-                      Rs {Number(s.credit_amount).toFixed(2)}
+                      {formatCurrency(s.credit_amount, currencySymbol)}
                     </p>
                     <p className="text-amber-600">Credit</p>
                   </div>

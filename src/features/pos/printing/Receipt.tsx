@@ -1,9 +1,6 @@
 import { useRef } from "react";
 import { PosReceiptData } from "../api";
-
-function formatRM(amount: string | number) {
-  return `Rs ${Number(amount).toFixed(2)}`;
-}
+import { formatCurrency } from "@/lib/currency";
 
 function formatDate(iso: string | null) {
   if (!iso) return "-";
@@ -23,12 +20,14 @@ interface ReceiptProps {
   data: PosReceiptData;
   printSize?: "58mm" | "80mm" | "a4";
   showPrintButton?: boolean;
+  currencySymbol?: string;
 }
 
 export default function Receipt({
   data,
   printSize = "80mm",
   showPrintButton = true,
+  currencySymbol = "Rs",
 }: ReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
 
@@ -172,11 +171,11 @@ export default function Receipt({
                 <span className="receipt-bold">
                   {item.quantity}x {item.name}
                 </span>
-                <span>{formatRM(item.subtotal)}</span>
+                <span>{Number(item.price) === 0 ? "FREE" : formatCurrency(item.subtotal, currencySymbol)}</span>
               </div>
-              {item.quantity > 1 && (
+              {item.quantity > 1 && Number(item.price) > 0 && (
                 <div className="receipt-subtext text-right">
-                  @ {formatRM(item.price)} each
+                  @ {formatCurrency(item.price, currencySymbol)} each
                 </div>
               )}
             </div>
@@ -189,7 +188,7 @@ export default function Receipt({
         <div className="space-y-0.5 text-xs">
           <div className="receipt-line">
             <span>Subtotal</span>
-            <span>{formatRM(data.subtotal)}</span>
+            <span>{formatCurrency(data.subtotal, currencySymbol)}</span>
           </div>
           {data.discounts.map((d, i) => (
             <div key={i} className="receipt-line text-green-700">
@@ -197,31 +196,34 @@ export default function Receipt({
                 Discount{" "}
                 {d.type === "percentage" ? `(${d.value}%)` : ""}
               </span>
-              <span>-{formatRM(d.amount)}</span>
+              <span>-{formatCurrency(d.amount, currencySymbol)}</span>
             </div>
           ))}
           {Number(data.discount_amount) > 0 && (
             <div className="receipt-line text-green-700">
               <span>Total Discount</span>
-              <span>-{formatRM(data.discount_amount)}</span>
+              <span>-{formatCurrency(data.discount_amount, currencySymbol)}</span>
             </div>
           )}
-          {Number(data.tax_amount) > 0 && (
-            <div className="receipt-line">
-              <span>VAT</span>
-              <span>{formatRM(data.tax_amount)}</span>
-            </div>
-          )}
+          {(data.tax_breakdown?.length ?? 0) > 0 &&
+            (data.tax_breakdown ?? []).map((tax, i) => (
+              <div key={i} className="receipt-line">
+                <span>
+                  {tax.name} ({tax.rate}%)
+                </span>
+                <span>{formatCurrency(tax.amount, currencySymbol)}</span>
+              </div>
+            ))}
           {Number(data.service_charge) > 0 && (
             <div className="receipt-line">
               <span>Service Charge</span>
-              <span>{formatRM(data.service_charge)}</span>
+              <span>{formatCurrency(data.service_charge, currencySymbol)}</span>
             </div>
           )}
           <hr className="receipt-divider-thick my-2" />
           <div className="receipt-total-row">
             <span>TOTAL</span>
-            <span>{formatRM(data.total_amount)}</span>
+            <span>{formatCurrency(data.total_amount, currencySymbol)}</span>
           </div>
         </div>
 
@@ -234,17 +236,17 @@ export default function Receipt({
               {data.payments.map((p, i) => (
                 <div key={i} className="receipt-line">
                   <span className="capitalize">{p.method.replace("_", " ")}</span>
-                  <span>{formatRM(p.amount)}</span>
+                  <span>{formatCurrency(p.amount, currencySymbol)}</span>
                 </div>
               ))}
               <div className="receipt-line">
                 <span>Paid</span>
-                <span>{formatRM(data.total_paid)}</span>
+                <span>{formatCurrency(data.total_paid, currencySymbol)}</span>
               </div>
               {Number(data.change) > 0 && (
                 <div className="receipt-line receipt-bold">
                   <span>Change</span>
-                  <span>{formatRM(data.change)}</span>
+                  <span>{formatCurrency(data.change, currencySymbol)}</span>
                 </div>
               )}
               <div className="receipt-line">

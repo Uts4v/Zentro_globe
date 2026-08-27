@@ -75,11 +75,13 @@ class Order(models.Model):
     ORDER_TYPE_REGULAR         = "regular"
     ORDER_TYPE_PUNCH_REDEMPTION = "punch_card_redemption"
     ORDER_TYPE_REWARD_REDEMPTION = "reward_redemption"
+    ORDER_TYPE_STAFF_COMP       = "staff_comp"
 
     ORDER_TYPE_CHOICES = [
         (ORDER_TYPE_REGULAR,           "Regular"),
         (ORDER_TYPE_PUNCH_REDEMPTION,  "Punch Card Redemption"),
         (ORDER_TYPE_REWARD_REDEMPTION, "Reward Redemption"),
+        (ORDER_TYPE_STAFF_COMP,        "Staff Free / Comp"),
     ]
 
     # Fulfillment type
@@ -175,6 +177,13 @@ class Order(models.Model):
     tax_amount = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
     )
+    tax_breakdown = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            "Per-component tax breakdown stored at creation time, e.g. "
+            '[{"name":"CGST","rate":9.0,"amount":45.00},{"name":"SGST","rate":9.0,"amount":45.00}]'
+        ),
+    )
     service_charge = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
     )
@@ -258,6 +267,24 @@ class Order(models.Model):
     kot_number = models.PositiveIntegerField(
         null=True, blank=True,
         help_text="Kitchen Order Ticket number (sequential per merchant)",
+    )
+
+    # ── Currency & tax snapshots (preserved at creation for historical integrity) ─
+    currency_code_snapshot = models.CharField(
+        max_length=3, blank=True, default="",
+        help_text="Currency code at time of order (e.g. NPR, INR)",
+    )
+    currency_symbol_snapshot = models.CharField(
+        max_length=5, blank=True, default="",
+        help_text="Currency symbol at time of order (e.g. Rs, ₹)",
+    )
+    tax_type_snapshot = models.CharField(
+        max_length=50, blank=True, default="",
+        help_text="Tax type name at time of order (e.g. VAT, GST)",
+    )
+    tax_rate_snapshot = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Combined tax rate at time of order",
     )
 
     # ── Guest order fields ────────────────────────────────────────────────────

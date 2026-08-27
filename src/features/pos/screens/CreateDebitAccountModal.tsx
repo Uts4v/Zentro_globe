@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import { posCreateDebitAccount } from "../api";
 import { X, UserPlus, Loader2, Check } from "lucide-react";
 
@@ -21,6 +23,9 @@ export default function CreateDebitAccountModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   if (!open) return null;
 
@@ -64,7 +69,7 @@ export default function CreateDebitAccountModal({
           </p>
           {numBalance > 0 && (
             <p className="mt-3 text-2xl font-bold text-ink">
-              Rs {numBalance.toFixed(2)} loaded
+              {formatCurrency(numBalance, currencySymbol)} loaded
             </p>
           )}
         </div>
@@ -121,7 +126,7 @@ export default function CreateDebitAccountModal({
 
         <div className="mb-4">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Initial Balance (Rs)
+            Initial Balance ({currencySymbol})
           </label>
           <input
             type="number"
@@ -145,7 +150,7 @@ export default function CreateDebitAccountModal({
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              Rs {amt}
+              {formatCurrency(amt, currencySymbol)}
             </button>
           ))}
         </div>

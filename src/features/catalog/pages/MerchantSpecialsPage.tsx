@@ -7,10 +7,12 @@ import { specialApi, menuApi, loyaltyApi, type TodaySpecial, type MenuItem, type
 import { uploadImage } from "@/lib/image-upload";
 import { optimizeImage } from "@/lib/image-optimize";
 import { useAuth } from "@/lib/auth";
+import { formatCurrency } from "@/lib/currency";
 import { toast } from "sonner";
 
 export function MerchantSpecialsPage() {
   const { merchantProfile } = useAuth();
+  const currencySymbol = merchantProfile?.currency_symbol || "Rs";
   const [specials, setSpecials] = useState<TodaySpecial[]>([]);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
@@ -123,7 +125,7 @@ export function MerchantSpecialsPage() {
                         <Tag className="h-3 w-3" />
                         {s.discount_type === "percentage"
                           ? `${s.discount_value}% off`
-                          : `Rs. ${s.discount_value} off`}
+                          : `${formatCurrency(s.discount_value, currencySymbol, 0)} off`}
                       </div>
                     )}
                   </div>
@@ -156,6 +158,7 @@ export function MerchantSpecialsPage() {
           merchantId={String(merchantProfile?.id ?? "")}
           onSave={handleSave}
           onClose={() => setModal(null)}
+          currencySymbol={currencySymbol}
         />
       )}
     </div>
@@ -164,7 +167,7 @@ export function MerchantSpecialsPage() {
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function SpecialModal({
-  initial, menuItems, rewards, merchantId, onSave, onClose,
+  initial, menuItems, rewards, merchantId, onSave, onClose, currencySymbol = "Rs",
 }: {
   initial: TodaySpecial | null;
   menuItems: MenuItem[];
@@ -172,6 +175,7 @@ function SpecialModal({
   merchantId: string;
   onSave: (data: Partial<TodaySpecial>) => Promise<void>;
   onClose: () => void;
+  currencySymbol?: string;
 }) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDesc] = useState(initial?.description ?? "");
@@ -395,7 +399,7 @@ function SpecialModal({
               {discountType !== "none" && (
                 <div className="relative flex-1">
                   {discountType === "fixed" && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">Rs.</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
                   )}
                   <input
                     type="number"

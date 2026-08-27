@@ -13,6 +13,7 @@ import {
   Filter,
 } from "lucide-react";
 import { orderApi, type Order, type OrderStatus, type FulfillmentType } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { playOrderChime } from "@/lib/audio";
 
@@ -54,6 +55,8 @@ function isToday(dateStr: string) {
 }
 
 export function MerchantOrdersPage() {
+  const { merchantProfile } = useAuth();
+  const sym = merchantProfile?.currency_symbol || "Rs";
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -235,6 +238,7 @@ export function MerchantOrdersPage() {
             advancing={advancing === o.id}
             cancelling={cancelling === o.id}
             isNew={newOrderIds.has(o.id)}
+            sym={sym}
           />
         ))}
         {grouped.incoming.length === 0 && <Empty text="No new orders" />}
@@ -250,6 +254,7 @@ export function MerchantOrdersPage() {
             advancing={advancing === o.id}
             cancelling={cancelling === o.id}
             isNew={false}
+            sym={sym}
           />
         ))}
         {grouped.active.length === 0 && <Empty text="Nothing brewing" />}
@@ -257,7 +262,7 @@ export function MerchantOrdersPage() {
 
       <Column title="Completed today" count={grouped.done.length}>
         {grouped.done.map((o) => (
-          <OrderCard key={o.id} order={o} advancing={false} cancelling={false} isNew={false} />
+          <OrderCard key={o.id} order={o} advancing={false} cancelling={false} isNew={false} sym={sym} />
         ))}
         {grouped.done.length === 0 && <Empty text="Day's just starting" />}
       </Column>
@@ -380,6 +385,7 @@ function OrderCard({
   advancing,
   cancelling,
   isNew,
+  sym = "Rs",
 }: {
   order: Order;
   onAdvance?: () => void;
@@ -387,6 +393,7 @@ function OrderCard({
   advancing: boolean;
   cancelling: boolean;
   isNew: boolean;
+  sym?: string;
 }) {
   const next = NEXT_STATUS[order.status];
   const mins = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60_000);
@@ -485,7 +492,7 @@ function OrderCard({
               {item.quantity}× {item.name}
             </span>
             <span className="text-muted-foreground">
-              {Number(item.subtotal) > 0 ? `NPR ${Number(item.subtotal).toLocaleString()}` : "FREE"}
+              {Number(item.subtotal) > 0 ? `${sym} ${Number(item.subtotal).toLocaleString()}` : "FREE"}
             </span>
           </li>
         ))}
@@ -504,7 +511,7 @@ function OrderCard({
         </span>
         <span className="font-display text-lg text-foreground">
           {Number(order.total_amount) > 0
-            ? `NPR ${Number(order.total_amount).toLocaleString()}`
+            ? `${sym} ${Number(order.total_amount).toLocaleString()}`
             : "FREE"}
         </span>
       </div>

@@ -9,10 +9,19 @@ import {
   Receipt,
   Sparkles,
   Gift,
+  Download,
+  FileText,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { analyticsApi, orderApi, type Order, type OrderStatus } from "@/lib/api";
+import { reportsApi } from "@/lib/api/reports";
+import { useAuth } from "@/lib/auth";
+import {
+  DateRangeSelector,
+  getDefaultDateRange,
+  type DateRange,
+} from "@/components/DateRangeSelector";
 
 function errorMessage(e: unknown, fallback: string) {
   return e instanceof Error ? e.message : fallback;
@@ -94,6 +103,7 @@ const TYPE_LABEL: Record<string, string> = {
   regular: "Regular",
   punch_card_redemption: "Punch Redemption",
   reward_redemption: "Reward Redemption",
+  staff_comp: "Staff Free",
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -113,8 +123,8 @@ function toLocalDateStr(d: Date): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-function formatNPR(value: number | string | null | undefined) {
-  return `NPR ${Number(value ?? 0).toLocaleString(undefined, {
+function formatNPR(value: number | string | null | undefined, sym = "Rs") {
+  return `${sym} ${Number(value ?? 0).toLocaleString(undefined, {
     maximumFractionDigits: 0,
   })}`;
 }
@@ -127,10 +137,14 @@ function formatDay(date: string) {
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function MerchantAnalyticsPage() {
-  const [range, setRange] = useState<14 | 30 | 90>(30);
+  const { merchantProfile } = useAuth();
+  const [dateRange, setDateRange] = useState<DateRange>(getDefaultDateRange());
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+
+  const sym = merchantProfile?.currency_symbol || "Rs";
 
   // Order history state
   const [historyOrders, setHistoryOrders] = useState<Order[]>([]);
@@ -147,13 +161,22 @@ export function MerchantAnalyticsPage() {
     let cancelled = false;
     setLoading(true);
     setError("");
+    console.log(
+      `[Analytics] fetching: date_from=${dateRange.dateFrom}, date_to=${dateRange.dateTo}`,
+    );
 
     analyticsApi
-      .merchant(range)
+      .merchant(undefined, dateRange.dateFrom, dateRange.dateTo)
       .then((d) => {
-        if (!cancelled) setData(d);
+        if (!cancelled) {
+          console.log(
+            `[Analytics] response: total_revenue=${d?.total_revenue}, total_orders=${d?.total_orders}, period_days=${d?.period_days}`,
+          );
+          setData(d);
+        }
       })
       .catch((e: unknown) => {
+        console.error("[Analytics] fetch error:", e);
         if (!cancelled) setError(errorMessage(e, "Failed to load analytics"));
       })
       .finally(() => {
@@ -163,7 +186,24 @@ export function MerchantAnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [range]);
+  }, [dateRange.dateFrom, dateRange.dateTo]);
+
+  async function handleExport(type: "csv" | "pdf") {
+    const params = {
+      date_from: dateRange.dateFrom,
+      date_to: dateRange.dateTo,
+      type: "sales",
+    };
+    setExporting(true);
+    try {
+      if (type === "csv") await reportsApi.exportCsv(params);
+      else await reportsApi.exportPdf(params);
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Export failed"));
+    } finally {
+      setExporting(false);
+    }
+  }
 
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true);
@@ -239,46 +279,60 @@ export function MerchantAnalyticsPage() {
 
   return (
     <div className="space-y-8">
-      {/* Header + range tabs */}
+      {/* Header + date range */}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-            Last {range} days
+            {dateRange.dateFrom} → {dateRange.dateTo}
           </p>
           <h1 className="font-display mt-1 text-5xl text-foreground">Analytics</h1>
         </div>
-        <div className="flex gap-1">
-          {([14, 30, 90] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setRange(p)}
-              className={`rounded-full px-3 py-1.5 text-xs transition-colors ${
-                range === p ? "bg-ink text-primary-foreground" : "glass text-muted-foreground"
-              }`}
-            >
-              {p}d
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <button
+            disabled={exporting}
+            onClick={() => handleExport("csv")}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 disabled:opacity-50"
+          >
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            CSV
+          </button>
+          <button
+            disabled={exporting}
+            onClick={() => handleExport("pdf")}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 disabled:opacity-50"
+          >
+            {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+            PDF
+          </button>
+          <DateRangeSelector value={dateRange} onChange={setDateRange} />
         </div>
       </div>
+
+      {/* Empty state banner */}
+      {(data?.total_orders ?? 0) === 0 && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3.5 text-sm text-amber-700">
+          No orders found for <strong>{dateRange.label}</strong> ({dateRange.dateFrom} → {dateRange.dateTo}).
+          Try selecting a wider range like <em>This Month</em> or <em>This Year</em>.
+        </div>
+      )}
 
       {/* KPI row */}
       <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi
           label="Revenue"
-          value={formatNPR(data?.total_revenue)}
-          sub={`Last ${range} days`}
+          value={formatNPR(data?.total_revenue, sym)}
+          sub={`${dateRange.dateFrom} → ${dateRange.dateTo}`}
           icon={TrendingUp}
         />
         <Kpi
           label="Orders"
           value={String(data?.total_orders ?? 0)}
-          sub={`Last ${range} days`}
+          sub={`${dateRange.dateFrom} → ${dateRange.dateTo}`}
           icon={Receipt}
         />
         <Kpi
           label="Avg order"
-          value={formatNPR(data?.avg_order_value)}
+          value={formatNPR(data?.avg_order_value, sym)}
           sub="Per order"
           icon={Receipt}
         />
@@ -290,7 +344,7 @@ export function MerchantAnalyticsPage() {
         />
         <Kpi
           label="Today's revenue"
-          value={formatNPR(todayRev)}
+          value={formatNPR(todayRev, sym)}
           delta={revDelta}
           sub="vs yesterday"
           icon={TrendingUp}
@@ -305,7 +359,7 @@ export function MerchantAnalyticsPage() {
         <Kpi
           label="New customers"
           value={String(data?.customers?.new_customers ?? 0)}
-          sub={`Last ${range} days`}
+          sub={`${dateRange.dateFrom} → ${dateRange.dateTo}`}
           icon={Users}
         />
         <Kpi
@@ -325,7 +379,7 @@ export function MerchantAnalyticsPage() {
                 Revenue & orders
               </p>
               <h2 className="font-display mt-1 text-3xl text-foreground">
-                Trend over {range} days
+                Trend over selected period
               </h2>
             </div>
             <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
@@ -356,7 +410,7 @@ export function MerchantAnalyticsPage() {
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Peak hours</p>
           <h2 className="font-display mt-1 text-3xl text-foreground">Busiest hours</h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            Orders by hour of day, last {range} days
+            Orders by hour of day, selected period
           </p>
           <div className="mt-6">
             <BusiestHoursChart hours={busiestHours} />
@@ -373,12 +427,14 @@ export function MerchantAnalyticsPage() {
           deltaRev={weekRevDelta}
           deltaOrders={weekOrdersDelta}
           vsLabel="vs last week"
+          sym={sym}
         />
         <PeriodCard
           title="Last week"
           revenue={lastWeek?.revenue ?? 0}
           orders={lastWeek?.orders ?? 0}
           vsLabel="previous 7 days"
+          sym={sym}
         />
       </section>
 
@@ -463,7 +519,7 @@ export function MerchantAnalyticsPage() {
           {paymentRows.length === 0 ? (
             <p className="mt-5 text-sm text-muted-foreground">No payment data yet.</p>
           ) : (
-            <PaymentList rows={paymentRows} />
+            <PaymentList rows={paymentRows} sym={sym} />
           )}
         </section>
 
@@ -497,12 +553,12 @@ export function MerchantAnalyticsPage() {
             <StatRow
               label="New customers"
               value={String(data?.customers?.new_customers ?? 0)}
-              hint={`Last ${range} days`}
+              hint={`${dateRange.dateFrom} → ${dateRange.dateTo}`}
             />
             <StatRow
               label="Returning customers"
               value={String(data?.customers?.returning_customers ?? 0)}
-              hint={`Last ${range} days`}
+              hint={`${dateRange.dateFrom} → ${dateRange.dateTo}`}
             />
             <StatRow
               label="Guest / walk-in orders"
@@ -530,7 +586,7 @@ export function MerchantAnalyticsPage() {
                   <span className="flex-1 truncate text-sm text-foreground">{item.name}</span>
                   <span className="text-xs text-muted-foreground">{item.total_qty}× sold</span>
                   <span className="font-display text-sm text-ember">
-                    {formatNPR(item.total_revenue)}
+                    {formatNPR(item.total_revenue, sym)}
                   </span>
                 </li>
               ))}
@@ -572,7 +628,7 @@ export function MerchantAnalyticsPage() {
                     {c.order_count} order{c.order_count !== 1 ? "s" : ""}
                   </span>
                   <span className="font-display text-sm text-ember">
-                    {formatNPR(c.total_spent)}
+                    {formatNPR(c.total_spent, sym)}
                   </span>
                 </li>
               ))}
@@ -677,7 +733,7 @@ export function MerchantAnalyticsPage() {
           <>
             <div className="space-y-3">
               {pagedOrders.map((order) => (
-                <HistoryOrderCard key={order.id} order={order} />
+                <HistoryOrderCard key={order.id} order={order} sym={sym} />
               ))}
             </div>
 
@@ -711,7 +767,7 @@ export function MerchantAnalyticsPage() {
 
 // ── History Order Card ────────────────────────────────────────────────────────
 
-function HistoryOrderCard({ order }: { order: Order }) {
+function HistoryOrderCard({ order, sym = "Rs" }: { order: Order; sym?: string }) {
   const customerName = order.profiles?.full_name ?? order.customer_name ?? "Customer";
   const mins = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60_000);
   const hours = Math.floor(mins / 60);
@@ -766,7 +822,7 @@ function HistoryOrderCard({ order }: { order: Order }) {
           {timeLabel}
         </span>
         <span className="font-display text-base text-foreground">
-          {Number(order.total_amount) > 0 ? formatNPR(order.total_amount) : "FREE"}
+          {Number(order.total_amount) > 0 ? formatNPR(order.total_amount, sym) : "FREE"}
         </span>
       </div>
     </div>
@@ -858,6 +914,7 @@ function PeriodCard({
   deltaRev,
   deltaOrders,
   vsLabel,
+  sym,
 }: {
   title: string;
   revenue: number;
@@ -865,13 +922,14 @@ function PeriodCard({
   deltaRev?: number;
   deltaOrders?: number;
   vsLabel?: string;
+  sym?: string;
 }) {
   return (
     <div className="glass-strong rounded-3xl p-6">
       <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{title}</p>
       <div className="mt-3 flex items-end justify-between gap-4">
         <div>
-          <p className="font-display text-3xl text-foreground">{formatNPR(revenue)}</p>
+          <p className="font-display text-3xl text-foreground">{formatNPR(revenue, sym)}</p>
           <p className="mt-1 text-xs text-muted-foreground">{orders} orders</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
@@ -912,7 +970,7 @@ function ProgressList({ items }: { items: { label: string; value: number }[] }) 
   );
 }
 
-function PaymentList({ rows }: { rows: { method: string; count: number; revenue: number }[] }) {
+function PaymentList({ rows, sym = "Rs" }: { rows: { method: string; count: number; revenue: number }[]; sym?: string }) {
   const maxRev = Math.max(...rows.map((r) => r.revenue), 1);
   return (
     <ul className="mt-5 space-y-4">
@@ -920,7 +978,7 @@ function PaymentList({ rows }: { rows: { method: string; count: number; revenue:
         <li key={row.method}>
           <div className="flex items-center justify-between text-sm">
             <span className="capitalize text-foreground">{row.method.replace(/_/g, " ")}</span>
-            <span className="font-display text-sm text-foreground">{formatNPR(row.revenue)}</span>
+            <span className="font-display text-sm text-foreground">{formatNPR(row.revenue, sym)}</span>
           </div>
           <div className="mt-1.5 flex items-center gap-2">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-mist">

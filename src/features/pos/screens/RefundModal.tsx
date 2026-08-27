@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { posProcessRefund, PosOrder } from "../api";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import { AlertCircle, Loader2, X, RotateCcw, DollarSign } from "lucide-react";
 
 interface RefundModalProps {
@@ -11,6 +12,8 @@ interface RefundModalProps {
 
 export default function RefundModal({ order, onClose, onRefunded }: RefundModalProps) {
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [refundType, setRefundType] = useState<"full" | "partial">("full");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -62,7 +65,7 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
           <div className="rounded-xl bg-muted/50 p-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Order #{order.id}</span>
-              <span className="font-bold text-foreground">Rs {orderTotal.toFixed(2)}</span>
+              <span className="font-bold text-foreground">{formatCurrency(orderTotal, currencySymbol)}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {order.items?.length || 0} items &middot; {order.payment_method}
@@ -95,7 +98,7 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
           {/* Partial amount input */}
           {refundType === "partial" && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Amount (Rs)</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">Amount ({currencySymbol})</label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
@@ -110,7 +113,7 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
                 />
               </div>
               <p className="mt-1 text-[10px] text-muted-foreground">
-                Maximum: Rs {orderTotal.toFixed(2)}
+                Maximum: {formatCurrency(orderTotal, currencySymbol)}
               </p>
             </div>
           )}
@@ -150,7 +153,7 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
           {/* Refund amount preview */}
           <div className="rounded-xl bg-red-50 p-3 text-center">
             <p className="text-xs text-red-600">Refund Amount</p>
-            <p className="text-2xl font-bold text-red-700">- Rs {refundAmount.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-red-700">- {formatCurrency(refundAmount, currencySymbol)}</p>
           </div>
 
           {/* Error */}

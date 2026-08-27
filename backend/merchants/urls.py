@@ -41,6 +41,11 @@ urlpatterns = [
     # ── Public table resolution ───────────────────────────────────────────────
     path("public/<slug:slug>/tables/<str:public_token>/", views.public_resolve_table, name="public-resolve-table"),
 
+    # ── PDF Menu ──────────────────────────────────────────────────────────────
+    path("pdf-menu/", views.merchant_pdf_menu, name="merchant-pdf-menu"),
+    path("public/<slug:slug>/pdf-menu/<str:public_token>/file/", views.public_pdf_menu_file, name="public-pdf-menu-file"),
+    path("public/<slug:slug>/pdf-menu/<str:public_token>/", views.public_pdf_menu, name="public-pdf-menu"),
+
     # ── Public merchant pages ─────────────────────────────────────────────────
     path("",                     views.merchant_list,           name="merchant-list"),
     path("slug/<slug:slug>/",    views.merchant_by_slug,        name="merchant-by-slug"),

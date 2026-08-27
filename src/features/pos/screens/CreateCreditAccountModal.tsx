@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import { posCreateCreditAccount } from "../api";
 import { X, UserPlus, Loader2, Check } from "lucide-react";
 
@@ -21,6 +23,9 @@ export default function CreateCreditAccountModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   if (!open) return null;
 
@@ -63,7 +68,7 @@ export default function CreateCreditAccountModal({
             Credit account created for {name}
           </p>
           <p className="mt-3 text-2xl font-bold text-amber-600">
-            Limit: Rs {numLimit.toFixed(2)}
+            Limit: {formatCurrency(numLimit, currencySymbol)}
           </p>
         </div>
       </div>
@@ -119,7 +124,7 @@ export default function CreateCreditAccountModal({
 
         <div className="mb-4">
           <label className="mb-1 block text-xs font-medium text-muted-foreground">
-            Credit Limit (Rs) *
+            Credit Limit ({currencySymbol}) *
           </label>
           <input
             type="number"
@@ -143,7 +148,7 @@ export default function CreateCreditAccountModal({
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
               }`}
             >
-              Rs {amt}
+              {formatCurrency(amt, currencySymbol)}
             </button>
           ))}
         </div>

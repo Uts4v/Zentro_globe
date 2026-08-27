@@ -8,6 +8,10 @@ def _generate_table_token():
     return f"TBL-{secrets.token_urlsafe(8)}".upper()
 
 
+def _generate_pdf_menu_token():
+    return f"MENU-{secrets.token_urlsafe(8)}".upper()
+
+
 class MerchantProfile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -103,9 +107,31 @@ class MerchantProfile(models.Model):
         default=False,
         help_text="Enable prepaid debit accounts (customer wallet / stored value)",
     )
+    tax_enabled = models.BooleanField(
+        default=True,
+        help_text="Master toggle: enable/disable tax calculations system-wide",
+    )
     tax_rate_percent = models.DecimalField(
         max_digits=5, decimal_places=2, default=6.00,
-        help_text="VAT rate applied to POS orders (set to 0 to disable)",
+        help_text="Legacy VAT rate. Kept for backward compat; prefer tax_components.",
+    )
+
+    # ── Currency & multi-tax ──────────────────────────────────────────────────
+    currency_code = models.CharField(
+        max_length=3, default="NPR",
+        help_text="ISO 4217 currency code (e.g. NPR, INR, USD, THB)",
+    )
+    currency_symbol = models.CharField(
+        max_length=5, default="Rs",
+        help_text="Display currency symbol (e.g. Rs, ₹, $, ฿)",
+    )
+    tax_components = models.JSONField(
+        default=list, blank=True,
+        help_text=(
+            'List of tax components, e.g. '
+            '[{"name":"VAT","rate":13}] or [{"name":"CGST","rate":9},{"name":"SGST","rate":9}]. '
+            "Falls back to tax_rate_percent when empty."
+        ),
     )
 
     # ── Preparation routing ────────────────────────────────────────────────────
@@ -132,11 +158,39 @@ class MerchantProfile(models.Model):
         help_text="Merchant's local timezone for scheduling",
     )
 
+    # ── PDF Menu ────────────────────────────────────────────────────────────────
+    pdf_menu_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="URL of the uploaded PDF menu file",
+    )
+    pdf_menu_token = models.CharField(
+        max_length=64,
+        blank=True,
+        editable=False,
+        help_text="Public token for accessing the PDF menu via QR",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "merchant_profiles"
+
+    def save(self, *args, **kwargs):
+        if not self.pdf_menu_token:
+            self.pdf_menu_token = self._unique_pdf_menu_token()
+        super().save(*args, **kwargs)
+
+    def _unique_pdf_menu_token(self):
+        token = _generate_pdf_menu_token()
+        while MerchantProfile.objects.filter(pdf_menu_token=token).exclude(pk=self.pk).exists():
+            token = _generate_pdf_menu_token()
+        return token
+
+    def regenerate_pdf_menu_token(self):
+        self.pdf_menu_token = self._unique_pdf_menu_token()
+        self.save(update_fields=["pdf_menu_token", "updated_at"])
 
     def __str__(self):
         return self.business_name

@@ -406,10 +406,17 @@ def create_order(request):
             "subtotal":  subtotal,
         })
 
+    # Apply tax
+    from config.tax_utils import calculate_tax
+    tax_amount, tax_breakdown = calculate_tax(total_amount, merchant)
+
     order = Order.objects.create(
         customer=customer,
         merchant=merchant,
-        total_amount=total_amount,
+        subtotal=total_amount,
+        tax_amount=tax_amount,
+        tax_breakdown=tax_breakdown,
+        total_amount=total_amount + tax_amount,
         points_earned=points_earned,
         notes=data.get("notes", ""),
         status=Order.STATUS_PENDING,
@@ -430,8 +437,8 @@ def create_order(request):
 
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
-        title="New order received 🔔",
-        message=f"Order #{order.id} from {customer.full_name or 'Customer'} — NPR {total_amount}",
+        title="New order received",
+        message=f"Order #{order.id} from {customer.full_name or 'Customer'} — {merchant.currency_symbol} {total_amount}",
         notification_type=Notification.TYPE_NEW_ORDER,
         merchant_name=merchant.business_name,
         context_url="/merchant/orders",
@@ -535,10 +542,17 @@ def guest_create_order(request):
     ).count()
     kot_number = today_count + 1
 
+    # Apply tax
+    from config.tax_utils import calculate_tax
+    tax_amount, tax_breakdown = calculate_tax(total_amount, merchant)
+
     order = Order.objects.create(
         customer=None,
         merchant=merchant,
-        total_amount=total_amount,
+        subtotal=total_amount,
+        tax_amount=tax_amount,
+        tax_breakdown=tax_breakdown,
+        total_amount=total_amount + tax_amount,
         points_earned=0,  # Guest orders don't earn points
         notes=data.get("notes", ""),
         status=Order.STATUS_PENDING,
@@ -563,8 +577,8 @@ def guest_create_order(request):
 
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
-        title="New guest order 🔔",
-        message=f"Guest Order #{order.id} — Table {table_instance.table_number} — NPR {total_amount}",
+        title="New guest order",
+        message=f"Guest Order #{order.id} — Table {table_instance.table_number} — {merchant.currency_symbol} {total_amount}",
         notification_type=Notification.TYPE_NEW_ORDER,
         merchant_name=merchant.business_name,
         context_url="/merchant/orders",

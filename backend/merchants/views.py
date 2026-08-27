@@ -21,15 +21,22 @@ Endpoints:
 import io
 import base64
 import math
-from datetime import datetime, timedelta, time as dt_time
+import os
+import uuid as uuid_module
+from datetime import date, datetime, timedelta, time as dt_time
 from zoneinfo import ZoneInfo
 
 import qrcode
 from django.conf import settings
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.db.models import Avg, Count, Min, Sum
 from django.db.models.functions import ExtractHour, TruncDate
+from django.http import FileResponse, HttpResponse, JsonResponse
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
+from django.views.decorators.clickjacking import xframe_options_exempt
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -328,6 +335,7 @@ def toggle_availability(request, pk):
 @permission_classes([IsAuthenticated])
 def merchant_analytics(request):
     """GET /api/merchants/analytics/?days=30
+    or  /api/merchants/analytics/?date_from=2025-01-01&date_to=2025-01-31
 
     Returns a rich analytics summary computed in the merchant's local timezone:
     KPIs, filled daily series, today/yesterday, hourly velocity, status /
@@ -338,6 +346,9 @@ def merchant_analytics(request):
         merchant = _get_merchant(request.user)
     except PermissionError as e:
         return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    raw_date_from = request.query_params.get("date_from")
+    raw_date_to = request.query_params.get("date_to")
 
     try:
         days = max(1, min(int(request.query_params.get("days", 30)), 90))
@@ -354,12 +365,31 @@ def merchant_analytics(request):
 
     today_start = day_start(local_today)
     yesterday_start = today_start - timedelta(days=1)
-    period_start = today_start - timedelta(days=days - 1)
+
+    # Support explicit date_from / date_to or fall back to days parameter.
+    d_from = d_to = None
+    if raw_date_from and raw_date_to:
+        try:
+            d_from = date.fromisoformat(str(raw_date_from))
+            d_to = date.fromisoformat(str(raw_date_to))
+        except (TypeError, ValueError) as exc:
+            import logging
+            logging.warning("merchant_analytics: failed to parse date_from=%r date_to=%r: %s", raw_date_from, raw_date_to, exc)
+            d_from = d_to = None
+
+    if d_from is not None and d_to is not None:
+        period_start = day_start(d_from)
+        period_end = day_start(d_to) + timedelta(days=1)
+        days = max(1, (d_to - d_from).days + 1)
+    else:
+        period_start = today_start - timedelta(days=days - 1)
+        period_end = today_start + timedelta(days=1)
 
     # Non-cancelled orders define revenue/orders; cancelled orders are excluded.
     orders_qs = Order.objects.filter(
         merchant=merchant,
         created_at__gte=period_start,
+        created_at__lt=period_end,
     ).exclude(status=Order.STATUS_CANCELLED)
 
     agg = orders_qs.aggregate(
@@ -413,7 +443,7 @@ def merchant_analytics(request):
     # ── Top items ─────────────────────────────────────────────────────────────
     top_items = (
         OrderItem.objects
-        .filter(order__merchant=merchant, order__created_at__gte=period_start)
+        .filter(order__merchant=merchant, order__created_at__gte=period_start, order__created_at__lt=period_end)
         .exclude(order__status=Order.STATUS_CANCELLED)
         .values("name")
         .annotate(total_qty=Sum("quantity"), total_revenue=Sum("subtotal"))
@@ -432,7 +462,7 @@ def merchant_analytics(request):
     # ── Status breakdown (all statuses, including cancelled) ──────────────────
     status_rows = (
         Order.objects
-        .filter(merchant=merchant, created_at__gte=period_start)
+        .filter(merchant=merchant, created_at__gte=period_start, created_at__lt=period_end)
         .values("status")
         .annotate(count=Count("id"))
     )
@@ -505,6 +535,7 @@ def merchant_analytics(request):
         .filter(
             merchant=merchant,
             created_at__gte=period_start,
+            created_at__lt=period_end,
             transaction_type__in=["EARNED", "MISSION_BONUS"],
         )
         .aggregate(total=Sum("points"))["total"] or 0
@@ -512,10 +543,12 @@ def merchant_analytics(request):
     rewards_redeemed = Redemption.objects.filter(
         reward__merchant=merchant,
         created_at__gte=period_start,
+        created_at__lt=period_end,
     ).count()
     punch_cards_redeemed = Order.objects.filter(
         merchant=merchant,
         created_at__gte=period_start,
+        created_at__lt=period_end,
         order_type=Order.ORDER_TYPE_PUNCH_REDEMPTION,
     ).count()
 
@@ -777,3 +810,171 @@ def public_resolve_table(request, slug, public_token):
             "public_token": table.public_token,
         },
     })
+
+
+# ── PDF Menu ─────────────────────────────────────────────────────────────────
+
+@api_view(["GET", "POST", "DELETE"])
+@permission_classes([IsAuthenticated])
+def merchant_pdf_menu(request):
+    """
+    GET    /api/merchants/pdf-menu/             — fetch current PDF menu + QR info
+    POST   /api/merchants/pdf-menu/             — upload/replace PDF menu (multipart, field="file")
+    DELETE /api/merchants/pdf-menu/             — remove the PDF menu
+    """
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    if not merchant.slug:
+        return Response({"error": "Merchant slug not set."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if request.method == "GET":
+        return Response(_pdf_menu_payload(merchant, request))
+
+    if request.method == "DELETE":
+        if merchant.pdf_menu_url:
+            _delete_pdf_menu_file(merchant.pdf_menu_url)
+        merchant.pdf_menu_url = ""
+        merchant.save(update_fields=["pdf_menu_url", "updated_at"])
+        return Response(_pdf_menu_payload(merchant, request), status=status.HTTP_200_OK)
+
+    # POST — upload/replace
+    file = request.FILES.get("file")
+    if not file:
+        return Response({"error": "No file provided. Use multipart field 'file'."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    content_type = (file.content_type or "").lower()
+    if content_type != "application/pdf":
+        return Response({"error": "Only PDF files are allowed."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # Remove any previous PDF to avoid orphaned files
+    if merchant.pdf_menu_url:
+        _delete_pdf_menu_file(merchant.pdf_menu_url)
+
+    filename = f"menus/{uuid_module.uuid4().hex}.pdf"
+    saved_path = default_storage.save(filename, ContentFile(file.read()))
+    file_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
+
+    merchant.pdf_menu_url = file_url
+    merchant.save(update_fields=["pdf_menu_url", "updated_at"])
+
+    return Response(_pdf_menu_payload(merchant, request), status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_pdf_menu(request, slug, public_token):
+    """
+    GET /api/merchants/public/{slug}/pdf-menu/{public_token}/
+    Public resolution for a PDF-menu QR code. Returns the merchant + PDF URL,
+    or a friendly error when no PDF has been uploaded yet.
+    """
+    try:
+        merchant = MerchantProfile.objects.get(slug=slug, is_approved=True)
+    except MerchantProfile.DoesNotExist:
+        return Response({"error": "Merchant not found."},
+                        status=status.HTTP_404_NOT_FOUND)
+
+    if merchant.pdf_menu_token != public_token:
+        return Response({"error": "Invalid or expired PDF menu QR code."},
+                        status=status.HTTP_404_NOT_FOUND)
+
+    if not merchant.pdf_menu_url:
+        return Response({
+            "merchant": {
+                "id": merchant.id,
+                "name": merchant.business_name,
+                "slug": merchant.slug,
+                "logo": merchant.logo_url,
+            },
+            "has_pdf": False,
+            "pdf_url": None,
+        }, status=status.HTTP_200_OK)
+
+    return Response({
+        "merchant": {
+            "id": merchant.id,
+            "name": merchant.business_name,
+            "slug": merchant.slug,
+            "logo": merchant.logo_url,
+            "address": merchant.address,
+            "phone": merchant.phone,
+        },
+        "has_pdf": True,
+        "pdf_url": _pdf_menu_file_url(request, merchant),
+    })
+
+
+@xframe_options_exempt
+def public_pdf_menu_file(request, slug, public_token):
+    """
+    GET /api/merchants/public/{slug}/pdf-menu/{public_token}/file/
+    Streams the merchant's PDF menu so the browser can embed it in a frame
+    (X-Frame-Options is stripped via xframe_options_exempt). Requires the
+    QR token so files aren't publicly enumerable.
+    """
+    try:
+        merchant = MerchantProfile.objects.get(slug=slug, is_approved=True)
+    except MerchantProfile.DoesNotExist:
+        return JsonResponse({"error": "Merchant not found."}, status=404)
+
+    if merchant.pdf_menu_token != public_token:
+        return JsonResponse({"error": "Invalid or expired PDF menu QR code."}, status=404)
+
+    if not merchant.pdf_menu_url:
+        return JsonResponse({"error": "No PDF menu uploaded yet."}, status=404)
+
+    rel = merchant.pdf_menu_url.split(settings.MEDIA_URL, 1)[1] if settings.MEDIA_URL in merchant.pdf_menu_url else None
+    if not rel:
+        return JsonResponse({"error": "PDF file missing."}, status=404)
+
+    try:
+        pdf_file = default_storage.open(rel)
+    except FileNotFoundError:
+        return JsonResponse({"error": "PDF file missing."}, status=404)
+
+    if request.GET.get("download"):
+        response = FileResponse(pdf_file, content_type="application/pdf")
+        response["Content-Disposition"] = "attachment; filename=menu.pdf"
+    else:
+        response = FileResponse(pdf_file, content_type="application/pdf")
+        response["Content-Disposition"] = "inline; filename=menu.pdf"
+    response["Cache-Control"] = "public, max-age=86400"
+    return response
+
+
+def _pdf_menu_file_url(request, merchant) -> str:
+    """Absolute URL of the embeddable PDF streaming endpoint."""
+    if not merchant.pdf_menu_url:
+        return None
+    return request.build_absolute_uri(
+        reverse("public-pdf-menu-file", kwargs={
+            "slug": merchant.slug,
+            "public_token": merchant.pdf_menu_token,
+        })
+    )
+
+
+def _pdf_menu_payload(merchant, request):
+    frontend_url = getattr(settings, "FRONTEND_URL", f"{request.scheme}://{request.get_host()}")
+    pdf_menu_page_url = f"{frontend_url.rstrip('/')}/m/{merchant.slug}/pdf-menu/{merchant.pdf_menu_token}"
+    return {
+        "has_pdf": bool(merchant.pdf_menu_url),
+        "pdf_url": _pdf_menu_file_url(request, merchant) or None,
+        "pdf_menu_token": merchant.pdf_menu_token,
+        "pdf_menu_page_url": pdf_menu_page_url,
+    }
+
+
+def _delete_pdf_menu_file(file_url):
+    """Best-effort removal of a previously stored PDF menu file."""
+    try:
+        if file_url and settings.MEDIA_URL in file_url:
+            rel = file_url.split(settings.MEDIA_URL, 1)[1]
+            default_storage.delete(rel)
+    except Exception:
+        pass

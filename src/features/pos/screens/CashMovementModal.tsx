@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { usePosStore } from "../store";
+import { formatCurrency } from "@/lib/currency";
 import { posCreateCashMovement } from "../api";
 import { X, ArrowDownToLine, ArrowUpFromLine, Landmark, Loader2 } from "lucide-react";
 
@@ -26,6 +27,8 @@ const MOVEMENT_TYPES: Array<{
 export default function CashMovementModal({ open, onClose, onRecorded }: CashMovementModalProps) {
   const activeShift = usePosStore((s) => s.activeShift);
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const posSettings = usePosStore((s) => s.posSettings);
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [type, setType] = useState<MovementType>("payout");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -94,7 +97,7 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
 
         {/* Amount */}
         <div className="px-6 pb-3">
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Amount (Rs)</label>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Amount ({currencySymbol})</label>
           <input
             type="number"
             value={amount}
@@ -115,7 +118,7 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
               onClick={() => setAmount(String(amt))}
               className="flex-1 rounded-lg bg-muted py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80"
             >
-              Rs {amt}
+              {formatCurrency(amt, currencySymbol)}
             </button>
           ))}
         </div>
@@ -151,7 +154,7 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
             {loading ? (
               <><Loader2 className="h-4 w-4 animate-spin" /> Recording...</>
             ) : (
-              <>Record {type === "payout" ? "Pay-out" : type === "payin" ? "Pay-in" : "Cash Drop"} — Rs {amt.toFixed(2)}</>
+              <>Record {type === "payout" ? "Pay-out" : type === "payin" ? "Pay-in" : "Cash Drop"} — {formatCurrency(amt, currencySymbol)}</>
             )}
           </button>
         </div>
