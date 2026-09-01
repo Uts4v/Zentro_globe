@@ -382,6 +382,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "redeem": "10/min",
     "guest": "60/hour",
     "upload": "100/hour",
+    "leaderboard": "300/hour",
 }
 
 # ── Logging ───────────────────────────────────────────────────────────────────

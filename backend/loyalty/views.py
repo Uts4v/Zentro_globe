@@ -18,6 +18,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
+from .throttles import LeaderboardThrottle
+
 from accounts.models import CustomerProfile, User
 from merchants.models import MerchantProfile
 from notifications.services import send_notification
@@ -50,6 +52,7 @@ from .serializers import (
     MembershipCardSerializer,
     MembershipQrTokenSerializer,
     MerchantCardDesignSerializer,
+    LeaderboardEntrySerializer,
 )
 from .services import join_merchant, get_or_create_wallet, deduct_wallet_points, transfer_points
 
@@ -1034,9 +1037,20 @@ def merchant_redemptions(request):
 # ── Leaderboard ───────────────────────────────────────────────────────────────
 
 @api_view(["GET"])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
+@throttle_classes([LeaderboardThrottle])
 def leaderboard(request):
-    limit = min(int(request.query_params.get("limit", 10)), 50)
+    """
+    GET /api/loyalty/leaderboard/?merchant=<id>
+
+    Authenticated + rate-limited. Returns a PUBLIC-safe leaderboard payload
+    via LeaderboardEntrySerializer — never internal serializers.
+    """
+    try:
+        limit = int(request.query_params.get("limit", 10))
+    except (TypeError, ValueError):
+        limit = 10
+    limit = max(1, min(limit, 50))
     merchant_id = request.query_params.get("merchant")
 
     if not merchant_id:
@@ -1063,7 +1077,6 @@ def leaderboard(request):
             "customer_id": w.customer_id,
             "full_name": w.customer.full_name or w.customer.user.email,
             "loyalty_points": w.points_balance,
-            "lifetime_points": w.lifetime_points,
             "tier": w.tier_level,
             "streak_days": w.streak_days,
             "merchant_id": w.merchant_id,
@@ -1071,7 +1084,7 @@ def leaderboard(request):
         for i, w in enumerate(qs)
     ]
 
-    return Response(result)
+    return Response(LeaderboardEntrySerializer(result, many=True).data)
 
 
 # ── Point Transfers ────────────────────────────────────────────────────────────

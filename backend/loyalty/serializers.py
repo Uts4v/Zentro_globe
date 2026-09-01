@@ -248,6 +248,23 @@ class RedemptionSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "customer", "customer_name", "reward", "created_at"]
 
 
+class LeaderboardEntrySerializer(serializers.Serializer):
+    """
+    Public leaderboard row (customer-facing).
+
+    Exposes only the non-sensitive fields the customer app renders. Requires
+    an authenticated request and is rate-limited (see leaderboard view).
+    """
+
+    rank = serializers.IntegerField(read_only=True)
+    customer_id = serializers.IntegerField(read_only=True)
+    full_name = serializers.CharField(read_only=True)
+    loyalty_points = serializers.IntegerField(read_only=True)
+    tier = serializers.CharField(read_only=True)
+    streak_days = serializers.IntegerField(read_only=True)
+    merchant_id = serializers.IntegerField(read_only=True)
+
+
 class CustomerMerchantProfileSerializer(serializers.ModelSerializer):
     merchant_id = serializers.IntegerField(source="merchant.id", read_only=True)
     merchant_name = serializers.CharField(source="merchant.business_name", read_only=True)
