@@ -171,7 +171,7 @@ def merchant_detail(request, pk):
 def merchant_by_slug(request, slug):
     """GET /api/merchants/slug/<slug>/ — public merchant page by slug."""
     try:
-        merchant = MerchantProfile.objects.get(slug=slug)
+        merchant = MerchantProfile.objects.get(slug=slug, is_approved=True)
     except MerchantProfile.DoesNotExist:
         return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
     return Response(

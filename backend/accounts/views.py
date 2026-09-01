@@ -16,6 +16,7 @@ Media:
   POST /api/media/upload/          — upload an image file, get back a URL
 """
 
+import os
 import secrets
 from datetime import timedelta
 
@@ -129,7 +130,10 @@ def register(request):
             user=user,
             business_name=store_name,
             slug=slug,
-            is_approved=True,  # Auto-approve for easier testing
+            # Merchants are NOT auto-approved. For the controlled pilot each
+            # café must be approved by an admin before it is publicly visible.
+            # Set AUTO_APPROVE_MERCHANTS=true only in non-production testing.
+            is_approved=os.getenv("AUTO_APPROVE_MERCHANTS", "false").lower() == "true",
             onboarding_complete=False,
             # POS feature flags (default False)
             pos_enabled=False,
