@@ -951,7 +951,7 @@ def close_shift(request):
                         status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        shift = CashShift.objects.get(
+        shift = CashShift.objects.select_for_update().get(
             id=shift_id, merchant=merchant, status=CashShift.STATUS_OPEN,
         )
     except CashShift.DoesNotExist:
