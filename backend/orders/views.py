@@ -2,6 +2,7 @@
 import logging
 
 from django.db import transaction
+from django.db import IntegrityError
 from django.utils import timezone
 
 from datetime import timedelta
@@ -384,6 +385,20 @@ def create_order(request):
 
     membership, _, _ = join_merchant(customer, merchant)
 
+    client_mutation_id = data.get("client_mutation_id")
+    if client_mutation_id:
+        existing_order = (
+            Order.objects.filter(
+                customer=customer,
+                merchant=merchant,
+                client_mutation_id=client_mutation_id,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if existing_order:
+            return Response(OrderSerializer(existing_order, context={"request": request}).data)
+
     # Validate fulfillment type against merchant settings
     fulfillment_type = data.get("fulfillment_type", Order.FULFILLMENT_PICKUP)
     table_token = data.get("table_token", "").strip()
@@ -490,15 +505,34 @@ def create_order(request):
         table=table_instance,
         table_name_snapshot=table_name_snap,
         table_number_snapshot=table_number_snap,
+        client_mutation_id=client_mutation_id,
     )
 
-    # Apply preparation routing
-    order_items_data = prepare_order_items_for_routing(order, order_items_data)
+    try:
+        # Apply preparation routing
+        order_items_data = prepare_order_items_for_routing(order, order_items_data)
 
-    OrderItem.objects.bulk_create(
-        [OrderItem(order=order, **item) for item in order_items_data],
-        batch_size=200,
-    )
+        OrderItem.objects.bulk_create(
+            [OrderItem(order=order, **item) for item in order_items_data],
+            batch_size=200,
+        )
+    except IntegrityError:
+        # A concurrent request already persisted an order with the same
+        # client_mutation_id (customer + merchant). Return that one.
+        existing_order = (
+            Order.objects.filter(
+                customer=customer,
+                merchant=merchant,
+                client_mutation_id=client_mutation_id,
+            )
+            .order_by("-created_at")
+            .first()
+        )
+        if existing_order:
+            return Response(
+                OrderSerializer(existing_order, context={"request": request}).data
+            )
+        raise
 
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,

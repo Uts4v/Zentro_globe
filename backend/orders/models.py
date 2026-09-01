@@ -326,6 +326,13 @@ class Order(models.Model):
             models.Index(fields=["merchant", "status", "-created_at"], name="orders_merchant_status_idx"),
             models.Index(fields=["customer", "-created_at"], name="orders_customer_created_idx"),
         ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["customer", "merchant", "client_mutation_id"],
+                condition=~models.Q(client_mutation_id__isnull=True),
+                name="uniq_customer_merchant_mutation",
+            ),
+        ]
 
     def __str__(self):
         customer_label = self.customer or "Walk-in"

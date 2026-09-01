@@ -92,6 +92,11 @@ class CreateOrderSerializer(serializers.Serializer):
     merchant_id = serializers.IntegerField()
     items       = CreateOrderItemSerializer(many=True)
     notes       = serializers.CharField(required=False, allow_blank=True, default="")
+    client_mutation_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Optional idempotency key; a resubmitted key returns the existing order.",
+    )
     fulfillment_type = serializers.ChoiceField(
         choices=["dine_in", "pickup", "delivery"],
         default="pickup",
@@ -125,6 +130,11 @@ class CreateGuestOrderSerializer(serializers.Serializer):
 class AddItemsToOrderSerializer(serializers.Serializer):
     items = CreateOrderItemSerializer(many=True)
     notes = serializers.CharField(required=False, allow_blank=True, default="")
+    client_mutation_id = serializers.UUIDField(
+        required=False,
+        allow_null=True,
+        help_text="Optional idempotency key for the add-items mutation.",
+    )
 
     def validate_items(self, value):
         if not value:
