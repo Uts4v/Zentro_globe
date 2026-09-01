@@ -828,7 +828,7 @@ def update_order_status(request, pk):
 @transaction.atomic
 def cancel_order(request, pk):
     try:
-        order = Order.objects.select_related(
+        order = Order.objects.select_for_update(of=("self",)).select_related(
             "customer__user", "merchant__user"
         ).get(pk=pk)
     except Order.DoesNotExist:
