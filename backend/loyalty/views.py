@@ -848,9 +848,12 @@ def confirm_punch_proof(request):
 def redeem_reward(request, pk):
     """
     POST /api/loyalty/rewards/<id>/redeem/
-    Customer redeems a reward using their loyalty points. Points are held
-    (validated but NOT deducted) until the merchant completes the order.
-    If the merchant cancels, the customer keeps their points.
+    Customer redeems a reward using loyalty points.
+
+    The points are deducted ATOMICALLY at redemption time (single
+    transaction with a wallet row lock, same PostgreSQL transaction that
+    creates the Redemption + Order). If the merchant later cancels the
+    order, the points are refunded (REDEMPTION_REFUND transaction).
     """
     try:
         customer = get_customer_profile(request.user)
@@ -866,9 +869,11 @@ def redeem_reward(request, pk):
         return Response({"error": "This reward is out of stock."}, status=status.HTTP_400_BAD_REQUEST)
 
     wallet = get_or_create_wallet(customer, reward.merchant)
+    # Serialise concurrent redemptions: hold the wallet row lock for the
+    # whole transaction so the balance check + deduction is race-free.
+    wallet = CustomerMerchantWallet.objects.select_for_update().get(pk=wallet.pk)
 
-    # Validate the customer has enough points but do NOT deduct yet.
-    # Points will be deducted when the merchant marks the order as completed.
+    # Validate BEFORE writing anything — insufficient balance aborts cleanly.
     if wallet.points_balance < reward.points_cost:
         return Response(
             {"error": f"Insufficient points: have {wallet.points_balance}, need {reward.points_cost}"},
@@ -903,6 +908,9 @@ def redeem_reward(request, pk):
         points_earned=0,
         notes=f"Reward redemption: {reward.name} (code {code})",
         reward_redemption=redemption,
+        # Points are deducted HERE (not at completion), so mark the order as
+        # already handled to prevent a second deduction on completion.
+        loyalty_awarded=True,
     )
     OrderItem.objects.create(
         order=redemption_order,
@@ -910,6 +918,24 @@ def redeem_reward(request, pk):
         price=0,
         quantity=1,
         subtotal=0,
+    )
+
+    # Deduct the points — same transaction, wallet already locked.
+    balance_before = wallet.points_balance
+    wallet.points_balance -= reward.points_cost
+    wallet.save(update_fields=["points_balance", "updated_at"])
+    PointTransaction.objects.create(
+        merchant=reward.merchant,
+        customer=customer,
+        membership=wallet.membership,
+        wallet=wallet,
+        transaction_type="REDEEMED",
+        points=-reward.points_cost,
+        balance_before=balance_before,
+        balance_after=wallet.points_balance,
+        description=f"Redeemed reward: {reward.name} (Order #{redemption_order.id})",
+        order=redemption_order,
+        reward=reward,
     )
 
     # Notify the merchant that a customer redeemed a reward
@@ -929,6 +955,7 @@ def redeem_reward(request, pk):
 
     data = RedemptionSerializer(redemption).data
     data["order_id"] = redemption_order.id
+    data["points_balance"] = wallet.points_balance
     return Response(data, status=status.HTTP_201_CREATED)
 
 

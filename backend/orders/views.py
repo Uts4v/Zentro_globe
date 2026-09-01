@@ -18,10 +18,11 @@ from merchants.models import MerchantProfile, MenuItem
 from loyalty.models import (
     MerchantPunchCard, CustomerPunchCard,
     CustomerMission, Mission, CustomerMerchantProfile,
+    PointTransaction, Redemption,
 )
 from loyalty.services import (
-    get_or_create_wallet, award_wallet_points, deduct_wallet_points, update_wallet_streak,
-    join_merchant,
+    get_or_create_wallet, award_wallet_points, deduct_wallet_points, refund_wallet_points,
+    update_wallet_streak, join_merchant,
 )
 from notifications.services import send_notification
 from notifications.models import Notification
@@ -63,9 +64,19 @@ def _notify_safe(**kwargs):
 
 
 def _deduct_reward_redemption_points(order: Order):
-    """Deduct points when a reward redemption order is completed by the merchant."""
+    """
+    Legacy path: deduct points when a reward redemption order is completed.
+
+    Kept only for redemptions created before the C-2 change (whose orders were
+    not yet marked ``loyalty_awarded``). New redemptions deduct at redemption
+    time inside ``redeem_reward`` and are created with ``loyalty_awarded=True``.
+    """
     redemption = order.reward_redemption
     if not redemption or not redemption.points_spent:
+        return
+
+    # Guard against double-deduction on re-processing.
+    if order.loyalty_awarded:
         return
 
     customer = order.customer
@@ -85,6 +96,53 @@ def _deduct_reward_redemption_points(order: Order):
             "Could not deduct %s points for redemption %s — insufficient balance",
             redemption.points_spent, redemption.id,
         )
+
+
+def _refund_reward_redemption_points(order: Order):
+    """Refund points for a cancelled reward redemption (idempotent)."""
+    redemption = order.reward_redemption
+    if not redemption or not redemption.points_spent:
+        return
+
+    # Idempotency guard: never refund the same order twice.
+    if PointTransaction.objects.filter(
+        order=order,
+        transaction_type="REDEMPTION_REFUND",
+    ).exists():
+        return
+
+    # Only refund if points were actually deducted for this order.
+    deduct_txn = (
+        PointTransaction.objects
+        .filter(
+            order=order,
+            transaction_type="REDEEMED",
+            wallet__customer=order.customer,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if not deduct_txn:
+        # A redemption created before the C-2 change never deducted points;
+        # nothing to refund.
+        return
+
+    refund_wallet_points(
+        deduct_txn.wallet,
+        redemption.points_spent,
+        transaction_type="REDEMPTION_REFUND",
+        description=f"Refund for cancelled reward redemption: {redemption.reward.name} (Order #{order.id})",
+        reward=redemption.reward,
+        order=order,
+    )
+
+    redemption.status = Redemption.STATUS_CANCELLED
+    redemption.save(update_fields=["status"])
+
+    # Restore reward stock if it was decremented at redemption time.
+    if redemption.reward.stock != -1:
+        redemption.reward.stock += 1
+        redemption.reward.save(update_fields=["stock"])
 
 
 def _award_loyalty(order: Order):
@@ -756,6 +814,16 @@ def cancel_order(request, pk):
     order.status       = Order.STATUS_CANCELLED
     order.cancelled_by = Order.CANCELLED_BY_CUSTOMER if is_customer else Order.CANCELLED_BY_MERCHANT
     order.cancellation_reason = reason
+
+    # Reward redemptions deduct points at redemption time — refund them now
+    # (idempotent, guarded by a REDEMPTION_REFUND transaction check).
+    is_reward_redemption = (
+        order.order_type == Order.ORDER_TYPE_REWARD_REDEMPTION
+        and order.reward_redemption_id is not None
+    )
+    if is_reward_redemption:
+        _refund_reward_redemption_points(order)
+
     order.save(update_fields=["status", "cancelled_by", "cancellation_reason", "updated_at"])
 
     reason_label = dict(Order.CANCEL_REASON_CHOICES).get(reason, "")

@@ -136,6 +136,41 @@ def deduct_wallet_points(wallet: CustomerMerchantWallet, pts: int, transaction_t
         )
 
 
+def refund_wallet_points(wallet: CustomerMerchantWallet, pts: int, transaction_type="REDEMPTION_REFUND", description="", order=None, reward=None, mission=None, punch_card=None):
+    """
+    Restore points to a wallet (refund path).
+
+    Unlike ``award_wallet_points`` a refund RESTORES a previously deducted
+    balance — it must NOT bump lifetime points, the earn timestamp, tiers or
+    streaks, otherwise refunds would inflate the customer's tier/footprint.
+    """
+    if pts <= 0:
+        return
+
+    with transaction.atomic():
+        wallet = _lock_wallet(wallet)
+
+        balance_before = wallet.points_balance
+        wallet.points_balance += pts
+        wallet.save(update_fields=["points_balance", "updated_at"])
+
+        PointTransaction.objects.create(
+            merchant=wallet.merchant,
+            customer=wallet.customer,
+            membership=wallet.membership,
+            wallet=wallet,
+            transaction_type=transaction_type,
+            points=pts,
+            balance_before=balance_before,
+            balance_after=wallet.points_balance,
+            description=description,
+            order=order,
+            reward=reward,
+            mission=mission,
+            punch_card=punch_card
+        )
+
+
 def update_wallet_streak(wallet: CustomerMerchantWallet, now=None) -> bool:
     """
     Update merchant-scoped streak based on order datetime.

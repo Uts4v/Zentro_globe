@@ -326,6 +326,7 @@ class PointTransaction(models.Model):
     TRANSACTION_TYPES = [
         ("EARNED", "Earned"),
         ("REDEEMED", "Redeemed"),
+        ("REDEMPTION_REFUND", "Redemption Refund"),
         ("MISSION_BONUS", "Mission Bonus"),
         ("PUNCH_CARD_REWARD", "Punch Card Reward"),
         ("EXPIRED", "Expired"),
