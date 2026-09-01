@@ -3387,10 +3387,15 @@ def process_refund(request):
                         status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        order = Order.objects.get(uuid=order_id, merchant=merchant)
+        order = Order.objects.select_for_update().get(uuid=order_id, merchant=merchant)
     except Order.DoesNotExist:
         return Response({"error": "Order not found."},
                         status=status.HTTP_404_NOT_FOUND)
+
+    # Idempotency: an order that was already refunded cannot be refunded again
+    if order.status == "refunded" or order.payment_status == "refunded":
+        return Response({"error": "Order has already been refunded."},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     try:
         worker = ShiftWorker.objects.get(
@@ -3405,19 +3410,24 @@ def process_refund(request):
         return Response({"error": "Order is not paid. Only paid orders can be refunded."},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    # Calculate refund amount
+    # Calculate refund amount (money math in Decimal, never float)
     if refund_amount is None:
-        refund_amount = float(order.total_amount)
+        refund_amount_dec = order.total_amount
     else:
-        refund_amount = float(refund_amount)
+        try:
+            refund_amount_dec = Decimal(str(refund_amount))
+        except Exception:
+            refund_amount_dec = Decimal(refund_amount)
 
-    if refund_amount <= 0:
+    if refund_amount_dec <= 0:
         return Response({"error": "Refund amount must be positive."},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    if refund_amount > float(order.total_amount):
+    if refund_amount_dec > order.total_amount:
         return Response({"error": "Refund amount exceeds order total."},
                         status=status.HTTP_400_BAD_REQUEST)
+
+    refund_amount = refund_amount_dec
 
     # Create refund payment record
     refund_payment = PosPayment.objects.create(
@@ -3439,27 +3449,42 @@ def process_refund(request):
     order.version += 1
     order.save(update_fields=["status", "payment_status", "version", "updated_at"])
 
-    # Reverse credit transaction if original payment was credit
+    # Reverse credit transaction if original payment was credit.
+    # The credit account balance is actually credited back (was previously a
+    # fabricated 0/0 row that never touched the customer's balance).
     if order.payment_method == "credit":
-        CreditTransaction.objects.create(
-            account=CreditAccount.objects.filter(
+        try:
+            credit_acct = CreditAccount.objects.select_for_update().get(
+                merchant=merchant, customer=order.customer, is_active=True,
+            )
+        except CreditAccount.DoesNotExist:
+            credit_acct = CreditAccount.objects.filter(
                 merchant=merchant, customer=order.customer
-            ).first(),
-            order=order,
-            worker=worker,
-            transaction_type="adjustment",
-            amount=-refund_amount,
-            balance_before=0,
-            balance_after=0,
-            note=f"Refund for order #{order.id}: {reason}",
-        )
+            ).first()
+        if credit_acct:
+            cb_before = credit_acct.current_balance
+            credit_acct.current_balance += refund_amount
+            credit_acct.save(update_fields=["current_balance", "updated_at"])
+            CreditTransaction.objects.create(
+                account=credit_acct,
+                order=order,
+                worker=worker,
+                transaction_type="adjustment",
+                amount=refund_amount,
+                balance_before=cb_before,
+                balance_after=credit_acct.current_balance,
+                note=f"Refund for order #{order.id}: {reason}",
+            )
 
-    # Reverse debit transaction if original payment was debit
+    # Reverse debit transaction if original payment was debit (locked row)
     if order.payment_method == "debit":
-        debit_acct = DebitAccount.objects.filter(
-            merchant=merchant, customer=order.customer
-        ).first()
+        debit_acct = None
+        if order.customer is not None:
+            debit_acct = DebitAccount.objects.select_for_update().filter(
+                merchant=merchant, customer=order.customer, is_active=True,
+            ).first()
         if debit_acct:
+            db_before = debit_acct.balance
             debit_acct.balance += refund_amount
             debit_acct.save(update_fields=["balance", "updated_at"])
             DebitTransaction.objects.create(
@@ -3468,7 +3493,7 @@ def process_refund(request):
                 worker=worker,
                 transaction_type="refund",
                 amount=refund_amount,
-                balance_before=debit_acct.balance - refund_amount,
+                balance_before=db_before,
                 balance_after=debit_acct.balance,
                 note=f"Refund for order #{order.id}: {reason}",
             )
