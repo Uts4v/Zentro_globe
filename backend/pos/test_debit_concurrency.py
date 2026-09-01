@@ -14,7 +14,7 @@ from django.test import TransactionTestCase
 from rest_framework.test import APIClient
 
 from merchants.models import MerchantProfile
-from pos.models import ShiftWorker, DebitAccount
+from pos.models import ShiftWorker, DebitAccount, PosDevice
 
 
 @unittest.skipUnless(
@@ -40,7 +40,21 @@ class DebitTopupConcurrencyTest(TransactionTestCase):
             merchant=self.merchant, contact_name="Prepaid A", balance=500,
             is_active=True,
         )
+        self.device = PosDevice.objects.create(
+            merchant=self.merchant, name="Till-1", device_token_hash="x",
+            is_active=True,
+        )
         self.user = user
+
+    def _body(self, cid):
+        return {
+            "account_id": str(self.account.id),
+            "worker_id": str(self.worker.id),
+            "device_id": str(self.device.id),
+            "amount": "100",
+            "client_mutation_id": cid,
+            "note": "",
+        }
 
     def _client(self):
         c = APIClient()
@@ -49,14 +63,7 @@ class DebitTopupConcurrencyTest(TransactionTestCase):
 
     def test_concurrent_topups_do_not_lose_updates(self):
         c = self._client()
-        base = c.post("/api/pos/debit/topup/", {
-            "account_id": str(self.account.id),
-            "worker_id": str(self.worker.id),
-            "device_id": "00000000-0000-0000-0000-000000000000",
-            "amount": "100",
-            "client_mutation_id": "00000000-0000-0000-0000-000000000001",
-            "note": "",
-        }, format="json")
+        base = c.post("/api/pos/debit/topup/", self._body("00000000-0000-0000-0000-000000000001"), format="json")
         self.assertEqual(base.status_code, 201, base.content)
 
         results = []
@@ -66,14 +73,7 @@ class DebitTopupConcurrencyTest(TransactionTestCase):
             from django.db import connections
             try:
                 client = self._client()
-                r = client.post("/api/pos/debit/topup/", {
-                    "account_id": str(self.account.id),
-                    "worker_id": str(self.worker.id),
-                    "device_id": "00000000-0000-0000-0000-000000000000",
-                    "amount": "100",
-                    "client_mutation_id": cid,
-                    "note": "",
-                }, format="json")
+                r = client.post("/api/pos/debit/topup/", self._body(cid), format="json")
                 with lock:
                     results.append(r.status_code)
             finally:

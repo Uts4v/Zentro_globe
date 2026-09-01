@@ -69,6 +69,23 @@ def _require_pos(merchant):
     return True
 
 
+def _resolve_pos_device(merchant, device_id):
+    """Validate a provided POS device id belongs to this merchant.
+
+    Money/POS-authoritative endpoints attribute transactions to a device; reject
+    a device that is not an active device of the current merchant (prevents
+    foreign/bogus device ids from being silently accepted).
+    """
+    if not device_id:
+        return None
+    try:
+        return PosDevice.objects.get(
+            id=device_id, merchant=merchant, is_active=True,
+        )
+    except (PosDevice.DoesNotExist, ValueError):
+        return None
+
+
 def _audit(merchant, action, *, device=None, worker=None, user=None,
            entity_type="", entity_id="", metadata=None):
     from django.contrib.auth import get_user_model
@@ -2231,6 +2248,11 @@ def credit_sale(request):
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    device = _resolve_pos_device(merchant, ser.validated_data.get("device_id"))
+    if device is None:
+        return Response({"error": "POS device not found or inactive."},
+                        status=status.HTTP_404_NOT_FOUND)
+
     try:
         account = CreditAccount.objects.select_for_update().get(
             id=ser.validated_data["account_id"], merchant=merchant, is_active=True,
@@ -2301,6 +2323,11 @@ def credit_repayment(request):
     ser = CreditRepaymentSerializer(data=request.data)
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    device = _resolve_pos_device(merchant, ser.validated_data.get("device_id"))
+    if device is None:
+        return Response({"error": "POS device not found or inactive."},
+                        status=status.HTTP_404_NOT_FOUND)
 
     try:
         account = CreditAccount.objects.select_for_update().get(
@@ -2385,6 +2412,11 @@ def debit_topup(request):
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
+    device = _resolve_pos_device(merchant, ser.validated_data.get("device_id"))
+    if device is None:
+        return Response({"error": "POS device not found or inactive."},
+                        status=status.HTTP_404_NOT_FOUND)
+
     try:
         account = DebitAccount.objects.select_for_update().get(
             id=ser.validated_data["account_id"], merchant=merchant, is_active=True,
@@ -2440,6 +2472,11 @@ def debit_purchase(request):
     ser = DebitPurchaseSerializer(data=request.data)
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    device = _resolve_pos_device(merchant, ser.validated_data.get("device_id"))
+    if device is None:
+        return Response({"error": "POS device not found or inactive."},
+                        status=status.HTTP_404_NOT_FOUND)
 
     try:
         account = DebitAccount.objects.select_for_update().get(
