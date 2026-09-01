@@ -543,6 +543,7 @@ def mission_list(request):
     merchant_id = request.query_params.get("merchant")
     if merchant_id:
         missions = missions.filter(required_merchant_id=merchant_id)
+    missions = missions[:200]
     return Response(MissionSerializer(missions, many=True).data)
 
 
@@ -671,6 +672,7 @@ def reward_list(request):
     merchant_id = request.query_params.get("merchant")
     if merchant_id:
         rewards = rewards.filter(merchant_id=merchant_id)
+    rewards = rewards[:200]
     return Response(RewardSerializer(rewards, many=True).data)
 
 

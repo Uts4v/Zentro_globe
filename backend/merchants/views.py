@@ -97,11 +97,11 @@ def _haversine_km(lat1, lon1, lat2, lon2):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def merchant_list(request):
-    """GET /api/merchants/ — all approved merchants (public)."""
+    """GET /api/merchants/ — all approved merchants (public), capped."""
     data = cache.get_or_set(
         "zentro:merchants_list",
         lambda: MerchantPublicSerializer(
-            MerchantProfile.objects.filter(is_approved=True).order_by("business_name"),
+            MerchantProfile.objects.filter(is_approved=True).order_by("business_name")[:200],
             many=True,
         ).data,
         120,
