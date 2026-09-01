@@ -44,6 +44,25 @@ def _paginate(request, qs, default=100, max_limit=200):
     return qs[offset:offset + limit]
 
 
+def _audit_order(order, action, *, metadata=None):
+    """
+    Write an audit entry for a customer/merchant order lifecycle event.
+    Uses the shared PosAuditLog so order-status changes and cancellations are
+    traceable alongside POS activity (H-9). Never raises into the caller.
+    """
+    from pos.models import PosAuditLog
+    try:
+        PosAuditLog.objects.create(
+            merchant=order.merchant,
+            action=action,
+            entity_type="order",
+            entity_id=str(order.id),
+            metadata=metadata or {},
+        )
+    except Exception:
+        logger.exception("Audit write failed (order flow continues)")
+
+
 def _order_qs():
     """select_related paths covering every OrderSerializer display source."""
     return Order.objects.select_related(
@@ -790,9 +809,20 @@ def update_order_status(request, pk):
             _award_loyalty(order)
         order.loyalty_awarded = True
 
+    _previous_status = order.status
     order.status = new_status
     order.version += 1
     order.save(update_fields=["status", "loyalty_awarded", "version", "updated_at"])
+
+    try:
+        _audit_order(
+            order, "order_status_change",
+            metadata={"from": _previous_status, "to": new_status,
+                      "points_awarded": order.points_earned,
+                      "by": str(request.user.id)},
+        )
+    except Exception:
+        logger.exception("Audit failed for status change (order flow continues)")
 
     status_msg = {
         "confirmed": "Your order has been accepted!",
@@ -872,6 +902,17 @@ def cancel_order(request, pk):
         _refund_reward_redemption_points(order)
 
     order.save(update_fields=["status", "cancelled_by", "cancellation_reason", "updated_at"])
+
+    _audit_order(
+        order,
+        "order_cancelled",
+        metadata={
+            "by": "customer" if is_customer else "merchant",
+            "reason": reason,
+            "refunded": is_reward_redemption,
+            "actor": str(request.user.id),
+        },
+    )
 
     reason_label = dict(Order.CANCEL_REASON_CHOICES).get(reason, "")
 
