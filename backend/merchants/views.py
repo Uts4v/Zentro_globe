@@ -639,6 +639,11 @@ from rest_framework import serializers as _serializers
 
 
 class _TableSerializer(_serializers.ModelSerializer):
+    def validate_table_number(self, value):
+        if value <= 0:
+            raise _serializers.ValidationError("table_number must be greater than zero.")
+        return value
+
     class Meta:
         model = MerchantTable
         fields = [

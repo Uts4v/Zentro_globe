@@ -16,6 +16,30 @@ class MenuItemSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "created_at", "updated_at"]
 
+    def validate_price(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("price must be greater than zero.")
+        return value
+
+    def validate_points_per_item(self, value):
+        if value < 0:
+            raise serializers.ValidationError("points_per_item cannot be negative.")
+        return value
+
+    def validate_name(self, value):
+        value = (value or "").strip()
+        if not value:
+            raise serializers.ValidationError("name cannot be blank.")
+        if len(value) > 255:
+            raise serializers.ValidationError("name is too long (max 255).")
+        return value
+
+    def validate_category(self, value):
+        value = (value or "").strip()
+        if len(value) > 100:
+            raise serializers.ValidationError("category is too long (max 100).")
+        return value
+
 
 class MerchantProfileSerializer(serializers.ModelSerializer):
     menu_items = MenuItemSerializer(many=True, read_only=True)
