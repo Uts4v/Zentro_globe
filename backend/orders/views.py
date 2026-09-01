@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
 from merchants.models import MerchantProfile, MenuItem
+from config.order_utils import parse_quantity, QuantityValidationError
 from loyalty.models import (
     MerchantPunchCard, CustomerPunchCard,
     CustomerMission, Mission, CustomerMerchantProfile,
@@ -449,7 +450,13 @@ def create_order(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        quantity  = item_data["quantity"]
+        try:
+            quantity = parse_quantity(item_data.get("quantity"))
+        except QuantityValidationError as exc:
+            return Response(
+                {"error": f"Invalid quantity for menu item {menu_item.id}: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         subtotal  = menu_item.price * quantity
         total_amount += subtotal
 
@@ -575,7 +582,13 @@ def guest_create_order(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        quantity = item_data["quantity"]
+        try:
+            quantity = parse_quantity(item_data.get("quantity"))
+        except QuantityValidationError as exc:
+            return Response(
+                {"error": f"Invalid quantity for menu item {menu_item.id}: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         subtotal = menu_item.price * quantity
         total_amount += subtotal
 
@@ -922,7 +935,13 @@ def add_items_to_order(request, pk):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        quantity = item_data["quantity"]
+        try:
+            quantity = parse_quantity(item_data.get("quantity"))
+        except QuantityValidationError as exc:
+            return Response(
+                {"error": f"Invalid quantity for menu item {menu_item.id}: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         subtotal = menu_item.price * quantity
         new_total_added += subtotal
 

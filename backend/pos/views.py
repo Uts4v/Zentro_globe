@@ -20,6 +20,7 @@ from accounts.models import CustomerProfile, User
 from notifications.services import send_notification
 from notifications.models import Notification
 from orders.views import _award_loyalty, _deduct_reward_redemption_points
+from config.order_utils import parse_quantity, QuantityValidationError
 
 from .models import (
     PosDevice, ShiftWorker, CashShift, PosPayment,
@@ -1357,7 +1358,13 @@ def create_pos_order(request):
 
     for item_data in items_data:
         menu_item_id = item_data.get("menu_item_id")
-        quantity = item_data.get("quantity", 1)
+        try:
+            quantity = parse_quantity(item_data.get("quantity"), default=1)
+        except QuantityValidationError as exc:
+            return Response(
+                {"error": f"Invalid quantity for menu item {menu_item_id}: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         menu_item = menu_items_by_id.get(menu_item_id)
         if menu_item is None:
@@ -3808,9 +3815,17 @@ def table_order(request, token):
         )
     }
     for item_data in items_data:
-        if item_data["menu_item_id"] not in menu_items_by_id:
-            return Response({"error": f"Menu item {item_data['menu_item_id']} not found."},
+        menu_item_id = item_data.get("menu_item_id")
+        if menu_item_id not in menu_items_by_id:
+            return Response({"error": f"Menu item {menu_item_id} not found."},
                             status=status.HTTP_400_BAD_REQUEST)
+        try:
+            parse_quantity(item_data.get("quantity"), default=1)
+        except QuantityValidationError as exc:
+            return Response(
+                {"error": f"Invalid quantity for menu item {menu_item_id}: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     # Build order
     order = Order(
@@ -3824,17 +3839,19 @@ def table_order(request, token):
         table_name_snapshot=table.name,
         table_number_snapshot=table.table_number,
         notes=notes,
+        subtotal=0,
+        tax_amount=0,
+        total_amount=0,
     )
     order.save()
 
-    # Create order items and calculate points
-    subtotal = 0
+    # Create order items and calculate points (Decimal math only)
+    subtotal = Decimal("0")
     points_earned = 0
     for item_data in items_data:
         menu_item = menu_items_by_id[item_data["menu_item_id"]]
-
-        qty = item_data.get("quantity", 1)
-        item_subtotal = float(menu_item.price) * qty
+        qty = parse_quantity(item_data.get("quantity"), default=1)
+        item_subtotal = menu_item.price * qty
         subtotal += item_subtotal
 
         if menu_item.loyalty_reward:
@@ -3860,7 +3877,7 @@ def table_order(request, token):
     order.subtotal = subtotal
     order.total_amount = subtotal
     order.points_earned = points_earned
-    order.customer_name_snapshot = customer_name
+    order.guest_name_snapshot = customer_name
 
     # Apply tax
     from config.tax_utils import calculate_tax
@@ -3869,17 +3886,18 @@ def table_order(request, token):
     order.tax_breakdown = tax_breakdown
     order.total_amount = subtotal + tax_amount
 
-    order.save(update_fields=["subtotal", "total_amount", "tax_amount", "tax_breakdown", "points_earned", "customer_name_snapshot", "updated_at"])
+    order.save(update_fields=["subtotal", "total_amount", "tax_amount", "tax_breakdown", "points_earned", "guest_name_snapshot", "updated_at"])
 
     _audit(merchant, PosAuditLog.ACTION_ORDER_CREATE,
            entity_type="order", entity_id=order.id,
            metadata={"source": "customer_qr", "table": table.name, "customer_name": customer_name})
 
     _notify_safe(
-        merchant=merchant,
+        user=merchant.user,
         title=f"New Table Order — {table.name}",
         message=f"Table {table.table_number}: {len(items_data)} items, {merchant.currency_symbol} {subtotal:.2f}",
         notification_type="pos_new_order",
+        merchant_name=merchant.business_name,
     )
 
     return Response({
