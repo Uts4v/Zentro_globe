@@ -8,6 +8,7 @@ These verify the per-staff daily report aggregation (rewritten from a per-worker
 """
 
 import uuid
+from decimal import Decimal
 
 from django.test import TestCase
 from django.contrib.auth import get_user_model
@@ -88,23 +89,23 @@ class StaffDailyReportTests(TestCase):
 
         alice = by_name["Alice"]
         # Failed payment excluded -> total revenue = 100 + 40 = 140
-        self.assertEqual(alice["total_revenue"], "140")
-        self.assertEqual(alice["cash_amount"], "100")
-        self.assertEqual(alice["card_amount"], "40")
-        self.assertEqual(alice["credit_amount"], "0")
-        self.assertEqual(alice["other_amount"], "0")
+        self.assertEqual(Decimal(alice["total_revenue"]), Decimal("140"))
+        self.assertEqual(Decimal(alice["cash_amount"]), Decimal("100"))
+        self.assertEqual(Decimal(alice["card_amount"]), Decimal("40"))
+        self.assertEqual(Decimal(alice["credit_amount"]), Decimal("0"))
+        self.assertEqual(Decimal(alice["other_amount"]), Decimal("0"))
         self.assertEqual(alice["payment_count"], 2)
         self.assertEqual(alice["order_count"], 2)
-        self.assertEqual(alice["total_discount"], "10")
+        self.assertEqual(Decimal(alice["total_discount"]), Decimal("10"))
         self.assertEqual(alice["items_sold"], 4)  # 2 items/order
 
         bob = by_name["Bob"]
-        self.assertEqual(bob["total_revenue"], "75")
-        self.assertEqual(bob["credit_amount"], "50")
-        self.assertEqual(bob["other_amount"], "25")
+        self.assertEqual(Decimal(bob["total_revenue"]), Decimal("75"))
+        self.assertEqual(Decimal(bob["credit_amount"]), Decimal("50"))
+        self.assertEqual(Decimal(bob["other_amount"]), Decimal("25"))
         self.assertEqual(bob["payment_count"], 2)
         self.assertEqual(bob["order_count"], 2)
-        self.assertEqual(bob["total_discount"], "5")
+        self.assertEqual(Decimal(bob["total_discount"]), Decimal("5"))
         self.assertEqual(bob["items_sold"], 4)
 
     def test_worker_with_no_activity_yields_zeroes(self):
@@ -117,7 +118,7 @@ class StaffDailyReportTests(TestCase):
         by_name = {s["worker_name"]: s for s in resp.data["staff"]}
 
         alice = by_name["Alice"]
-        self.assertEqual(alice["total_revenue"], "0")
+        self.assertEqual(Decimal(alice["total_revenue"]), Decimal("0"))
         self.assertEqual(alice["payment_count"], 0)
         self.assertEqual(alice["order_count"], 0)
         self.assertEqual(alice["items_sold"], 0)

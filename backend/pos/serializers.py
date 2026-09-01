@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from .models import (
     PosDevice, ShiftWorker, CashShift, PosPayment,
@@ -338,7 +340,7 @@ class DebitTopupSerializer(serializers.Serializer):
     account_id = serializers.UUIDField()
     worker_id = serializers.UUIDField()
     device_id = serializers.UUIDField()
-    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
     client_mutation_id = serializers.UUIDField()
     note = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
 
@@ -349,7 +351,7 @@ class DebitPurchaseSerializer(serializers.Serializer):
     worker_id = serializers.UUIDField()
     device_id = serializers.UUIDField()
     shift_id = serializers.UUIDField(required=False, allow_null=True)
-    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
     client_mutation_id = serializers.UUIDField()
     note = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
 
@@ -444,5 +446,5 @@ class CreateCashMovementSerializer(serializers.Serializer):
     shift_id = serializers.UUIDField()
     worker_id = serializers.UUIDField()
     movement_type = serializers.ChoiceField(choices=PosCashMovement.TYPE_CHOICES)
-    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=0.01)
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
     reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")

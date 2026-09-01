@@ -2232,7 +2232,7 @@ def credit_sale(request):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        account = CreditAccount.objects.get(
+        account = CreditAccount.objects.select_for_update().get(
             id=ser.validated_data["account_id"], merchant=merchant, is_active=True,
         )
     except CreditAccount.DoesNotExist:
@@ -2303,7 +2303,7 @@ def credit_repayment(request):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        account = CreditAccount.objects.get(
+        account = CreditAccount.objects.select_for_update().get(
             id=ser.validated_data["account_id"], merchant=merchant, is_active=True,
         )
     except CreditAccount.DoesNotExist:
@@ -2386,7 +2386,7 @@ def debit_topup(request):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        account = DebitAccount.objects.get(
+        account = DebitAccount.objects.select_for_update().get(
             id=ser.validated_data["account_id"], merchant=merchant, is_active=True,
         )
     except DebitAccount.DoesNotExist:
@@ -2442,7 +2442,7 @@ def debit_purchase(request):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        account = DebitAccount.objects.get(
+        account = DebitAccount.objects.select_for_update().get(
             id=ser.validated_data["account_id"], merchant=merchant, is_active=True,
         )
     except DebitAccount.DoesNotExist:
@@ -2513,7 +2513,7 @@ def debit_adjustment(request):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        account = DebitAccount.objects.get(
+        account = DebitAccount.objects.select_for_update().get(
             id=ser.validated_data["account_id"], merchant=merchant, is_active=True,
         )
     except DebitAccount.DoesNotExist:
