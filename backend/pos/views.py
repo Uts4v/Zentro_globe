@@ -3563,13 +3563,51 @@ def resolve_conflict(request):
                             status=status.HTTP_404_NOT_FOUND)
 
         if resolution == "keep_client" and client_data:
-            # Update order with client data
-            for field in ["status", "total_amount", "notes", "fulfillment_type"]:
-                if field in client_data:
-                    setattr(order, field, client_data[field])
-            order.source = "pos_offline_resolved"
-            order.version += 1
-            order.save()
+            # NEVER write financial or state fields straight from the client.
+            # Only a strict allow-list is applied, every value is validated
+            # against model choices/transitions, and totals are recomputed
+            # server-side from the stored line items.
+            changed = False
+
+            if "status" in client_data:
+                new_status = client_data["status"]
+                if new_status not in dict(Order.STATUS_CHOICES):
+                    return Response({"error": f"Invalid status: {new_status}."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                if new_status != order.status and not order.can_transition_to(new_status):
+                    return Response({
+                        "error": f"Cannot transition from '{order.status}' to '{new_status}'.",
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                order.status = new_status
+                changed = True
+
+            if "fulfillment_type" in client_data:
+                fulfillment = client_data["fulfillment_type"]
+                if fulfillment not in dict(Order.FULFILLMENT_CHOICES):
+                    return Response({"error": f"Invalid fulfillment_type: {fulfillment}."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                order.fulfillment_type = fulfillment
+                changed = True
+
+            if "notes" in client_data:
+                order.notes = str(client_data["notes"])[:2000]
+                changed = True
+
+            # A client-supplied total_amount is unconditionally IGNORED —
+            # recompute from the persisted items using the same path as POS
+            # order creation.
+            from config.tax_utils import calculate_tax
+            subtotal = sum((item.subtotal or 0) for item in order.items.all())
+            tax_amount, tax_breakdown = calculate_tax(subtotal, merchant)
+            order.subtotal = subtotal
+            order.tax_amount = tax_amount
+            order.tax_breakdown = tax_breakdown
+            order.total_amount = subtotal - order.discount_amount + tax_amount + order.service_charge
+
+            if changed:
+                order.source = "pos_offline_resolved"
+                order.version += 1
+                order.save()
 
         elif resolution == "keep_server":
             # Mark as resolved, keep server version
@@ -3590,9 +3628,40 @@ def resolve_conflict(request):
                             status=status.HTTP_404_NOT_FOUND)
 
         if resolution == "keep_client" and client_data:
-            for field in ["payment_method", "amount", "status"]:
-                if field in client_data:
-                    setattr(payment, field, client_data[field])
+            # Allow-list + money validation — never trust client amounts.
+            if "payment_method" in client_data:
+                method = client_data["payment_method"]
+                if method not in dict(PosPayment.METHOD_CHOICES):
+                    return Response({"error": f"Invalid payment method: {method}."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                payment.payment_method = method
+
+            if "status" in client_data:
+                new_status = client_data["status"]
+                if new_status not in dict(PosPayment.STATUS_CHOICES):
+                    return Response({"error": f"Invalid payment status: {new_status}."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                payment.status = new_status
+
+            if "amount" in client_data:
+                try:
+                    new_amount = Decimal(str(client_data["amount"])).quantize(Decimal("0.01"))
+                except (TypeError, ValueError, ArithmeticError):
+                    return Response({"error": "Invalid payment amount."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                if new_amount <= 0:
+                    return Response({"error": "Payment amount must be positive."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                # A POS payment can exceed the order total only by what is
+                # returned as cash change (e.g. Rs 2000 tendered for a
+                # Rs 1500 order, Rs 500 change).
+                order_total = payment.order.total_amount if payment.order_id else None
+                max_payable = (order_total + (payment.change_amount or 0)) if order_total else payment.amount
+                if new_amount > max_payable:
+                    return Response({"error": "Payment amount exceeds the order total."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+                payment.amount = new_amount
+
             payment.sync_status = "resolved"
             payment.save()
 
