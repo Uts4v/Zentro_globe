@@ -289,7 +289,7 @@ def _update_mission_progress(customer, order, wallet, streak_incremented):
                 continue
 
         if mission.mission_type == "spend_amount":
-            cm.current_count += int(order.total_amount)
+            cm.current_count += int(order.subtotal)
         else:
             cm.current_count += 1
 

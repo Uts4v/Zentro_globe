@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
 from accounts.models import CustomerProfile
+from orders.models import Order
 from loyalty.models import CustomerMerchantProfile, CustomerMission, Mission
 from merchants.models import MerchantProfile, MenuItem
 
@@ -118,3 +119,35 @@ class OrderMissionTrackingTests(TestCase):
         streak_progress = CustomerMission.objects.get(customer=self.customer_profile, mission=self.streak_mission)
         self.assertEqual(streak_progress.current_count, 1)
         self.assertFalse(streak_progress.is_completed)
+
+    def test_spend_mission_tracks_pre_tax_subtotal_not_total(self):
+        self.client.force_authenticate(user=self.customer_user)
+
+        create_response = self.client.post(
+            "/api/orders/create/",
+            {
+                "merchant_id": self.merchant_profile.id,
+                "items": [{"menu_item_id": self.menu_item.id, "quantity": 280}],
+                "notes": "Test order",
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, 201)
+
+        self.client.force_authenticate(user=self.merchant_user)
+        for status_flag in ("confirmed", "preparing", "ready", "completed"):
+            resp = self.client.patch(
+                f"/api/orders/{create_response.data['id']}/update-status/",
+                {"status": status_flag},
+                format="json",
+            )
+            self.assertEqual(resp.status_code, 200, getattr(resp, "data", resp.content))
+
+        order = Order.objects.get(id=create_response.data["id"])
+        self.assertGreater(order.total_amount, order.subtotal)
+
+        spend_progress = CustomerMission.objects.get(
+            customer=self.customer_profile, mission=self.spend_mission,
+        )
+        # Must equal subtotal (2800), never the tax-inclusive total.
+        self.assertEqual(spend_progress.current_count, int(order.subtotal))

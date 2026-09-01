@@ -4254,7 +4254,7 @@ def staff_daily_report(request):
 
     from orders.models import OrderItem
     items_by_worker = {
-        row["processed_by_worker_id"]: row
+        row["order__processed_by_worker_id"]: row
         for row in (
             OrderItem.objects.filter(order__in=orders)
             .values("order__processed_by_worker_id")
