@@ -7,12 +7,8 @@ from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import path, re_path, include
 from django.conf import settings
-from django.views.static import serve as static_serve
 from accounts.views import upload_image
-
-def healthz(request):
-    return JsonResponse({"status": "ok"})
-
+from config.views import healthz, serve_media
 
 urlpatterns = [
     path("healthz/", healthz),
@@ -26,12 +22,11 @@ urlpatterns = [
     path("api/notifications/", include("notifications.urls")),
     path("api/pos/", include("pos.urls")),
     path("api/ai/", include("ai_core.api.urls")),
-    # Serve static (admin UI) via WhiteNoise middleware (compressed + cached)
-    # and media (uploads) in all modes — required when DEBUG=False since
-    # Django stops auto-serving them.
+    # Serve media (uploads) in all modes with safety headers — required when
+    # DEBUG=False since Django stops auto-serving them.
     re_path(
         r"^media/(?P<path>.*)$",
-        static_serve,
-        {"document_root": settings.MEDIA_ROOT},
+        serve_media,
+        name="media-serve",
     ),
 ]

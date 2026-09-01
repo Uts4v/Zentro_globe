@@ -34,6 +34,8 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.exceptions import TokenError
 
+from config.media_utils import UploadValidationError, validate_image_upload
+
 from .models import User, CustomerProfile, PasswordResetToken
 from .serializers import (
     RegisterSerializer,
@@ -378,33 +380,34 @@ from django.core.files.base import ContentFile
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([ScopedRateThrottle])
 def upload_image(request):
     """
     POST /api/media/upload/
     Multipart form: field name = "file"
     Returns: { "url": "http://..." }
 
-    Saves the uploaded file under MEDIA_ROOT/uploads/<uuid>.<ext>.
+    The upload is treated as untrusted: the file is sniffed with Pillow,
+    only JPEG/PNG/WEBP raster images are accepted, and the image is
+    re-encoded server-side and stored under a server-generated name.
     In production, point MEDIA_ROOT at a CDN-backed directory or
     swap default_storage for S3/DigitalOcean Spaces.
     """
     file = request.FILES.get("file")
-    if not file:
-        return Response({"error": "No file provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Limit to image types
-    allowed = {"image/jpeg", "image/png", "image/webp", "image/gif"}
-    if file.content_type not in allowed:
-        return Response(
-            {"error": f"Unsupported file type: {file.content_type}"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    try:
+        data, ext = validate_image_upload(file)
+    except UploadValidationError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Build a safe unique filename
-    ext = os.path.splitext(file.name)[1] or ".webp"
+    # Server-generated filename + canonical extension (never derived from the
+    # client filename, which is untrusted).
     filename = f"uploads/{_uuid.uuid4().hex}{ext}"
 
-    saved_path = default_storage.save(filename, ContentFile(file.read()))
+    saved_path = default_storage.save(filename, ContentFile(data))
     file_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
 
     return Response({"url": file_url}, status=status.HTTP_201_CREATED)
+
+
+upload_image.throttle_scope = "upload"

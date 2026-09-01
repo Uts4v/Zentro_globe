@@ -381,6 +381,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "transfer": "10/hour",
     "redeem": "10/min",
     "guest": "60/hour",
+    "upload": "100/hour",
 }
 
 # ── Logging ───────────────────────────────────────────────────────────────────

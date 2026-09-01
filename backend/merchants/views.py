@@ -48,6 +48,8 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from config.media_utils import UploadValidationError, validate_pdf_upload
+
 from .models import MerchantProfile, MenuItem, MerchantTable
 from .serializers import (
     MenuItemSerializer,
@@ -890,12 +892,17 @@ def merchant_pdf_menu(request):
         return Response({"error": "Only PDF files are allowed."},
                         status=status.HTTP_400_BAD_REQUEST)
 
+    try:
+        pdf_data = validate_pdf_upload(file)
+    except UploadValidationError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
     # Remove any previous PDF to avoid orphaned files
     if merchant.pdf_menu_url:
         _delete_pdf_menu_file(merchant.pdf_menu_url, merchant.pdf_menu_page_count)
 
     filename = f"menus/{uuid_module.uuid4().hex}.pdf"
-    saved_path = default_storage.save(filename, ContentFile(file.read()))
+    saved_path = default_storage.save(filename, ContentFile(pdf_data))
     file_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
 
     merchant.pdf_menu_url = file_url
