@@ -20,6 +20,34 @@ from django.conf import settings
 logger = logging.getLogger("config.middleware")
 
 
+class VerboseMiddlewareFormatter(logging.Formatter):
+    """Formats middleware/request log lines.
+
+    Fields supplied via ``extra`` (request_id, path, etc.) are rendered, and any
+    that are absent on the record (e.g. records from ``django.request`` or
+    ``django.channels.server`` that share this handler) fall back to a safe
+    placeholder instead of raising ``KeyError``.
+    """
+
+    _DEFAULTS = {
+        "request_id": "-",
+        "path": "-",
+        "method": "-",
+        "status_code": "-",
+        "duration_ms": "-",
+        "user": "-",
+    }
+
+    def __init__(self, fmt=None, datefmt=None, style="%"):
+        super().__init__(fmt=fmt, datefmt=datefmt, style=style)
+
+    def format(self, record):
+        for key, default in self._DEFAULTS.items():
+            if not hasattr(record, key):
+                setattr(record, key, default)
+        return super().format(record)
+
+
 class RequestContextMiddleware:
     """Attach a request id, measure duration and log a structured summary."""
 

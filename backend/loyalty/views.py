@@ -9,6 +9,7 @@ import uuid
 from datetime import timedelta
 
 from django.db import transaction
+from django.db.models import Q, Count, OuterRef, Subquery
 from django.utils import timezone
 
 from rest_framework import status
@@ -239,37 +240,54 @@ def customer_joined_merchants(request):
         CustomerMerchantProfile.objects
         .filter(customer=customer, status=CustomerMerchantProfile.STATUS_ACTIVE)
         .select_related("merchant")
+        .annotate(
+            wallet_points=Subquery(
+                CustomerMerchantWallet.objects.filter(
+                    customer=customer,
+                    merchant=OuterRef("merchant"),
+                ).values("points_balance")[:1]
+            ),
+            wallet_tier=Subquery(
+                CustomerMerchantWallet.objects.filter(
+                    customer=customer,
+                    merchant=OuterRef("merchant"),
+                ).values("tier_level")[:1]
+            ),
+            active_rewards_count=Count(
+                "merchant__rewards",
+                filter=Q(merchant__rewards__is_active=True),
+                distinct=True,
+            ),
+            pending_orders_count=Count(
+                "merchant__orders",
+                filter=Q(merchant__orders__customer=customer)
+                & ~Q(
+                    merchant__orders__status__in=[
+                        Order.STATUS_COMPLETED,
+                        Order.STATUS_CANCELLED,
+                    ]
+                ),
+                distinct=True,
+            ),
+        )
         .order_by("-joined_at")
     )
 
-    result = []
-    for profile in profiles:
-        merchant = profile.merchant
-        wallet = CustomerMerchantWallet.objects.filter(
-            customer=customer, merchant=merchant
-        ).first()
-        active_rewards_count = Reward.objects.filter(
-            merchant=merchant, is_active=True
-        ).count()
-        pending_orders_count = Order.objects.filter(
-            customer=customer,
-            merchant=merchant,
-        ).exclude(
-            status__in=[Order.STATUS_COMPLETED, Order.STATUS_CANCELLED]
-        ).count()
-
-        result.append({
-            "merchant_id": merchant.id,
-            "merchant_slug": merchant.slug,
-            "business_name": merchant.business_name,
-            "logo_url": merchant.logo_url,
-            "is_open": merchant.is_open,
-            "points_balance": wallet.points_balance if wallet else 0,
-            "tier_level": wallet.tier_level if wallet else CustomerMerchantWallet.TIER_BRONZE,
-            "active_rewards_count": active_rewards_count,
-            "pending_orders_count": pending_orders_count,
+    result = [
+        {
+            "merchant_id": profile.merchant_id,
+            "merchant_slug": profile.merchant.slug,
+            "business_name": profile.merchant.business_name,
+            "logo_url": profile.merchant.logo_url,
+            "is_open": profile.merchant.is_open,
+            "points_balance": profile.wallet_points or 0,
+            "tier_level": profile.wallet_tier or CustomerMerchantWallet.TIER_BRONZE,
+            "active_rewards_count": profile.active_rewards_count,
+            "pending_orders_count": profile.pending_orders_count,
             "joined_at": profile.joined_at,
-        })
+        }
+        for profile in profiles
+    ]
 
     return Response(result)
 
@@ -349,7 +367,9 @@ def customer_point_transactions(request):
     except PermissionError as e:
         return _customer_error(str(e))
 
-    transactions = PointTransaction.objects.filter(customer=customer, merchant_id=merchant_id)
+    transactions = PointTransaction.objects.filter(customer=customer, merchant_id=merchant_id).select_related(
+        "customer", "merchant"
+    )
     transactions = _paginate(request, transactions)
     return Response(PointTransactionSerializer(transactions, many=True).data)
 
@@ -362,7 +382,7 @@ def merchant_point_transactions(request):
     except PermissionError as e:
         return _merchant_error(str(e))
 
-    transactions = PointTransaction.objects.filter(merchant=merchant)
+    transactions = PointTransaction.objects.filter(merchant=merchant).select_related("customer", "merchant")
     transactions = _paginate(request, transactions)
     return Response(PointTransactionSerializer(transactions, many=True).data)
 
@@ -516,7 +536,7 @@ def customer_punch_card_redeem(request, pk):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def mission_list(request):
-    missions = Mission.objects.filter(is_active=True).select_related("required_merchant")
+    missions = Mission.objects.filter(is_active=True).select_related("required_merchant", "linked_menu_item")
     merchant_id = request.query_params.get("merchant")
     if merchant_id:
         missions = missions.filter(required_merchant_id=merchant_id)
@@ -644,7 +664,7 @@ def mission_detail(request, pk):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def reward_list(request):
-    rewards = Reward.objects.filter(is_active=True).select_related("merchant")
+    rewards = Reward.objects.filter(is_active=True).select_related("merchant", "linked_menu_item")
     merchant_id = request.query_params.get("merchant")
     if merchant_id:
         rewards = rewards.filter(merchant_id=merchant_id)
@@ -1168,7 +1188,7 @@ def customer_transfers(request):
     qs = PointTransaction.objects.filter(
         customer=customer,
         transaction_type__in=["TRANSFER_SENT", "TRANSFER_RECEIVED"],
-    ).select_related("merchant").order_by("-created_at")
+    ).select_related("customer", "merchant").order_by("-created_at")
 
     merchant_id = request.query_params.get("merchant")
     if merchant_id:
@@ -1193,7 +1213,7 @@ def merchant_transfer_history(request):
     qs = PointTransaction.objects.filter(
         merchant=merchant,
         transaction_type__in=["TRANSFER_SENT", "TRANSFER_RECEIVED"],
-    ).select_related("customer__user").order_by("-created_at")
+    ).select_related("customer", "merchant").order_by("-created_at")
 
     return Response(PointTransactionSerializer(qs, many=True).data)
 
@@ -1322,7 +1342,7 @@ def membership_cards_list(request):
     profiles = (
         CustomerMerchantProfile.objects
         .filter(customer=customer)
-        .select_related("merchant")
+        .select_related("merchant", "merchant__card_design")
         .prefetch_related("wallets")
         .order_by("-joined_at")
     )
@@ -1555,7 +1575,7 @@ def merchant_customer_detail(request, membership_id):
     transactions = PointTransaction.objects.filter(
         customer=membership.customer,
         merchant=merchant,
-    ).select_related("wallet").order_by("-created_at")[:50]
+    ).select_related("customer", "merchant", "wallet").order_by("-created_at")[:50]
 
     return Response({
         "membership_id": membership.id,

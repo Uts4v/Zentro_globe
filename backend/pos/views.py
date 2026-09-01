@@ -4,6 +4,7 @@ from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Sum, Count, Q, F
+from django.db.models.functions import Coalesce
 from django.db import IntegrityError
 from django.utils import timezone
 
@@ -3645,12 +3646,12 @@ def table_menu(request, token):
     Public endpoint: customer scans QR code at table, gets menu + table info.
     No auth required — the token in the URL is the table's public_token.
     """
-    from merchants.models import RestaurantTable
+    from merchants.models import MerchantTable
     try:
-        table = RestaurantTable.objects.select_related("merchant").get(
+        table = MerchantTable.objects.select_related("merchant").get(
             public_token=token, is_active=True,
         )
-    except RestaurantTable.DoesNotExist:
+    except MerchantTable.DoesNotExist:
         return Response({"error": "Invalid QR code."},
                         status=status.HTTP_404_NOT_FOUND)
 
@@ -3698,12 +3699,12 @@ def table_order(request, token):
     Public endpoint: customer places an order from their table via QR.
     Creates a pending order linked to the table. POS receives it as a new order.
     """
-    from merchants.models import RestaurantTable
+    from merchants.models import MerchantTable
     try:
-        table = RestaurantTable.objects.select_related("merchant").get(
+        table = MerchantTable.objects.select_related("merchant").get(
             public_token=token, is_active=True,
         )
-    except RestaurantTable.DoesNotExist:
+    except MerchantTable.DoesNotExist:
         return Response({"error": "Invalid QR code."},
                         status=status.HTTP_404_NOT_FOUND)
 
@@ -4135,51 +4136,63 @@ def staff_daily_report(request):
     if worker_id:
         orders = orders.filter(processed_by_worker_id=worker_id)
 
-    # ── Per-staff breakdown ──
+    # ── Per-staff breakdown (single grouped pass per table) ──
+    # Aggregates are computed with GROUP BY worker, so the number of queries
+    # stays constant regardless of how many workers the merchant has.
+    cash = PosPayment.METHOD_CASH
+    card = PosPayment.METHOD_CARD
+    credit = PosPayment.METHOD_CREDIT
+
+    payments_by_worker = {
+        row["worker_id"]: row
+        for row in payments.values("worker_id").annotate(
+            total_revenue=Coalesce(Sum("amount"), Decimal("0")),
+            cash_amount=Coalesce(Sum("amount", filter=Q(payment_method=cash)), Decimal("0")),
+            card_amount=Coalesce(Sum("amount", filter=Q(payment_method=card)), Decimal("0")),
+            credit_amount=Coalesce(Sum("amount", filter=Q(payment_method=credit)), Decimal("0")),
+            other_amount=Coalesce(
+                Sum("amount", filter=~Q(payment_method__in=[cash, card, credit])), Decimal("0")
+            ),
+            payment_count=Count("id"),
+        )
+    }
+
+    orders_by_worker = {
+        row["processed_by_worker_id"]: row
+        for row in orders.values("processed_by_worker_id").annotate(
+            order_count=Count("id"),
+            total_discount=Coalesce(Sum("discount_amount"), Decimal("0")),
+        )
+    }
+
+    from orders.models import OrderItem
+    items_by_worker = {
+        row["processed_by_worker_id"]: row
+        for row in (
+            OrderItem.objects.filter(order__in=orders)
+            .values("order__processed_by_worker_id")
+            .annotate(items_sold=Coalesce(Sum("quantity"), 0))
+        )
+    }
+
     staff_data = []
     for worker in all_workers:
-        w_payments = payments.filter(worker=worker)
-        w_orders = orders.filter(processed_by_worker=worker)
-
-        total_revenue = w_payments.aggregate(t=Sum("amount"))["t"] or 0
-        cash_amount = w_payments.filter(
-            payment_method=PosPayment.METHOD_CASH
-        ).aggregate(t=Sum("amount"))["t"] or 0
-        card_amount = w_payments.filter(
-            payment_method=PosPayment.METHOD_CARD
-        ).aggregate(t=Sum("amount"))["t"] or 0
-        credit_amount = w_payments.filter(
-            payment_method=PosPayment.METHOD_CREDIT
-        ).aggregate(t=Sum("amount"))["t"] or 0
-        other_amount = w_payments.exclude(
-            payment_method__in=[
-                PosPayment.METHOD_CASH, PosPayment.METHOD_CARD,
-                PosPayment.METHOD_CREDIT,
-            ]
-        ).aggregate(t=Sum("amount"))["t"] or 0
-
-        total_discount = w_orders.aggregate(
-            t=Sum("discount_amount")
-        )["t"] or 0
-
-        # Item count
-        from orders.models import OrderItem
-        items_sold = OrderItem.objects.filter(
-            order__in=w_orders
-        ).aggregate(t=Sum("quantity"))["t"] or 0
+        p = payments_by_worker.get(worker.id, {})
+        o = orders_by_worker.get(worker.id, {})
+        it = items_by_worker.get(worker.id, {})
 
         staff_data.append({
             "worker_id": str(worker.id),
             "worker_name": worker.display_name,
-            "order_count": w_orders.count(),
-            "payment_count": w_payments.count(),
-            "total_revenue": str(total_revenue),
-            "cash_amount": str(cash_amount),
-            "card_amount": str(card_amount),
-            "credit_amount": str(credit_amount),
-            "other_amount": str(other_amount),
-            "total_discount": str(total_discount),
-            "items_sold": items_sold,
+            "order_count": o.get("order_count", 0),
+            "payment_count": p.get("payment_count", 0),
+            "total_revenue": str(p.get("total_revenue", 0)),
+            "cash_amount": str(p.get("cash_amount", 0)),
+            "card_amount": str(p.get("card_amount", 0)),
+            "credit_amount": str(p.get("credit_amount", 0)),
+            "other_amount": str(p.get("other_amount", 0)),
+            "total_discount": str(o.get("total_discount", 0)),
+            "items_sold": it.get("items_sold", 0),
         })
 
     # Sort by revenue descending

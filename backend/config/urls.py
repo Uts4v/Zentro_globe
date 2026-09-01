@@ -10,7 +10,6 @@ from django.conf import settings
 from django.views.static import serve as static_serve
 from accounts.views import upload_image
 
-
 def healthz(request):
     return JsonResponse({"status": "ok"})
 
@@ -27,13 +26,9 @@ urlpatterns = [
     path("api/notifications/", include("notifications.urls")),
     path("api/pos/", include("pos.urls")),
     path("api/ai/", include("ai_core.api.urls")),
-    # Serve static (admin UI) and media (uploads) in all modes — required
-    # when DEBUG=False since Django stops auto-serving them.
-    re_path(
-        r"^static/(?P<path>.*)$",
-        static_serve,
-        {"document_root": settings.STATIC_ROOT},
-    ),
+    # Serve static (admin UI) via WhiteNoise middleware (compressed + cached)
+    # and media (uploads) in all modes — required when DEBUG=False since
+    # Django stops auto-serving them.
     re_path(
         r"^media/(?P<path>.*)$",
         static_serve,

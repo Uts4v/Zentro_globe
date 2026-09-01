@@ -6,6 +6,8 @@ Run with: python manage.py test loyalty.test_joined_merchants
 """
 
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
+from django.db import connection
 from rest_framework.test import APIClient
 from rest_framework import status
 
@@ -188,3 +190,38 @@ class JoinedMerchantsTests(TestCase):
         self.client.force_authenticate(user=None)
         resp = self.client.get("/api/loyalty/merchant-profiles/joined/")
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_query_count_does_not_grow_with_joined_merchants(self):
+        # Regression guard against N+1: query count must stay bounded as the
+        # number of joined merchants grows (uses annotations, not per-row queries).
+        for i in range(8):
+            mu = User.objects.create_user(
+                username=f"merchN{i}", email=f"merchN{i}@example.com",
+                password="pass1234", role=User.ROLE_MERCHANT,
+            )
+            mp = MerchantProfile.objects.create(
+                user=mu, business_name=f"Cafe N{i}", slug=f"cafe-n{i}",
+                is_approved=True, is_open=True,
+            )
+            CustomerMerchantProfile.objects.create(
+                customer=self.customer, merchant=mp,
+                status=CustomerMerchantProfile.STATUS_ACTIVE,
+            )
+            CustomerMerchantWallet.objects.create(
+                customer=self.customer, merchant=mp,
+                points_balance=50, lifetime_points=50,
+            )
+            Reward.objects.create(
+                merchant=mp, name=f"R{i}", points_cost=10, is_active=True,
+            )
+            Order.objects.create(
+                customer=self.customer, merchant=mp,
+                total_amount=10, points_earned=1, status=Order.STATUS_PENDING,
+            )
+
+        with CaptureQueriesContext(connection) as ctx:
+            resp = self.client.get("/api/loyalty/merchant-profiles/joined/")
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 2 + 8)
+        # 1 (mount/url resolver) + 1 (auth) + 1 (profiles query) + small fixed overhead.
+        self.assertLess(len(ctx.captured_queries), 8)

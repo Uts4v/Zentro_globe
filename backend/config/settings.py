@@ -133,6 +133,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "config.middleware.RequestContextMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -223,6 +224,15 @@ USE_TZ = True
 # ── Static & media files ──────────────────────────────────────────────────────
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Whitenoise: serve collected static with compression + far-future cache headers
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
@@ -383,6 +393,7 @@ LOGGING = {
             "style": "{",
         },
         "verbose": {
+            "()": "config.middleware.VerboseMiddlewareFormatter",
             "format": "{asctime} [{levelname}] {name} request_id={request_id} path={path} method={method} status={status_code} duration_ms={duration_ms} user={user} {message}",
             "style": "{",
         },
