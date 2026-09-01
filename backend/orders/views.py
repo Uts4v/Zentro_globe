@@ -30,7 +30,7 @@ from notifications.services import send_notification
 from notifications.models import Notification
 
 from .models import Order, OrderItem
-from .serializers import OrderSerializer, CreateOrderSerializer, CreateGuestOrderSerializer, AddItemsToOrderSerializer
+from .serializers import CustomerOrderSerializer, OrderSerializer, CreateOrderSerializer, CreateGuestOrderSerializer, AddItemsToOrderSerializer
 from .services.preparation import prepare_order_items_for_routing
 
 logger = logging.getLogger(__name__)
@@ -335,7 +335,7 @@ def my_orders(request):
         .order_by("-created_at")
     )
     orders = _paginate(request, orders)
-    return Response(OrderSerializer(orders, many=True, context={"request": request}).data)
+    return Response(CustomerOrderSerializer(orders, many=True, context={"request": request}).data)
 
 
 @api_view(["GET"])

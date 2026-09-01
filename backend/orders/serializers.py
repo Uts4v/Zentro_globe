@@ -83,6 +83,61 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
 
 
+class CustomerOrderSerializer(serializers.ModelSerializer):
+    """
+    Customer-facing order view.
+
+    Deliberately EXCLUDES POS-internal fields that a shopper should not see:
+    processed_by_worker, worker_name, pos_device, cash_shift,
+    client_mutation_id, and version. Used for the authenticated customer's
+    my_orders and order responses (H-7).
+    """
+
+    items         = OrderItemSerializer(many=True, read_only=True)
+    merchant_name = serializers.CharField(source="merchant.business_name", read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    merchant_id   = serializers.IntegerField(source="merchant.id",         read_only=True)
+
+    def get_customer_name(self, obj):
+        if obj.customer:
+            return obj.customer.full_name
+        if obj.guest_name_snapshot:
+            return obj.guest_name_snapshot
+        return None
+
+    reward_name = serializers.CharField(
+        source="reward_redemption.reward.name", read_only=True, default=None
+    )
+    punch_card_name = serializers.CharField(
+        source="punch_card_redemption.punch_card.name", read_only=True, default=None
+    )
+
+    table_id = serializers.PrimaryKeyRelatedField(
+        source="table", read_only=True, default=None
+    )
+
+    class Meta:
+        model = Order
+        fields = [
+            "id", "uuid",
+            "customer", "customer_name",
+            "merchant", "merchant_id", "merchant_name",
+            "status", "order_type", "source", "fulfillment_type",
+            "subtotal", "discount_type", "discount_value", "discount_amount",
+            "tax_amount", "tax_breakdown", "service_charge",
+            "total_amount", "points_earned",
+            "payment_status", "payment_method",
+            "notes", "items",
+            "cancellation_reason", "cancelled_by",
+            "reward_name", "punch_card_name",
+            "table_id", "table_name_snapshot", "table_number_snapshot",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "uuid", "created_at", "updated_at",
+        ]
+
+
 class CreateOrderItemSerializer(serializers.Serializer):
     menu_item_id = serializers.IntegerField()
     quantity     = serializers.IntegerField(min_value=1)
