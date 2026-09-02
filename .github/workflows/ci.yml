@@ -39,6 +39,8 @@ jobs:
 
       - name: Check for missing migrations
         working-directory: backend
+        env:
+          SECRET_KEY: ci-only-test-secret-key-not-used-in-production
         run: python manage.py makemigrations --check --dry-run
 
       - name: Run test suite (Postgres)
@@ -47,6 +49,7 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/zentro_test
           DB_SSLMODE: disable
           DEBUG: "False"
+          SECRET_KEY: ci-only-test-secret-key-not-used-in-production
         run: python manage.py test --verbosity 1
 
   frontend:
