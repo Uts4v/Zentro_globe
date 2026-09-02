@@ -4,7 +4,7 @@ export default defineConfig({
   nitro: {
     preset: "node-server",
     publicAssets: [{ dir: "dist" }],
-  },
+  } as any,
   tanstackStart: {
     server: {
       entry: "server",
