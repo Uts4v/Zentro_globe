@@ -1410,7 +1410,7 @@ def create_pos_order(request):
     try:
         rules = merchant.loyalty_rules
         if rules.points_per_npr > 0:
-            points_earned += int(float(total_amount) * rules.points_per_npr)
+            points_earned += int(Decimal(str(total_amount)) * rules.points_per_npr)
     except Exception:
         pass
 
@@ -3932,7 +3932,7 @@ def table_order(request, token):
     try:
         rules = merchant.loyalty_rules
         if rules.points_per_npr > 0:
-            points_earned += int(float(subtotal) * rules.points_per_npr)
+            points_earned += int(Decimal(str(subtotal)) * rules.points_per_npr)
     except Exception:
         pass
 
