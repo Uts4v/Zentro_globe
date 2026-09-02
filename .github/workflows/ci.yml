@@ -48,7 +48,11 @@ jobs:
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/zentro_test
           DB_SSLMODE: disable
-          DEBUG: "False"
+          # Regression suite mirrors the validated local dev config. Under
+          # DEBUG=False the hardening settings enable SECURE_SSL_REDIRECT,
+          # which 301-redirects the test client's plain-HTTP requests;
+          # production HTTPS behavior is exercised at deploy, not in CI.
+          DEBUG: "True"
           SECRET_KEY: ci-only-test-secret-key-not-used-in-production
         run: python manage.py test --verbosity 1
 
