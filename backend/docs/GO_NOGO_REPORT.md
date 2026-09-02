@@ -12,7 +12,7 @@ The audited platform was **NO-GO** with reproducible failures and financially
 unsafe flow gaps. After Phase C (financial-atomicity), Phase D (the complete
 H-1..H-14 hardening list), and the money/auth Medium sweep, the platform is:
 
-- **229/229 backend tests green on PostgreSQL (0 skipped)** and **229/229 with
+- **229/229 backend tests green on PostgreSQL (0 skipped)** and **232/232 with
   2 skipped on SQLite** (the two skips are Postgres-only row-lock concurrency
   tests).
 - `manage.py check` clean; `makemigrations --check --dry-run` clean.
@@ -230,10 +230,15 @@ Commit `a505547`.
 
 ## 22. Regression gates (real measurements)
 
-- **SQLite (default)**: `python manage.py test` → **229 OK, 2 skipped**
+- **SQLite (default)**: `python manage.py test` → **232 OK, 2 skipped**
   (skips are the Postgres-gated money-concurrency tests).
 - **PostgreSQL 16 (local)**: `DATABASE_URL=… DB_SSLMODE=disable
-  python manage.py test` → **229 OK, 0 skipped**.
+  python manage.py test` → **232 OK, 0 skipped**.
+- **Query-count guards**: `orders/test_query_counts.py` + the leaderboard guard
+  bound serializer-stage query growth (1 vs 25 rows). Negative control: the
+  optimized queryset delta is 0, while the same serialization on an
+  un-optimized queryset yields delta 72 — a genuine N+1 alarm, not a
+  constantly-passing check.
 - `python manage.py check` → no issues; `makemigrations --check --dry-run` → no
   changes.
 - Frontend: `tsc --noEmit` → exit 0; `npm run build` → exit 0 (PWA
@@ -275,9 +280,9 @@ pilot branch gate.
 
 **Ready now:** all C/H fixes; money integrity (row locks, Decimal ledgers,
 atomic refunds, idempotent creation/cancellation); merchant approval + public
-visibility gate; bounded/authenticated/throttled endpoints; 229 green
-(Postgres); migrations clean; backups verified; health probe; option for S3
-media.
+visibility gate; bounded/authenticated/throttled endpoints; 232 green
+(Postgres) with N+1 query-count guards; migrations clean; backups verified;
+health probe; option for S3 media.
 
 **Pilot-gating conditions (must be satisfied before first café goes live):**
 1. H-10 JWT cookie migration (documented, not yet implemented) —
