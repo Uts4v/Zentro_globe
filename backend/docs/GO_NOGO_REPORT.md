@@ -250,9 +250,15 @@ Commit `a505547`.
 
 `.github/workflows/ci.yml`: backend job runs migrations check + full test suite
 against a **Postgres 16 service** (money-concurrency tests actually execute in
-CI); frontend job runs `tsc --noEmit`, production build, and informational
-lint. Not yet exercised on a live GitHub run (requires push) — queued for the
-pilot branch gate.
+CI); frontend job runs `npm ci`, `tsc --noEmit`, production build, and
+informational lint. **Verified live on GitHub**: run 33616357630 on commit
+`0ff3790` → Backend and Frontend jobs both **success**. Two issues surfaced and
+fixed during the live run: (a) `DEBUG=False` triggered production hardening
+(`SECURE_SSL_REDIRECT`) which 301-redirected the test client — the suite now
+runs with `DEBUG=True` (matching the config the suite was validated on) while
+the migrations check still runs on the production import path; (b) the npm-10
+`npm ci` lockfile rejection was fixed by regenerating `package-lock.json` with
+npm 10.
 
 ---
 
@@ -295,7 +301,8 @@ health probe; option for S3 media.
    run one documented restore drill.
 5. If media is not on a persistent volume, enable `USE_S3_STORAGE` and verify
    a real upload/download round trip against the pilot provider.
-6. Push a commit to run `.github/workflows/ci.yml` once green on GitHub.
+6. ~~Push a commit to run `.github/workflows/ci.yml` once green on GitHub~~ —
+   **DONE**: backend + frontend jobs both pass on commit `0ff3790`.
 
 If all six conditions are accepted and verified, the platform is **GO** for the
 controlled café pilot; the remaining 10–20-café rollout requires the staging
