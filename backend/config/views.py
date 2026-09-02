@@ -21,7 +21,41 @@ _IMAGE_CONTENT_TYPES = {
 
 
 def healthz(request):
-    return JsonResponse({"status": "ok"})
+    """
+    Liveness/readiness probe for orchestrators and load balancers.
+
+    Returns 200 with ``{"status": "ok"}`` when the database and cache are
+    reachable, otherwise 503 with a per-dependency status so a down Postgres or
+    Redis shows up in the probe check rather than a silent 200.
+    """
+    checks = {"status": "ok"}
+
+    try:
+        from django.db import connection
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        checks["database"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        checks["database"] = f"error: {exc}"
+        checks["status"] = "degraded"
+
+    try:
+        from django.core.cache import cache
+
+        cache.set("zentro:healthz_ping", "ok", 5)
+        if cache.get("zentro:healthz_ping") != "ok":
+            raise RuntimeError("cache write/read mismatch")
+        checks["cache"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        checks["cache"] = f"error: {exc}"
+        checks["status"] = "degraded"
+
+    return JsonResponse(
+        checks,
+        status=200 if checks["status"] == "ok" else 503,
+    )
 
 
 def serve_media(request, path):

@@ -10,6 +10,7 @@ Django settings for Zentro Loyalty backend.
 from pathlib import Path
 from datetime import timedelta
 import os
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -235,6 +236,31 @@ STORAGES = {
 }
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Optional S3-compatible object storage for media (S3 / MinIO / R2 …).
+# Enable with USE_S3_STORAGE=true so productions without a persistent
+# filesystem still keep uploads. Local/README defaults stay unchanged.
+USE_S3_STORAGE = os.getenv("USE_S3_STORAGE", "False").lower() in ("true", "1", "yes")
+if USE_S3_STORAGE:
+    try:
+        import storages  # noqa: F401
+    except ImportError as _exc:
+        raise ImproperlyConfigured(
+            "USE_S3_STORAGE=true requires django-storages: `pip install django-storages[s3]`."
+        ) from _exc
+
+    STORAGES["default"] = {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+    }
+    AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
+    AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+    AWS_STORAGE_BUCKET_NAME = os.getenv("AWS_STORAGE_BUCKET_NAME", "")
+    AWS_S3_REGION_NAME = os.getenv("AWS_S3_REGION_NAME", "") or None
+    # Set for S3-compatible providers (MinIO, Cloudflare R2, …)
+    AWS_S3_ENDPOINT_URL = os.getenv("AWS_S3_ENDPOINT_URL", "") or None
+    AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "public, max-age=3600"}
+    AWS_QUERYSTRING_AUTH = False
+    MEDIA_URL = os.getenv("MEDIA_URL", "https://%s.s3.amazonaws.com/" % AWS_STORAGE_BUCKET_NAME)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
