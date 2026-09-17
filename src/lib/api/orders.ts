@@ -33,6 +33,21 @@ function normaliseOrder(o: any): Order {
 }
 
 export const orderApi = {
+  callWaiter: async (payload: {
+    merchant_id: string;
+    table_token: string;
+    guest_name?: string;
+  }): Promise<{ message: string; delivered: boolean; cooldown?: boolean }> => {
+    return djangoFetch<{ message: string; delivered: boolean; cooldown?: boolean }>(
+      apiUrl("/orders/call-waiter/"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
   cancelByMerchant: async (id: string, reason: string): Promise<Order> => {
     const data = await djangoFetch<any>(apiUrl(`/orders/${id}/cancel/`), {
       method: "PATCH",

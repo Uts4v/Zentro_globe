@@ -508,6 +508,21 @@ export const menuApi = {
 // ── Orders ────────────────────────────────────────────────────────────────────
 
 export const orderApi = {
+  callWaiter: async (payload: {
+    merchant_id: string;
+    table_token: string;
+    guest_name?: string;
+  }): Promise<{ message: string; delivered: boolean; cooldown?: boolean }> => {
+    return djangoFetch<{ message: string; delivered: boolean; cooldown?: boolean }>(
+      apiUrl("/orders/call-waiter/"),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      },
+    );
+  },
+
   cancelByMerchant: async (id: string, reason: string): Promise<Order> => {
     const data = await djangoFetch<any>(apiUrl(`/orders/${id}/cancel/`), {
       method: "PATCH",
@@ -802,7 +817,9 @@ export const missionApi = {
     });
   },
 
-  create: async (input: Omit<Mission, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">): Promise<Mission> => {
+  create: async (
+    input: Omit<Mission, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">,
+  ): Promise<Mission> => {
     return djangoFetch<Mission>(apiUrl("/loyalty/missions/create/"), {
       method: "POST",
       headers: authHeaders(true),
@@ -1276,9 +1293,8 @@ export interface MerchantCustomer {
 
 export const merchantCustomersApi = {
   list: async (): Promise<MerchantCustomer[]> => {
-    return djangoFetch<MerchantCustomer[]>(
-      apiUrl("/loyalty/merchant/customers/"),
-      { headers: authHeaders() },
-    );
+    return djangoFetch<MerchantCustomer[]>(apiUrl("/loyalty/merchant/customers/"), {
+      headers: authHeaders(),
+    });
   },
 };

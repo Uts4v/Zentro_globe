@@ -7,11 +7,26 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import {
-  Loader2, Plus, Minus, ShoppingBag, Search, X as XIcon,
-  Utensils, ArrowRight, SendHorizontal, Sparkles, Star, Gift, Zap, UserPlus,
-  Sun, Moon,
+  Loader2,
+  Plus,
+  Minus,
+  ShoppingBag,
+  Search,
+  X as XIcon,
+  Utensils,
+  ArrowRight,
+  SendHorizontal,
+  Sparkles,
+  Star,
+  Gift,
+  Zap,
+  UserPlus,
+  Sun,
+  Moon,
+  BellRing,
+  Check,
 } from "lucide-react";
-import { tableApi, menuApi, type TableResolution } from "@/lib/api";
+import { tableApi, menuApi, orderApi, type TableResolution } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useStore, cartTotal, type MenuItem } from "@/lib/store";
@@ -23,9 +38,15 @@ export const Route = createFileRoute("/m/$slug/table/$token")({
 });
 
 function MenuItemCard({
-  item, qty, onAdd, onRemove,
+  item,
+  qty,
+  onAdd,
+  onRemove,
 }: {
-  item: MenuItem; qty: number; onAdd: () => void; onRemove: () => void;
+  item: MenuItem;
+  qty: number;
+  onAdd: () => void;
+  onRemove: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
   const hasImage = !!item.image_url && !imgError;
@@ -50,9 +71,7 @@ function MenuItemCard({
         <h3 className="text-sm font-semibold text-foreground">{item.name}</h3>
         <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{item.description}</p>
         <div className="mt-3 flex items-center justify-between">
-          <span className="font-display text-xl text-foreground">
-            NPR {price.toLocaleString()}
-          </span>
+          <span className="font-display text-xl text-foreground">NPR {price.toLocaleString()}</span>
           {qty === 0 ? (
             <button
               onClick={onAdd}
@@ -69,7 +88,9 @@ function MenuItemCard({
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
-              <span className="min-w-[20px] text-center text-sm font-semibold text-foreground">{qty}</span>
+              <span className="min-w-[20px] text-center text-sm font-semibold text-foreground">
+                {qty}
+              </span>
               <button
                 onClick={onAdd}
                 className="grid h-8 w-8 place-items-center rounded-full bg-ink text-primary-foreground transition-transform active:scale-90"
@@ -92,8 +113,16 @@ function TableQRScanPage() {
   const { user } = useAuth();
   const { resolved: themeResolved, setTheme } = useTheme();
   const {
-    cart, add, remove, setActiveTable, setSelectedMerchant, setGuestSession,
-    activeTable, guestSession, setGuestName, placeGuestOrder,
+    cart,
+    add,
+    remove,
+    setActiveTable,
+    setSelectedMerchant,
+    setGuestSession,
+    activeTable,
+    guestSession,
+    setGuestName,
+    placeGuestOrder,
   } = useStore();
 
   const [resolution, setResolution] = useState<TableResolution | null>(null);
@@ -108,6 +137,8 @@ function TableQRScanPage() {
   const [notes, setNotes] = useState("");
   const [placing, setPlacing] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<{ orderId: string } | null>(null);
+  const [waiterStatus, setWaiterStatus] = useState<"idle" | "sending" | "sent">("idle");
+  const [waiterCooldown, setWaiterCooldown] = useState(0);
 
   // Resolve table token
   useEffect(() => {
@@ -127,7 +158,9 @@ function TableQRScanPage() {
         if (!cancelled) setLoading(false);
       });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [slug, token]);
 
   // Set table context once resolved
@@ -164,7 +197,18 @@ function TableQRScanPage() {
       navigate({ to: "/merchant", replace: true });
       return;
     }
-  }, [loading, resolution, user, slug, token, navigate, setActiveTable, setSelectedMerchant, setGuestSession, guestSession]);
+  }, [
+    loading,
+    resolution,
+    user,
+    slug,
+    token,
+    navigate,
+    setActiveTable,
+    setSelectedMerchant,
+    setGuestSession,
+    guestSession,
+  ]);
 
   // Load menu once resolution is ready
   useEffect(() => {
@@ -175,22 +219,29 @@ function TableQRScanPage() {
     menuApi
       .forMerchant(String(resolution.merchant.id))
       .then((items) => {
-        if (!cancelled) setMenuItems(items.map((i) => ({
-          id: String(i.id),
-          name: i.name,
-          description: i.description ?? "",
-          price: Number(i.price),
-          category: i.category ?? "",
-          emoji: i.emoji ?? "☕",
-          points_per_item: i.points_per_item ?? 0,
-          is_available: i.is_available,
-          image_url: i.image_url,
-        })));
+        if (!cancelled)
+          setMenuItems(
+            items.map((i) => ({
+              id: String(i.id),
+              name: i.name,
+              description: i.description ?? "",
+              price: Number(i.price),
+              category: i.category ?? "",
+              emoji: i.emoji ?? "☕",
+              points_per_item: i.points_per_item ?? 0,
+              is_available: i.is_available,
+              image_url: i.image_url,
+            })),
+          );
       })
       .catch(() => {})
-      .finally(() => { if (!cancelled) setMenuLoading(false); });
+      .finally(() => {
+        if (!cancelled) setMenuLoading(false);
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [resolution]);
 
   const cats = useMemo(
@@ -224,6 +275,38 @@ function TableQRScanPage() {
       alert(err?.message || "Failed to place order");
     } finally {
       setPlacing(false);
+    }
+  }
+
+  // Count down the waiter-call cooldown, then re-enable the button.
+  useEffect(() => {
+    if (waiterStatus !== "sent") return;
+    const timer = setInterval(() => {
+      setWaiterCooldown((c) => {
+        if (c <= 1) {
+          setWaiterStatus("idle");
+          return 0;
+        }
+        return c - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [waiterStatus]);
+
+  async function handleCallWaiter() {
+    if (waiterStatus === "sending" || waiterCooldown > 0 || !resolution) return;
+    setWaiterStatus("sending");
+    try {
+      await orderApi.callWaiter({
+        merchant_id: String(resolution.merchant.id),
+        table_token: token,
+        guest_name: guestName.trim() || guestSession?.guestName?.trim() || "",
+      });
+      setWaiterStatus("sent");
+      setWaiterCooldown(60);
+    } catch {
+      setWaiterStatus("idle");
+      alert("Couldn't reach the waiter. Please try again.");
     }
   }
 
@@ -271,7 +354,9 @@ function TableQRScanPage() {
         {activeTable && (
           <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-muted/60 px-4 py-2">
             <Utensils className="h-4 w-4 text-ember" />
-            <span className="text-sm font-medium">{merchant.name} · Table {activeTable.tableName}</span>
+            <span className="text-sm font-medium">
+              {merchant.name} · Table {activeTable.tableName}
+            </span>
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">Order #{orderSuccess.orderId}</p>
@@ -281,6 +366,22 @@ function TableQRScanPage() {
         >
           Order More <ArrowRight className="h-4 w-4" />
         </button>
+        <button
+          onClick={handleCallWaiter}
+          disabled={waiterStatus === "sending" || waiterCooldown > 0}
+          className="mt-3 flex h-12 items-center gap-2 rounded-2xl border border-border bg-background px-8 text-sm font-medium text-foreground active:scale-[0.98] disabled:opacity-60"
+        >
+          {waiterStatus === "sending" ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : waiterStatus === "sent" && waiterCooldown > 0 ? (
+            <Check className="h-4 w-4 text-green-600" />
+          ) : (
+            <BellRing className="h-4 w-4" />
+          )}
+          {waiterStatus === "sent" && waiterCooldown > 0
+            ? `Waiter notified (${waiterCooldown}s)`
+            : "Call Waiter"}
+        </button>
       </div>
     );
   }
@@ -289,7 +390,10 @@ function TableQRScanPage() {
   if (showCheckout) {
     return (
       <div className="mx-auto min-h-dvh max-w-[480px] bg-background px-5 pb-10 pt-5">
-        <button onClick={() => setShowCheckout(false)} className="mb-4 text-sm text-muted-foreground hover:text-foreground">
+        <button
+          onClick={() => setShowCheckout(false)}
+          className="mb-4 text-sm text-muted-foreground hover:text-foreground"
+        >
           ← Back to menu
         </button>
 
@@ -298,7 +402,9 @@ function TableQRScanPage() {
         {activeTable && (
           <div className="mt-3 flex items-center gap-2 rounded-2xl bg-muted/50 px-4 py-3">
             <Utensils className="h-4 w-4 text-ember" />
-            <span className="text-sm font-medium text-foreground">{merchant.name} · Table {activeTable.tableName}</span>
+            <span className="text-sm font-medium text-foreground">
+              {merchant.name} · Table {activeTable.tableName}
+            </span>
           </div>
         )}
 
@@ -330,8 +436,12 @@ function TableQRScanPage() {
             if (!item) return null;
             return (
               <div key={c.itemId} className="flex justify-between text-sm">
-                <span className="text-foreground">{c.qty}× {item.name}</span>
-                <span className="font-medium text-foreground">NPR {(item.price * c.qty).toFixed(2)}</span>
+                <span className="text-foreground">
+                  {c.qty}× {item.name}
+                </span>
+                <span className="font-medium text-foreground">
+                  NPR {(item.price * c.qty).toFixed(2)}
+                </span>
               </div>
             );
           })}
@@ -362,7 +472,8 @@ function TableQRScanPage() {
         <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-center">
           <p className="text-xs text-amber-700">
             <Sparkles className="inline h-3 w-3 mr-1" />
-            <span className="font-semibold">Join Zentro</span> — earn points on every order, unlock rewards & member-only offers.
+            <span className="font-semibold">Join Zentro</span> — earn points on every order, unlock
+            rewards & member-only offers.
           </p>
           <Link
             to="/auth/signup"
@@ -388,17 +499,46 @@ function TableQRScanPage() {
               <Utensils className="h-3 w-3 text-ember" />
               <span className="text-xs font-medium text-muted-foreground">
                 Table {table.table_number}
-                {table.name && table.name !== `Table ${table.table_number}` ? ` · ${table.name}` : ""}
+                {table.name && table.name !== `Table ${table.table_number}`
+                  ? ` · ${table.name}`
+                  : ""}
               </span>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <button
+              onClick={handleCallWaiter}
+              disabled={waiterStatus === "sending" || waiterCooldown > 0}
+              className="flex h-10 items-center gap-1.5 rounded-full bg-muted/50 px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+              title={
+                waiterStatus === "sent" && waiterCooldown > 0
+                  ? `Waiter notified — re-enables in ${waiterCooldown}s`
+                  : "Call a waiter to your table"
+              }
+            >
+              {waiterStatus === "sending" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : waiterStatus === "sent" && waiterCooldown > 0 ? (
+                <Check className="h-4 w-4 text-green-600" />
+              ) : (
+                <BellRing className="h-4 w-4" />
+              )}
+              {waiterStatus === "sent" && waiterCooldown > 0
+                ? `Called (${waiterCooldown}s)`
+                : waiterStatus === "sending"
+                  ? "Calling..."
+                  : "Waiter"}
+            </button>
+            <button
               onClick={() => setTheme(themeResolved === "dark" ? "light" : "dark")}
               className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 text-foreground transition-colors hover:bg-muted"
               aria-label="Toggle theme"
             >
-              {themeResolved === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              {themeResolved === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
             </button>
             <button
               onClick={() => setShowCheckout(true)}
@@ -427,7 +567,10 @@ function TableQRScanPage() {
             className="h-10 w-full rounded-xl bg-muted/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-foreground/10"
           />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2"
+            >
               <XIcon className="h-4 w-4 text-muted-foreground" />
             </button>
           )}
@@ -468,7 +611,10 @@ function TableQRScanPage() {
                 { icon: Gift, text: "Rewards" },
                 { icon: Zap, text: "B2G1 deals" },
               ].map(({ icon: Icon, text }) => (
-                <span key={text} className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                <span
+                  key={text}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-700"
+                >
                   <Icon className="h-2.5 w-2.5" /> {text}
                 </span>
               ))}

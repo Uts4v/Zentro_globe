@@ -1,18 +1,14 @@
 ﻿// src/routes/merchant.onboarding.tsx
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useAuth } from "@/lib/auth";
 import { merchantApi } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Loader2, LocateFixed, MapPin } from "lucide-react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Form,
   FormControl,
@@ -60,10 +56,41 @@ function MerchantOnboardingPage() {
     },
   });
 
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  function handleUseCurrentLocation() {
+    if (!navigator.geolocation) {
+      setLocationError("Your browser doesn't support location.");
+      return;
+    }
+    setLocating(true);
+    setLocationError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        setLocating(false);
+      },
+      (err) => {
+        setLocationError(
+          err.code === err.PERMISSION_DENIED
+            ? "Location permission was denied. Enable it in your browser settings."
+            : "Couldn't get your location. Try again.",
+        );
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 },
+    );
+  }
+
   const updateProfileMutation = useMutation({
     mutationFn: (values: OnboardingFormValues) =>
       merchantApi.update({
         ...values,
+        ...(coords
+          ? { latitude: coords.latitude.toFixed(6), longitude: coords.longitude.toFixed(6) }
+          : {}),
         onboarding_complete: true,
       }),
     onSuccess: async () => {
@@ -94,7 +121,6 @@ function MerchantOnboardingPage() {
         <CardContent>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-
               <FormField
                 control={form.control}
                 name="business_name"
@@ -102,10 +128,7 @@ function MerchantOnboardingPage() {
                   <FormItem>
                     <FormLabel>Business Name</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="e.g., The Cozy Corner Cafe"
-                        {...field}
-                      />
+                      <Input placeholder="e.g., The Cozy Corner Cafe" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -120,9 +143,7 @@ function MerchantOnboardingPage() {
                     <FormLabel>Your branded URL</FormLabel>
                     <FormControl>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">
-                          /m/
-                        </span>
+                        <span className="text-sm text-muted-foreground">/m/</span>
                         <Input placeholder="cafe-name" {...field} />
                       </div>
                     </FormControl>
@@ -138,15 +159,40 @@ function MerchantOnboardingPage() {
                   <FormItem>
                     <FormLabel>Address</FormLabel>
                     <FormControl>
-                      <Textarea
-                        placeholder="123 Main Street, Anytown"
-                        {...field}
-                      />
+                      <Textarea placeholder="123 Main Street, Anytown" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleUseCurrentLocation}
+                  disabled={locating}
+                  className="w-full"
+                >
+                  {locating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <LocateFixed className="h-4 w-4" />
+                  )}
+                  {coords ? "Location set · tap to update" : "Use my current location for the map"}
+                </Button>
+                {coords && !locating && (
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3" />
+                    {coords.latitude.toFixed(4)}, {coords.longitude.toFixed(4)}
+                  </div>
+                )}
+                {locationError && <p className="text-xs text-destructive">{locationError}</p>}
+                <p className="text-xs text-muted-foreground">
+                  This pin lets customers find you on the café map and see distance. You can change
+                  it later in Store settings.
+                </p>
+              </div>
 
               <FormField
                 control={form.control}
@@ -155,10 +201,7 @@ function MerchantOnboardingPage() {
                   <FormItem>
                     <FormLabel>Public Phone Number</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Your business contact number"
-                        {...field}
-                      />
+                      <Input placeholder="Your business contact number" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -182,16 +225,9 @@ function MerchantOnboardingPage() {
                 )}
               />
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={updateProfileMutation.isPending}
-              >
-                {updateProfileMutation.isPending
-                  ? "Saving..."
-                  : "Continue to Dashboard"}
+              <Button type="submit" className="w-full" disabled={updateProfileMutation.isPending}>
+                {updateProfileMutation.isPending ? "Saving..." : "Continue to Dashboard"}
               </Button>
-
             </form>
           </Form>
         </CardContent>

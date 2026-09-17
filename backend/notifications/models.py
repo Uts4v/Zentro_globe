@@ -12,6 +12,7 @@ class Notification(models.Model):
     TYPE_SPECIAL_OFFER      = "special_offer"
     TYPE_TRANSFER_SENT      = "transfer_sent"
     TYPE_TRANSFER_RECEIVED  = "transfer_received"
+    TYPE_WAITER_CALL        = "waiter_call"
     TYPE_GENERAL            = "generic"
 
     TYPE_CHOICES = [
@@ -24,6 +25,7 @@ class Notification(models.Model):
         (TYPE_SPECIAL_OFFER,      "Special Offer"),
         (TYPE_TRANSFER_SENT,      "Transfer Sent"),
         (TYPE_TRANSFER_RECEIVED,  "Transfer Received"),
+        (TYPE_WAITER_CALL,        "Waiter Call"),
         (TYPE_GENERAL,            "General"),
     ]
 

@@ -13,11 +13,19 @@ class MerchantProfileAdmin(FastAdminMixin, UnfoldModelAdmin):
         "phone",
         "is_approved",
         "is_open",
+        "pos_enabled",
+        "offline_pos_enabled",
         "onboarding_complete",
         "table_ordering_enabled",
         "created_at",
     ]
-    list_filter = ["is_approved", "is_open", "onboarding_complete", "table_ordering_enabled"]
+    list_editable = [
+        "is_approved",
+        "is_open",
+        "pos_enabled",
+        "offline_pos_enabled",
+    ]
+    list_filter = ["is_approved", "is_open", "pos_enabled", "onboarding_complete", "table_ordering_enabled"]
     search_fields = ["business_name", "slug", "phone", "address"]
     prepopulated_fields = {"slug": ("business_name",)}  # was store_slug / store_name
     readonly_fields = ["qr_code", "created_at", "updated_at"]

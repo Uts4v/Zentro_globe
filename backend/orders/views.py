@@ -716,6 +716,113 @@ def guest_create_order(request):
 guest_create_order.throttle_scope = "guest"
 
 
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
+def call_waiter(request):
+    """
+    POST /api/orders/call-waiter/
+
+    Guest at a table requests waiter attention. Sends a notification to the
+    merchant with the table number and guest name (if provided).
+
+    Body: { merchant_id, table_token, guest_name? }
+    """
+    merchant_id = request.data.get("merchant_id")
+    table_token = (request.data.get("table_token") or "").strip()
+    guest_name = (request.data.get("guest_name") or "").strip()
+
+    if not merchant_id or not table_token:
+        return Response(
+            {"error": "merchant_id and table_token are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    try:
+        merchant = MerchantProfile.objects.get(id=merchant_id)
+    except MerchantProfile.DoesNotExist:
+        return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if not merchant.table_ordering_enabled:
+        return Response(
+            {"error": "This merchant does not support table service."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    from merchants.models import MerchantTable
+    try:
+        table = MerchantTable.objects.get(
+            public_token=table_token,
+            merchant=merchant,
+            is_active=True,
+        )
+    except MerchantTable.DoesNotExist:
+        return Response(
+            {"error": "Invalid or inactive table. Please scan a valid table QR code."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Spam guard: at most one waiter call per table per 45s (keyed via audit log).
+    from pos.models import PosAuditLog
+    recent = PosAuditLog.objects.filter(
+        merchant=merchant,
+        action="waiter_call",
+        entity_type="table",
+        entity_id=str(table.id),
+        created_at__gte=timezone.now() - timedelta(seconds=45),
+    ).exists()
+    if recent:
+        return Response(
+            {
+                "message": "Your request was sent — a waiter will be with you shortly.",
+                "delivered": True,
+                "cooldown": True,
+            }
+        )
+
+    waiter_message = f"Guest at Table {table.table_number}"
+    if table.name and table.name != f"Table {table.table_number}":
+        waiter_message += f" ({table.name})"
+    if guest_name:
+        waiter_message += f" — {guest_name}"
+
+    _notify_safe(
+        user=merchant.user,
+        title="Waiter call 🔔",
+        message=waiter_message,
+        notification_type=Notification.TYPE_WAITER_CALL,
+        merchant_name=merchant.business_name,
+        context_url="/merchant/tables",
+        merchant_id=merchant.id,
+    )
+
+    # Keep a traceable audit trail alongside notifications.
+    try:
+        PosAuditLog.objects.create(
+            merchant=merchant,
+            action="waiter_call",
+            entity_type="table",
+            entity_id=str(table.id),
+            metadata={
+                "table_number": table.table_number,
+                "table_name": table.name,
+                "guest_name": guest_name,
+            },
+        )
+    except Exception:
+        logger.exception("Audit write failed (waiter call continues)")
+
+    return Response(
+        {
+            "message": "Your request was sent — a waiter will be with you shortly.",
+            "delivered": True,
+        }
+    )
+
+
+call_waiter.throttle_scope = "guest"
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def order_detail(request, pk):

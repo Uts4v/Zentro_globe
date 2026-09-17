@@ -2,11 +2,30 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  MapPin, Clock, Loader2, Save, Check, X,
-  ImageIcon, Upload, QrCode, ExternalLink, RefreshCw, LocateFixed, Palette, CreditCard, Send, Wifi,
+  MapPin,
+  Clock,
+  Loader2,
+  Save,
+  Check,
+  X,
+  ImageIcon,
+  Upload,
+  QrCode,
+  ExternalLink,
+  RefreshCw,
+  LocateFixed,
+  Palette,
+  CreditCard,
+  Send,
+  Wifi,
 } from "lucide-react";
 import simImg from "@/img/sim.png";
-import { merchantApi, type MerchantProfile, merchantCardDesignApi, type MembershipCardDesign } from "@/lib/api";
+import {
+  merchantApi,
+  type MerchantProfile,
+  merchantCardDesignApi,
+  type MembershipCardDesign,
+} from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { optimizeImage } from "@/lib/image-optimize";
 import { uploadImage } from "@/lib/image-upload";
@@ -27,9 +46,18 @@ type ImgStatus =
 
 // ── Inline image uploader ─────────────────────────────────────────────────────
 function InlineImageUploader({
-  label, hint, currentUrl, onUpload, onClear,
-  aspectClass = "aspect-video", shape = "square", disabled = false,
-  merchantId, bucket, storagePath, preset,
+  label,
+  hint,
+  currentUrl,
+  onUpload,
+  onClear,
+  aspectClass = "aspect-video",
+  shape = "square",
+  disabled = false,
+  merchantId,
+  bucket,
+  storagePath,
+  preset,
 }: {
   label: string;
   hint?: string;
@@ -45,7 +73,7 @@ function InlineImageUploader({
   preset: "logo" | "banner" | "profile" | "product";
 }) {
   const [imgState, setImgState] = useState<ImgStatus>(
-    currentUrl ? { status: "done", previewUrl: currentUrl } : { status: "idle" }
+    currentUrl ? { status: "done", previewUrl: currentUrl } : { status: "idle" },
   );
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -55,8 +83,7 @@ function InlineImageUploader({
     }
   }, [currentUrl]);
 
-  const imgUploading =
-    imgState.status === "processing" || imgState.status === "uploading";
+  const imgUploading = imgState.status === "processing" || imgState.status === "uploading";
   const displayUrl =
     imgState.status === "uploading" || imgState.status === "done"
       ? imgState.previewUrl
@@ -123,11 +150,7 @@ function InlineImageUploader({
         onDrop={handleDrop}
       >
         {displayUrl ? (
-          <img
-            src={displayUrl}
-            alt={label}
-            className={`h-full w-full object-cover ${radiusCls}`}
-          />
+          <img src={displayUrl} alt={label} className={`h-full w-full object-cover ${radiusCls}`} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 bg-mist p-4 text-center">
             <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
@@ -136,7 +159,9 @@ function InlineImageUploader({
           </div>
         )}
         {imgUploading && (
-          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 ${radiusCls}`}>
+          <div
+            className={`absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 ${radiusCls}`}
+          >
             <Loader2 className="h-7 w-7 animate-spin text-white" />
             <p className="text-xs font-medium text-white">
               {imgState.status === "processing" ? "Optimising…" : "Uploading…"}
@@ -153,7 +178,10 @@ function InlineImageUploader({
         {displayUrl && !imgUploading && !disabled && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); handleClear(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClear();
+            }}
             className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
           >
             <X className="h-3.5 w-3.5" />
@@ -161,12 +189,8 @@ function InlineImageUploader({
         )}
       </div>
       <div className="flex min-h-[18px] items-center justify-between">
-        {imgState.status === "error" && (
-          <p className="text-xs text-rose-500">{imgState.error}</p>
-        )}
-        {imgState.status === "done" && (
-          <p className="text-xs text-emerald-600">Saved ✓</p>
-        )}
+        {imgState.status === "error" && <p className="text-xs text-rose-500">{imgState.error}</p>}
+        {imgState.status === "done" && <p className="text-xs text-emerald-600">Saved ✓</p>}
         {displayUrl && !imgUploading && (
           <button
             type="button"
@@ -234,7 +258,8 @@ function QRSection({
 
           <div className="flex gap-2">
             {profile?.qr_code && (
-              <a href={profile.qr_code}
+              <a
+                href={profile.qr_code}
                 download={`${profile.slug}-qr.png`}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-xs text-muted-foreground transition-colors hover:border-ink hover:text-ink"
               >
@@ -263,7 +288,8 @@ function QRSection({
             </p>
             <div className="mt-2 flex items-center gap-2 rounded-2xl bg-mist px-4 py-3">
               <span className="flex-1 truncate text-sm text-ink">{storeUrl}</span>
-              <a href={`/customer/merchant/${profile?.slug}`}
+              <a
+                href={`/customer/merchant/${profile?.slug}`}
                 target="_blank"
                 rel="noreferrer"
                 className="shrink-0 text-muted-foreground hover:text-ink"
@@ -287,8 +313,8 @@ function QRSection({
           </div>
 
           <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
-            The QR code points to your public customer page. It contains no
-            private tokens — safe to print and share anywhere.
+            The QR code points to your public customer page. It contains no private tokens — safe to
+            print and share anywhere.
           </div>
         </div>
       </div>
@@ -366,12 +392,21 @@ function StoreConfig() {
     }
   }, []);
 
-  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   useEffect(() => {
-    merchantCardDesignApi.get().then((d) => {
-      setCardDesign({ ...d, background_pattern: REVERSE_PATTERN_MAP[d.background_pattern || ""] || d.background_pattern || "none" });
-    }).catch(() => {});
+    merchantCardDesignApi
+      .get()
+      .then((d) => {
+        setCardDesign({
+          ...d,
+          background_pattern:
+            REVERSE_PATTERN_MAP[d.background_pattern || ""] || d.background_pattern || "none",
+        });
+      })
+      .catch(() => {});
   }, []);
 
   const handleSave = async () => {
@@ -379,7 +414,22 @@ function StoreConfig() {
       setSaving(true);
       setSaved(false);
       setError(null);
-      const updated = await merchantApi.update(form);
+      const payload: Partial<MerchantProfile> = {
+        business_name: form.business_name,
+        description: form.description,
+        business_type: form.business_type,
+        address: form.address,
+        phone: form.phone,
+        logo_url: form.logo_url,
+        banner_url: form.banner_url,
+        is_open: form.is_open,
+        store_theme_color: form.store_theme_color,
+      };
+      if (form.latitude !== "" && form.longitude !== "") {
+        payload.latitude = form.latitude;
+        payload.longitude = form.longitude;
+      }
+      const updated = await merchantApi.update(payload);
       setProfile(updated);
       setForm({
         business_name: updated.business_name || "",
@@ -407,16 +457,16 @@ function StoreConfig() {
     setForm((prev) => ({ ...prev, [field]: value }));
 
   const PATTERN_MAP: Record<string, string> = {
-    "none": "",
-    "dots": "zentro_dots",
-    "geometric": "geometric",
-    "diamonds": "diamonds",
+    none: "",
+    dots: "zentro_dots",
+    geometric: "geometric",
+    diamonds: "diamonds",
   };
   const REVERSE_PATTERN_MAP: Record<string, string> = {
     "": "none",
-    "zentro_dots": "dots",
-    "geometric": "geometric",
-    "diamonds": "diamonds",
+    zentro_dots: "dots",
+    geometric: "geometric",
+    diamonds: "diamonds",
   };
 
   async function handleSaveCardDesign(publish = false) {
@@ -424,13 +474,33 @@ function StoreConfig() {
     try {
       const raw: Record<string, unknown> = {
         ...cardDesign,
-        background_pattern: PATTERN_MAP[cardDesign.background_pattern || ""] || cardDesign.background_pattern || "",
+        background_pattern:
+          PATTERN_MAP[cardDesign.background_pattern || ""] || cardDesign.background_pattern || "",
       };
       // URLFields on backend reject null — must be "" (blank=True)
       if (!raw.background_image) raw.background_image = "";
       if (!raw.logo) raw.logo = "";
       // Only send fields the backend serializer accepts
-      const allowed = ["card_title","card_subtitle","primary_color","secondary_color","accent_color","text_mode","background_type","background_image","background_pattern","logo","tier_style","points_label","membership_label","show_lifetime_points","show_joined_date","show_qr_shortcut","show_color_overlay","is_published"];
+      const allowed = [
+        "card_title",
+        "card_subtitle",
+        "primary_color",
+        "secondary_color",
+        "accent_color",
+        "text_mode",
+        "background_type",
+        "background_image",
+        "background_pattern",
+        "logo",
+        "tier_style",
+        "points_label",
+        "membership_label",
+        "show_lifetime_points",
+        "show_joined_date",
+        "show_qr_shortcut",
+        "show_color_overlay",
+        "is_published",
+      ];
       const payload: Record<string, unknown> = {};
       for (const k of allowed) {
         if (k in raw) payload[k] = raw[k];
@@ -442,7 +512,13 @@ function StoreConfig() {
       } else {
         toast.success("Card design saved!");
       }
-      setCardDesign({ ...updated, background_pattern: REVERSE_PATTERN_MAP[updated.background_pattern || ""] || updated.background_pattern || "none" });
+      setCardDesign({
+        ...updated,
+        background_pattern:
+          REVERSE_PATTERN_MAP[updated.background_pattern || ""] ||
+          updated.background_pattern ||
+          "none",
+      });
     } catch {
       toast.error("Failed to save card design");
     }
@@ -469,11 +545,11 @@ function StoreConfig() {
         setLocationError(
           err.code === err.PERMISSION_DENIED
             ? "Location permission was denied. Enable it in your browser settings."
-            : "Couldn't get your location. Try again."
+            : "Couldn't get your location. Try again.",
         );
         setLocating(false);
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000 },
     );
   }
 
@@ -516,10 +592,14 @@ function StoreConfig() {
         <button
           onClick={() => updateField("is_open", !form.is_open)}
           className={`inline-flex h-9 items-center gap-2 rounded-full px-4 text-xs font-medium transition-all ${
-            form.is_open ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400" : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400"
+            form.is_open
+              ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400"
+              : "bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400"
           }`}
         >
-          <span className={`h-2 w-2 rounded-full ${form.is_open ? "bg-emerald-500" : "bg-red-500"}`} />
+          <span
+            className={`h-2 w-2 rounded-full ${form.is_open ? "bg-emerald-500" : "bg-red-500"}`}
+          />
           {form.is_open ? "Open" : "Closed"}
         </button>
         {profile && !profile.is_approved && (
@@ -567,7 +647,8 @@ function StoreConfig() {
             </div>
             <p className="pt-8 text-xs leading-relaxed text-muted-foreground">
               Shown on the store listing card and in the customer app.
-              <br />Min 200 × 200 px recommended.
+              <br />
+              Min 200 × 200 px recommended.
             </p>
           </div>
         )}
@@ -626,10 +707,7 @@ function StoreConfig() {
                 onClick={() => updateField("store_theme_color", preset.color)}
                 className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs transition-colors hover:border-ink"
               >
-                <span
-                  className="h-3 w-3 rounded-full"
-                  style={{ backgroundColor: preset.color }}
-                />
+                <span className="h-3 w-3 rounded-full" style={{ backgroundColor: preset.color }} />
                 {preset.label}
               </button>
             ))}
@@ -639,12 +717,18 @@ function StoreConfig() {
 
       {(form.logo_url || form.banner_url || form.business_name) && (
         <section className="glass-strong overflow-hidden rounded-3xl">
-          <p className="px-5 pt-4 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Preview</p>
+          <p className="px-5 pt-4 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            Preview
+          </p>
           <div
             className="relative h-28 bg-gradient-to-br from-ember/40 via-ember-soft to-mist"
             style={
               form.banner_url
-                ? { backgroundImage: `url(${form.banner_url})`, backgroundSize: "cover", backgroundPosition: "center" }
+                ? {
+                    backgroundImage: `url(${form.banner_url})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
                 : undefined
             }
           />
@@ -655,14 +739,24 @@ function StoreConfig() {
                 style={{
                   backgroundColor: form.store_theme_color || undefined,
                   backgroundImage: !form.store_theme_color && form.logo_url ? undefined : undefined,
-                  ...(form.logo_url ? { backgroundImage: `url(${form.logo_url})`, backgroundSize: "cover", backgroundPosition: "center" } : {}),
-                  ...(form.store_theme_color && !form.logo_url ? { backgroundColor: form.store_theme_color } : {}),
+                  ...(form.logo_url
+                    ? {
+                        backgroundImage: `url(${form.logo_url})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }
+                    : {}),
+                  ...(form.store_theme_color && !form.logo_url
+                    ? { backgroundColor: form.store_theme_color }
+                    : {}),
                 }}
               >
                 {!form.logo_url && "☕"}
               </div>
               <div className="pb-1">
-                <p className="font-display text-lg text-ink">{form.business_name || "Your store name"}</p>
+                <p className="font-display text-lg text-ink">
+                  {form.business_name || "Your store name"}
+                </p>
                 <p className="text-xs text-muted-foreground">{form.business_type || "Café"}</p>
               </div>
             </div>
@@ -685,7 +779,10 @@ function StoreConfig() {
           {/* ── LEFT: Sticky Preview ───────────────────────────────────── */}
           <div className="sticky top-6 hidden lg:flex flex-col items-center gap-6">
             {/* Phone Mockup */}
-            <div className="relative overflow-hidden rounded-[40px] border-[3px] border-foreground/10 bg-foreground/[0.03] p-3 shadow-2xl shadow-foreground/5" style={{ width: 280, height: 560 }}>
+            <div
+              className="relative overflow-hidden rounded-[40px] border-[3px] border-foreground/10 bg-foreground/[0.03] p-3 shadow-2xl shadow-foreground/5"
+              style={{ width: 280, height: 560 }}
+            >
               {/* Status bar */}
               <div className="flex items-center justify-between px-4 pb-2 pt-1">
                 <span className="text-[9px] font-semibold text-foreground/50">9:41</span>
@@ -708,28 +805,54 @@ function StoreConfig() {
                   className="relative w-full overflow-hidden rounded-[16px] p-4"
                   style={{
                     aspectRatio: "1.586 / 1",
-                    background: cardDesign.background_image && cardDesign.background_image.trim()
-                      ? cardDesign.show_color_overlay !== false
-                        ? `linear-gradient(145deg, ${cardDesign.primary_color}cc 0%, ${cardDesign.secondary_color}cc 100%), url(${cardDesign.background_image})`
-                        : `url(${cardDesign.background_image})`
-                      : `linear-gradient(145deg, ${cardDesign.primary_color} 0%, ${cardDesign.secondary_color} 100%)`,
+                    background:
+                      cardDesign.background_image && cardDesign.background_image.trim()
+                        ? cardDesign.show_color_overlay !== false
+                          ? `linear-gradient(145deg, ${cardDesign.primary_color}cc 0%, ${cardDesign.secondary_color}cc 100%), url(${cardDesign.background_image})`
+                          : `url(${cardDesign.background_image})`
+                        : `linear-gradient(145deg, ${cardDesign.primary_color} 0%, ${cardDesign.secondary_color} 100%)`,
                     backgroundSize: cardDesign.background_image ? "cover" : undefined,
                     backgroundPosition: cardDesign.background_image ? "center" : undefined,
                     color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a",
                   }}
                 >
-                  <img src={simImg} alt="" className="pointer-events-none absolute right-3 top-1/2 h-8 w-10 -translate-y-1/2 object-contain" style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.2))", opacity: 0.85 }} />
-                  <Wifi className="pointer-events-none absolute right-[48px] top-1/2 h-3 w-3 -translate-y-1/2 -rotate-90" strokeWidth={1.8} style={{ color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a", opacity: 0.4 }} />
+                  <img
+                    src={simImg}
+                    alt=""
+                    className="pointer-events-none absolute right-3 top-1/2 h-8 w-10 -translate-y-1/2 object-contain"
+                    style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.2))", opacity: 0.85 }}
+                  />
+                  <Wifi
+                    className="pointer-events-none absolute right-[48px] top-1/2 h-3 w-3 -translate-y-1/2 -rotate-90"
+                    strokeWidth={1.8}
+                    style={{
+                      color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a",
+                      opacity: 0.4,
+                    }}
+                  />
 
                   <div className="relative flex h-full flex-col">
-                    <p className="text-[6px] uppercase tracking-[0.2em] opacity-40">{cardDesign.card_title || "Membership"}</p>
-                    <p className="mt-0.5 font-display text-sm leading-tight">{profile?.business_name || "Your Store"}</p>
+                    <p className="text-[6px] uppercase tracking-[0.2em] opacity-40">
+                      {cardDesign.card_title || "Membership"}
+                    </p>
+                    <p className="mt-0.5 font-display text-sm leading-tight">
+                      {profile?.business_name || "Your Store"}
+                    </p>
                     <div className="mt-auto">
-                      <p className="text-[6px] uppercase tracking-[0.2em] opacity-40">{cardDesign.points_label || "POINTS"}</p>
-                      <p className="font-display text-2xl leading-none" style={{ letterSpacing: "-0.03em" }}>0</p>
+                      <p className="text-[6px] uppercase tracking-[0.2em] opacity-40">
+                        {cardDesign.points_label || "POINTS"}
+                      </p>
+                      <p
+                        className="font-display text-2xl leading-none"
+                        style={{ letterSpacing: "-0.03em" }}
+                      >
+                        0
+                      </p>
                     </div>
                     <div className="mt-1.5 flex items-end justify-between">
-                      <p className="text-[6px] uppercase tracking-widest opacity-30">{cardDesign.membership_label || "MEMBER"}</p>
+                      <p className="text-[6px] uppercase tracking-widest opacity-30">
+                        {cardDesign.membership_label || "MEMBER"}
+                      </p>
                       <p className="text-[5px] opacity-20">Powered by Zentro</p>
                     </div>
                   </div>
@@ -747,7 +870,9 @@ function StoreConfig() {
                 <div className="mx-2 flex items-center justify-between rounded-[16px] bg-card px-3 py-2 shadow-sm">
                   {["Home", "Discover", "Menu", "Scan", "Rewards", "Profile"].map((l, i) => (
                     <div key={l} className="flex flex-col items-center gap-0.5">
-                      <div className={`h-3.5 w-3.5 rounded-full ${i === 2 ? "bg-[#E85D3A]" : "bg-foreground/12"}`} />
+                      <div
+                        className={`h-3.5 w-3.5 rounded-full ${i === 2 ? "bg-[#E85D3A]" : "bg-foreground/12"}`}
+                      />
                       <span className="text-[6px] text-muted-foreground">{l}</span>
                     </div>
                   ))}
@@ -757,16 +882,19 @@ function StoreConfig() {
 
             {/* Standalone card preview */}
             <div>
-              <p className="mb-2.5 text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">Card Preview</p>
+              <p className="mb-2.5 text-center text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
+                Card Preview
+              </p>
               <div
                 className="relative w-[320px] overflow-hidden rounded-[20px] shadow-xl shadow-foreground/8"
                 style={{
                   aspectRatio: "1.586 / 1",
-                  background: cardDesign.background_image && cardDesign.background_image.trim()
-                    ? cardDesign.show_color_overlay !== false
-                      ? `linear-gradient(145deg, ${cardDesign.primary_color}cc 0%, ${cardDesign.secondary_color}cc 100%), url(${cardDesign.background_image})`
-                      : `url(${cardDesign.background_image})`
-                    : `linear-gradient(145deg, ${cardDesign.primary_color} 0%, ${cardDesign.secondary_color} 100%)`,
+                  background:
+                    cardDesign.background_image && cardDesign.background_image.trim()
+                      ? cardDesign.show_color_overlay !== false
+                        ? `linear-gradient(145deg, ${cardDesign.primary_color}cc 0%, ${cardDesign.secondary_color}cc 100%), url(${cardDesign.background_image})`
+                        : `url(${cardDesign.background_image})`
+                      : `linear-gradient(145deg, ${cardDesign.primary_color} 0%, ${cardDesign.secondary_color} 100%)`,
                   backgroundSize: cardDesign.background_image ? "cover" : undefined,
                   backgroundPosition: cardDesign.background_image ? "center" : undefined,
                   color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a",
@@ -774,44 +902,102 @@ function StoreConfig() {
               >
                 {/* Pattern overlays */}
                 {cardDesign.background_pattern === "dots" && (
-                  <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: `radial-gradient(${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"} 1.5px, transparent 1.5px)`, backgroundSize: "16px 16px" }} />
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      backgroundImage: `radial-gradient(${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"} 1.5px, transparent 1.5px)`,
+                      backgroundSize: "16px 16px",
+                    }}
+                  />
                 )}
                 {cardDesign.background_pattern === "diamonds" && (
-                  <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: `linear-gradient(45deg, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 25%, transparent 25%, transparent 75%, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 75%), linear-gradient(45deg, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 25%, transparent 25%, transparent 75%, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 75%)`, backgroundSize: "24px 24px", backgroundPosition: "0 0, 12px 12px" }} />
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      backgroundImage: `linear-gradient(45deg, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 25%, transparent 25%, transparent 75%, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 75%), linear-gradient(45deg, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 25%, transparent 25%, transparent 75%, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 75%)`,
+                      backgroundSize: "24px 24px",
+                      backgroundPosition: "0 0, 12px 12px",
+                    }}
+                  />
                 )}
                 {cardDesign.background_pattern === "geometric" && (
-                  <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 31px), repeating-linear-gradient(90deg, transparent, transparent 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 31px)` }} />
+                  <div
+                    className="pointer-events-none absolute inset-0"
+                    style={{
+                      backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 31px), repeating-linear-gradient(90deg, transparent, transparent 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 31px)`,
+                    }}
+                  />
                 )}
 
-                <img src={simImg} alt="" className="pointer-events-none absolute right-4 top-1/2 h-14 w-16 -translate-y-1/2 object-contain" style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }} />
-                <Wifi className="pointer-events-none absolute right-[78px] top-1/2 h-5 w-5 -translate-y-1/2 -rotate-90" strokeWidth={1.8} style={{ color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a", opacity: 0.5 }} />
+                <img
+                  src={simImg}
+                  alt=""
+                  className="pointer-events-none absolute right-4 top-1/2 h-14 w-16 -translate-y-1/2 object-contain"
+                  style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+                />
+                <Wifi
+                  className="pointer-events-none absolute right-[78px] top-1/2 h-5 w-5 -translate-y-1/2 -rotate-90"
+                  strokeWidth={1.8}
+                  style={{
+                    color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a",
+                    opacity: 0.5,
+                  }}
+                />
 
                 <div className="relative flex h-full flex-col p-5">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-[8px] uppercase tracking-[0.22em] opacity-45">{cardDesign.card_title || "Membership"}</p>
-                      <p className="mt-0.5 font-display text-lg leading-tight">{profile?.business_name || "Your Store"}</p>
+                      <p className="text-[8px] uppercase tracking-[0.22em] opacity-45">
+                        {cardDesign.card_title || "Membership"}
+                      </p>
+                      <p className="mt-0.5 font-display text-lg leading-tight">
+                        {profile?.business_name || "Your Store"}
+                      </p>
                     </div>
-                    <span className="mt-0.5 shrink-0 rounded-full px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest" style={{ background: "rgba(255,255,255,0.15)" }}>Bronze</span>
+                    <span
+                      className="mt-0.5 shrink-0 rounded-full px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest"
+                      style={{ background: "rgba(255,255,255,0.15)" }}
+                    >
+                      Bronze
+                    </span>
                   </div>
 
                   <div className="relative mt-3">
-                    <p className="text-[8px] uppercase tracking-[0.22em] opacity-45">{cardDesign.points_label || "POINTS"}</p>
-                    <p className="font-display text-[40px] leading-none tracking-tight" style={{ letterSpacing: "-0.03em", color: cardDesign.accent_color }}>0</p>
+                    <p className="text-[8px] uppercase tracking-[0.22em] opacity-45">
+                      {cardDesign.points_label || "POINTS"}
+                    </p>
+                    <p
+                      className="font-display text-[40px] leading-none tracking-tight"
+                      style={{ letterSpacing: "-0.03em", color: cardDesign.accent_color }}
+                    >
+                      0
+                    </p>
                   </div>
 
-                  <div className="relative mt-2 h-1 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>
-                    <div className="h-full w-1/4 rounded-full" style={{ background: "rgba(255,255,255,0.4)" }} />
+                  <div
+                    className="relative mt-2 h-1 overflow-hidden rounded-full"
+                    style={{ background: "rgba(255,255,255,0.15)" }}
+                  >
+                    <div
+                      className="h-full w-1/4 rounded-full"
+                      style={{ background: "rgba(255,255,255,0.4)" }}
+                    />
                   </div>
 
                   <div className="relative mt-auto flex items-end justify-between">
                     <div>
-                      <p className="text-[8px] uppercase tracking-widest opacity-35">{cardDesign.membership_label || "MEMBER"}</p>
+                      <p className="text-[8px] uppercase tracking-widest opacity-35">
+                        {cardDesign.membership_label || "MEMBER"}
+                      </p>
                       {cardDesign.show_joined_date && (
-                        <p className="mt-0.5 font-mono text-[10px] tracking-wider opacity-60">•••• ••••</p>
+                        <p className="mt-0.5 font-mono text-[10px] tracking-wider opacity-60">
+                          •••• ••••
+                        </p>
                       )}
                     </div>
-                    <p className="text-right text-[7px] opacity-25 tracking-wide">Powered by Zentro</p>
+                    <p className="text-right text-[7px] opacity-25 tracking-wide">
+                      Powered by Zentro
+                    </p>
                   </div>
                 </div>
               </div>
@@ -820,47 +1006,116 @@ function StoreConfig() {
 
           {/* ── Mobile preview (visible below lg) ──────────────────────── */}
           <div className="lg:hidden">
-            <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">Live Preview</p>
+            <p className="mb-3 text-[11px] uppercase tracking-[0.18em] text-muted-foreground/70">
+              Live Preview
+            </p>
             <div
               className="relative w-full max-w-[320px] mx-auto overflow-hidden rounded-[20px] shadow-xl shadow-foreground/8"
               style={{
                 aspectRatio: "1.586 / 1",
-                background: cardDesign.background_image && cardDesign.background_image.trim()
-                  ? cardDesign.show_color_overlay !== false
-                    ? `linear-gradient(145deg, ${cardDesign.primary_color}cc 0%, ${cardDesign.secondary_color}cc 100%), url(${cardDesign.background_image})`
-                    : `url(${cardDesign.background_image})`
-                  : `linear-gradient(145deg, ${cardDesign.primary_color} 0%, ${cardDesign.secondary_color} 100%)`,
+                background:
+                  cardDesign.background_image && cardDesign.background_image.trim()
+                    ? cardDesign.show_color_overlay !== false
+                      ? `linear-gradient(145deg, ${cardDesign.primary_color}cc 0%, ${cardDesign.secondary_color}cc 100%), url(${cardDesign.background_image})`
+                      : `url(${cardDesign.background_image})`
+                    : `linear-gradient(145deg, ${cardDesign.primary_color} 0%, ${cardDesign.secondary_color} 100%)`,
                 backgroundSize: cardDesign.background_image ? "cover" : undefined,
                 backgroundPosition: cardDesign.background_image ? "center" : undefined,
                 color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a",
               }}
             >
-              {cardDesign.background_pattern === "dots" && <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: `radial-gradient(${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"} 1.5px, transparent 1.5px)`, backgroundSize: "16px 16px" }} />}
-              {cardDesign.background_pattern === "diamonds" && <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: `linear-gradient(45deg, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 25%, transparent 25%, transparent 75%, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 75%), linear-gradient(45deg, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 25%, transparent 25%, transparent 75%, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 75%)`, backgroundSize: "24px 24px", backgroundPosition: "0 0, 12px 12px" }} />}
-              {cardDesign.background_pattern === "geometric" && <div className="pointer-events-none absolute inset-0" style={{ backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 31px), repeating-linear-gradient(90deg, transparent, transparent 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 31px)` }} />}
-              <img src={simImg} alt="" className="pointer-events-none absolute right-4 top-1/2 h-14 w-16 -translate-y-1/2 object-contain" style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }} />
-              <Wifi className="pointer-events-none absolute right-[78px] top-1/2 h-5 w-5 -translate-y-1/2 -rotate-90" strokeWidth={1.8} style={{ color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a", opacity: 0.5 }} />
+              {cardDesign.background_pattern === "dots" && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    backgroundImage: `radial-gradient(${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"} 1.5px, transparent 1.5px)`,
+                    backgroundSize: "16px 16px",
+                  }}
+                />
+              )}
+              {cardDesign.background_pattern === "diamonds" && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    backgroundImage: `linear-gradient(45deg, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 25%, transparent 25%, transparent 75%, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 75%), linear-gradient(45deg, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 25%, transparent 25%, transparent 75%, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 75%)`,
+                    backgroundSize: "24px 24px",
+                    backgroundPosition: "0 0, 12px 12px",
+                  }}
+                />
+              )}
+              {cardDesign.background_pattern === "geometric" && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{
+                    backgroundImage: `repeating-linear-gradient(0deg, transparent, transparent 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 31px), repeating-linear-gradient(90deg, transparent, transparent 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 30px, ${cardDesign.text_mode === "light" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"} 31px)`,
+                  }}
+                />
+              )}
+              <img
+                src={simImg}
+                alt=""
+                className="pointer-events-none absolute right-4 top-1/2 h-14 w-16 -translate-y-1/2 object-contain"
+                style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.25))" }}
+              />
+              <Wifi
+                className="pointer-events-none absolute right-[78px] top-1/2 h-5 w-5 -translate-y-1/2 -rotate-90"
+                strokeWidth={1.8}
+                style={{
+                  color: cardDesign.text_mode === "light" ? "#ffffff" : "#1a1a1a",
+                  opacity: 0.5,
+                }}
+              />
               <div className="relative flex h-full flex-col p-5">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="text-[8px] uppercase tracking-[0.22em] opacity-45">{cardDesign.card_title || "Membership"}</p>
-                    <p className="mt-0.5 font-display text-lg leading-tight">{profile?.business_name || "Your Store"}</p>
+                    <p className="text-[8px] uppercase tracking-[0.22em] opacity-45">
+                      {cardDesign.card_title || "Membership"}
+                    </p>
+                    <p className="mt-0.5 font-display text-lg leading-tight">
+                      {profile?.business_name || "Your Store"}
+                    </p>
                   </div>
-                  <span className="mt-0.5 shrink-0 rounded-full px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest" style={{ background: "rgba(255,255,255,0.15)" }}>Bronze</span>
+                  <span
+                    className="mt-0.5 shrink-0 rounded-full px-2.5 py-1 text-[8px] font-semibold uppercase tracking-widest"
+                    style={{ background: "rgba(255,255,255,0.15)" }}
+                  >
+                    Bronze
+                  </span>
                 </div>
                 <div className="relative mt-3">
-                  <p className="text-[8px] uppercase tracking-[0.22em] opacity-45">{cardDesign.points_label || "POINTS"}</p>
-                  <p className="font-display text-[40px] leading-none tracking-tight" style={{ letterSpacing: "-0.03em", color: cardDesign.accent_color }}>0</p>
+                  <p className="text-[8px] uppercase tracking-[0.22em] opacity-45">
+                    {cardDesign.points_label || "POINTS"}
+                  </p>
+                  <p
+                    className="font-display text-[40px] leading-none tracking-tight"
+                    style={{ letterSpacing: "-0.03em", color: cardDesign.accent_color }}
+                  >
+                    0
+                  </p>
                 </div>
-                <div className="relative mt-2 h-1 overflow-hidden rounded-full" style={{ background: "rgba(255,255,255,0.15)" }}>
-                  <div className="h-full w-1/4 rounded-full" style={{ background: "rgba(255,255,255,0.4)" }} />
+                <div
+                  className="relative mt-2 h-1 overflow-hidden rounded-full"
+                  style={{ background: "rgba(255,255,255,0.15)" }}
+                >
+                  <div
+                    className="h-full w-1/4 rounded-full"
+                    style={{ background: "rgba(255,255,255,0.4)" }}
+                  />
                 </div>
                 <div className="relative mt-auto flex items-end justify-between">
                   <div>
-                    <p className="text-[8px] uppercase tracking-widest opacity-35">{cardDesign.membership_label || "MEMBER"}</p>
-                    {cardDesign.show_joined_date && <p className="mt-0.5 font-mono text-[10px] tracking-wider opacity-60">•••• ••••</p>}
+                    <p className="text-[8px] uppercase tracking-widest opacity-35">
+                      {cardDesign.membership_label || "MEMBER"}
+                    </p>
+                    {cardDesign.show_joined_date && (
+                      <p className="mt-0.5 font-mono text-[10px] tracking-wider opacity-60">
+                        •••• ••••
+                      </p>
+                    )}
                   </div>
-                  <p className="text-right text-[7px] opacity-25 tracking-wide">Powered by Zentro</p>
+                  <p className="text-right text-[7px] opacity-25 tracking-wide">
+                    Powered by Zentro
+                  </p>
                 </div>
               </div>
             </div>
@@ -868,13 +1123,16 @@ function StoreConfig() {
 
           {/* ── RIGHT: Form Controls ──────────────────────────────────── */}
           <div className="space-y-6 min-w-0">
-
             {/* Card Title & Subtitle */}
             <div className="rounded-2xl bg-mist/50 p-5 space-y-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Card Text</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Card Text
+              </p>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="block">
-                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Card Title</span>
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Card Title
+                  </span>
                   <input
                     value={cardDesign.card_title ?? ""}
                     onChange={(e) => setCardDesign((p) => ({ ...p, card_title: e.target.value }))}
@@ -883,10 +1141,14 @@ function StoreConfig() {
                   />
                 </label>
                 <label className="block">
-                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Card Subtitle</span>
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Card Subtitle
+                  </span>
                   <input
                     value={cardDesign.card_subtitle ?? ""}
-                    onChange={(e) => setCardDesign((p) => ({ ...p, card_subtitle: e.target.value }))}
+                    onChange={(e) =>
+                      setCardDesign((p) => ({ ...p, card_subtitle: e.target.value }))
+                    }
                     placeholder="Optional subtitle"
                     className="mt-1.5 h-12 w-full rounded-2xl bg-card px-4 text-sm text-ink outline-none transition-all focus:ring-2 focus:ring-ember/40"
                   />
@@ -896,14 +1158,20 @@ function StoreConfig() {
 
             {/* Colors */}
             <div className="rounded-2xl bg-mist/50 p-5 space-y-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Colors</p>
-              {([
-                { key: "primary_color", label: "Primary Color" },
-                { key: "secondary_color", label: "Secondary Color" },
-                { key: "accent_color", label: "Accent Color" },
-              ] as const).map(({ key, label }) => (
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Colors
+              </p>
+              {(
+                [
+                  { key: "primary_color", label: "Primary Color" },
+                  { key: "secondary_color", label: "Secondary Color" },
+                  { key: "accent_color", label: "Accent Color" },
+                ] as const
+              ).map(({ key, label }) => (
                 <div key={key}>
-                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</span>
+                  <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    {label}
+                  </span>
                   <div className="mt-1.5 flex items-center gap-3">
                     <input
                       type="color"
@@ -924,7 +1192,9 @@ function StoreConfig() {
 
             {/* Text Mode */}
             <div className="rounded-2xl bg-mist/50 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Text Mode</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Text Mode
+              </p>
               <div className="mt-2 flex gap-2">
                 {(["light", "dark"] as const).map((mode) => (
                   <button
@@ -945,13 +1215,23 @@ function StoreConfig() {
             {/* Background Image */}
             {merchantId && (
               <div className="rounded-2xl bg-mist/50 p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3">Background Image</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground mb-3">
+                  Background Image
+                </p>
                 <InlineImageUploader
                   label=""
                   hint="Recommended 800 × 500 px"
                   currentUrl={cardDesign.background_image}
-                  onUpload={(url) => setCardDesign((p) => ({ ...p, background_image: url, background_type: "image" }))}
-                  onClear={() => setCardDesign((p) => ({ ...p, background_image: "", background_type: "solid" }))}
+                  onUpload={(url) =>
+                    setCardDesign((p) => ({
+                      ...p,
+                      background_image: url,
+                      background_type: "image",
+                    }))
+                  }
+                  onClear={() =>
+                    setCardDesign((p) => ({ ...p, background_image: "", background_type: "solid" }))
+                  }
                   aspectClass="aspect-[16/10]"
                   shape="square"
                   merchantId={merchantId}
@@ -964,12 +1244,18 @@ function StoreConfig() {
                 {cardDesign.background_image && cardDesign.background_image.trim() && (
                   <div className="mt-4 flex items-center justify-between">
                     <div>
-                      <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Gradient Overlay</span>
-                      <p className="mt-0.5 text-[11px] text-muted-foreground/60">Blend gradient on top of the image</p>
+                      <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                        Gradient Overlay
+                      </span>
+                      <p className="mt-0.5 text-[11px] text-muted-foreground/60">
+                        Blend gradient on top of the image
+                      </p>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setCardDesign((p) => ({ ...p, show_color_overlay: !p.show_color_overlay }))}
+                      onClick={() =>
+                        setCardDesign((p) => ({ ...p, show_color_overlay: !p.show_color_overlay }))
+                      }
                       className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full transition-colors ${
                         cardDesign.show_color_overlay ? "bg-ink" : "bg-border"
                       }`}
@@ -987,7 +1273,9 @@ function StoreConfig() {
 
             {/* Background Pattern */}
             <div className="rounded-2xl bg-mist/50 p-5">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Background Pattern</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Background Pattern
+              </p>
               <div className="mt-2 flex flex-wrap gap-2">
                 {(["none", "dots", "geometric", "diamonds"] as const).map((pat) => (
                   <button
@@ -1007,12 +1295,14 @@ function StoreConfig() {
 
             {/* Toggle Options */}
             <div className="rounded-2xl bg-mist/50 p-5 space-y-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Display Options</p>
-              {([
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Display Options
+              </p>
+              {[
                 { key: "show_lifetime_points" as const, label: "Show Lifetime Points" },
                 { key: "show_joined_date" as const, label: "Show Joined Date" },
                 { key: "show_qr_shortcut" as const, label: "Show QR Shortcut" },
-              ]).map(({ key, label }) => (
+              ].map(({ key, label }) => (
                 <div key={key} className="flex items-center justify-between">
                   <span className="text-sm text-ink">{label}</span>
                   <button
@@ -1039,7 +1329,11 @@ function StoreConfig() {
                 disabled={cardDesignSaving}
                 className="inline-flex h-11 items-center gap-2 rounded-full border border-border px-5 text-xs font-medium text-muted-foreground transition-colors hover:border-ink hover:text-ink disabled:opacity-50"
               >
-                {cardDesignSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                {cardDesignSaving ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="h-3.5 w-3.5" />
+                )}
                 {cardDesignSaving ? "Saving…" : "Save Draft"}
               </button>
               <button
@@ -1047,13 +1341,18 @@ function StoreConfig() {
                 disabled={cardDesignSaving}
                 className="inline-flex h-12 items-center gap-2 rounded-full bg-ink px-7 text-sm font-medium text-primary-foreground shadow-ember transition-all disabled:opacity-50"
               >
-                {cardDesignSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {cardDesignSaving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
                 {cardDesignSaving ? "Publishing…" : "Publish"}
               </button>
             </div>
-
-          </div>{/* end right column */}
-        </div>{/* end grid */}
+          </div>
+          {/* end right column */}
+        </div>
+        {/* end grid */}
       </section>
 
       <section className="glass-strong rounded-3xl p-6">
@@ -1104,9 +1403,7 @@ function StoreConfig() {
                 <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   Map location
                 </span>
-                {hasLocation && (
-                  <span className="text-[11px] text-emerald-600">Set ✓</span>
-                )}
+                {hasLocation && <span className="text-[11px] text-emerald-600">Set ✓</span>}
               </div>
 
               <button
@@ -1123,8 +1420,8 @@ function StoreConfig() {
                 {locating
                   ? "Getting your location…"
                   : hasLocation
-                  ? "Update to my current location"
-                  : "Use my current location"}
+                    ? "Update to my current location"
+                    : "Use my current location"}
               </button>
 
               {hasLocation && (
@@ -1132,9 +1429,7 @@ function StoreConfig() {
                   {Number(form.latitude).toFixed(5)}, {Number(form.longitude).toFixed(5)}
                 </p>
               )}
-              {locationError && (
-                <p className="mt-2 text-xs text-rose-500">{locationError}</p>
-              )}
+              {locationError && <p className="mt-2 text-xs text-rose-500">{locationError}</p>}
               {!hasLocation && !locationError && (
                 <p className="mt-2 text-xs text-muted-foreground">
                   Stand at your store and tap this so customers can find you on the map.
@@ -1186,7 +1481,11 @@ function StoreConfig() {
 
 // ── Field component ───────────────────────────────────────────────────────────
 function Field({
-  label, value, onChange, placeholder, multiline = false,
+  label,
+  value,
+  onChange,
+  placeholder,
+  multiline = false,
 }: {
   label: string;
   value: string;

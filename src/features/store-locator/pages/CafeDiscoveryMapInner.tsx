@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { MapPin } from "lucide-react";
 import type { MerchantDiscoveryItem } from "@/lib/api";
 
 import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
@@ -76,7 +77,7 @@ export function CafeDiscoveryMapInner({
           lng: parseFloat(m.longitude as string),
         }))
         .filter((m) => !Number.isNaN(m.lat) && !Number.isNaN(m.lng)),
-    [merchants]
+    [merchants],
   );
 
   const center: [number, number] = useMemo(() => {
@@ -88,12 +89,27 @@ export function CafeDiscoveryMapInner({
   const containerClass = className ?? "glass overflow-hidden rounded-3xl h-[260px] w-full";
 
   if (pins.length === 0 && !userLocation) {
-    return null;
+    return (
+      <div className={containerClass}>
+        <div className="flex h-full flex-col items-center justify-center gap-2 p-4 text-center">
+          <MapPin className="h-6 w-6 text-muted-foreground/60" />
+          <p className="text-sm font-medium text-muted-foreground">No cafés on the map yet</p>
+          <p className="text-xs text-muted-foreground/70">
+            Cafés need a location pin before they can show here.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className={containerClass}>
-      <MapContainer center={center} zoom={13} scrollWheelZoom={false} style={{ height: "100%", width: "100%" }}>
+      <MapContainer
+        center={center}
+        zoom={13}
+        scrollWheelZoom={false}
+        style={{ height: "100%", width: "100%" }}
+      >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
           url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -118,8 +134,13 @@ export function CafeDiscoveryMapInner({
           >
             <Popup>
               <div className="text-sm font-medium">{store.business_name}</div>
-              {store.address && <div className="text-xs text-muted-foreground">{store.address}</div>}
-              <button onClick={() => onSelectSlug(store.slug)} className="mt-1 text-xs font-semibold text-ember underline">
+              {store.address && (
+                <div className="text-xs text-muted-foreground">{store.address}</div>
+              )}
+              <button
+                onClick={() => onSelectSlug(store.slug)}
+                className="mt-1 text-xs font-semibold text-ember underline"
+              >
                 Open store →
               </button>
             </Popup>
