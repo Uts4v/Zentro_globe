@@ -17,15 +17,23 @@ from .views import (
     reset_password,
     ws_token,
     upload_image,
+    send_otp,
+    verify_otp,
+    google_auth,
 )
 
 urlpatterns = [
     # Authentication
     path("register/", register, name="auth-register"),
     path("login/", LoginView.as_view(), name="auth-login"),
+    path("google/", google_auth, name="auth-google"),
     path("token/refresh/", TokenRefreshView.as_view(), name="auth-token-refresh"),
     path("logout/", logout, name="auth-logout"),
     path("ws-token/", ws_token, name="auth-ws-token"),
+
+    # Phone OTP (customer mobile verification)
+    path("send-otp/", send_otp, name="auth-send-otp"),
+    path("verify-otp/", verify_otp, name="auth-verify-otp"),
 
     # Profile
     path("me/", me, name="auth-me"),

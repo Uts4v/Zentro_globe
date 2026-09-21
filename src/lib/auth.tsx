@@ -83,13 +83,37 @@ type AuthContextType = {
     email: string,
     password: string,
     name: string,
-    meta?: { role?: Role; store_name?: string; confirmPassword?: string }
+    meta?: {
+      role?: Role;
+      store_name?: string;
+      confirmPassword?: string;
+      phone?: string;
+      phoneToken?: string;
+    }
   ) => Promise<{ error: string | null }>;
   signIn: (
     email: string,
     password: string,
     meta?: { role?: Role }
   ) => Promise<{ error: string | null }>;
+  googleAuth: (
+    idToken: string,
+    meta?: {
+      role?: Role;
+      phone?: string;
+      phoneToken?: string;
+      store_name?: string;
+    }
+  ) => Promise<{ error: string | null }>;
+  sendOtp: (
+    phone: string,
+    purpose?: "signup" | "login" | "verify_phone"
+  ) => Promise<{ error: string | null; debugCode?: string }>;
+  verifyOtp: (
+    phone: string,
+    code: string,
+    purpose?: "signup" | "login" | "verify_phone"
+  ) => Promise<{ error: string | null; phoneToken?: string }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   refreshMerchantProfile: () => Promise<void>;
@@ -234,7 +258,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email: string,
       password: string,
       name: string,
-      meta?: { role?: Role; store_name?: string; confirmPassword?: string }
+      meta?: {
+        role?: Role;
+        store_name?: string;
+        confirmPassword?: string;
+        phone?: string;
+        phoneToken?: string;
+      }
     ): Promise<{ error: string | null }> => {
       try {
         const data = await djangoFetch<{
@@ -253,6 +283,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             full_name: name,
             role: meta?.role ?? "customer",
             store_name: meta?.store_name ?? "",
+            phone: meta?.phone ?? "",
+            phone_token: meta?.phoneToken ?? "",
           }),
         });
         tokenStore.set(data.access, data.refresh);
@@ -301,6 +333,95 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [fetchMe, scheduleRefresh]
   );
 
+  // ── Continue with Google ──────────────────────────────────────────────────
+
+  const googleAuth = useCallback(
+    async (
+      idToken: string,
+      meta?: {
+        role?: Role;
+        phone?: string;
+        phoneToken?: string;
+        store_name?: string;
+      }
+    ): Promise<{ error: string | null }> => {
+      try {
+        const data = await djangoFetch<{
+          access: string;
+          refresh: string;
+          role: string;
+          email: string;
+          full_name: string;
+        }>(apiUrl("/auth/google/"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id_token: idToken,
+            role: meta?.role ?? "customer",
+            phone: meta?.phone ?? "",
+            phone_token: meta?.phoneToken ?? "",
+            store_name: meta?.store_name ?? "",
+          }),
+        });
+        tokenStore.set(data.access, data.refresh);
+        scheduleRefresh(data.access);
+        await fetchMe();
+        return { error: null };
+      } catch (e: any) {
+        return { error: e.message };
+      }
+    },
+    [fetchMe, scheduleRefresh]
+  );
+
+  // ── OTP (mobile verification) ─────────────────────────────────────────────
+
+  const sendOtp = useCallback(
+    async (
+      phone: string,
+      purpose: "signup" | "login" | "verify_phone" = "signup"
+    ): Promise<{ error: string | null; debugCode?: string }> => {
+      try {
+        const res = await djangoFetch<{
+          detail?: string;
+          debug_code?: string;
+          sent_via?: string;
+        }>(apiUrl("/auth/send-otp/"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone, purpose }),
+        });
+        return { error: null, debugCode: res.debug_code };
+      } catch (e: any) {
+        return { error: e.message };
+      }
+    },
+    []
+  );
+
+  const verifyOtp = useCallback(
+    async (
+      phone: string,
+      code: string,
+      purpose: "signup" | "login" | "verify_phone" = "signup"
+    ): Promise<{ error: string | null; phoneToken?: string }> => {
+      try {
+        const res = await djangoFetch<{ verified: boolean; phone_token: string }>(
+          apiUrl("/auth/verify-otp/"),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone, code, purpose }),
+          }
+        );
+        return { error: null, phoneToken: res.phone_token };
+      } catch (e: any) {
+        return { error: e.message };
+      }
+    },
+    []
+  );
+
   // ── Sign out ───────────────────────────────────────────────────────────────
 
   const signOut = useCallback(async () => {
@@ -347,6 +468,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         signUp,
         signIn,
+        googleAuth,
+        sendOtp,
+        verifyOtp,
         signOut,
         refreshProfile,
         refreshMerchantProfile,

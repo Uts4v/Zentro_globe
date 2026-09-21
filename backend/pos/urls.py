@@ -111,6 +111,7 @@ urlpatterns = [
 
     # Notifications (Phase 31)
     path("notifications/", views.pos_notifications, name="pos-notifications"),
+    path("notifications/read-all/", views.mark_all_notifications_read, name="pos-notifications-read-all"),
     path("notifications/<int:notification_id>/read/", views.mark_notification_read, name="pos-notification-read"),
 
     # Staff scheduling (Phase 31+)

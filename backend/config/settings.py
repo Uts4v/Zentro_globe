@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "notifications",
     "pos",
     "ai_core",
+    "config",
 ]
 
 # Switch from WSGI to ASGI
@@ -336,6 +337,19 @@ UNFOLD = {
     "SIDEBAR": {
         "show_search": True,
         "show_all_apps": True,
+        "navigation": [
+            {
+                "title": "Tools",
+                "separator": True,
+                "items": [
+                    {
+                        "title": "Database Explorer",
+                        "icon": "database",
+                        "link": "/__db__/",
+                    },
+                ],
+            },
+        ],
     },
 }
 
@@ -353,6 +367,33 @@ SIMPLE_JWT = {
     "USER_ID_CLAIM": "user_id",
     "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.CustomTokenObtainPairSerializer",
 }
+
+# ── SMS / OTP ─────────────────────────────────────────────────────────────────
+# Backend: "console" (free, dev — logs the code), "twilio", or "vonage".
+# International SMS is always a paid service (~$0.04–0.12 / SMS). See
+# accounts/sms.py for full config options.
+SMS_BACKEND = os.getenv("SMS_BACKEND", "console")
+TWILIO_ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
+TWILIO_MESSAGING_SERVICE_SID = os.getenv("TWILIO_MESSAGING_SERVICE_SID", "")
+TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "")
+VONAGE_API_KEY = os.getenv("VONAGE_API_KEY", "")
+VONAGE_API_SECRET = os.getenv("VONAGE_API_SECRET", "")
+VONAGE_BRAND = os.getenv("VONAGE_BRAND", "Zentro")
+OTP_TTL_MINUTES = int(os.getenv("OTP_TTL_MINUTES", "10"))
+OTP_LENGTH = 6
+
+# ── Google OAuth ("Continue with Google") ─────────────────────────────────────
+# Comma-separated list of OAuth 2.0 client IDs this backend will accept ID
+# tokens from. In dev add the "Web application" client ID from Google Cloud
+# Console and pass the same ID to the frontend via VITE_GOOGLE_CLIENT_ID.
+GOOGLE_OAUTH_CLIENT_IDS = [
+    cid.strip()
+    for cid in os.getenv("GOOGLE_OAUTH_CLIENT_IDS", "").split(",")
+    if cid.strip()
+]
+# Optional server-side `aud` override for the verify step (advanced use).
+GOOGLE_AUDIENCE = os.getenv("GOOGLE_AUDIENCE", "") or None
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 EMAIL_BACKEND = os.getenv(

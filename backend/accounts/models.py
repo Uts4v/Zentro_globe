@@ -9,6 +9,8 @@ User and profile models.
 
 from django.db import models
 from django.contrib.auth.models import AbstractUser
+from django.utils import timezone
+from datetime import timedelta
 
 
 class User(AbstractUser):
@@ -31,7 +33,11 @@ class User(AbstractUser):
         db_index=True,
     )
     phone = models.CharField(max_length=20, blank=True)
+    phone_verified = models.BooleanField(default=False)
     avatar_url = models.URLField(blank=True)
+
+    # Google OAuth — the user's Google account subject ID (stable identifier)
+    google_sub = models.CharField(max_length=64, unique=True, null=True, blank=True)
 
     # email is required and used for login (in addition to username)
     email = models.EmailField(unique=True)
@@ -160,3 +166,74 @@ class PasswordResetToken(models.Model):
 
     def __str__(self):
         return f"Reset token for {self.user.email}"
+
+
+class OtpCode(models.Model):
+    """
+    One-time password sent by SMS for phone verification.
+
+    - identifier: the phone number (E.164-ish string) the code was sent to
+    - purpose:    "signup" | "login" | "verify_phone"
+    - code_hash:  SHA-256 of the code — plaintext code never stored
+    - attempts:   failed verification attempts (max enforced in view)
+    - is_used / expires_at: single-use + short-lived (10 min)
+    """
+
+    PURPOSE_SIGNUP = "signup"
+    PURPOSE_LOGIN = "login"
+    PURPOSE_VERIFY_PHONE = "verify_phone"
+    PURPOSE_CHOICES = [
+        (PURPOSE_SIGNUP, "Sign up"),
+        (PURPOSE_LOGIN, "Login"),
+        (PURPOSE_VERIFY_PHONE, "Verify phone"),
+    ]
+
+    identifier = models.CharField(max_length=64, db_index=True)
+    purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES, default=PURPOSE_SIGNUP)
+    code_hash = models.CharField(max_length=64)
+    attempts = models.IntegerField(default=0)
+    is_used = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "otp_codes"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["identifier", "purpose", "is_used"]),
+        ]
+
+    def __str__(self):
+        return f"OTP for {self.identifier} ({self.purpose})"
+
+    @staticmethod
+    def generate_code() -> str:
+        """Return a fresh 6-digit numeric code."""
+        import secrets
+        return f"{secrets.randbelow(1_000_000):06d}"
+
+    @staticmethod
+    def _hash(code: str) -> str:
+        import hashlib
+        return hashlib.sha256(code.encode()).hexdigest()
+
+    @classmethod
+    def issue(cls, identifier: str, purpose: str, ttl_minutes: int = 10) -> "OtpCode":
+        """Create a fresh OTP and return it (code in memory only)."""
+        code = cls.generate_code()
+        obj = cls.objects.create(
+            identifier=identifier,
+            purpose=purpose,
+            code_hash=cls._hash(code),
+            expires_at=timezone.now() + timedelta(minutes=ttl_minutes),
+        )
+        obj._plain_code = code  # type: ignore[attr-defined]
+        return obj
+
+    @property
+    def plain_code(self) -> str:
+        """The code as issued — only available on the instance returned by issue()."""
+        return getattr(self, "_plain_code", "")
+
+    def verify(self, code: str) -> bool:
+        return self._hash(code) == self.code_hash

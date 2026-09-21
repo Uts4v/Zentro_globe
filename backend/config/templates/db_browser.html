@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zentro Database Explorer</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --border:#2a2f3a;
+          --text:#e2e4e9; --muted:#9aa2b1; --accent:#5b8cff; --green:#3fb950; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system, "Segoe UI", Roboto, sans-serif;
+         background:var(--bg); color:var(--text); font-size:13px; }
+  header { display:flex; align-items:center; gap:14px; padding:12px 18px;
+           background:var(--panel); border-bottom:1px solid var(--border); }
+  header h1 { font-size:15px; margin:0; font-weight:600; }
+  .badge { font-size:11px; padding:2px 8px; border-radius:999px;
+           background:var(--panel2); color:var(--muted); border:1px solid var(--border); }
+  .layout { display:flex; min-height:calc(100vh - 50px); }
+  aside { width:240px; min-width:240px; background:var(--panel); border-right:1px solid var(--border);
+          padding:12px; overflow-y:auto; }
+  aside .t { margin-bottom:4px; }
+  aside a { display:flex; justify-content:space-between; gap:8px; padding:6px 10px;
+            border-radius:8px; color:var(--text); text-decoration:none; }
+  aside a:hover { background:var(--panel2); }
+  aside a.active { background:var(--accent); color:#fff; }
+  aside .count { color:var(--muted); font-size:11px; }
+  main { flex:1; padding:18px; min-width:0; }
+  .section { margin-bottom:26px; }
+  .section h2 { font-size:14px; margin:0 0 10px; font-weight:600; display:flex;
+                align-items:center; gap:10px; }
+  .section h2 .muted { color:var(--muted); font-weight:400; font-size:12px; }
+  .grid { overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--panel); }
+  table { border-collapse:collapse; width:100%; }
+  th, td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--border);
+           white-space:nowrap; max-width:360px; overflow:hidden; text-overflow:ellipsis; }
+  th { background:var(--panel2); color:var(--muted); font-weight:500; position:sticky; top:0; }
+  tr:hover td { background:rgba(255,255,255,0.03); }
+  .pk { color:var(--accent); font-weight:600; }
+  .null { background:transparent; }
+  .type-pill { font-size:10px; padding:1px 6px; border-radius:4px; background:var(--panel2);
+               color:var(--muted); border:1px solid var(--border); }
+  .pager { display:flex; gap:10px; align-items:center; margin-top:10px; font-size:12px; }
+  .pager a, .pager span.btn { padding:5px 12px; border-radius:8px; border:1px solid var(--border);
+               background:var(--panel2); color:var(--text); text-decoration:none; }
+  .pager a:hover { border-color:var(--accent); }
+  textarea { width:100%; min-height:90px; background:var(--panel2); color:var(--text);
+             border:1px solid var(--border); border-radius:10px; padding:12px;
+             font-family:ui-monospace, Consolas, monospace; font-size:12px; resize:vertical; }
+  button { background:var(--accent); color:#fff; border:none; padding:9px 18px;
+           border-radius:10px; font-weight:600; cursor:pointer; margin-top:8px; }
+  button:hover { opacity:0.9; }
+  .err { color:#ff6b6b; background:#3a1d1f; border:1px solid #7a2f33; padding:10px 12px;
+         border-radius:8px; margin-top:8px; font-family:ui-monospace, Consolas, monospace; }
+  .empty { color:var(--muted); padding:16px; }
+  .link-admin { margin-left:auto; color:var(--muted); text-decoration:none; font-size:12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🗄️ Zentro Database Explorer</h1>
+  <span class="badge">{{ engine|upper }}</span>
+  <a class="link-admin" href="/admin/">← Django Admin</a>
+</header>
+
+<div class="layout">
+  <aside>
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:4px 8px 8px;">
+      Tables <span>({{ tables|length }})</span>
+    </div>
+    <div class="t">
+      {% for t in tables %}
+      <a href="?table={{ t.name|urlencode }}" class="{% if t.name == current %}active{% endif %}">
+        <span>{% if t.type == 'view' %}👁{% else %}▦{% endif %} {{ t.name }}</span>
+        <span class="count">{{ t.count|default:"–" }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </aside>
+
+  <main>
+    <div class="section">
+      <h2>{{ current|default:"No tables" }}
+        <span class="muted">{{ columns|length }} columns · {{ total }} rows</span>
+      </h2>
+
+      {% if columns %}
+      <div class="grid">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              {% for c in columns %}<th class="{% if c.pk %}pk{% endif %}">{{ c.name }}</th>{% endfor %}
+            </tr>
+            <tr>
+              <th></th>
+              {% for c in columns %}
+              <th><span class="type-pill">{{ c.type }}{% if c.null or not c.pk %} · NULL{% endif %}</span></th>
+              {% endfor %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in rows %}
+            <tr>
+              <td style="color:var(--muted)">{{ forloop.counter0|add:page_start }}</td>
+              {% for v in r %}<td>{{ v|default_if_none:"NULL" }}</td>{% endfor %}
+            </tr>
+            {% empty %}
+            <tr><td colspan="{{ total }}" class="empty">No rows in this table.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager">
+        {% if page > 1 %}<a href="?table={{ current|urlencode }}&amp;page={{ page|add:-1 }}">← Prev</a>{% else %}<span class="btn" style="opacity:.4">← Prev</span>{% endif %}
+        <span>Page {{ page }} / {{ pages }}</span>
+        {% if page < pages %}<a href="?table={{ current|urlencode }}&amp;page={{ page|add:1 }}">Next →</a>{% else %}<span class="btn" style="opacity:.4">Next →</span>{% endif %}
+      </div>
+      {% else %}
+      <div class="empty">Select a table from the sidebar.</div>
+      {% endif %}
+    </div>
+
+    <div class="section">
+      <h2>SQL Console <span class="muted">read-only · SELECT only</span></h2>
+      <form method="post">
+        {% csrf_token %}
+        <textarea name="sql" placeholder="SELECT * FROM merchants_merchantprofile WHERE id = 1;">{{ sql }}</textarea>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <button type="submit">Run Query</button>
+          <span style="color:var(--muted);font-size:11px;">e.g. SELECT * FROM orders_order ORDER BY id DESC;</span>
+        </div>
+      </form>
+
+      {% if sql_error or sql_cols %}
+      <div class="grid" style="margin-top:12px;">
+        {% if sql_error %}<div class="err">{{ sql_error }}</div>{% endif %}
+        {% if sql_cols %}
+        <table>
+          <thead>
+            <tr>{% for c in sql_cols %}<th>{{ c }}</th>{% endfor %}</tr>
+          </thead>
+          <tbody>
+            {% for r in sql_rows %}
+            <tr>{% for v in r %}<td>{{ v|default_if_none:"NULL" }}</td>{% endfor %}</tr>
+            {% empty %}
+            <tr><td colspan="{{ sql_cols|length }}" class="empty">No rows returned.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -23,8 +23,12 @@ from datetime import timedelta
 from django.contrib.auth import update_session_auth_hash
 from django.utils import timezone
 from django.core.mail import send_mail
+from django.core import signing
 from django.conf import settings
 from django.db import transaction
+
+from google.oauth2 import id_token as google_id_token
+from google.auth.transport import requests as google_requests
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -37,7 +41,8 @@ from rest_framework_simplejwt.exceptions import TokenError
 
 from config.media_utils import UploadValidationError, validate_image_upload
 
-from .models import User, CustomerProfile, PasswordResetToken
+from .models import User, CustomerProfile, PasswordResetToken, OtpCode
+from .sms import send_sms, build_otp_message
 from .serializers import (
     RegisterSerializer,
     UserProfileSerializer,
@@ -46,7 +51,92 @@ from .serializers import (
     ForgotPasswordSerializer,
     ResetPasswordSerializer,
     CustomTokenObtainPairSerializer,
+    SendOtpSerializer,
+    VerifyOtpSerializer,
+    GoogleAuthSerializer,
+    OtpPurpose,
+    sign_phone_token,
 )
+
+
+# ── Shared helpers ────────────────────────────────────────────────────────────
+
+
+def _resolve_full_name(user: User, fallback: str = "") -> str:
+    full_name = ""
+    try:
+        full_name = user.customer_profile.full_name
+    except Exception:
+        pass
+    if not full_name:
+        full_name = f"{user.first_name} {user.last_name}".strip()
+    return full_name or fallback
+
+
+def _auth_payload(user: User, full_name: str = "") -> dict:
+    """Build the JWT response dict used by login/register/google."""
+    full_name = full_name or _resolve_full_name(user)
+    refresh = RefreshToken.for_user(user)
+    refresh["role"] = user.role
+    refresh["email"] = user.email
+    refresh["full_name"] = full_name
+    return {
+        "access": str(refresh.access_token),
+        "refresh": str(refresh),
+        "role": user.role,
+        "email": user.email,
+        "full_name": full_name,
+    }
+
+
+def _create_customer_profile(user: User, full_name: str) -> None:
+    CustomerProfile.objects.create(
+        user=user,
+        full_name=full_name,
+        loyalty_points=0,
+        tier="bronze",
+    )
+
+
+def _create_merchant_profile(user: User, store_name: str) -> None:
+    from merchants.models import MerchantProfile
+    import re
+
+    base_slug = re.sub(r"[^a-z0-9]+", "-", store_name.lower()).strip("-")
+    slug = base_slug
+    idx = 1
+    while MerchantProfile.objects.filter(slug=slug).exists():
+        slug = f"{base_slug}-{idx}"
+        idx += 1
+
+    MerchantProfile.objects.create(
+        user=user,
+        business_name=store_name,
+        slug=slug,
+        is_approved=os.getenv("AUTO_APPROVE_MERCHANTS", "false").lower() == "true",
+        onboarding_complete=False,
+        pos_enabled=False,
+        offline_pos_enabled=False,
+        credit_accounts_enabled=False,
+        debit_accounts_enabled=False,
+        discounts_enabled=False,
+        shift_management_enabled=False,
+        receipt_printing_enabled=False,
+        offline_discounts_allowed=False,
+        offline_credit_allowed=False,
+        max_worker_discount_percent=0,
+        manager_approval_threshold=0,
+    )
+
+
+def _unique_username(email: str) -> str:
+    base = email.split("@")[0]
+    username = base
+    counter = 1
+    while User.objects.filter(username=username).exists():
+        username = f"{base}{counter}"
+        counter += 1
+    return username
 
 
 # ── Login ─────────────────────────────────────────────────────────────────────
@@ -82,14 +172,9 @@ def register(request):
     data = serializer.validated_data
     email = data["email"]
     role = data["role"]
-
-    # Build username from email prefix (guaranteed unique per validate_email)
-    base_username = email.split("@")[0]
-    username = base_username
-    counter = 1
-    while User.objects.filter(username=username).exists():
-        username = f"{base_username}{counter}"
-        counter += 1
+    phone = data.get("phone", "")
+    phone_verified = data.get("phone_verified", False)
+    username = _unique_username(email)
 
     # Split full_name into first / last
     name_parts = data["full_name"].strip().split(" ", 1)
@@ -103,71 +188,19 @@ def register(request):
         first_name=first_name,
         last_name=last_name,
         role=role,
+        phone=phone,
+        phone_verified=phone_verified,
     )
 
     # Create associated profile(s)
     if role == "customer":
-        CustomerProfile.objects.create(
-            user=user,
-            full_name=data["full_name"],
-            loyalty_points=0,
-            tier="bronze",
-        )
+        _create_customer_profile(user, data["full_name"])
 
     elif role == "merchant":
-        from merchants.models import MerchantProfile
-        import re
-
-        store_name = data["store_name"].strip()
-        base_slug = re.sub(r"[^a-z0-9]+", "-", store_name.lower()).strip("-")
-        slug = base_slug
-        idx = 1
-        while MerchantProfile.objects.filter(slug=slug).exists():
-            slug = f"{base_slug}-{idx}"
-            idx += 1
-
-        MerchantProfile.objects.create(
-            user=user,
-            business_name=store_name,
-            slug=slug,
-            # Merchants are NOT auto-approved. For the controlled pilot each
-            # café must be approved by an admin before it is publicly visible.
-            # Set AUTO_APPROVE_MERCHANTS=true only in non-production testing.
-            is_approved=os.getenv("AUTO_APPROVE_MERCHANTS", "false").lower() == "true",
-            onboarding_complete=False,
-            # POS feature flags (default False)
-            pos_enabled=False,
-            offline_pos_enabled=False,
-            credit_accounts_enabled=False,
-            debit_accounts_enabled=False,
-            discounts_enabled=False,
-            shift_management_enabled=False,
-            receipt_printing_enabled=False,
-            offline_discounts_allowed=False,
-            offline_credit_allowed=False,
-            max_worker_discount_percent=0,
-            manager_approval_threshold=0,
-        )
+        _create_merchant_profile(user, data["store_name"].strip())
 
     # Issue tokens immediately so the user is logged in after registering
-    refresh = RefreshToken.for_user(user)
-    # Embed custom claims
-    refresh["role"] = user.role
-    refresh["email"] = user.email
-
-    full_name = data["full_name"]
-    refresh["full_name"] = full_name
-
-    return Response(
-        {
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
-            "role": user.role,
-            "email": user.email,
-            "full_name": full_name,
-        },
-        status=status.HTTP_201_CREATED,
-    )
+    return Response(_auth_payload(user, data["full_name"]), status=status.HTTP_201_CREATED)
 
 
 register.throttle_scope = "login"
@@ -352,6 +385,249 @@ def reset_password(request):
 
 
 reset_password.throttle_scope = "otp"
+
+
+# ── OTP (mobile verification) ─────────────────────────────────────────────────
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
+def send_otp(request):
+    """
+    POST /api/auth/send-otp/
+    Body: { "phone": "+15551234567", "purpose": "signup" }
+    Sends a 6-digit code by SMS. In dev (SMS_BACKEND=console, DEBUG=True)
+    the code is logged and returned as `debug_code`.
+    """
+    serializer = SendOtpSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    phone = serializer.validated_data["phone"]
+    purpose = serializer.validated_data["purpose"]
+
+    # Invalidate outstanding unused codes for this phone+purpose.
+    OtpCode.objects.filter(identifier=phone, purpose=purpose, is_used=False).update(is_used=True)
+
+    otp = OtpCode.issue(phone, purpose, ttl_minutes=settings.OTP_TTL_MINUTES)
+    try:
+        result = send_sms(phone, build_otp_message(otp.plain_code))
+    except Exception as exc:
+        otp.is_used = True
+        otp.save(update_fields=["is_used"])
+        return Response(
+            {"error": f"Could not deliver the code: {exc}"},
+            status=status.HTTP_502_BAD_GATEWAY,
+        )
+
+    payload = {
+        "detail": "Verification code sent.",
+        "sent_via": result.get("channel"),
+        "expires_in_seconds": settings.OTP_TTL_MINUTES * 60,
+    }
+    # Dev-only: surface the code so local testing doesn't need a real SMS.
+    if settings.DEBUG and result.get("debug_code"):
+        payload["debug_code"] = result["debug_code"]
+    return Response(payload)
+
+
+send_otp.throttle_scope = "otp"
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
+def verify_otp(request):
+    """
+    POST /api/auth/verify-otp/
+    Body: { "phone": "+15551234567", "code": "123456", "purpose": "signup" }
+    On success returns { verified, phone_token } where phone_token is a
+    short-lived signed proof of phone ownership (used at register / google).
+    """
+    serializer = VerifyOtpSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    phone = serializer.validated_data["phone"]
+    code = serializer.validated_data["code"]
+    purpose = serializer.validated_data["purpose"]
+
+    otp_obj = (
+        OtpCode.objects.filter(
+            identifier=phone,
+            purpose=purpose,
+            is_used=False,
+            expires_at__gte=timezone.now(),
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if otp_obj is None:
+        return Response(
+            {"error": "No active code found. Please request a new one."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if otp_obj.attempts >= 5:
+        return Response(
+            {"error": "Too many attempts. Please request a new code."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if not otp_obj.verify(code):
+        otp_obj.attempts += 1
+        otp_obj.save(update_fields=["attempts"])
+        return Response({"error": "Incorrect code."}, status=status.HTTP_400_BAD_REQUEST)
+
+    otp_obj.is_used = True
+    otp_obj.save(update_fields=["is_used"])
+
+    phone_token = sign_phone_token(phone, purpose=purpose)
+    return Response({"verified": True, "phone_token": phone_token, "phone": phone})
+
+
+verify_otp.throttle_scope = "otp"
+
+
+# ── Google OAuth ("Continue with Google") ────────────────────────────────────
+
+def _google_client_ids() -> list:
+    cids = settings.GOOGLE_OAUTH_CLIENT_IDS or []
+    if settings.GOOGLE_AUDIENCE:
+        cids.append(settings.GOOGLE_AUDIENCE)
+    return list(dict.fromkeys(cids))
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
+@transaction.atomic
+def google_auth(request):
+    """
+    POST /api/auth/google/
+    Body: {
+      "id_token": "<credential from Google Identity Services>",
+      "role": "customer" | "merchant",
+      "phone": "+15551234567",       // optional — collected from the sign-up form
+      "phone_token": "...",           // optional — verified only if supplied
+      "store_name": "..."             // required iff role == merchant
+    }
+    Verifies the Google ID token, finds or creates the user (by google_sub or
+    email), links the Google account and issues JWTs.
+
+    Note: Google's basic profile scope does NOT include a phone number, so any
+    phone is collected from the sign-up form. OTP verification is optional for
+    now (SMS gated behind a future update).
+    """
+    serializer = GoogleAuthSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+    client_ids = _google_client_ids()
+    if not client_ids:
+        return Response(
+            {"error": "Google sign-in is not configured on the server."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    try:
+        info = google_id_token.verify_oauth2_token(
+            data["id_token"],
+            google_requests.Request(),
+            audience=client_ids if len(client_ids) > 1 else client_ids[0],
+        )
+    except Exception:
+        return Response(
+            {"error": "The Google token could not be verified."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if info.get("aud") not in client_ids:
+        return Response(
+            {"error": "The Google token audience is not recognised."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    email = (info.get("email") or "").lower().strip()
+    if not email:
+        return Response(
+            {"error": "No email address on this Google account."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not info.get("email_verified"):
+        return Response(
+            {"error": "The Google email address is not verified."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    sub = str(info["sub"])
+    role = data["role"]
+    google_name = (info.get("name") or "").strip()
+    google_picture = (info.get("picture") or "").strip()
+
+    try:
+        user = User.objects.get(google_sub=sub)
+    except User.DoesNotExist:
+        user = User.objects.filter(email=email).first()
+
+    if user is None:
+        # ── New account ─────────────────────────────────────────────────────
+        name_parts = google_name.split(" ", 1)
+        user = User.objects.create_user(
+            username=_unique_username(email),
+            email=email,
+            password=None,
+            role=role,
+            first_name=name_parts[0],
+            last_name=name_parts[1] if len(name_parts) > 1 else "",
+            google_sub=sub,
+            avatar_url=google_picture,
+            phone=data.get("phone", ""),
+            phone_verified=data.get("phone_verified", False),
+        )
+        user.set_unusable_password()
+        user.save(update_fields=["password"])
+
+        if role == "customer":
+            _create_customer_profile(user, google_name or email)
+        else:
+            _create_merchant_profile(user, data["store_name"].strip())
+
+    else:
+        # ── Existing account — link Google if not already linked ────────────
+        if role != user.role:
+            return Response(
+                {
+                    "error": (
+                        f"This email already belongs to a {user.role} account. "
+                        f"Please use the {user.role} sign-in page."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        changed = False
+        if not user.google_sub:
+            user.google_sub = sub
+            changed = True
+        if not user.avatar_url and google_picture:
+            user.avatar_url = google_picture
+            changed = True
+        if data.get("phone") and user.phone != data["phone"]:
+            user.phone = data["phone"]
+            user.phone_verified = data.get("phone_verified", False)
+            changed = True
+        if changed:
+            user.save()
+
+        if role == "customer" and not hasattr(user, "customer_profile"):
+            _create_customer_profile(user, google_name or _resolve_full_name(user))
+
+    return Response(_auth_payload(user, google_name or _resolve_full_name(user)))
+
+
+google_auth.throttle_scope = "login"
 
 
 # ── WebSocket auth token ──────────────────────────────────────────────────────

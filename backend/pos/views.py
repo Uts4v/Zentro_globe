@@ -4084,11 +4084,27 @@ def mark_notification_read(request, notification_id):
     try:
         n = Notification.objects.get(id=notification_id, merchant_id=merchant.id)
         n.is_read = True
-        n.save(update_fields=["is_read", "updated_at"])
+        n.save(update_fields=["is_read"])
         return Response({"message": "Marked as read"})
     except Notification.DoesNotExist:
         return Response({"error": "Notification not found."},
                         status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def mark_all_notifications_read(request):
+    """Mark all POS notifications for this merchant as read."""
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response({"error": "POS is not enabled."},
+                        status=status.HTTP_403_FORBIDDEN)
+
+    updated = Notification.objects.filter(
+        merchant_id=merchant.id,
+        is_read=False,
+    ).update(is_read=True)
+    return Response({"message": "Notifications cleared.", "updated": updated})
 
 
 # ══════════════════════════════════════════════════════════════════════════════

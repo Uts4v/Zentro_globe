@@ -7,6 +7,7 @@ import CartPanel from "./CartPanel";
 import PaymentSheet from "./PaymentSheet";
 import DiscountModal from "./DiscountModal";
 import IncomingOrdersPanel from "./IncomingOrdersPanel";
+import WaiterCallPanel from "./WaiterCallPanel";
 import { Loader2, AlertTriangle } from "lucide-react";
 
 export default function PosOrderScreen() {
@@ -52,9 +53,7 @@ export default function PosOrderScreen() {
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-ink" />
-          <p className="mt-3 text-sm text-muted-foreground">
-            Initializing POS...
-          </p>
+          <p className="mt-3 text-sm text-muted-foreground">Initializing POS...</p>
         </div>
       </div>
     );
@@ -65,9 +64,7 @@ export default function PosOrderScreen() {
       <div className="flex h-full items-center justify-center px-6">
         <div className="text-center">
           <AlertTriangle className="mx-auto h-10 w-10 text-amber-500" />
-          <h2 className="mt-3 text-lg font-bold text-foreground">
-            POS Error
-          </h2>
+          <h2 className="mt-3 text-lg font-bold text-foreground">POS Error</h2>
           <p className="mt-2 text-sm text-muted-foreground">{error}</p>
           <button
             onClick={() => window.location.reload()}
@@ -85,6 +82,7 @@ export default function PosOrderScreen() {
       {/* Center: menu workspace */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="shrink-0 px-5 pt-4">
+          <WaiterCallPanel />
           <IncomingOrdersPanel />
         </div>
         <div className="min-h-0 flex-1">

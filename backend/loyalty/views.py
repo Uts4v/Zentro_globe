@@ -9,7 +9,7 @@ import uuid
 from datetime import timedelta
 
 from django.db import transaction
-from django.db.models import Q, Count, OuterRef, Subquery
+from django.db.models import Q, Count, Sum, OuterRef, Subquery
 from django.utils import timezone
 
 from rest_framework import status
@@ -1563,9 +1563,24 @@ def merchant_customer_list(request):
         )
     }
 
+    order_stats_by_customer = {
+        row["customer_id"]: row
+        for row in (
+            Order.objects
+            .filter(
+                merchant=merchant,
+                customer_id__in=[m.customer_id for m in memberships],
+            )
+            .exclude(status=Order.STATUS_CANCELLED)
+            .values("customer_id")
+            .annotate(order_count=Count("id"), total_spent=Sum("total_amount"))
+        )
+    }
+
     result = []
     for m in memberships:
         wallet = wallets_by_customer.get(m.customer_id)
+        stats = order_stats_by_customer.get(m.customer_id, {})
         result.append({
             "membership_id": m.id,
             "membership_number": m.membership_number,
@@ -1575,6 +1590,8 @@ def merchant_customer_list(request):
             "points_balance": wallet.points_balance if wallet else 0,
             "lifetime_points": wallet.lifetime_points if wallet else 0,
             "tier": wallet.tier_level if wallet else "bronze",
+            "order_count": int(stats.get("order_count") or 0),
+            "total_spent": float(stats.get("total_spent") or 0),
             "joined_at": m.joined_at,
             "status": m.status,
             "last_active_at": m.last_active_at,

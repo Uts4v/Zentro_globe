@@ -1,10 +1,9 @@
 // src/features/loyalty-engine/pages/MerchantCustomersPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import { Users, Phone, Mail, Star, Search, Loader2 } from "lucide-react";
-import {
-  merchantCustomersApi,
-  type MerchantCustomer,
-} from "@/lib/api";
+import { merchantCustomersApi, type MerchantCustomer } from "@/lib/api";
+import { formatCurrency } from "@/lib/currency";
+import { useAuth } from "@/lib/auth";
 
 const TIER_STYLES: Record<string, string> = {
   bronze: "bg-orange-100 text-orange-700",
@@ -29,6 +28,8 @@ export function MerchantCustomersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const { merchantProfile } = useAuth();
+  const currencySymbol = merchantProfile?.currency_symbol || "Rs";
 
   useEffect(() => {
     merchantCustomersApi
@@ -53,7 +54,8 @@ export function MerchantCustomersPage() {
   const totals = useMemo(() => {
     const active = customers.filter((c) => c.status === "active").length;
     const points = customers.reduce((sum, c) => sum + (c.points_balance || 0), 0);
-    return { total: customers.length, active, points };
+    const spend = customers.reduce((sum, c) => sum + (c.total_spent || 0), 0);
+    return { total: customers.length, active, points, spend };
   }, [customers]);
 
   return (
@@ -72,7 +74,7 @@ export function MerchantCustomersPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="mb-6 grid grid-cols-3 gap-4">
+      <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-4">
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
             Total Customers
@@ -91,6 +93,14 @@ export function MerchantCustomersPage() {
           </p>
           <p className="mt-1 text-2xl font-bold text-foreground">
             {totals.points.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            Total Spend
+          </p>
+          <p className="mt-1 text-2xl font-bold text-foreground">
+            {formatCurrency(totals.spend, currencySymbol, 0)}
           </p>
         </div>
       </div>
@@ -124,10 +134,12 @@ export function MerchantCustomersPage() {
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
           <div className="hidden grid-cols-12 gap-2 border-b border-border bg-muted/40 px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground md:grid">
-            <span className="col-span-4">Customer</span>
-            <span className="col-span-3">Membership</span>
+            <span className="col-span-3">Customer</span>
+            <span className="col-span-2">Membership</span>
             <span className="col-span-2">Points</span>
-            <span className="col-span-2">Joined</span>
+            <span className="col-span-1">Orders</span>
+            <span className="col-span-2">Spent</span>
+            <span className="col-span-1">Joined</span>
             <span className="col-span-1">Status</span>
           </div>
           <ul className="divide-y divide-border">
@@ -136,7 +148,7 @@ export function MerchantCustomersPage() {
                 key={c.membership_id}
                 className="grid grid-cols-1 gap-2 px-5 py-4 md:grid-cols-12 md:items-center md:gap-2"
               >
-                <div className="col-span-4">
+                <div className="col-span-3">
                   <div className="flex items-center gap-2">
                     <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink/10 text-xs font-bold text-ink">
                       {(c.customer_name || "?").charAt(0).toUpperCase()}
@@ -160,7 +172,7 @@ export function MerchantCustomersPage() {
                     </div>
                   </div>
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-2">
                   <div className="flex items-center gap-2">
                     <span className="rounded bg-ink/10 px-2 py-0.5 font-mono text-[11px] font-bold text-ink">
                       {c.membership_number || "—"}
@@ -182,7 +194,13 @@ export function MerchantCustomersPage() {
                     {c.points_balance.toLocaleString()}
                   </span>
                 </div>
-                <div className="col-span-2 text-xs text-muted-foreground">
+                <div className="col-span-1 text-sm font-medium text-foreground">
+                  {(c.order_count ?? 0).toLocaleString()}
+                </div>
+                <div className="col-span-2 text-sm font-semibold text-foreground">
+                  {formatCurrency(c.total_spent ?? 0, currencySymbol, 0)}
+                </div>
+                <div className="col-span-1 text-xs text-muted-foreground">
                   {formatDate(c.joined_at)}
                 </div>
                 <div className="col-span-1">

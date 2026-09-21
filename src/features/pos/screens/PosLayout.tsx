@@ -24,6 +24,7 @@ import {
   Loader2,
   LayoutDashboard,
   HandCoins,
+  Menu,
 } from "lucide-react";
 import { posListWorkers, posAuthorizeDevice, posBootstrap, posDeviceBootstrap } from "../api";
 import { useState, useEffect } from "react";
@@ -36,16 +37,19 @@ function NavItem({
   icon: Icon,
   active,
   badge,
+  onClick,
 }: {
   to: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
   active?: boolean;
   badge?: number;
+  onClick?: () => void;
 }) {
   return (
     <Link
       to={to as any}
+      onClick={onClick}
       className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-colors ${
         active
           ? "bg-ember-soft font-semibold text-ember"
@@ -76,6 +80,7 @@ export default function PosLayout() {
   const setActiveShift = usePosStore((s) => s.setActiveShift);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showShiftClose, setShowShiftClose] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
   const workers = usePosStore((s) => s.workers);
@@ -355,7 +360,14 @@ export default function PosLayout() {
       {/* ── Main content ── */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile header */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-border bg-background px-4 py-3 lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-background px-3 py-2.5 sm:gap-3 sm:px-4 sm:py-3 lg:hidden">
+          <button
+            onClick={() => setMobileNavOpen(true)}
+            className="rounded-xl p-2 text-muted-foreground hover:bg-muted"
+            aria-label="Open POS navigation"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <Link
             to="/"
             className="inline-flex items-center text-foreground"
@@ -367,6 +379,7 @@ export default function PosLayout() {
             POS
           </span>
           <div className="ml-auto flex items-center gap-2">
+            <NotificationBell />
             <ThemeCycleButton />
             {isOnline ? (
               <Wifi className="h-4 w-4 text-green-500" />
@@ -376,7 +389,7 @@ export default function PosLayout() {
             {activeShift && (
               <button
                 onClick={() => setShowShiftClose(true)}
-                className="rounded-lg bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-700"
+                className="hidden rounded-lg bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-700 sm:block"
               >
                 CLOSE SHIFT
               </button>
@@ -384,7 +397,7 @@ export default function PosLayout() {
             {!activeShift && (
               <button
                 onClick={() => navigate({ to: "/pos" })}
-                className="rounded-lg bg-green-100 px-2 py-1 text-[10px] font-bold text-green-700"
+                className="hidden rounded-lg bg-green-100 px-2 py-1 text-[10px] font-bold text-green-700 sm:block"
               >
                 OPEN SHIFT
               </button>
@@ -397,8 +410,51 @@ export default function PosLayout() {
           </div>
         </header>
 
+        {mobileNavOpen && (
+          <div className="fixed inset-0 z-40 lg:hidden">
+            <button
+              onClick={() => setMobileNavOpen(false)}
+              className="absolute inset-0 bg-black/40"
+              aria-label="Close POS navigation"
+            />
+            <aside className="relative flex h-full w-[min(20rem,85vw)] flex-col bg-background shadow-2xl">
+              <div className="flex items-center justify-between border-b border-border px-4 py-4">
+                <div className="flex items-center gap-2">
+                  <ZentroLogo className="h-6 w-auto" title="" />
+                  <span className="rounded-md bg-ember-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-ember">
+                    POS
+                  </span>
+                </div>
+                <NotificationBell />
+              </div>
+              <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+                <NavItem to="/pos" label="Order" icon={ShoppingCart} badge={cartCount} active={isOrderPage} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/orders" label="Orders" icon={Clock} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/preparation" label="Preparation" icon={AlertTriangle} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/accounts" label="Accounts" icon={CreditCard} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/cash-movements" label="Cash In/Out" icon={HandCoins} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/reports" label="Reports" icon={BarChart3} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/conflicts" label="Conflicts" icon={AlertTriangle} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/schedule" label="Schedule" icon={Calendar} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/staff" label="Staff" icon={Users} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/merchant" label="Dashboard" icon={LayoutDashboard} onClick={() => setMobileNavOpen(false)} />
+                <NavItem to="/pos/settings" label="Settings" icon={Settings} onClick={() => setMobileNavOpen(false)} />
+              </nav>
+              <div className="border-t border-border p-3">
+                <button
+                  onClick={handleSignOut}
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Sign out</span>
+                </button>
+              </div>
+            </aside>
+          </div>
+        )}
+
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="min-h-0 flex-1 overflow-y-auto">
           {/* If on order page and no active shift, show shift open screen */}
           {isShiftRequiredPage && !activeShift ? (
             <div className="flex h-full items-center justify-center">

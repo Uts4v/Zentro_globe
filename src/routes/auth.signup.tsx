@@ -2,8 +2,9 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { Loader2, Mail, Lock, User } from "lucide-react";
+import { Loader2, Mail, Lock, User, Phone } from "lucide-react";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
 export const Route = createFileRoute("/auth/signup")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -18,11 +19,25 @@ function CustomerSignup() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const { signUp } = useAuth();
+  const { signUp, googleAuth } = useAuth();
   const navigate = useNavigate();
   const { redirect } = useSearch({ from: "/auth/signup" });
+
+  const handleGoogleToken = async (idToken: string) => {
+    setError(null);
+    const { error: err } = await googleAuth(idToken, {
+      role: "customer",
+      phone,
+    });
+    if (err) {
+      setError(err);
+      return;
+    }
+    navigate({ to: (redirect || "/") as any, replace: true });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +54,7 @@ function CustomerSignup() {
       const { error: err } = await signUp(email, password, name, {
         role: "customer",
         confirmPassword,
+        phone,
       });
       if (err) {
         setError(err);
@@ -88,6 +104,27 @@ function CustomerSignup() {
           value={email}
           onChange={setEmail}
         />
+
+        {/* Mobile number (OTP verification arrives in a future update) */}
+        <label className="block">
+          <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Mobile number <span className="lowercase normal-case">(incl. country code, e.g. +91)</span>
+          </span>
+          <div className="relative mt-1.5">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
+              <Phone className="h-4 w-4" />
+            </span>
+            <input
+              type="tel"
+              inputMode="tel"
+              placeholder="+91 98765 43210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              className="h-14 w-full rounded-2xl bg-mist pl-11 pr-4 text-sm text-ink outline-none transition-all placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-ember/40"
+            />
+          </div>
+        </label>
+
         <Field
           label="Password"
           placeholder="••••••••"
@@ -113,6 +150,19 @@ function CustomerSignup() {
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Create account"}
         </button>
       </form>
+
+      <div className="mt-5 flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <GoogleAuthButton
+        className="mt-5"
+        label="Sign up with Google"
+        onToken={handleGoogleToken}
+        onError={(msg) => setError(msg)}
+      />
 
       <p className="mt-auto pt-8 text-center text-xs text-muted-foreground">
         Already have an account?{" "}

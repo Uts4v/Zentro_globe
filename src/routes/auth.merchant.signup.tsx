@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Loader2, Mail, Lock, User, Store } from "lucide-react";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
 export const Route = createFileRoute("/auth/merchant/signup")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -21,9 +22,26 @@ function MerchantSignup() {
   const [storeName, setStoreName] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const { signUp } = useAuth();
+  const { signUp, googleAuth } = useAuth();
   const navigate = useNavigate();
   const { redirect } = useSearch({ from: "/auth/merchant/signup" });
+
+  const handleGoogleToken = async (idToken: string) => {
+    setError(null);
+    if (!storeName.trim()) {
+      setError("Enter your store name before signing up with Google.");
+      return;
+    }
+    const { error: err } = await googleAuth(idToken, {
+      role: "merchant",
+      store_name: storeName,
+    });
+    if (err) {
+      setError(err);
+      return;
+    }
+    navigate({ to: (redirect || "/merchant") as any, replace: true });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -131,6 +149,19 @@ function MerchantSignup() {
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Register business"}
         </button>
       </form>
+
+      <div className="mt-5 flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <GoogleAuthButton
+        className="mt-5"
+        label="Sign up with Google"
+        onToken={handleGoogleToken}
+        onError={(msg) => setError(msg)}
+      />
 
       <p className="mt-auto pt-8 text-center text-xs text-muted-foreground">
         Already have a business account?{" "}

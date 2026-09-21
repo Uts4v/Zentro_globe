@@ -1286,6 +1286,8 @@ export interface MerchantCustomer {
   points_balance: number;
   lifetime_points: number;
   tier: string;
+  order_count: number;
+  total_spent: number;
   joined_at: string;
   status: string;
   last_active_at: string | null;

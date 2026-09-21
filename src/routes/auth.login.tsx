@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Loader2, Mail, Lock } from "lucide-react";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
+import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
 
 export const Route = createFileRoute("/auth/login")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -18,9 +19,22 @@ function CustomerLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const { signIn } = useAuth();
+  const [googleBusy, setGoogleBusy] = useState(false);
+  const { signIn, googleAuth } = useAuth();
   const navigate = useNavigate();
   const { redirect } = useSearch({ from: "/auth/login" });
+
+  const handleGoogleToken = async (idToken: string) => {
+    setError(null);
+    setGoogleBusy(true);
+    const { error: err } = await googleAuth(idToken, { role: "customer" });
+    setGoogleBusy(false);
+    if (err) {
+      setError(err);
+      return;
+    }
+    navigate({ to: (redirect || "/") as any, replace: true });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,6 +101,24 @@ function CustomerLogin() {
           {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign in"}
         </button>
       </form>
+
+      <div className="mt-5 flex items-center gap-3 text-xs text-muted-foreground">
+        <span className="h-px flex-1 bg-border" />
+        or
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <GoogleAuthButton
+        className="mt-5"
+        label="Continue with Google"
+        onToken={handleGoogleToken}
+        onError={(msg) => setError(msg)}
+      />
+      {googleBusy && (
+        <p className="mt-3 text-center text-xs text-muted-foreground">
+          Signing you in with Google…
+        </p>
+      )}
 
       <Link
         to="/auth/forgot-password"

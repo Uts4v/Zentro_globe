@@ -1,13 +1,30 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
-import { posUpdateSettings, PosSettings } from "../api";
+import { posGetSettings, posUpdateSettings, PosSettings } from "../api";
 import { Settings, Save, Loader2 } from "lucide-react";
 
 export default function PosSettingsScreen() {
   const posSettings = usePosStore((s) => s.posSettings);
+  const setPosSettings = usePosStore((s) => s.setPosSettings);
   const [settings, setSettings] = useState<PosSettings | null>(posSettings);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    posGetSettings()
+      .then((fresh) => {
+        if (cancelled) return;
+        setSettings(fresh);
+        setPosSettings(fresh);
+      })
+      .catch(() => {
+        // keep the cached value
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [setPosSettings]);
 
   async function handleSave() {
     if (!settings) return;
@@ -16,6 +33,7 @@ export default function PosSettingsScreen() {
     try {
       const updated = await posUpdateSettings(settings);
       setSettings(updated);
+      setPosSettings(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch {
@@ -45,26 +63,21 @@ export default function PosSettingsScreen() {
         <section className="rounded-2xl border border-border bg-card p-5">
           <h2 className="mb-4 text-sm font-bold text-foreground">Features</h2>
           <div className="space-y-4">
-            {([
-              ["pos_enabled", "POS Enabled"],
-              ["offline_pos_enabled", "Offline Mode"],
-              ["credit_accounts_enabled", "Credit Accounts"],
-              ["debit_accounts_enabled", "Debit Accounts"],
-              ["discounts_enabled", "Discounts"],
-              ["shift_management_enabled", "Shift Management"],
-              ["receipt_printing_enabled", "Receipt Printing"],
-            ] as const).map(([key, label]) => (
-              <label
-                key={key}
-                className="flex items-center justify-between"
-              >
+            {(
+              [
+                ["pos_enabled", "POS Enabled"],
+                ["offline_pos_enabled", "Offline Mode"],
+                ["credit_accounts_enabled", "Credit Accounts"],
+                ["debit_accounts_enabled", "Debit Accounts"],
+                ["discounts_enabled", "Discounts"],
+                ["shift_management_enabled", "Shift Management"],
+                ["receipt_printing_enabled", "Receipt Printing"],
+              ] as const
+            ).map(([key, label]) => (
+              <label key={key} className="flex items-center justify-between">
                 <span className="text-sm text-foreground">{label}</span>
                 <button
-                  onClick={() =>
-                    setSettings((s) =>
-                      s ? { ...s, [key]: !s[key] } : s
-                    )
-                  }
+                  onClick={() => setSettings((s) => (s ? { ...s, [key]: !s[key] } : s))}
                   className={`relative h-6 w-11 rounded-full transition-colors ${
                     settings[key] ? "bg-ink" : "bg-gray-200"
                   }`}
@@ -82,9 +95,7 @@ export default function PosSettingsScreen() {
 
         {/* Discount Limits */}
         <section className="rounded-2xl border border-border bg-card p-5">
-          <h2 className="mb-4 text-sm font-bold text-foreground">
-            Discount Limits
-          </h2>
+          <h2 className="mb-4 text-sm font-bold text-foreground">Discount Limits</h2>
           <div className="space-y-4">
             <div>
               <label className="mb-1 block text-xs text-muted-foreground">
@@ -100,7 +111,7 @@ export default function PosSettingsScreen() {
                           ...s,
                           max_worker_discount_percent: e.target.value,
                         }
-                      : s
+                      : s,
                   )
                 }
                 className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
@@ -120,16 +131,14 @@ export default function PosSettingsScreen() {
                           ...s,
                           manager_approval_threshold: e.target.value,
                         }
-                      : s
+                      : s,
                   )
                 }
                 className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
               />
             </div>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-foreground">
-                Offline Discounts Allowed
-              </span>
+              <span className="text-sm text-foreground">Offline Discounts Allowed</span>
               <button
                 onClick={() =>
                   setSettings((s) =>
@@ -138,7 +147,7 @@ export default function PosSettingsScreen() {
                           ...s,
                           offline_discounts_allowed: !s.offline_discounts_allowed,
                         }
-                      : s
+                      : s,
                   )
                 }
                 className={`relative h-6 w-11 rounded-full transition-colors ${
@@ -147,17 +156,13 @@ export default function PosSettingsScreen() {
               >
                 <span
                   className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    settings.offline_discounts_allowed
-                      ? "translate-x-5"
-                      : "translate-x-0.5"
+                    settings.offline_discounts_allowed ? "translate-x-5" : "translate-x-0.5"
                   }`}
                 />
               </button>
             </label>
             <label className="flex items-center justify-between">
-              <span className="text-sm text-foreground">
-                Offline Credit Allowed
-              </span>
+              <span className="text-sm text-foreground">Offline Credit Allowed</span>
               <button
                 onClick={() =>
                   setSettings((s) =>
@@ -166,7 +171,7 @@ export default function PosSettingsScreen() {
                           ...s,
                           offline_credit_allowed: !s.offline_credit_allowed,
                         }
-                      : s
+                      : s,
                   )
                 }
                 className={`relative h-6 w-11 rounded-full transition-colors ${
@@ -175,9 +180,7 @@ export default function PosSettingsScreen() {
               >
                 <span
                   className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    settings.offline_credit_allowed
-                      ? "translate-x-5"
-                      : "translate-x-0.5"
+                    settings.offline_credit_allowed ? "translate-x-5" : "translate-x-0.5"
                   }`}
                 />
               </button>
@@ -191,11 +194,7 @@ export default function PosSettingsScreen() {
           disabled={saving}
           className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
         >
-          {saving ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="h-4 w-4" />
-          )}
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {saved ? "Saved!" : "Save Settings"}
         </button>
       </div>
