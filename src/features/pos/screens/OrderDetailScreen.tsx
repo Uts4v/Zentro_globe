@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
-import { posListOrders, posReceiptData, posUpdateOrderStatus, posAddItemsToOrder, PosOrder, PosReceiptData } from "../api";
+import {
+  posListOrders,
+  posReceiptData,
+  posUpdateOrderStatus,
+  posAddItemsToOrder,
+  PosOrder,
+  PosReceiptData,
+} from "../api";
 import { menuApi, type MenuItem } from "@/lib/api";
 import { formatCurrency } from "@/lib/currency";
 import Receipt from "../printing/Receipt";
+import { printKOT, kotTicketFromReceipt } from "../printing/KOTTicket";
 import RefundModal from "./RefundModal";
 import CollectPaymentSheet from "./CollectPaymentSheet";
 import {
@@ -25,6 +33,7 @@ import {
   Plus,
   Minus,
   X,
+  Ticket,
 } from "lucide-react";
 import CustomerSearchModal from "./CustomerSearchModal";
 
@@ -94,6 +103,18 @@ export default function OrderDetailScreen({
     }
   }
 
+  async function handlePrintKOT(order: PosOrder) {
+    setLoadingReceipt(true);
+    try {
+      const data = await posReceiptData(String(order.uuid));
+      printKOT(kotTicketFromReceipt(data));
+    } catch {
+      // ignore
+    } finally {
+      setLoadingReceipt(false);
+    }
+  }
+
   async function handleStatusChange(order: PosOrder, newStatus: string) {
     setStatusLoading(true);
     try {
@@ -101,10 +122,10 @@ export default function OrderDetailScreen({
         String(order.uuid),
         newStatus,
         currentWorker?.id,
-        device?.id
+        device?.id,
       );
-      setOrders((prev) => prev.map((o) => o.uuid === order.uuid ? { ...o, ...updatedOrder } : o));
-      setSelectedOrder((prev) => prev?.uuid === order.uuid ? { ...prev, ...updatedOrder } : prev);
+      setOrders((prev) => prev.map((o) => (o.uuid === order.uuid ? { ...o, ...updatedOrder } : o)));
+      setSelectedOrder((prev) => (prev?.uuid === order.uuid ? { ...prev, ...updatedOrder } : prev));
     } catch (err: any) {
       // Backend saves status before audit log, so a 500 from audit
       // means the status WAS updated. Always refresh to get truth.
@@ -119,19 +140,57 @@ export default function OrderDetailScreen({
     }
   }
 
-  function getNextActions(status: string): Array<{ label: string; next: string; color: string; icon: React.ComponentType<{ className?: string }> }> {
+  function getNextActions(
+    status: string,
+  ): Array<{
+    label: string;
+    next: string;
+    color: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }> {
     switch (status) {
       case "pending":
-        return [{ label: "Confirm Order", next: "confirmed", color: "bg-blue-600 text-white hover:bg-blue-700", icon: Check }];
+        return [
+          {
+            label: "Confirm Order",
+            next: "confirmed",
+            color: "bg-blue-600 text-white hover:bg-blue-700",
+            icon: Check,
+          },
+        ];
       case "confirmed":
         return [
-          { label: "Start Preparing", next: "preparing", color: "bg-orange-500 text-white hover:bg-orange-600", icon: Play },
-          { label: "Ready", next: "ready", color: "bg-green-600 text-white hover:bg-green-700", icon: PackageCheck },
+          {
+            label: "Start Preparing",
+            next: "preparing",
+            color: "bg-orange-500 text-white hover:bg-orange-600",
+            icon: Play,
+          },
+          {
+            label: "Ready",
+            next: "ready",
+            color: "bg-green-600 text-white hover:bg-green-700",
+            icon: PackageCheck,
+          },
         ];
       case "preparing":
-        return [{ label: "Mark Ready", next: "ready", color: "bg-green-600 text-white hover:bg-green-700", icon: PackageCheck }];
+        return [
+          {
+            label: "Mark Ready",
+            next: "ready",
+            color: "bg-green-600 text-white hover:bg-green-700",
+            icon: PackageCheck,
+          },
+        ];
       case "ready":
-        return [{ label: "Complete Order", next: "completed", color: "bg-green-700 text-white hover:bg-green-800", icon: CheckCircle2 }];
+        return [
+          {
+            label: "Complete Order",
+            next: "completed",
+            color: "bg-green-700 text-white hover:bg-green-800",
+            icon: CheckCircle2,
+          },
+        ];
       default:
         return [];
     }
@@ -172,9 +231,15 @@ export default function OrderDetailScreen({
           {/* Header */}
           <div className="mb-4 flex items-start justify-between">
             <div>
-              <h2 className="text-xl font-bold text-foreground">
-                Order #{order.id}
-              </h2>
+              <div className="flex items-center gap-2">
+                <h2 className="text-xl font-bold text-foreground">Order #{order.id}</h2>
+                {order.kot_number && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2.5 py-0.5 text-[11px] font-extrabold text-ember">
+                    <Ticket className="h-3 w-3" />
+                    KOT #{String(order.kot_number).padStart(3, "0")}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground">
                 {new Date(order.created_at).toLocaleString("en-MY")}
               </p>
@@ -216,27 +281,18 @@ export default function OrderDetailScreen({
             </div>
             <div className="rounded-xl bg-muted/50 p-3">
               <p className="text-[10px] uppercase text-muted-foreground">Method</p>
-              <p className="font-medium capitalize">
-                {order.payment_method || "-"}
-              </p>
+              <p className="font-medium capitalize">{order.payment_method || "-"}</p>
             </div>
           </div>
 
           {/* Items */}
           <div className="mb-4">
-            <h3 className="mb-2 text-xs font-bold uppercase text-muted-foreground">
-              Items
-            </h3>
+            <h3 className="mb-2 text-xs font-bold uppercase text-muted-foreground">Items</h3>
             <div className="divide-y divide-border rounded-xl border border-border">
               {order.items.map((item) => (
-                <div
-                  key={item.id}
-                  className="flex items-center justify-between px-4 py-3"
-                >
+                <div key={item.id} className="flex items-center justify-between px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium text-foreground">
-                      {item.name}
-                    </p>
+                    <p className="text-sm font-medium text-foreground">{item.name}</p>
                     <p className="text-xs text-muted-foreground">
                       {item.quantity} x {formatCurrency(Number(item.price), currencySymbol)}
                     </p>
@@ -322,6 +378,20 @@ export default function OrderDetailScreen({
             )}
 
             <div className="flex gap-3">
+              {order.kot_number && (
+                <button
+                  onClick={() => handlePrintKOT(order)}
+                  disabled={loadingReceipt}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-ink/20 py-2.5 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
+                >
+                  {loadingReceipt ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Ticket className="h-4 w-4" />
+                  )}
+                  Print KOT
+                </button>
+              )}
               <button
                 onClick={() => handleViewReceipt(order)}
                 disabled={loadingReceipt}
@@ -352,7 +422,10 @@ export default function OrderDetailScreen({
           <RefundModal
             order={order}
             onClose={() => setShowRefund(false)}
-            onRefunded={() => { setShowRefund(false); loadOrders(); }}
+            onRefunded={() => {
+              setShowRefund(false);
+              loadOrders();
+            }}
           />
         )}
 
@@ -361,7 +434,10 @@ export default function OrderDetailScreen({
           <CollectPaymentSheet
             order={order}
             onClose={() => setShowCollectPayment(false)}
-            onPaid={() => { setShowCollectPayment(false); loadOrders(); }}
+            onPaid={() => {
+              setShowCollectPayment(false);
+              loadOrders();
+            }}
           />
         )}
 
@@ -387,7 +463,9 @@ export default function OrderDetailScreen({
                 setOrders(fresh);
                 const updated = fresh.find((o) => o.id === selectedOrder.id);
                 if (updated) setSelectedOrder(updated);
-              } catch { /* ignore */ } finally {
+              } catch {
+                /* ignore */
+              } finally {
                 setLoading(false);
               }
             }}
@@ -434,10 +512,7 @@ export default function OrderDetailScreen({
             .filter((o) => {
               if (!search) return true;
               const q = search.toLowerCase();
-              return (
-                String(o.id).includes(q) ||
-                (o.customer_name ?? "").toLowerCase().includes(q)
-              );
+              return String(o.id).includes(q) || (o.customer_name ?? "").toLowerCase().includes(q);
             })
             .map((order) => (
               <button
@@ -448,9 +523,13 @@ export default function OrderDetailScreen({
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-foreground">
-                        #{order.id}
-                      </span>
+                      <span className="text-sm font-bold text-foreground">#{order.id}</span>
+                      {order.kot_number && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-[10px] font-bold text-ember">
+                          <Ticket className="h-2.5 w-2.5" />
+                          KOT {String(order.kot_number).padStart(3, "0")}
+                        </span>
+                      )}
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600"
@@ -465,7 +544,8 @@ export default function OrderDetailScreen({
                       )}
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {order.customer_name || "Walk-in"} · {order.items.length} item(s) — {formatCurrency(Number(order.total_amount), currencySymbol)}
+                      {order.customer_name || "Walk-in"} · {order.items.length} item(s) —{" "}
+                      {formatCurrency(Number(order.total_amount), currencySymbol)}
                     </p>
                   </div>
                   <span className="text-xs text-muted-foreground">
@@ -519,7 +599,7 @@ function AddItemsModal({
   function addToCart(item: MenuItem) {
     setCart((prev) => {
       const existing = prev.find((c) => c.item.id === item.id);
-      if (existing) return prev.map((c) => c.item.id === item.id ? { ...c, qty: c.qty + 1 } : c);
+      if (existing) return prev.map((c) => (c.item.id === item.id ? { ...c, qty: c.qty + 1 } : c));
       return [...prev, { item, qty: 1 }];
     });
   }
@@ -529,7 +609,7 @@ function AddItemsModal({
       const existing = prev.find((c) => c.item.id === itemId);
       if (!existing) return prev;
       if (existing.qty === 1) return prev.filter((c) => c.item.id !== itemId);
-      return prev.map((c) => c.item.id === itemId ? { ...c, qty: c.qty - 1 } : c);
+      return prev.map((c) => (c.item.id === itemId ? { ...c, qty: c.qty - 1 } : c));
     });
   }
 
@@ -540,10 +620,13 @@ function AddItemsModal({
     setSubmitting(true);
     setError("");
     try {
-      await posAddItemsToOrder(order.id, cart.map((c) => ({
-        menu_item_id: Number(c.item.id),
-        quantity: c.qty,
-      })));
+      await posAddItemsToOrder(
+        order.id,
+        cart.map((c) => ({
+          menu_item_id: Number(c.item.id),
+          quantity: c.qty,
+        })),
+      );
       onAdded();
     } catch (e: any) {
       setError(e.message || "Failed to add items");
@@ -556,15 +639,23 @@ function AddItemsModal({
     : menu;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-card shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
             <h3 className="text-sm font-bold text-foreground">Add items to #{order.id}</h3>
-            <p className="text-[11px] text-muted-foreground">Current total: {formatCurrency(Number(order.total_amount), currencySymbol)}</p>
+            <p className="text-[11px] text-muted-foreground">
+              Current total: {formatCurrency(Number(order.total_amount), currencySymbol)}
+            </p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
+          <button
+            onClick={onClose}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -598,24 +689,38 @@ function AddItemsModal({
               {filtered.map((item) => {
                 const inCart = cart.find((c) => c.item.id === item.id);
                 return (
-                  <div key={item.id} className="flex items-center gap-3 rounded-xl border border-border px-3 py-2">
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 rounded-xl border border-border px-3 py-2"
+                  >
                     <span className="text-lg">{item.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-foreground truncate">{item.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{formatCurrency(Number(item.price), currencySymbol)}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {formatCurrency(Number(item.price), currencySymbol)}
+                      </p>
                     </div>
                     {inCart ? (
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => removeFromCart(item.id)} className="grid h-6 w-6 place-items-center rounded-md bg-muted text-foreground">
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="grid h-6 w-6 place-items-center rounded-md bg-muted text-foreground"
+                        >
                           <Minus className="h-3 w-3" />
                         </button>
                         <span className="w-5 text-center text-xs font-bold">{inCart.qty}</span>
-                        <button onClick={() => addToCart(item)} className="grid h-6 w-6 place-items-center rounded-md bg-ink text-white">
+                        <button
+                          onClick={() => addToCart(item)}
+                          className="grid h-6 w-6 place-items-center rounded-md bg-ink text-white"
+                        >
                           <Plus className="h-3 w-3" />
                         </button>
                       </div>
                     ) : (
-                      <button onClick={() => addToCart(item)} className="rounded-lg bg-ink/10 px-3 py-1 text-[10px] font-bold text-ink hover:bg-ink/20">
+                      <button
+                        onClick={() => addToCart(item)}
+                        className="rounded-lg bg-ink/10 px-3 py-1 text-[10px] font-bold text-ink hover:bg-ink/20"
+                      >
                         Add
                       </button>
                     )}
@@ -632,8 +737,12 @@ function AddItemsModal({
             <div className="mb-2 space-y-1 text-xs">
               {cart.map((c) => (
                 <div key={c.item.id} className="flex justify-between">
-                  <span className="text-muted-foreground">{c.qty}× {c.item.name}</span>
-                  <span className="font-medium">{formatCurrency(Number(c.item.price) * c.qty, currencySymbol)}</span>
+                  <span className="text-muted-foreground">
+                    {c.qty}× {c.item.name}
+                  </span>
+                  <span className="font-medium">
+                    {formatCurrency(Number(c.item.price) * c.qty, currencySymbol)}
+                  </span>
                 </div>
               ))}
               <div className="flex justify-between border-t border-border pt-1 font-bold text-foreground">
@@ -645,9 +754,7 @@ function AddItemsModal({
                 <span>{formatCurrency(Number(order.total_amount) + total, currencySymbol)}</span>
               </div>
             </div>
-            {error && (
-              <p className="mb-2 text-xs text-red-500">{error}</p>
-            )}
+            {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
             <button
               onClick={handleSubmit}
               disabled={submitting}

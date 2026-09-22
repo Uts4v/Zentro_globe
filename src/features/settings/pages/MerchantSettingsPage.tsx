@@ -55,7 +55,7 @@ export function MerchantSettingsPage() {
             ...p,
             tax_components: [...(p.tax_components || []), { name: "", rate: 0 }],
           }
-        : p
+        : p,
     );
   }
 
@@ -66,7 +66,7 @@ export function MerchantSettingsPage() {
             ...p,
             tax_components: (p.tax_components || []).filter((_, i) => i !== index),
           }
-        : p
+        : p,
     );
   }
 
@@ -81,10 +81,10 @@ export function MerchantSettingsPage() {
                     ...c,
                     [field]: field === "rate" ? Number.parseFloat(value) || 0 : value,
                   }
-                : c
+                : c,
             ),
           }
-        : p
+        : p,
     );
   }
 
@@ -102,7 +102,7 @@ export function MerchantSettingsPage() {
             currency_code: currency.code,
             currency_symbol: currency.symbol,
           }
-        : p
+        : p,
     );
   }
 
@@ -207,8 +207,8 @@ export function MerchantSettingsPage() {
             }`}
           >
             <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                profile.tax_enabled ? "translate-x-5" : "translate-x-0.5"
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
+                profile.tax_enabled ? "left-[22px]" : "left-0.5"
               }`}
             />
           </button>
@@ -236,11 +236,7 @@ export function MerchantSettingsPage() {
                 ].map((preset) => (
                   <button
                     key={preset.key}
-                    onClick={() =>
-                      applyPreset(
-                        TAX_PRESETS[preset.key] || []
-                      )
-                    }
+                    onClick={() => applyPreset(TAX_PRESETS[preset.key] || [])}
                     className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted/60 transition-colors"
                   >
                     <Zap className="h-3 w-3" />
@@ -348,8 +344,8 @@ export function MerchantSettingsPage() {
       </button>
 
       <p className="text-center text-[11px] text-muted-foreground pb-8">
-        These settings are the single source of truth for your entire system. POS, orders,
-        invoices, reports, and analytics will use these configurations.
+        These settings are the single source of truth for your entire system. POS, orders, invoices,
+        reports, and analytics will use these configurations.
       </p>
     </div>
   );

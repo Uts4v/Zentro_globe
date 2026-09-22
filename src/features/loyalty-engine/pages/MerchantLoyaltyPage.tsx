@@ -2,40 +2,51 @@
 import { Plus, Pencil, Trash2, X, Check, AlertCircle, Loader2, Gift } from "lucide-react";
 import { useState, useEffect } from "react";
 import {
-  loyaltyApi, missionApi, menuApi, punchCardApi, transactionApi,
-  type Reward, type Mission, type MerchantPunchCard, type PointTransaction, type MenuItem,
+  loyaltyApi,
+  missionApi,
+  menuApi,
+  punchCardApi,
+  transactionApi,
+  type Reward,
+  type Mission,
+  type MerchantPunchCard,
+  type PointTransaction,
+  type MenuItem,
 } from "@/lib/api";
 import { ErrorBanner, EmptyState, Toggle, IconBtn, Chip } from "@/components/LoyaltyShared";
 import { MissionModal } from "@/features/missions/components/MissionModal";
 import { RewardModal } from "@/features/rewards/components/RewardModal";
 import { PunchCardModal } from "@/features/punch-cards/components/PunchCardModal";
+import { PunchCardHistorySection } from "@/features/punch-cards/components/PunchCardHistorySection";
 
 export function MerchantLoyaltyPage() {
-  const [tab, setTab] = useState<"missions" | "rewards" | "punch_cards" | "transactions">("missions");
+  const [tab, setTab] = useState<"missions" | "rewards" | "punch_cards" | "transactions">(
+    "missions",
+  );
 
   // ── Missions ───────────────────────────────────────────────────────────────
-  const [missions, setMissions]           = useState<Mission[]>([]);
+  const [missions, setMissions] = useState<Mission[]>([]);
   const [missionsLoading, setMissionsLoading] = useState(true);
   const [missionsError, setMissionsError] = useState("");
-  const [missionModal, setMissionModal]   = useState<"new" | Mission | null>(null);
+  const [missionModal, setMissionModal] = useState<"new" | Mission | null>(null);
   const [missionSaving, setMissionSaving] = useState(false);
 
   // ── Rewards ────────────────────────────────────────────────────────────────
-  const [rewards, setRewards]             = useState<Reward[]>([]);
+  const [rewards, setRewards] = useState<Reward[]>([]);
   const [rewardsLoading, setRewardsLoading] = useState(true);
-  const [rewardsError, setRewardsError]   = useState("");
-  const [rewardModal, setRewardModal]     = useState<"new" | Reward | null>(null);
-  const [rewardSaving, setRewardSaving]   = useState(false);
+  const [rewardsError, setRewardsError] = useState("");
+  const [rewardModal, setRewardModal] = useState<"new" | Reward | null>(null);
+  const [rewardSaving, setRewardSaving] = useState(false);
 
   // ── Punch Cards ────────────────────────────────────────────────────────────
-  const [punchCards, setPunchCards]         = useState<MerchantPunchCard[]>([]);
+  const [punchCards, setPunchCards] = useState<MerchantPunchCard[]>([]);
   const [punchCardsLoading, setPunchCardsLoading] = useState(true);
-  const [punchCardsError, setPunchCardsError]     = useState("");
+  const [punchCardsError, setPunchCardsError] = useState("");
   const [punchCardModal, setPunchCardModal] = useState<"new" | MerchantPunchCard | null>(null);
-  const [punchCardSaving, setPunchCardSaving]     = useState(false);
+  const [punchCardSaving, setPunchCardSaving] = useState(false);
 
   // ── Transactions ───────────────────────────────────────────────────────────
-  const [transactions, setTransactions]           = useState<PointTransaction[]>([]);
+  const [transactions, setTransactions] = useState<PointTransaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
   const [transactionsError, setTransactionsError] = useState("");
 
@@ -43,28 +54,32 @@ export function MerchantLoyaltyPage() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
 
   useEffect(() => {
-    missionApi.merchantMissions()
+    missionApi
+      .merchantMissions()
       .then(setMissions)
       .catch((e: any) => setMissionsError(e.message))
       .finally(() => setMissionsLoading(false));
   }, []);
 
   useEffect(() => {
-    loyaltyApi.getRewards()
+    loyaltyApi
+      .getRewards()
       .then(setRewards)
       .catch((e: any) => setRewardsError(e.message))
       .finally(() => setRewardsLoading(false));
   }, []);
 
   useEffect(() => {
-    punchCardApi.merchantList()
+    punchCardApi
+      .merchantList()
       .then(setPunchCards)
       .catch((e: any) => setPunchCardsError(e.message))
       .finally(() => setPunchCardsLoading(false));
   }, []);
 
   useEffect(() => {
-    menuApi.myItems()
+    menuApi
+      .myItems()
       .then(setMenuItems)
       .catch(() => {});
   }, []);
@@ -72,7 +87,8 @@ export function MerchantLoyaltyPage() {
   useEffect(() => {
     if (tab === "transactions") {
       setTransactionsLoading(true);
-      transactionApi.merchantList()
+      transactionApi
+        .merchantList()
         .then(setTransactions)
         .catch((e: any) => setTransactionsError(e.message))
         .finally(() => setTransactionsLoading(false));
@@ -80,13 +96,15 @@ export function MerchantLoyaltyPage() {
   }, [tab]);
 
   // ── Mission CRUD ───────────────────────────────────────────────────────────
-  async function saveMission(data: Omit<Mission, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">) {
+  async function saveMission(
+    data: Omit<Mission, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">,
+  ) {
     setMissionSaving(true);
     setMissionsError("");
     try {
       if (typeof missionModal === "object" && missionModal !== null) {
         const updated = await missionApi.update(missionModal.id, data);
-        setMissions((ms) => ms.map((m) => m.id === updated.id ? updated : m));
+        setMissions((ms) => ms.map((m) => (m.id === updated.id ? updated : m)));
       } else {
         const created = await missionApi.create(data);
         setMissions((ms) => [created, ...ms]);
@@ -111,20 +129,22 @@ export function MerchantLoyaltyPage() {
   async function toggleMission(m: Mission) {
     try {
       const updated = await missionApi.update(m.id, { is_active: !m.is_active });
-      setMissions((ms) => ms.map((x) => x.id === m.id ? updated : x));
+      setMissions((ms) => ms.map((x) => (x.id === m.id ? updated : x)));
     } catch (e: any) {
       setMissionsError(e.message);
     }
   }
 
   // ── Reward CRUD ────────────────────────────────────────────────────────────
-  async function saveReward(data: Omit<Reward, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">) {
+  async function saveReward(
+    data: Omit<Reward, "id" | "merchant_id" | "created_at" | "linked_menu_item_name">,
+  ) {
     setRewardSaving(true);
     setRewardsError("");
     try {
       if (typeof rewardModal === "object" && rewardModal !== null) {
         const updated = await loyaltyApi.updateReward(rewardModal.id, data);
-        setRewards((rs) => rs.map((r) => r.id === updated.id ? updated : r));
+        setRewards((rs) => rs.map((r) => (r.id === updated.id ? updated : r)));
       } else {
         const created = await loyaltyApi.createReward(data);
         setRewards((rs) => [created, ...rs]);
@@ -149,7 +169,7 @@ export function MerchantLoyaltyPage() {
   async function toggleReward(r: Reward) {
     try {
       const updated = await loyaltyApi.updateReward(r.id, { is_active: !r.is_active });
-      setRewards((rs) => rs.map((x) => x.id === r.id ? updated : x));
+      setRewards((rs) => rs.map((x) => (x.id === r.id ? updated : x)));
     } catch (e: any) {
       setRewardsError(e.message);
     }
@@ -162,7 +182,7 @@ export function MerchantLoyaltyPage() {
     try {
       if (typeof punchCardModal === "object" && punchCardModal !== null) {
         const updated = await punchCardApi.merchantUpdate(punchCardModal.id, data);
-        setPunchCards((pcs) => pcs.map((pc) => pc.id === updated.id ? updated : pc));
+        setPunchCards((pcs) => pcs.map((pc) => (pc.id === updated.id ? updated : pc)));
       } else {
         const created = await punchCardApi.merchantCreate(data);
         setPunchCards((pcs) => [created, ...pcs]);
@@ -178,7 +198,7 @@ export function MerchantLoyaltyPage() {
   async function togglePunchCard(pc: MerchantPunchCard) {
     try {
       const updated = await punchCardApi.merchantUpdate(pc.id, { is_active: !pc.is_active });
-      setPunchCards((pcs) => pcs.map((x) => x.id === pc.id ? updated : x));
+      setPunchCards((pcs) => pcs.map((x) => (x.id === pc.id ? updated : x)));
     } catch (e: any) {
       setPunchCardsError(e.message);
     }
@@ -198,7 +218,9 @@ export function MerchantLoyaltyPage() {
             key={t}
             onClick={() => setTab(t)}
             className={`flex-1 min-w-[90px] rounded-xl py-2 text-xs font-medium capitalize transition-colors ${
-              tab === t ? "bg-white text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              tab === t
+                ? "bg-white text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
             {t === "punch_cards" ? "Punch Cards" : t.replace("_", " ")}
@@ -212,7 +234,9 @@ export function MerchantLoyaltyPage() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="font-display text-2xl text-foreground">Missions</h2>
-              <p className="text-xs text-muted-foreground">Challenges customers can complete for points.</p>
+              <p className="text-xs text-muted-foreground">
+                Challenges customers can complete for points.
+              </p>
             </div>
             <button
               onClick={() => setMissionModal("new")}
@@ -227,17 +251,26 @@ export function MerchantLoyaltyPage() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : missions.length === 0 ? (
-            <EmptyState icon="🎯" title="No missions yet" sub="Create your first mission to engage customers." />
+            <EmptyState
+              icon="🎯"
+              title="No missions yet"
+              sub="Create your first mission to engage customers."
+            />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {missions.map((m) => (
-                <div key={m.id} className={`glass rounded-3xl p-5 transition-opacity ${m.is_active ? "" : "opacity-60"}`}>
+                <div
+                  key={m.id}
+                  className={`glass rounded-3xl p-5 transition-opacity ${m.is_active ? "" : "opacity-60"}`}
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium text-foreground">{m.title}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{m.description}</p>
                       {m.linked_menu_item_name && (
-                        <p className="mt-0.5 text-xs font-medium text-ember">Linked: {m.linked_menu_item_name}</p>
+                        <p className="mt-0.5 text-xs font-medium text-ember">
+                          Linked: {m.linked_menu_item_name}
+                        </p>
                       )}
                     </div>
                     <div className="flex shrink-0 gap-1">
@@ -269,7 +302,9 @@ export function MerchantLoyaltyPage() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h2 className="font-display text-2xl text-foreground">Rewards</h2>
-              <p className="text-xs text-muted-foreground">Items customers can redeem with points.</p>
+              <p className="text-xs text-muted-foreground">
+                Items customers can redeem with points.
+              </p>
             </div>
             <button
               onClick={() => setRewardModal("new")}
@@ -284,11 +319,18 @@ export function MerchantLoyaltyPage() {
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : rewards.length === 0 ? (
-            <EmptyState icon="🎁" title="No rewards yet" sub="Add a reward so customers can redeem their points." />
+            <EmptyState
+              icon="🎁"
+              title="No rewards yet"
+              sub="Add a reward so customers can redeem their points."
+            />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {rewards.map((r) => (
-                <div key={r.id} className={`glass rounded-3xl p-5 transition-opacity ${r.is_active ? "" : "opacity-60"}`}>
+                <div
+                  key={r.id}
+                  className={`glass rounded-3xl p-5 transition-opacity ${r.is_active ? "" : "opacity-60"}`}
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-center gap-3">
                       <div className="grid h-12 w-12 place-items-center rounded-xl bg-mist text-2xl">
@@ -296,9 +338,13 @@ export function MerchantLoyaltyPage() {
                       </div>
                       <div className="min-w-0">
                         <p className="truncate font-medium text-foreground">{r.name}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-1">{r.description}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-1">
+                          {r.description}
+                        </p>
                         {r.linked_menu_item_name && (
-                          <p className="mt-0.5 text-xs font-medium text-ember">Linked: {r.linked_menu_item_name}</p>
+                          <p className="mt-0.5 text-xs font-medium text-ember">
+                            Linked: {r.linked_menu_item_name}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -313,8 +359,11 @@ export function MerchantLoyaltyPage() {
                   </div>
                   <div className="mt-4 flex items-center justify-between">
                     <div className="flex gap-3">
-                      <Chip label="Cost"  value={`${r.points_cost} pts`} />
-                      <Chip label="Stock" value={r.stock === -1 ? "Unlimited" : `${r.stock} left`} />
+                      <Chip label="Cost" value={`${r.points_cost} pts`} />
+                      <Chip
+                        label="Stock"
+                        value={r.stock === -1 ? "Unlimited" : `${r.stock} left`}
+                      />
                     </div>
                     <Toggle active={r.is_active} onToggle={() => toggleReward(r)} />
                   </div>
@@ -328,7 +377,6 @@ export function MerchantLoyaltyPage() {
       {/* ── Punch Cards — manage cards + confirm proof code in one tab ── */}
       {tab === "punch_cards" && (
         <section className="space-y-6">
-
           {/* Confirm punch card proof code — replaces old redeem section */}
           <ConfirmPunchCardSection />
 
@@ -356,7 +404,11 @@ export function MerchantLoyaltyPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
             ) : punchCards.length === 0 ? (
-              <EmptyState icon="🎟️" title="No punch cards yet" sub="Create your first card template." />
+              <EmptyState
+                icon="🎟️"
+                title="No punch cards yet"
+                sub="Create your first card template."
+              />
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
                 {punchCards.map((pc) => (
@@ -377,7 +429,10 @@ export function MerchantLoyaltyPage() {
                     </div>
                     <div className="mt-4 flex items-center justify-between">
                       <div className="flex gap-3">
-                        <Chip label="Mode"   value={pc.mode === "per_order" ? "Per Order" : "Per Streak"} />
+                        <Chip
+                          label="Mode"
+                          value={pc.mode === "per_order" ? "Per Order" : "Per Streak"}
+                        />
                         <Chip label="Stamps" value={String(pc.stamps_required)} />
                       </div>
                       <Toggle active={pc.is_active} onToggle={() => togglePunchCard(pc)} />
@@ -387,6 +442,9 @@ export function MerchantLoyaltyPage() {
               </div>
             )}
           </div>
+
+          {/* Punch card history — every customer's stamp journey */}
+          <PunchCardHistorySection />
         </section>
       )}
 
@@ -432,8 +490,11 @@ export function MerchantLoyaltyPage() {
                       <td className="p-3 text-xs capitalize">
                         {tx.transaction_type.toLowerCase().replace("_", " ")}
                       </td>
-                      <td className={`p-3 font-medium ${tx.points >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                        {tx.points > 0 ? "+" : ""}{tx.points}
+                      <td
+                        className={`p-3 font-medium ${tx.points >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+                      >
+                        {tx.points > 0 ? "+" : ""}
+                        {tx.points}
                       </td>
                       <td className="p-3 text-muted-foreground">{tx.balance_after}</td>
                     </tr>
@@ -478,9 +539,9 @@ export function MerchantLoyaltyPage() {
 
 // ── Confirm punch card proof code section ─────────────────────────────────────
 function ConfirmPunchCardSection() {
-  const [code, setCode]       = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
-  const [result, setResult]   = useState<{
+  const [result, setResult] = useState<{
     success: boolean;
     customer_name?: string;
     reward_text?: string;

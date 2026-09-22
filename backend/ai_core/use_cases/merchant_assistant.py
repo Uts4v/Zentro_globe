@@ -11,6 +11,7 @@ from ..constants import REQUEST_STATUS_COMPLETED, REQUEST_STATUS_FAILED
 from ..exceptions import AIProviderRateLimited
 from ..tools.registry import tool_registry
 from ..tools.guidance_tools import register_guidance_tools
+from ..tools.menu_tools import register_menu_tools
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ def chat_with_merchant_assistant(
     message_content: str,
 ) -> dict:
     register_guidance_tools()
+    register_menu_tools()
     prompt_def = prompt_registry.get("merchant_assistant", "1.0.0")
     system_prompt = prompt_def["system_prompt"]
 

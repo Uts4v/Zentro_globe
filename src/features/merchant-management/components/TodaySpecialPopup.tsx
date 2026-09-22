@@ -11,7 +11,12 @@ interface Props {
   onViewReward?: (rewardId: string) => void;
 }
 
-export function TodaySpecialPopup({ slug, currencySymbol = "Rs", onOrderItem, onViewReward }: Props) {
+export function TodaySpecialPopup({
+  slug,
+  currencySymbol = "Rs",
+  onOrderItem,
+  onViewReward,
+}: Props) {
   const [specials, setSpecials] = useState<TodaySpecial[]>([]);
   const [visible, setVisible] = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -209,11 +214,9 @@ function SpecialCard({
   carousel?: boolean;
 }) {
   const hasCTA = !!(special.linked_menu_item || special.linked_reward);
-  const ctaLabel = special.linked_menu_item
-    ? "Order now"
-    : special.linked_reward
-      ? "View reward"
-      : null;
+  const ctaLabel =
+    special.cta_label ||
+    (special.linked_menu_item ? "Order now" : special.linked_reward ? "View reward" : null);
 
   return (
     <div
@@ -261,7 +264,9 @@ function SpecialCard({
                 <span className="line-through opacity-50">
                   {formatCurrency(parseFloat(special.linked_menu_item_price), currencySymbol)}
                 </span>{" "}
-                <span className="font-bold text-emerald-600">{formatCurrency(parseFloat(discountedPrice), currencySymbol)}</span>
+                <span className="font-bold text-emerald-600">
+                  {formatCurrency(parseFloat(discountedPrice), currencySymbol)}
+                </span>
               </span>
             )}
           </div>

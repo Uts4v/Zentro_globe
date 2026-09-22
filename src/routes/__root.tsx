@@ -297,7 +297,27 @@ function RootComponent() {
 
 // ── Shell ─────────────────────────────────────────────────────────────────────
 function RootShell({ children }: { children: ReactNode }) {
-  const [showSplash, setShowSplash] = useState(true);
+  // Splash plays once per app session (first open of a tab/launch), never on reload
+  // or in-app navigation. sessionStorage survives reloads in the same tab and is
+  // cleared when the session ends, so reopening the web app shows it again.
+  const [showSplash, setShowSplash] = useState(false);
+
+  useEffect(() => {
+    let seen = true;
+    try {
+      seen = sessionStorage.getItem("zentro-splash-played") === "1";
+    } catch {
+      // ignore storage errors (private mode, disabled storage)
+    }
+    if (!seen) {
+      setShowSplash(true);
+      try {
+        sessionStorage.setItem("zentro-splash-played", "1");
+      } catch {
+        // ignore storage errors
+      }
+    }
+  }, []);
 
   return (
     <html lang="en" suppressHydrationWarning>

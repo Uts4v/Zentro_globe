@@ -13,6 +13,9 @@ export interface TodaySpecial {
   discount_type: "none" | "percentage" | "fixed";
   discount_value: number | null;
   is_active: boolean;
+  cta_label?: string;
+  starts_at?: string | null;
+  ends_at?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -48,9 +51,93 @@ export interface MenuItem {
   updated_at: string;
   preparation_area?: number | null;
   requires_preparation?: boolean;
+  /** Menu editor extensions (spec 65-85). */
+  status?: "active" | "draft" | "archived";
+  short_description?: string | null;
+  dietary_tags?: string[];
+  allergens?: string[];
+  display_order?: number;
+  category_id?: number | null;
+  category_ref?: number | null;
+  category_name?: string | null;
+  from_price?: string | null;
+  /** Item-level discount on the base price (promotions / Today's Special). */
+  discount_type?: "none" | "percentage" | "fixed";
+  discount_value?: string | null;
+  discount_source?: "manual" | "special";
+  /** Effective base price after the in-force discount, or null when undiscounted. */
+  discount_price?: string | null;
+  discount_amount?: string | null;
+  groups?: MenuOptionGroup[];
 }
 
 export type MenuItemInput = Omit<MenuItem, "id" | "merchant_id" | "created_at" | "updated_at">;
+
+/** A single selectable variant or modifier/extras option. */
+export interface MenuOption {
+  id: string;
+  merchant_id: string;
+  group: string | null;
+  name: string;
+  sku: string | null;
+  /** Absolute price — used by variants (replaces the item's base price). */
+  price: string | null;
+  /** Price delta added on top of the unit price — used by modifiers/extras. */
+  price_delta: string | null;
+  is_default: boolean;
+  is_available: boolean;
+  display_order: number;
+  option_group?: string | null;
+  price_effect?: string | null;
+}
+
+/** Variant (single-select) or modifier (multi-select extras) group on an item. */
+export interface MenuOptionGroup {
+  id: string;
+  merchant_id: string;
+  menu_item?: string | null;
+  name: string;
+  kind: "variant" | "modifier";
+  required: boolean;
+  min_select: number;
+  max_select: number;
+  is_active: boolean;
+  display_order: number;
+  options: MenuOption[];
+}
+
+export interface MenuCategory {
+  id: string;
+  merchant_id: string;
+  name: string;
+  emoji: string | null;
+  is_active: boolean;
+  display_order: number;
+  item_count: number;
+}
+
+export interface MenuCatalogMerchant {
+  id: number;
+  slug: string;
+  name: string;
+  logo_url: string | null;
+  is_open: boolean;
+  currency_code: string;
+  currency_symbol: string;
+  store_theme_color?: string | null;
+}
+
+/** Public catalog payload returned by GET /merchants/<id>/menu/catalog/. */
+export interface MenuCatalog {
+  merchant: MenuCatalogMerchant;
+  categories: MenuCategory[];
+  items: MenuItem[];
+  filters: {
+    q: string | null;
+    category_id: number | null;
+    available_only: boolean;
+  };
+}
 
 export type OrderStatus =
   | "pending"
@@ -61,6 +148,17 @@ export type OrderStatus =
   | "cancelled";
 
 export type FulfillmentType = "dine_in" | "pickup" | "delivery";
+
+/** Snapshot of a selected variant/extras option stored on an order line. */
+export interface OrderItemOption {
+  id?: string;
+  order_item_id?: string;
+  group_name: string;
+  option_name: string;
+  kind: string;
+  price_effect: string;
+  display_order?: number;
+}
 
 export interface OrderItem {
   id: string;
@@ -73,6 +171,8 @@ export interface OrderItem {
   preparation_area?: number | null;
   requires_preparation?: boolean;
   preparation_status?: string;
+  special_instructions?: string;
+  options?: OrderItemOption[];
 }
 
 export interface Order {
@@ -104,6 +204,12 @@ export interface Order {
   merchant_name?: string;
 }
 
+/** Selection payload sent with an order line: [{ "group_id": 1, "option_id": 2 }, ...]. */
+export interface MenuSelection {
+  group_id: number | string;
+  option_id: number | string;
+}
+
 export interface CreateOrderPayload {
   merchant_id: string;
   items: {
@@ -112,6 +218,8 @@ export interface CreateOrderPayload {
     name: string;
     price: number;
     points_per_item: number;
+    selections?: MenuSelection[];
+    special_instructions?: string;
   }[];
   notes?: string;
   fulfillment_type?: FulfillmentType;
@@ -126,11 +234,34 @@ export interface CreateGuestOrderPayload {
     name: string;
     price: number;
     points_per_item: number;
+    selections?: MenuSelection[];
+    special_instructions?: string;
   }[];
   notes?: string;
   table_token: string;
   guest_session_id: string;
   guest_name: string;
+}
+
+/** Server-authoritative order preview from POST /orders/preview/. */
+export interface OrderPreview {
+  merchant_id?: number;
+  currency?: { code: string; symbol: string };
+  subtotal: string;
+  tax_amount: string;
+  tax_breakdown: Array<{ name: string; rate: number; amount: number }>;
+  service_charge?: string;
+  total_amount: string;
+  points_earned: number;
+  lines: Array<{
+    menu_item_id: number;
+    name: string;
+    quantity: number;
+    unit_price: string;
+    subtotal: string;
+    options: OrderItemOption[];
+    special_instructions?: string;
+  }>;
 }
 
 export interface Notification {
@@ -299,6 +430,43 @@ export interface CustomerPunchCard {
   redeemed_at?: string;
   created_at: string;
   updated_at: string;
+}
+
+export type PunchCardEventType = "STARTED" | "PUNCHED" | "COMPLETED" | "REDEEMED";
+
+export interface PunchCardEvent {
+  id: string;
+  event_type: PunchCardEventType;
+  event_display: string;
+  stamp_number?: number | null;
+  note: string;
+  created_at: string;
+  order_id?: number | null;
+  customer_id: number;
+  customer_name: string;
+  card_id: number;
+  card_name: string;
+  stamps_required: number;
+  card_state: {
+    current_stamps: number;
+    is_completed: boolean;
+    completed_at?: string | null;
+    is_redeemed: boolean;
+    redeemed_at?: string | null;
+    started_at: string;
+  };
+}
+
+export interface PunchCardHistory {
+  summary: {
+    customers_active: number;
+    cards_started: number;
+    punches_awarded: number;
+    cards_completed: number;
+    claimed: number;
+  };
+  cards: MerchantPunchCard[];
+  events: PunchCardEvent[];
 }
 
 export interface PointTransaction {

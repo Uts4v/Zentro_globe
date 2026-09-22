@@ -14,6 +14,7 @@ from .models import (
     CustomerMerchantWallet,
     MerchantPunchCard,
     CustomerPunchCard,
+    PunchCardEvent,
     PointTransaction,
     MembershipQrToken,
     MerchantMembershipCardDesign,
@@ -61,6 +62,13 @@ class CustomerPunchCardAdmin(FastAdminMixin, UnfoldModelAdmin):
     list_display = ["customer", "punch_card", "current_stamps", "is_completed", "is_redeemed"]
     list_filter = ["is_completed", "is_redeemed"]
     search_fields = ["customer__full_name", "punch_card__name"]
+
+
+@admin.register(PunchCardEvent)
+class PunchCardEventAdmin(FastAdminMixin, UnfoldModelAdmin):
+    list_display = ["event_type", "customer", "punch_card", "stamp_number", "order", "created_at"]
+    list_filter = ["event_type"]
+    search_fields = ["customer__full_name", "punch_card__name", "note"]
 
 
 @admin.register(PointTransaction)

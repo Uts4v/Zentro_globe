@@ -83,8 +83,8 @@ export default function PosSettingsScreen() {
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                      settings[key] ? "translate-x-5" : "translate-x-0.5"
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
+                      settings[key] ? "left-[22px]" : "left-0.5"
                     }`}
                   />
                 </button>
@@ -155,8 +155,8 @@ export default function PosSettingsScreen() {
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    settings.offline_discounts_allowed ? "translate-x-5" : "translate-x-0.5"
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
+                    settings.offline_discounts_allowed ? "left-[22px]" : "left-0.5"
                   }`}
                 />
               </button>
@@ -179,8 +179,8 @@ export default function PosSettingsScreen() {
                 }`}
               >
                 <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                    settings.offline_credit_allowed ? "translate-x-5" : "translate-x-0.5"
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
+                    settings.offline_credit_allowed ? "left-[22px]" : "left-0.5"
                   }`}
                 />
               </button>

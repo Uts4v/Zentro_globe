@@ -157,15 +157,16 @@ export function MerchantCustomersPage() {
                       <p className="truncate text-sm font-semibold text-foreground">
                         {c.customer_name}
                       </p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="min-w-0 space-y-0.5 text-xs text-muted-foreground">
                         {c.customer_phone ? (
-                          <span className="flex items-center gap-0.5">
-                            <Phone className="h-3 w-3" /> {c.customer_phone}
+                          <span className="flex items-center gap-1">
+                            <Phone className="h-3 w-3 shrink-0" /> {c.customer_phone}
                           </span>
                         ) : null}
                         {c.customer_email ? (
-                          <span className="flex items-center gap-0.5 truncate">
-                            <Mail className="h-3 w-3" /> {c.customer_email}
+                          <span className="flex items-center gap-1">
+                            <Mail className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{c.customer_email}</span>
                           </span>
                         ) : null}
                       </div>

@@ -24,6 +24,9 @@ def calculate_tax(subtotal, merchant):
 
     Falls back to the legacy tax_rate_percent when tax_components is empty.
     """
+    if not getattr(merchant, "tax_enabled", True):
+        return Decimal("0"), []
+
     components = merchant.tax_components or []
     subtotal_dec = Decimal(str(subtotal))
 

@@ -67,6 +67,17 @@ function NavItem({
   );
 }
 
+function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1">
+      <p className="px-4 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/70">
+        {title}
+      </p>
+      {children}
+    </div>
+  );
+}
+
 export default function PosLayout() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
@@ -284,24 +295,32 @@ export default function PosLayout() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          <NavItem
-            to="/pos"
-            label="Order"
-            icon={ShoppingCart}
-            badge={cartCount}
-            active={isOrderPage}
-          />
-          <NavItem to="/pos/orders" label="Orders" icon={Clock} />
-          <NavItem to="/pos/preparation" label="Preparation" icon={AlertTriangle} />
-          <NavItem to="/pos/accounts" label="Accounts" icon={CreditCard} />
-          <NavItem to="/pos/cash-movements" label="Cash In/Out" icon={HandCoins} />
-          <NavItem to="/pos/reports" label="Reports" icon={BarChart3} />
-          <NavItem to="/pos/conflicts" label="Conflicts" icon={AlertTriangle} />
-          <NavItem to="/pos/schedule" label="Schedule" icon={Calendar} />
-          <NavItem to="/pos/staff" label="Staff" icon={Users} />
-          <NavItem to="/merchant" label="Dashboard" icon={LayoutDashboard} />
-          <NavItem to="/pos/settings" label="Settings" icon={Settings} />
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-2 pb-4">
+          <NavSection title="Operations">
+            <NavItem
+              to="/pos"
+              label="Order"
+              icon={ShoppingCart}
+              badge={cartCount}
+              active={isOrderPage}
+            />
+            <NavItem to="/pos/orders" label="Orders" icon={Clock} />
+            <NavItem to="/pos/preparation" label="Preparation" icon={AlertTriangle} />
+            <NavItem to="/pos/conflicts" label="Conflicts" icon={AlertTriangle} />
+          </NavSection>
+          <NavSection title="Money">
+            <NavItem to="/pos/accounts" label="Accounts" icon={CreditCard} />
+            <NavItem to="/pos/cash-movements" label="Cash In/Out" icon={HandCoins} />
+            <NavItem to="/pos/reports" label="Reports" icon={BarChart3} />
+          </NavSection>
+          <NavSection title="Team">
+            <NavItem to="/pos/schedule" label="Schedule" icon={Calendar} />
+            <NavItem to="/pos/staff" label="Staff" icon={Users} />
+          </NavSection>
+          <NavSection title="Manage">
+            <NavItem to="/merchant" label="Dashboard" icon={LayoutDashboard} />
+            <NavItem to="/pos/settings" label="Settings" icon={Settings} />
+          </NavSection>
         </nav>
 
         {/* Footer */}
@@ -427,18 +446,83 @@ export default function PosLayout() {
                 </div>
                 <NotificationBell />
               </div>
-              <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-                <NavItem to="/pos" label="Order" icon={ShoppingCart} badge={cartCount} active={isOrderPage} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/orders" label="Orders" icon={Clock} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/preparation" label="Preparation" icon={AlertTriangle} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/accounts" label="Accounts" icon={CreditCard} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/cash-movements" label="Cash In/Out" icon={HandCoins} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/reports" label="Reports" icon={BarChart3} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/conflicts" label="Conflicts" icon={AlertTriangle} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/schedule" label="Schedule" icon={Calendar} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/staff" label="Staff" icon={Users} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/merchant" label="Dashboard" icon={LayoutDashboard} onClick={() => setMobileNavOpen(false)} />
-                <NavItem to="/pos/settings" label="Settings" icon={Settings} onClick={() => setMobileNavOpen(false)} />
+              <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-2 pb-4">
+                <NavSection title="Operations">
+                  <NavItem
+                    to="/pos"
+                    label="Order"
+                    icon={ShoppingCart}
+                    badge={cartCount}
+                    active={isOrderPage}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                  <NavItem
+                    to="/pos/orders"
+                    label="Orders"
+                    icon={Clock}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                  <NavItem
+                    to="/pos/preparation"
+                    label="Preparation"
+                    icon={AlertTriangle}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                  <NavItem
+                    to="/pos/conflicts"
+                    label="Conflicts"
+                    icon={AlertTriangle}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                </NavSection>
+                <NavSection title="Money">
+                  <NavItem
+                    to="/pos/accounts"
+                    label="Accounts"
+                    icon={CreditCard}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                  <NavItem
+                    to="/pos/cash-movements"
+                    label="Cash In/Out"
+                    icon={HandCoins}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                  <NavItem
+                    to="/pos/reports"
+                    label="Reports"
+                    icon={BarChart3}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                </NavSection>
+                <NavSection title="Team">
+                  <NavItem
+                    to="/pos/schedule"
+                    label="Schedule"
+                    icon={Calendar}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                  <NavItem
+                    to="/pos/staff"
+                    label="Staff"
+                    icon={Users}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                </NavSection>
+                <NavSection title="Manage">
+                  <NavItem
+                    to="/merchant"
+                    label="Dashboard"
+                    icon={LayoutDashboard}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                  <NavItem
+                    to="/pos/settings"
+                    label="Settings"
+                    icon={Settings}
+                    onClick={() => setMobileNavOpen(false)}
+                  />
+                </NavSection>
               </nav>
               <div className="border-t border-border p-3">
                 <button

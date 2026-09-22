@@ -1,5 +1,6 @@
 # orders/views.py
 import logging
+from decimal import Decimal
 
 from django.db import transaction
 from django.db import IntegrityError
@@ -17,8 +18,9 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from merchants.models import MerchantProfile, MenuItem
 from config.order_utils import parse_quantity, QuantityValidationError
+from config.menu_pricing import validate_and_price_line, LineValidationError
 from loyalty.models import (
-    MerchantPunchCard, CustomerPunchCard,
+    MerchantPunchCard, CustomerPunchCard, PunchCardEvent,
     CustomerMission, Mission, CustomerMerchantProfile,
     PointTransaction, Redemption,
 )
@@ -29,7 +31,7 @@ from loyalty.services import (
 from notifications.services import send_notification
 from notifications.models import Notification
 
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderItemOption
 from .serializers import CustomerOrderSerializer, OrderSerializer, CreateOrderSerializer, CreateGuestOrderSerializer, AddItemsToOrderSerializer
 from .services.preparation import prepare_order_items_for_routing
 
@@ -42,6 +44,84 @@ def _paginate(request, qs, default=100, max_limit=200):
     limit = max(1, min(limit, max_limit))
     offset = max(0, int(request.query_params.get("offset", 0)))
     return qs[offset:offset + limit]
+
+
+class _LineError(ValueError):
+    """Internal signal for a cart-line validation failure."""
+
+
+def _priced_items(menu_items_by_id, request_items, *, loyalty_eligible=True):
+    """
+    Compute authoritative prices for every cart line via config.menu_pricing
+    (backend is the price authority). Returns:
+      (order_items_data, option_rows, total, points)
+
+    option_rows maps line index -> [PricedOption, ...] so callers can snapshot
+    structured options onto the created OrderItem rows.
+    Raises _LineError with a user-safe message on any violation.
+    """
+    order_items_data = []
+    option_rows = []
+    total = Decimal("0")
+    points = 0
+
+    for index, item_data in enumerate(request_items):
+        menu_item = menu_items_by_id.get(item_data["menu_item_id"])
+        if menu_item is None:
+            raise _LineError(
+                f"Menu item {item_data['menu_item_id']} not found or unavailable."
+            )
+
+        selections = [
+            (sel.get("group_id"), sel.get("option_id"))
+            for sel in (item_data.get("selections") or [])
+        ]
+        try:
+            line = validate_and_price_line(
+                menu_item,
+                item_data.get("quantity"),
+                selections,
+                special_instructions=item_data.get("special_instructions", ""),
+                loyalty_eligible=loyalty_eligible,
+            )
+        except LineValidationError as exc:
+            raise _LineError(f"{menu_item.name}: {exc}")
+
+        total += line.subtotal
+        points += line.points
+        option_rows.append((index, line.options))
+        order_items_data.append({
+            "menu_item": menu_item,
+            "name": line.name,
+            "price": line.unit_price,
+            "quantity": line.quantity,
+            "subtotal": line.subtotal,
+            "special_instructions": line.special_instructions,
+        })
+
+    return order_items_data, option_rows, total, points
+
+
+def _bulk_create_items_with_options(order, order_items_data, option_rows):
+    """Create OrderItem rows (after preparation routing) and snapshot options."""
+    items = OrderItem.objects.bulk_create(
+        [OrderItem(order=order, **item) for item in order_items_data],
+        batch_size=200,
+    )
+    snapshot_rows = []
+    for index, line_options in option_rows:
+        created = items[index]
+        for display_order, opt in enumerate(line_options):
+            snapshot_rows.append(OrderItemOption(
+                order_item=created,
+                group_name=opt.group_name,
+                option_name=opt.option_name,
+                kind=opt.kind,
+                price_effect=opt.price_effect,
+                display_order=display_order,
+            ))
+    OrderItemOption.objects.bulk_create(snapshot_rows, batch_size=200)
+    return items
 
 
 def _audit_order(order, action, *, metadata=None):
@@ -242,19 +322,25 @@ def _award_loyalty(order: Order):
     for merchant_card in MerchantPunchCard.objects.filter(
         merchant=order.merchant, is_active=True
     ):
-        customer_card, _ = CustomerPunchCard.objects.get_or_create(
+        customer_card, created = CustomerPunchCard.objects.get_or_create(
             customer=customer,
             punch_card=merchant_card,
             merchant=order.merchant,
             is_completed=False,
             defaults={"current_stamps": 0},
         )
+        if created:
+            customer_card.record_event(
+                PunchCardEvent.EVENT_STARTED,
+                order=order,
+                note=f"Started '{merchant_card.name}'",
+            )
         should_punch = (
             merchant_card.mode == MerchantPunchCard.MODE_PER_ORDER
             or (merchant_card.mode == MerchantPunchCard.MODE_PER_STREAK and streak_incremented)
         )
         if should_punch:
-            completed = customer_card.add_punch()
+            completed = customer_card.add_punch(order=order)
             if completed:
                 # Notify customer their punch card is complete
                 transaction.on_commit(lambda: _notify_safe(
@@ -462,10 +548,6 @@ def create_order(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-    total_amount   = 0
-    points_earned  = 0
-    order_items_data = []
-
     # Batch-fetch menu items in one query instead of one per line item.
     menu_items_by_id = {
         mi.id: mi
@@ -476,34 +558,13 @@ def create_order(request):
         )
     }
 
-    for item_data in data["items"]:
-        menu_item = menu_items_by_id.get(item_data["menu_item_id"])
-        if menu_item is None:
-            return Response(
-                {"error": f"Menu item {item_data['menu_item_id']} not found or unavailable."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            quantity = parse_quantity(item_data.get("quantity"))
-        except QuantityValidationError as exc:
-            return Response(
-                {"error": f"Invalid quantity for menu item {menu_item.id}: {exc}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        subtotal  = menu_item.price * quantity
-        total_amount += subtotal
-
-        if menu_item.loyalty_reward:
-            points_earned += menu_item.points_per_item * quantity
-
-        order_items_data.append({
-            "menu_item": menu_item,
-            "name":      menu_item.name,
-            "price":     menu_item.price,
-            "quantity":  quantity,
-            "subtotal":  subtotal,
-        })
+    # ── Server-side authoritative pricing (variants/modifiers included) ──────
+    try:
+        order_items_data, option_rows, total_amount, points_earned = _priced_items(
+            menu_items_by_id, data["items"]
+        )
+    except _LineError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     # Apply tax
     from config.tax_utils import calculate_tax
@@ -531,10 +592,7 @@ def create_order(request):
         # Apply preparation routing
         order_items_data = prepare_order_items_for_routing(order, order_items_data)
 
-        OrderItem.objects.bulk_create(
-            [OrderItem(order=order, **item) for item in order_items_data],
-            batch_size=200,
-        )
+        _bulk_create_items_with_options(order, order_items_data, option_rows)
     except IntegrityError:
         # A concurrent request already persisted an order with the same
         # client_mutation_id (customer + merchant). Return that one.
@@ -627,34 +685,13 @@ def guest_create_order(request):
         )
     }
 
-    for item_data in data["items"]:
-        menu_item = menu_items_by_id.get(item_data["menu_item_id"])
-        if menu_item is None:
-            return Response(
-                {"error": f"Menu item {item_data['menu_item_id']} not found or unavailable."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            quantity = parse_quantity(item_data.get("quantity"))
-        except QuantityValidationError as exc:
-            return Response(
-                {"error": f"Invalid quantity for menu item {menu_item.id}: {exc}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        subtotal = menu_item.price * quantity
-        total_amount += subtotal
-
-        if menu_item.loyalty_reward:
-            points_earned += menu_item.points_per_item * quantity
-
-        order_items_data.append({
-            "menu_item": menu_item,
-            "name": menu_item.name,
-            "price": menu_item.price,
-            "quantity": quantity,
-            "subtotal": subtotal,
-        })
+    # ── Server-side authoritative pricing for guest/table-QR orders ───────────
+    try:
+        order_items_data, option_rows, total_amount, points_earned = _priced_items(
+            menu_items_by_id, data["items"], loyalty_eligible=False
+        )
+    except _LineError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     # Generate KOT number. Lock the merchant row so concurrent guest orders
     # can't compute the same count+1.
@@ -694,10 +731,7 @@ def guest_create_order(request):
     # Apply preparation routing
     order_items_data = prepare_order_items_for_routing(order, order_items_data)
 
-    OrderItem.objects.bulk_create(
-        [OrderItem(order=order, **item) for item in order_items_data],
-        batch_size=200,
-    )
+    _bulk_create_items_with_options(order, order_items_data, option_rows)
 
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
@@ -714,6 +748,88 @@ def guest_create_order(request):
 
 
 guest_create_order.throttle_scope = "guest"
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
+def preview_order(request):
+    """
+    POST /api/orders/preview/
+
+    Return the server-computed price breakdown for a proposed cart WITHOUT
+    creating anything. The customer UI shows this as the authoritative total
+    before placing the order; the order itself is recomputed at creation.
+    """
+    serializer = CreateOrderSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    data = serializer.validated_data
+
+    try:
+        merchant = MerchantProfile.objects.get(id=data["merchant_id"])
+    except MerchantProfile.DoesNotExist:
+        return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    menu_items_by_id = {
+        mi.id: mi
+        for mi in MenuItem.objects.filter(
+            id__in=[i["menu_item_id"] for i in data["items"]],
+            merchant=merchant,
+            is_available=True,
+        )
+    }
+
+    try:
+        order_items_data, option_rows, subtotal, points = _priced_items(
+            menu_items_by_id, data["items"]
+        )
+    except _LineError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    from config.tax_utils import calculate_tax
+    tax_amount, tax_breakdown = calculate_tax(subtotal, merchant)
+
+    lines = []
+    opts_by_index = {idx: opts for idx, opts in option_rows}
+    for index, item in enumerate(order_items_data):
+        menu_item = item["menu_item"]
+        unit = item["price"]
+        lines.append({
+            "menu_item_id": menu_item.id,
+            "name": item["name"],
+            "quantity": item["quantity"],
+            "unit_price": str(unit),
+            "subtotal": str(item["subtotal"]),
+            "special_instructions": item.get("special_instructions", ""),
+            "options": [
+                {
+                    "group_name": opt.group_name,
+                    "option_name": opt.option_name,
+                    "kind": opt.kind,
+                    "price_effect": str(opt.price_effect),
+                }
+                for opt in (opts_by_index.get(index) or [])
+            ],
+        })
+
+    return Response({
+        "merchant_id": merchant.id,
+        "currency": {
+            "code": merchant.currency_code,
+            "symbol": merchant.currency_symbol,
+        },
+        "subtotal": str(subtotal),
+        "tax_amount": str(tax_amount),
+        "tax_breakdown": tax_breakdown,
+        "total_amount": str(subtotal + tax_amount),
+        "points_earned": points,
+        "lines": lines,
+    })
+
+
+preview_order.throttle_scope = "guest"
 
 
 @api_view(["POST"])
@@ -1105,53 +1221,45 @@ def add_items_to_order(request, pk):
         )
     }
 
+    # ── Server-side authoritative pricing for added items ─────────────────────
+    new_items_data = []
+    option_rows = []
     new_total_added = 0
     new_points_added = 0
-    new_items_data = []
 
-    for item_data in data["items"]:
-        menu_item = menu_items_by_id.get(item_data["menu_item_id"])
-        if menu_item is None:
-            return Response(
-                {"error": f"Menu item {item_data['menu_item_id']} not found or unavailable."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        try:
-            quantity = parse_quantity(item_data.get("quantity"))
-        except QuantityValidationError as exc:
-            return Response(
-                {"error": f"Invalid quantity for menu item {menu_item.id}: {exc}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-        subtotal = menu_item.price * quantity
-        new_total_added += subtotal
-
-        if menu_item.loyalty_reward:
-            new_points_added += menu_item.points_per_item * quantity
-
-        new_items_data.append({
-            "menu_item": menu_item,
-            "name": menu_item.name,
-            "price": menu_item.price,
-            "quantity": quantity,
-            "subtotal": subtotal,
-        })
+    try:
+        priced_data, option_rows, new_total_added, new_points_added = _priced_items(
+            menu_items_by_id, data["items"]
+        )
+        new_items_data = priced_data
+    except _LineError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     # Apply preparation routing for new items
     new_items_data = prepare_order_items_for_routing(order, new_items_data)
 
-    OrderItem.objects.bulk_create(
-        [OrderItem(order=order, **item) for item in new_items_data],
-        batch_size=200,
-    )
+    _bulk_create_items_with_options(order, new_items_data, option_rows)
 
-    # Recalculate order totals
-    order.subtotal = sum(item.subtotal for item in order.items.all())
-    order.total_amount = order.subtotal - order.discount_amount + order.tax_amount + order.service_charge
+    # Drop the stale prefetch cache so order.items.all() re-queries and
+    # actually sees the rows we just created.
+    order._prefetched_objects_cache.pop("items", None)
+
+    # Recalculate order totals. Tax MUST be recomputed from the new subtotal —
+    # the stored tax_amount only covers the pre-add subtotal.
+    from config.tax_utils import calculate_tax
+    order.subtotal = sum((item.subtotal or 0) for item in order.items.all())
+    tax_amount, tax_breakdown = calculate_tax(order.subtotal, merchant)
+    order.tax_amount = tax_amount
+    order.tax_breakdown = tax_breakdown
+    order.total_amount = order.subtotal - order.discount_amount + tax_amount + order.service_charge
     order.points_earned += new_points_added
     order.version += 1
-    order.save(update_fields=["subtotal", "total_amount", "points_earned", "version", "updated_at"])
+    order.save(
+        update_fields=[
+            "subtotal", "tax_amount", "tax_breakdown", "total_amount",
+            "points_earned", "version", "updated_at",
+        ]
+    )
 
     # Append notes if provided
     new_notes = data.get("notes", "").strip()

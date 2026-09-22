@@ -28,6 +28,7 @@ path("punch-cards/confirm-proof/",           views.confirm_punch_proof,    name=
     path("punch-cards/<int:pk>/redeem/", views.customer_punch_card_redeem, name="customer-punch-card-redeem"),
     path("merchant/punch-cards/", views.merchant_punch_cards, name="merchant-punch-cards"),
     path("merchant/punch-cards/create/", views.merchant_punch_card_create, name="merchant-punch-card-create"),
+    path("merchant/punch-cards/history/", views.merchant_punch_card_history, name="merchant-punch-card-history"),
     path("merchant/punch-cards/<int:pk>/", views.merchant_punch_card_detail, name="merchant-punch-card-detail"),
 
     # Missions

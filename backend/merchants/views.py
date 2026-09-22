@@ -35,7 +35,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db.models import Avg, Count, Min, Sum
+from django.db.models import Avg, Count, Min, Sum, Q
 from django.db.models.functions import ExtractHour, TruncDate
 from django.http import FileResponse, HttpResponse, JsonResponse
 from django.urls import reverse
@@ -50,12 +50,17 @@ from rest_framework.response import Response
 
 from config.media_utils import UploadValidationError, validate_pdf_upload
 
-from .models import MerchantProfile, MenuItem, MerchantTable
+from .models import MerchantProfile, MenuItem, MerchantTable, MenuCategory, MenuOptionGroup, MenuOption
 from .serializers import (
     MenuItemSerializer,
+    MenuItemEditorSerializer,
     MerchantProfileSerializer,
     MerchantPublicSerializer,
     MerchantDiscoverySerializer,
+    MenuCategorySerializer,
+    MenuOptionSerializer,
+    MenuOptionGroupSerializer,
+    PublicMenuItemSerializer,
 )
 
 
@@ -247,6 +252,68 @@ def merchant_regenerate_qr(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+def public_merchant_catalog(request, pk):
+    """
+    GET /api/merchants/<id>/menu/catalog/ — rich customer menu payload.
+
+    Returns merchant theme/branding, active categories, items (with
+    variant/modifier groups), and currency display info. The server computes
+    pricing at order time via config.menu_pricing; this payload is display data.
+    """
+    try:
+        merchant = MerchantProfile.objects.get(pk=pk)
+    except MerchantProfile.DoesNotExist:
+        return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    q = (request.query_params.get("q") or "").strip().lower()
+    category_id = request.query_params.get("category_id")
+    available_only = request.query_params.get("available_only", "true").lower() != "false"
+
+    items_qs = (
+        merchant.menu_items
+        .filter(status=MenuItem.STATUS_ACTIVE)
+        .select_related("category_ref")
+        .prefetch_related(
+            "option_groups__options",
+        )
+        .order_by("display_order", "name")
+    )
+    if available_only:
+        items_qs = items_qs.filter(is_available=True)
+    if category_id:
+        items_qs = items_qs.filter(category_ref_id=category_id)
+    if q:
+        items_qs = items_qs.filter(
+            Q(name__icontains=q) | Q(description__icontains=q) | Q(short_description__icontains=q)
+        )
+
+    categories = (
+        merchant.menu_categories
+        .filter(is_active=True)
+        .annotate(item_count=Count("menu_items", filter=Q(menu_items__status="active", menu_items__is_available=True)))
+        .order_by("display_order", "name")
+    )
+
+    items = list(items_qs)
+
+    # Avoid the N+1 on on-sale/from price; serializer computes from preloaded options.
+    return Response({
+        "merchant": MerchantPublicSerializer(merchant).data,
+        "currency": {
+            "code": merchant.currency_code,
+            "symbol": merchant.currency_symbol,
+        },
+        "categories": MenuCategorySerializer(categories, many=True).data,
+        "items": PublicMenuItemSerializer(items, many=True).data,
+        "filters": {
+            "q": q or None,
+            "category_id": int(category_id) if category_id else None,
+        },
+    })
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
 def merchant_menu(request, pk):
     """GET /api/merchants/<id>/menu/ — public menu for a specific merchant."""
     try:
@@ -263,6 +330,228 @@ def merchant_menu(request, pk):
     )
 
 
+# ── Categories ────────────────────────────────────────────────────────────────
+
+def _categories_qs(merchant):
+    return MenuCategory.objects.filter(merchant=merchant).annotate(
+        item_count=Count("menu_items", filter=Q(menu_items__status="active"))
+    )
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def merchant_categories(request):
+    """GET/POST /api/merchants/categories/ — manage the merchant's menu categories."""
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    if request.method == "GET":
+        return Response(MenuCategorySerializer(_categories_qs(merchant), many=True).data)
+
+    serializer = MenuCategorySerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.save(merchant=merchant)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def merchant_category_detail(request, pk):
+    """PATCH/DELETE /api/merchants/categories/<id>/ — update or delete a category."""
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        category = MenuCategory.objects.get(pk=pk, merchant=merchant)
+    except MenuCategory.DoesNotExist:
+        return Response({"error": "Category not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "DELETE":
+        category.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    serializer = MenuCategorySerializer(category, data=request.data, partial=True)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.save()
+    return Response(serializer.data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def merchant_categories_reorder(request):
+    """
+    POST /api/merchants/categories/reorder/ — bulk reorder.
+    Body: {"ids": [12, 3, 7]} — order in which categories should appear.
+    """
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    ids = request.data.get("ids")
+    if not isinstance(ids, list) or not ids:
+        return Response({"error": "ids must be a non-empty list."}, status=status.HTTP_400_BAD_REQUEST)
+
+    categories = {
+        c.id: c
+        for c in MenuCategory.objects.filter(merchant=merchant, pk__in=ids)
+    }
+    for order, category_id in enumerate(ids):
+        category = categories.get(category_id)
+        if category is not None and category.display_order != order:
+            category.display_order = order
+            category.save(update_fields=["display_order", "updated_at"])
+
+    return Response(MenuCategorySerializer(_categories_qs(merchant), many=True).data)
+
+
+# ── Option groups & options (variants / modifiers / extras) ──────────────────
+
+def _get_owned_menu_item(merchant, pk):
+    try:
+        return MenuItem.objects.get(pk=pk, merchant=merchant)
+    except MenuItem.DoesNotExist:
+        return None
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsAuthenticated])
+def menu_item_option_groups(request, pk):
+    """
+    GET/POST /api/merchants/menu-items/<pk>/option-groups/
+    Create a group (with optional nested options) for a menu item.
+    """
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    menu_item = _get_owned_menu_item(merchant, pk)
+    if menu_item is None:
+        return Response({"error": "Menu item not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        groups = menu_item.option_groups.all().order_by("display_order", "id")
+        return Response(MenuOptionGroupSerializer(groups, many=True).data)
+
+    data = request.data.copy()
+    nested_options = data.pop("options", [])
+
+    serializer = MenuOptionGroupSerializer(data=data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    group = serializer.save(merchant=merchant, menu_item=menu_item)
+
+    created_options = []
+    for i, option_data in enumerate(nested_options):
+        option_data = dict(option_data)
+        option_data.setdefault("display_order", i)
+        oser = MenuOptionSerializer(data=option_data)
+        if not oser.is_valid():
+            return Response(oser.errors, status=status.HTTP_400_BAD_REQUEST)
+        created_options.append(oser.save(merchant=merchant, group=group))
+
+    return Response(
+        MenuOptionGroupSerializer(group).data,
+        status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["GET", "PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def menu_item_option_group_detail(request, pk, gpk):
+    """GET/PATCH/DELETE /api/merchants/menu-items/<pk>/option-groups/<gpk>/"""
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    menu_item = _get_owned_menu_item(merchant, pk)
+    if menu_item is None:
+        return Response({"error": "Menu item not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        group = MenuOptionGroup.objects.get(pk=gpk, menu_item=menu_item, merchant=merchant)
+    except MenuOptionGroup.DoesNotExist:
+        return Response({"error": "Option group not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "GET":
+        return Response(MenuOptionGroupSerializer(group).data)
+
+    if request.method == "DELETE":
+        group.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    serializer = MenuOptionGroupSerializer(group, data=request.data, partial=True)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.save()
+    return Response(MenuOptionGroupSerializer(group).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def menu_item_option_create(request, pk, gpk):
+    """POST /api/merchants/menu-items/<pk>/option-groups/<gpk>/options/"""
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    menu_item = _get_owned_menu_item(merchant, pk)
+    if menu_item is None:
+        return Response({"error": "Menu item not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        group = MenuOptionGroup.objects.get(pk=gpk, menu_item=menu_item, merchant=merchant)
+    except MenuOptionGroup.DoesNotExist:
+        return Response({"error": "Option group not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = MenuOptionSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.save(merchant=merchant, group=group)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["PATCH", "DELETE"])
+@permission_classes([IsAuthenticated])
+def menu_item_option_detail(request, pk, gpk, opk):
+    """PATCH/DELETE /api/merchants/menu-items/<pk>/option-groups/<gpk>/options/<opk>/"""
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    menu_item = _get_owned_menu_item(merchant, pk)
+    if menu_item is None:
+        return Response({"error": "Menu item not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        option = MenuOption.objects.get(
+            pk=opk, group_id=gpk, group__menu_item=menu_item, merchant=merchant
+        )
+    except MenuOption.DoesNotExist:
+        return Response({"error": "Option not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    if request.method == "DELETE":
+        option.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    serializer = MenuOptionSerializer(option, data=request.data, partial=True)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.save()
+    return Response(serializer.data)
+
+
 # ── Menu items ────────────────────────────────────────────────────────────────
 
 @api_view(["GET"])
@@ -274,8 +563,13 @@ def my_menu_items(request):
     except PermissionError as e:
         return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
 
-    items = MenuItem.objects.filter(merchant=merchant).order_by("category", "name")
-    return Response(MenuItemSerializer(items, many=True).data)
+    items = (
+        MenuItem.objects.filter(merchant=merchant)
+        .select_related("category_ref")
+        .prefetch_related("option_groups__options")
+        .order_by("category", "name")
+    )
+    return Response(MenuItemEditorSerializer(items, many=True).data)
 
 
 @api_view(["GET", "POST"])
@@ -294,7 +588,7 @@ def menu_item_list_create(request):
         items = MenuItem.objects.filter(merchant=merchant).order_by("category", "name")
         return Response(MenuItemSerializer(items, many=True).data)
 
-    serializer = MenuItemSerializer(data=request.data)
+    serializer = MenuItemEditorSerializer(data=request.data, context={"merchant": merchant})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     serializer.save(merchant=merchant)
@@ -315,7 +609,13 @@ def menu_item_detail(request, pk):
         return Response({"error": "Menu item not found."}, status=status.HTTP_404_NOT_FOUND)
 
     if request.method == "GET":
-        return Response(MenuItemSerializer(item).data)
+        item = (
+            MenuItem.objects
+            .select_related("category_ref")
+            .prefetch_related("option_groups__options")
+            .get(pk=pk)
+        )
+        return Response(MenuItemEditorSerializer(item).data)
 
     try:
         merchant = _get_merchant(request.user)
@@ -332,7 +632,7 @@ def menu_item_detail(request, pk):
         item.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 
-    serializer = MenuItemSerializer(item, data=request.data, partial=True)
+    serializer = MenuItemEditorSerializer(item, data=request.data, partial=True, context={"merchant": merchant})
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     serializer.save()
@@ -358,7 +658,7 @@ def toggle_availability(request, pk):
 
     item.is_available = not item.is_available
     item.save(update_fields=["is_available", "updated_at"])
-    return Response(MenuItemSerializer(item).data)
+    return Response(MenuItemEditorSerializer(item).data)
 
 
 # ── Analytics ─────────────────────────────────────────────────────────────────

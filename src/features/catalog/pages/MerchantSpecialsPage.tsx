@@ -1,9 +1,26 @@
 import { useState, useEffect, useRef } from "react";
 import {
-  Plus, Pencil, Trash2, Loader2, X, Check,
-  ImageIcon, Upload, Sparkles, Percent, Tag,
+  Plus,
+  Pencil,
+  Trash2,
+  Loader2,
+  X,
+  Check,
+  ImageIcon,
+  Upload,
+  Sparkles,
+  Percent,
+  Tag,
+  Clock3,
 } from "lucide-react";
-import { specialApi, menuApi, loyaltyApi, type TodaySpecial, type MenuItem, type Reward } from "@/lib/api";
+import {
+  specialApi,
+  menuApi,
+  loyaltyApi,
+  type TodaySpecial,
+  type MenuItem,
+  type Reward,
+} from "@/lib/api";
 import { uploadImage } from "@/lib/image-upload";
 import { optimizeImage } from "@/lib/image-optimize";
 import { useAuth } from "@/lib/auth";
@@ -20,15 +37,13 @@ export function MerchantSpecialsPage() {
   const [modal, setModal] = useState<"new" | TodaySpecial | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      specialApi.list(),
-      menuApi.myItems(),
-      loyaltyApi.getRewards(),
-    ]).then(([s, m, r]) => {
-      setSpecials(s);
-      setMenuItems(m);
-      setRewards(r);
-    }).finally(() => setLoading(false));
+    Promise.all([specialApi.list(), menuApi.myItems(), loyaltyApi.getRewards()])
+      .then(([s, m, r]) => {
+        setSpecials(s);
+        setMenuItems(m);
+        setRewards(r);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   async function handleDelete(id: string) {
@@ -39,13 +54,13 @@ export function MerchantSpecialsPage() {
 
   async function handleToggle(special: TodaySpecial) {
     const updated = await specialApi.update(special.id, { is_active: !special.is_active });
-    setSpecials((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+    setSpecials((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
   }
 
   async function handleSave(data: Partial<TodaySpecial>) {
     if (typeof modal === "object" && modal !== null) {
       const updated = await specialApi.update(modal.id, data);
-      setSpecials((prev) => prev.map((s) => s.id === updated.id ? updated : s));
+      setSpecials((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
       toast.success("Special updated.");
     } else {
       const created = await specialApi.create(data);
@@ -70,8 +85,8 @@ export function MerchantSpecialsPage() {
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Promotions</p>
           <h1 className="font-display mt-1 text-5xl text-foreground">Today's Special</h1>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            A popup banner shown to customers when they first open your store page.
-            Add multiple specials — customers can swipe through them all.
+            A popup banner shown to customers when they first open your store page. Add multiple
+            specials — customers can swipe through them all.
           </p>
         </div>
         <button
@@ -100,11 +115,7 @@ export function MerchantSpecialsPage() {
               }`}
             >
               {s.image_url && (
-                <img
-                  src={s.image_url}
-                  alt={s.title}
-                  className="h-40 w-full object-cover"
-                />
+                <img src={s.image_url} alt={s.title} className="h-40 w-full object-cover" />
               )}
               <div className="p-5">
                 <div className="flex items-start justify-between gap-3">
@@ -139,7 +150,9 @@ export function MerchantSpecialsPage() {
                   </div>
                 </div>
                 <div className="mt-4 flex items-center justify-between">
-                  <span className={`text-xs ${s.is_active ? "text-emerald-600" : "text-muted-foreground"}`}>
+                  <span
+                    className={`text-xs ${s.is_active ? "text-emerald-600" : "text-muted-foreground"}`}
+                  >
                     {s.is_active ? "Active — visible to customers" : "Inactive"}
                   </span>
                   <Toggle active={s.is_active} onToggle={() => handleToggle(s)} />
@@ -167,7 +180,13 @@ export function MerchantSpecialsPage() {
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
 function SpecialModal({
-  initial, menuItems, rewards, merchantId, onSave, onClose, currencySymbol = "Rs",
+  initial,
+  menuItems,
+  rewards,
+  merchantId,
+  onSave,
+  onClose,
+  currencySymbol = "Rs",
 }: {
   initial: TodaySpecial | null;
   menuItems: MenuItem[];
@@ -183,19 +202,25 @@ function SpecialModal({
   const [linkedItem, setLinkedItem] = useState(initial?.linked_menu_item ?? "");
   const [linkedReward, setLinkedReward] = useState(initial?.linked_reward ?? "");
   const [discountType, setDiscountType] = useState<"none" | "percentage" | "fixed">(
-    initial?.discount_type ?? "none"
+    initial?.discount_type ?? "none",
   );
   const [discountValue, setDiscountValue] = useState(
-    initial?.discount_value != null ? String(initial.discount_value) : ""
+    initial?.discount_value != null ? String(initial.discount_value) : "",
   );
+  const [ctaLabel, setCtaLabel] = useState(initial?.cta_label ?? "");
+  const toLocalInput = (iso?: string | null) => (iso ? iso.slice(0, 16) : "");
+  const [startsAt, setStartsAt] = useState(toLocalInput(initial?.starts_at));
+  const [endsAt, setEndsAt] = useState(toLocalInput(initial?.ends_at));
   const [saving, setSaving] = useState(false);
-  const [imgState, setImgState] = useState<
-    "idle" | "processing" | "uploading" | "done" | "error"
-  >(initial?.image_url ? "done" : "idle");
+  const [imgState, setImgState] = useState<"idle" | "processing" | "uploading" | "done" | "error">(
+    initial?.image_url ? "done" : "idle",
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
   }, [onClose]);
@@ -206,7 +231,10 @@ function SpecialModal({
       const optimized = await optimizeImage(file, "banner");
       setImgState("uploading");
       const { publicUrl } = await uploadImage(
-        file, "banner", "special-images", `${merchantId}/special-${Date.now()}.webp`
+        file,
+        "banner",
+        "special-images",
+        `${merchantId}/special-${Date.now()}.webp`,
       );
       setImageUrl(publicUrl);
       setImgState("done");
@@ -226,7 +254,11 @@ function SpecialModal({
         linked_menu_item: linkedItem === "" || linkedItem == null ? null : Number(linkedItem),
         linked_reward: linkedReward || null,
         discount_type: discountType,
-        discount_value: discountType === "none" ? null : discountValue ? Number(discountValue) : null,
+        discount_value:
+          discountType === "none" ? null : discountValue ? Number(discountValue) : null,
+        cta_label: ctaLabel.trim() || undefined,
+        starts_at: startsAt ? new Date(startsAt).toISOString() : null,
+        ends_at: endsAt ? new Date(endsAt).toISOString() : null,
         is_active: initial?.is_active ?? true,
       });
     } finally {
@@ -296,7 +328,11 @@ function SpecialModal({
               {imageUrl && !imgBusy && (
                 <button
                   type="button"
-                  onClick={(e) => { e.stopPropagation(); setImageUrl(""); setImgState("idle"); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setImageUrl("");
+                    setImgState("idle");
+                  }}
                   className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -348,12 +384,17 @@ function SpecialModal({
             </label>
             <select
               value={linkedItem}
-              onChange={(e) => { setLinkedItem(e.target.value); if (e.target.value) setLinkedReward(""); }}
+              onChange={(e) => {
+                setLinkedItem(e.target.value);
+                if (e.target.value) setLinkedReward("");
+              }}
               className="mt-1.5 h-11 w-full rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
             >
               <option value="">— None —</option>
               {menuItems.map((m) => (
-                <option key={m.id} value={m.id}>{m.emoji} {m.name}</option>
+                <option key={m.id} value={m.id}>
+                  {m.emoji} {m.name}
+                </option>
               ))}
             </select>
           </div>
@@ -365,14 +406,65 @@ function SpecialModal({
             </label>
             <select
               value={linkedReward}
-              onChange={(e) => { setLinkedReward(e.target.value); if (e.target.value) setLinkedItem(""); }}
+              onChange={(e) => {
+                setLinkedReward(e.target.value);
+                if (e.target.value) setLinkedItem("");
+              }}
               className="mt-1.5 h-11 w-full rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
             >
               <option value="">— None —</option>
               {rewards.map((r) => (
-                <option key={r.id} value={r.id}>{r.emoji} {r.name}</option>
+                <option key={r.id} value={r.id}>
+                  {r.emoji} {r.name}
+                </option>
               ))}
             </select>
+          </div>
+
+          {/* CTA label */}
+          <div>
+            <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              Button label (optional)
+            </label>
+            <input
+              value={ctaLabel}
+              onChange={(e) => setCtaLabel(e.target.value)}
+              placeholder="e.g. Order now · Get today's deal"
+              className="mt-1.5 h-11 w-full rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
+            />
+          </div>
+
+          {/* Schedule */}
+          <div className="rounded-2xl border border-dashed border-border p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
+              <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                Schedule (optional window)
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-[10px] text-muted-foreground">Starts</label>
+                <input
+                  type="datetime-local"
+                  value={startsAt}
+                  onChange={(e) => setStartsAt(e.target.value)}
+                  className="mt-1 h-10 w-full rounded-2xl bg-mist px-3 text-xs text-foreground outline-none focus:ring-2 focus:ring-ember/40"
+                />
+              </div>
+              <div>
+                <label className="text-[10px] text-muted-foreground">Ends</label>
+                <input
+                  type="datetime-local"
+                  value={endsAt}
+                  onChange={(e) => setEndsAt(e.target.value)}
+                  className="mt-1 h-10 w-full rounded-2xl bg-mist px-3 text-xs text-foreground outline-none focus:ring-2 focus:ring-ember/40"
+                />
+              </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Leave blank for an always-on special. Outside the window the banner is hidden.
+            </p>
           </div>
 
           {/* Discount (optional) */}
@@ -399,7 +491,9 @@ function SpecialModal({
               {discountType !== "none" && (
                 <div className="relative flex-1">
                   {discountType === "fixed" && (
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">{currencySymbol}</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      {currencySymbol}
+                    </span>
                   )}
                   <input
                     type="number"
@@ -414,7 +508,9 @@ function SpecialModal({
                     }`}
                   />
                   {discountType === "percentage" && (
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                      %
+                    </span>
                   )}
                 </div>
               )}
@@ -460,7 +556,9 @@ function Toggle({ active, onToggle }: { active: boolean; onToggle: () => void })
 }
 
 function IconBtn({
-  onClick, danger, children,
+  onClick,
+  danger,
+  children,
 }: {
   onClick: () => void;
   danger?: boolean;

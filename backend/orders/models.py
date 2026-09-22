@@ -386,6 +386,10 @@ class OrderItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.IntegerField(default=1)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+    special_instructions = models.TextField(
+        blank=True, default="",
+        help_text="Per-line customer special requests (stored as an immutable snapshot).",
+    )
 
     # ── Preparation routing (snapshot from menu item at order creation) ────────
     preparation_area = models.ForeignKey(
@@ -441,3 +445,34 @@ class OrderItem(models.Model):
         return new_status in self.VALID_PREPARATION_TRANSITIONS.get(
             self.preparation_status, set()
         )
+
+
+class OrderItemOption(models.Model):
+    """
+    Immutable snapshot of a selected variant/modifier on an order line.
+
+    Kept structured (not a free-text blob) so POS, KDS, receipts, and
+    analytics can query exact selections after the menu item is renamed or
+    deleted (D-4, single-source-of-truth, section 108).
+    """
+
+    order_item = models.ForeignKey(
+        OrderItem,
+        on_delete=models.CASCADE,
+        related_name="options",
+    )
+    group_name = models.CharField(max_length=255)
+    option_name = models.CharField(max_length=255)
+    kind = models.CharField(max_length=20, default="modifier")
+    price_effect = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Absolute variant price or modifier price_delta applied to this line.",
+    )
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        db_table = "order_item_options"
+        ordering = ["display_order", "id"]
+
+    def __str__(self):
+        return f"{self.option_name} ({self.group_name})"

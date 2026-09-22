@@ -43,12 +43,16 @@ class MenuItemValidationTests(TestCase):
         self.assertEqual(resp.status_code, 201, resp.data)
         self.assertEqual(MenuItem.objects.count(), 1)
 
-    def test_rejects_zero_or_negative_price(self):
-        for bad in ("0", "-5", "0.00"):
+    def test_rejects_negative_price_but_allows_zero(self):
+        # Zero (price 0) is valid — free / comp items for staff food (spec §65).
+        for good in ("0", "0.00"):
+            with self.subTest(price=good):
+                resp = self._create(price=good)
+                self.assertEqual(resp.status_code, 201, resp.data)
+        for bad in ("-5", "-0.01"):
             with self.subTest(price=bad):
                 resp = self._create(price=bad)
                 self.assertEqual(resp.status_code, 400, resp.data)
-        self.assertEqual(MenuItem.objects.count(), 0)
 
     def test_rejects_negative_points(self):
         for bad in (-1, "-3"):
@@ -69,7 +73,7 @@ class MenuItemValidationTests(TestCase):
         self.assertEqual(resp.status_code, 400, resp.data)
         self.assertEqual(MenuItem.objects.count(), 0)
 
-    def test_update_rejects_bad_price(self):
+    def test_update_rejects_negative_price(self):
         resp = self._create()
         self.assertEqual(resp.status_code, 201, resp.data)
         item_id = resp.data["id"]

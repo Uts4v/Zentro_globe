@@ -153,7 +153,7 @@ function GuestMerchantMenu() {
     setPlacing(true);
     try {
       setGuestName(guestName);
-      const orderId = await placeGuestOrder(menuItems, notes, guestName);
+      const orderId = await placeGuestOrder(notes, guestName);
       setOrderSuccess({ orderId, tableNum: activeTable.tableId });
     } catch (err: any) {
       alert(err?.message || "Failed to place order");

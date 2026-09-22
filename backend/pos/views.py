@@ -15,7 +15,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
 from merchants.models import MerchantProfile, MenuItem
-from orders.models import Order, OrderItem
+from orders.models import Order, OrderItem, OrderItemOption
 from accounts.models import CustomerProfile, User
 from notifications.services import send_notification
 from notifications.models import Notification
@@ -1373,16 +1373,12 @@ def create_pos_order(request):
         order_type = Order.ORDER_TYPE_REGULAR
     is_staff_comp = order_type == Order.ORDER_TYPE_STAFF_COMP
 
+    from config.menu_pricing import validate_and_price_line, LineValidationError
+
+    option_rows = []
+
     for item_data in items_data:
         menu_item_id = item_data.get("menu_item_id")
-        try:
-            quantity = parse_quantity(item_data.get("quantity"), default=1)
-        except QuantityValidationError as exc:
-            return Response(
-                {"error": f"Invalid quantity for menu item {menu_item_id}: {exc}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         menu_item = menu_items_by_id.get(menu_item_id)
         if menu_item is None:
             return Response(
@@ -1390,20 +1386,42 @@ def create_pos_order(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        selections = [
+            (sel.get("group_id"), sel.get("option_id"))
+            for sel in (item_data.get("selections") or [])
+        ]
+        try:
+            line = validate_and_price_line(
+                menu_item,
+                item_data.get("quantity", 1),
+                selections,
+                special_instructions=item_data.get("special_instructions", ""),
+                loyalty_eligible=not is_staff_comp,
+            )
+        except LineValidationError as exc:
+            return Response(
+                {"error": f"{menu_item.name}: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         # Staff comp orders are free — override price to 0
-        item_price = Decimal("0") if is_staff_comp else menu_item.price
-        subtotal = item_price * quantity
+        unit_price = Decimal("0") if is_staff_comp else line.unit_price
+        subtotal = unit_price * line.quantity
         total_amount += subtotal
 
-        if menu_item.loyalty_reward and not is_staff_comp:
-            points_earned += menu_item.points_per_item * quantity
+        if is_staff_comp:
+            line.points = 0
+
+        points_earned += line.points
+        option_rows.append(line.options)
 
         order_items_data.append({
             "menu_item": menu_item,
-            "name": menu_item.name,
-            "price": item_price,
-            "quantity": quantity,
+            "name": line.name,
+            "price": unit_price,
+            "quantity": line.quantity,
             "subtotal": subtotal,
+            "special_instructions": line.special_instructions,
         })
 
     # Apply spend-based points from LoyaltyRules (points_per_npr)
@@ -1493,10 +1511,23 @@ def create_pos_order(request):
             from orders.services.preparation import prepare_order_items_for_routing
             order_items_data = prepare_order_items_for_routing(order, order_items_data)
 
-            OrderItem.objects.bulk_create(
+            created_items = OrderItem.objects.bulk_create(
                 [OrderItem(order=order, **item) for item in order_items_data],
                 batch_size=200,
             )
+            snapshot_rows = []
+            for index, line_options in enumerate(option_rows):
+                created = created_items[index]
+                for display_order, opt in enumerate(line_options):
+                    snapshot_rows.append(OrderItemOption(
+                        order_item=created,
+                        group_name=opt.group_name,
+                        option_name=opt.option_name,
+                        kind=opt.kind,
+                        price_effect=opt.price_effect,
+                        display_order=display_order,
+                    ))
+            OrderItemOption.objects.bulk_create(snapshot_rows, batch_size=200)
 
             # Record client mutation for idempotency
             if client_mutation_id:
@@ -2748,15 +2779,25 @@ def receipt_data(request, order_id):
         return Response({"error": "Order not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    # Items
+    # Items (with kitchen details for KOT printing)
+    order_items = list(order.items.prefetch_related("options").all())
     items = [
         {
             "name": item.name,
             "price": str(item.price),
             "quantity": item.quantity,
             "subtotal": str(item.subtotal),
+            "special_instructions": item.special_instructions or "",
+            "options": [
+                {
+                    "group_name": opt.group_name,
+                    "option_name": opt.option_name,
+                    "kind": opt.kind,
+                }
+                for opt in item.options.all()
+            ],
         }
-        for item in order.items.all()
+        for item in order_items
     ]
 
     # Discounts
@@ -2819,6 +2860,7 @@ def receipt_data(request, order_id):
         "fulfillment_type": order.fulfillment_type,
         "customer_name": order.customer.full_name if order.customer else None,
         "worker_name": order.processed_by_worker.display_name if order.processed_by_worker else None,
+        "notes": order.notes,
 
         "items": items,
         "subtotal": str(order.subtotal or order.total_amount),
@@ -3794,15 +3836,51 @@ def table_menu(request, token):
                         status=status.HTTP_404_NOT_FOUND)
 
     merchant = table.merchant
-    menu_items = MenuItem.objects.filter(
-        merchant=merchant, is_available=True,
-    ).order_by("category", "name")
+    menu_items = (
+        MenuItem.objects
+        .filter(merchant=merchant, is_available=True, status="active")
+        .select_related("category_ref")
+        .prefetch_related("option_groups__options")
+        .order_by("category", "name")
+    )
+
+    def _serialize_groups(item):
+        result = []
+        for group in item.option_groups.filter(is_active=True).order_by("display_order", "id"):
+            result.append({
+                "id": group.id,
+                "name": group.name,
+                "kind": group.kind,
+                "required": group.required,
+                "min_select": group.min_select,
+                "max_select": group.max_select,
+                "options": [
+                    {
+                        "id": opt.id,
+                        "name": opt.name,
+                        "price": str(opt.price) if opt.price is not None else None,
+                        "price_delta": str(opt.price_delta),
+                        "is_default": opt.is_default,
+                    }
+                    for opt in group.options.filter(is_available=True).order_by("display_order", "id")
+                ],
+            })
+        return result
 
     categories: dict = {}
+    from config.menu_pricing import apply_discount, resolve_discount
+
     for item in menu_items:
         cat = item.category or "Menu"
         if cat not in categories:
             categories[cat] = []
+        discount_type, discount_value = resolve_discount(item)
+        discount_price = None
+        discount_amount = "0.00"
+        if discount_type != "none":
+            discounted, cut = apply_discount(item.price, discount_type, discount_value)
+            discount_price = str(discounted)
+            discount_amount = str(cut)
         categories[cat].append({
             "id": item.id,
             "name": item.name,
@@ -3812,6 +3890,11 @@ def table_menu(request, token):
             "category": item.category,
             "emoji": item.emoji,
             "is_featured": item.is_featured,
+            "discount_type": discount_type,
+            "discount_value": str(discount_value) if discount_value is not None else None,
+            "discount_price": discount_price,
+            "discount_amount": discount_amount,
+            "groups": _serialize_groups(item),
         })
 
     return Response({
@@ -3907,26 +3990,58 @@ def table_order(request, token):
     )
     order.save()
 
-    # Create order items and calculate points (Decimal math only)
+    # Create order items and calculate points (Decimal math only, backend authority)
+    from config.menu_pricing import validate_and_price_line, LineValidationError
+
     subtotal = Decimal("0")
     points_earned = 0
+    order_items = []
+    option_snapshot_rows = []
+
     for item_data in items_data:
         menu_item = menu_items_by_id[item_data["menu_item_id"]]
-        qty = parse_quantity(item_data.get("quantity"), default=1)
-        item_subtotal = menu_item.price * qty
-        subtotal += item_subtotal
+        selections = [
+            (s.get("group_id"), s.get("option_id"))
+            for s in (item_data.get("selections") or [])
+        ]
+        try:
+            line = validate_and_price_line(
+                menu_item,
+                item_data.get("quantity", 1),
+                selections,
+                special_instructions=item_data.get("special_instructions", ""),
+                loyalty_eligible=False,
+            )
+        except LineValidationError as exc:
+            return Response(
+                {"error": f"{menu_item.name}: {exc}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        if menu_item.loyalty_reward:
-            points_earned += menu_item.points_per_item * qty
+        subtotal += line.subtotal
+        points_earned += line.points
 
-        OrderItem.objects.create(
+        order_item = OrderItem.objects.create(
             order=order,
             menu_item=menu_item,
-            name=menu_item.name,
-            price=menu_item.price,
-            quantity=qty,
-            subtotal=item_subtotal,
+            name=line.name,
+            price=line.unit_price,
+            quantity=line.quantity,
+            subtotal=line.subtotal,
+            special_instructions=line.special_instructions,
         )
+        order_items.append(order_item)
+        for i, opt in enumerate(line.options):
+            option_snapshot_rows.append(OrderItemOption(
+                order_item=order_item,
+                group_name=opt.group_name,
+                option_name=opt.option_name,
+                kind=opt.kind,
+                price_effect=opt.price_effect,
+                display_order=i,
+            ))
+
+    OrderItemOption.objects.bulk_create(option_snapshot_rows, batch_size=200)
 
     # Apply spend-based points from LoyaltyRules
     try:

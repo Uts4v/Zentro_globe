@@ -227,7 +227,7 @@ export const posAddItemsToOrder = (
   orderId: number,
   items: { menu_item_id: number; quantity: number }[],
 ) =>
-  djangoFetch<any>(apiUrl(`/orders/${orderId}/add-items/`), {
+  djangoFetch<PosOrder>(apiUrl(`/orders/${orderId}/add-items/`), {
     method: "POST",
     headers: headers(),
     body: JSON.stringify({ items }),
@@ -455,9 +455,11 @@ export interface PosOrder {
     price: string;
     quantity: number;
     subtotal: string;
+    special_instructions?: string;
   }>;
   cancellation_reason: string;
   cancelled_by: string;
+  kot_number: number | null;
   table_id: number | null;
   table_name_snapshot: string;
   table_number_snapshot: number | null;
@@ -526,8 +528,11 @@ export interface PosReceiptData {
     price: string;
     quantity: number;
     subtotal: string;
+    special_instructions?: string;
+    options?: Array<{ group_name: string; option_name: string; kind: string }>;
   }>;
   subtotal: string;
+  notes?: string;
   discounts: Array<{
     type: string;
     value: string;
@@ -1032,7 +1037,7 @@ export interface PosResolveConflictPayload {
   entity_type: "order" | "payment";
   entity_id: string;
   resolution: "keep_server" | "keep_client" | "merge";
-  client_data?: Record<string, any>;
+  client_data?: Record<string, unknown>;
 }
 
 // ── Table QR (Phase 28) — Public ───────────────────────────────────────────
@@ -1040,10 +1045,33 @@ export interface PosResolveConflictPayload {
 export const posTableMenu = (token: string) =>
   djangoFetch<PosTableMenu>(apiUrl(`/pos/table/${token}/menu/`), {});
 
+export interface PosTableOption {
+  id: number;
+  name: string;
+  price: string | null;
+  price_delta: string | null;
+  is_default: boolean;
+}
+
+export interface PosTableGroup {
+  id: number;
+  name: string;
+  kind: "variant" | "modifier";
+  required: boolean;
+  min_select: number;
+  max_select: number;
+  options: PosTableOption[];
+}
+
 export const posTableOrder = (
   token: string,
   data: {
-    items: Array<{ menu_item_id: number; quantity: number }>;
+    items: Array<{
+      menu_item_id: number;
+      quantity: number;
+      selections?: Array<{ group_id: number | string; option_id: number | string }>;
+      special_instructions?: string;
+    }>;
     notes?: string;
     customer_name?: string;
   },
@@ -1071,6 +1099,11 @@ export interface PosTableMenu {
       category: string;
       emoji: string;
       is_featured: boolean;
+      discount_type?: "none" | "percentage" | "fixed";
+      discount_value?: string | null;
+      discount_price?: string | null;
+      discount_amount?: string | null;
+      groups: PosTableGroup[];
     }>
   >;
 }

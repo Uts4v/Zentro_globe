@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useStore, cartTotal, cartPoints, type MenuItem } from "@/lib/store";
+import { useStore, type CartItem } from "@/lib/store";
 import { TopBar, MobileShell } from "@/components/MobileShell";
 import {
   Minus,
@@ -11,15 +11,24 @@ import {
   ShoppingBag,
   Truck,
   Scan,
+  Pencil,
+  Trash2,
 } from "lucide-react";
-import { menuApi, merchantApi } from "@/lib/api";
-import { useState, useEffect } from "react";
+import { menuApi, merchantApi, orderApi } from "@/lib/api";
+import type { MenuCatalog, MenuItem, OrderPreview } from "@/lib/api";
+import ProductDetailSheet, {
+  type ProductDraft,
+} from "@/features/catalog/components/ProductDetailSheet";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { formatCurrency } from "@/lib/currency";
+import { lineSelectionsText } from "@/lib/menu-utils";
 
 export function CartPage() {
   const {
     cart,
-    add,
-    remove,
+    setQty,
+    replaceLine,
+    removeLine,
     placeOrder,
     selectedMerchantId,
     activeTable,
@@ -27,15 +36,20 @@ export function CartPage() {
     setFulfillmentType,
   } = useStore();
   const nav = useNavigate();
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [catalog, setCatalog] = useState<MenuCatalog | null>(null);
   const [loading, setLoading] = useState(true);
   const [placing, setPlacing] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [error, setError] = useState("");
   const [sym, setSym] = useState("Rs");
+  const [preview, setPreview] = useState<OrderPreview | null>(null);
+  const [editing, setEditing] = useState<{ line: CartItem; item: MenuItem } | null>(null);
+
+  const symFromCatalog = catalog?.merchant.currency_symbol || sym;
 
   useEffect(() => {
     loadMenu();
-  }, [selectedMerchantId]);
+  }, [selectedMerchantId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadMenu() {
     if (!selectedMerchantId) {
@@ -44,35 +58,74 @@ export function CartPage() {
     }
     setLoading(true);
     try {
-      const items = await menuApi.forMerchant(selectedMerchantId);
-      setMenuItems(
-        items.map((i) => ({
-          id: i.id,
-          name: i.name,
-          description: i.description,
-          price: parseFloat(i.price),
-          category: i.category,
-          emoji: i.emoji,
-          points_per_item: i.points_per_item,
-          is_available: i.is_available,
-          image_url: i.image_url,
-        })),
-      );
-      try {
-        const merchant = await merchantApi.get(selectedMerchantId);
-        if (merchant?.currency_symbol) setSym(merchant.currency_symbol);
-      } catch {
-        // use default "Rs"
-      }
+      const data = await menuApi.catalog(selectedMerchantId);
+      setCatalog(data);
+      if (data.merchant.currency_symbol) setSym(data.merchant.currency_symbol);
     } catch {
-      // cart calculations will skip unknown items
+      setCatalog(null);
     } finally {
       setLoading(false);
     }
   }
 
-  const total = cartTotal(cart, menuItems);
-  const points = cartPoints(cart, menuItems);
+  const itemsById = useMemo(() => {
+    const map = new Map<string, MenuItem>();
+    for (const i of catalog?.items ?? []) map.set(String(i.id), i);
+    return map;
+  }, [catalog]);
+
+  const previewPayload = useMemo(
+    () => ({
+      merchant_id: String(selectedMerchantId ?? ""),
+      items: cart.map((c) => ({
+        menu_item_id: c.itemId,
+        quantity: c.qty,
+        selections: c.selections,
+        special_instructions: c.specialInstructions,
+        name: "",
+        price: c.unitPrice,
+        points_per_item: 0,
+      })),
+    }),
+    [cart, selectedMerchantId],
+  );
+
+  const runPreview = useCallback(async () => {
+    if (!selectedMerchantId || cart.length === 0) {
+      setPreview(null);
+      return;
+    }
+    setPreviewing(true);
+    try {
+      const p = await orderApi.preview(previewPayload);
+      setPreview(p);
+      setError("");
+    } catch (e: unknown) {
+      const msg = (e as { message?: string })?.message;
+      if (msg && /sold out|unavailable|no longer active/i.test(msg)) {
+        setError(msg);
+      } else {
+        setPreview(null);
+      }
+    } finally {
+      setPreviewing(false);
+    }
+  }, [previewPayload, cart.length, selectedMerchantId]);
+
+  useEffect(() => {
+    if (cart.length === 0) {
+      setPreview(null);
+      return;
+    }
+    const t = setTimeout(runPreview, 350);
+    return () => clearTimeout(t);
+  }, [runPreview, cart]);
+
+  const clientSubtotal = cart.reduce((s, c) => s + (c.unitPrice || 0) * c.qty, 0);
+  const subtotal = preview ? parseFloat(preview.subtotal) : clientSubtotal;
+  const taxValue = preview ? parseFloat(preview.tax_amount) : 0;
+  const total = preview ? parseFloat(preview.total_amount) : clientSubtotal;
+  const points = preview?.points_earned ?? cart.reduce((s, c) => s + c.qty, 0);
 
   async function handlePlaceOrder() {
     if (placing) return;
@@ -83,10 +136,10 @@ export function CartPage() {
     setPlacing(true);
     setError("");
     try {
-      const id = await placeOrder(menuItems);
+      const id = await placeOrder();
       nav({ to: "/orders/$id", params: { id } });
-    } catch (e: any) {
-      setError(e.message || "Failed to place order");
+    } catch (e: unknown) {
+      setError((e as { message?: string }).message || "Failed to place order");
     } finally {
       setPlacing(false);
     }
@@ -96,7 +149,7 @@ export function CartPage() {
     <MobileShell>
       <TopBar
         right={
-          <Link to="/" className="glass grid h-9 w-9 place-items-center rounded-full">
+          <Link to="/menu" className="glass grid h-9 w-9 place-items-center rounded-full">
             <ArrowLeft className="h-4 w-4" />
           </Link>
         }
@@ -140,7 +193,6 @@ export function CartPage() {
             })}
           </div>
 
-          {/* Table context */}
           {fulfillmentType === "dine_in" && (
             <div className="mt-3">
               {activeTable ? (
@@ -180,37 +232,67 @@ export function CartPage() {
 
       <div className="mt-6 space-y-3 px-5">
         {cart.map((c) => {
-          const item = menuItems.find((m) => String(m.id) === String(c.itemId));
+          const item = itemsById.get(String(c.itemId));
+          const optionsText = item ? lineSelectionsText(item, c.selections) : "";
           return (
-            <div key={c.itemId} className="glass flex items-center gap-3 rounded-2xl p-3">
+            <div key={c.key} className="glass flex items-center gap-3 rounded-2xl p-3">
               <div className="grid h-14 w-14 shrink-0 place-items-center rounded-xl bg-mist text-2xl">
                 {item?.emoji || "🍽️"}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-foreground">
-                  {item?.name || "Unknown item"}
-                </p>
-                <p className="font-display text-lg text-foreground">
-                  {item && item.price === 0 ? (
-                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-sm font-bold text-emerald-700">FREE</span>
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-sm font-semibold text-foreground">
+                    {item?.name || "Unknown item"}
+                  </p>
+                  <button
+                    onClick={() => item && setEditing({ line: c, item })}
+                    aria-label="Edit item"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                  >
+                    <Pencil className="h-3 w-3" />
+                  </button>
+                </div>
+                {optionsText && (
+                  <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">
+                    {optionsText}
+                  </p>
+                )}
+                {c.specialInstructions && (
+                  <p className="mt-0.5 line-clamp-1 text-[11px] text-ember">
+                    “{c.specialInstructions}”
+                  </p>
+                )}
+                <p className="font-display text-base text-foreground">
+                  {c.unitPrice === 0 ? (
+                    <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-sm font-bold text-emerald-700">
+                      FREE
+                    </span>
                   ) : (
-                    `NPR ${item ? (item.price * c.qty).toLocaleString() : "—"}`
+                    `${formatCurrency(c.unitPrice * c.qty, symFromCatalog, 0)}`
                   )}
                 </p>
               </div>
-              <div className="glass flex shrink-0 items-center gap-1 rounded-full p-1">
+              <div className="flex shrink-0 flex-col items-end gap-1.5">
+                <div className="glass flex items-center gap-1 rounded-full p-1">
+                  <button
+                    onClick={() => setQty(c.key, c.qty - 1)}
+                    className="grid h-7 w-7 place-items-center rounded-full bg-white"
+                  >
+                    <Minus className="h-3 w-3" />
+                  </button>
+                  <span className="w-5 text-center text-sm font-medium">{c.qty}</span>
+                  <button
+                    onClick={() => setQty(c.key, c.qty + 1)}
+                    className="grid h-7 w-7 place-items-center rounded-full bg-ink text-primary-foreground"
+                  >
+                    <Plus className="h-3 w-3" />
+                  </button>
+                </div>
                 <button
-                  onClick={() => remove(c.itemId)}
-                  className="grid h-7 w-7 place-items-center rounded-full bg-white"
+                  onClick={() => removeLine(c.key)}
+                  className="text-[11px] text-rose-400 hover:text-rose-600"
                 >
-                  <Minus className="h-3 w-3" />
-                </button>
-                <span className="w-5 text-center text-sm font-medium">{c.qty}</span>
-                <button
-                  onClick={() => add(c.itemId)}
-                  className="grid h-7 w-7 place-items-center rounded-full bg-ink text-primary-foreground"
-                >
-                  <Plus className="h-3 w-3" />
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
@@ -221,7 +303,6 @@ export function CartPage() {
       {cart.length > 0 && (
         <div className="mt-8 px-5">
           <div className="glass-strong rounded-3xl p-5">
-            {/* Order summary with fulfillment info */}
             <div className="flex items-center gap-2 mb-3">
               {fulfillmentType === "dine_in" && activeTable && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-[10px] font-medium text-blue-700">
@@ -238,14 +319,30 @@ export function CartPage() {
                   <Truck className="h-3 w-3" /> Delivery
                 </span>
               )}
+              {previewing && (
+                <Loader2 className="ml-auto h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              )}
             </div>
 
-            <Row label="Subtotal" value={`${sym} ${total.toLocaleString()}`} />
-            <Row label="Service" value="—" />
+            <Row label="Subtotal" value={formatCurrency(subtotal, symFromCatalog, 0)} />
+            {preview && taxValue > 0 && (
+              <>
+                {preview.tax_breakdown.map((t) => (
+                  <Row
+                    key={t.name}
+                    label={`${t.name || "Tax"} (${t.rate}%)`}
+                    value={formatCurrency(t.amount, symFromCatalog, 0)}
+                  />
+                ))}
+                {preview.tax_breakdown.length === 0 && (
+                  <Row label="Tax" value={formatCurrency(taxValue, symFromCatalog, 0)} />
+                )}
+              </>
+            )}
             <div className="my-3 border-t border-border" />
-            <Row label="Total" value={`${sym} ${total.toLocaleString()}`} bold />
+            <Row label="Total" value={formatCurrency(total, symFromCatalog, 0)} bold />
             <div className="mt-3 flex items-center justify-between rounded-2xl bg-ember-soft px-4 py-3">
-              <span className="text-xs text-foreground">You'll earn</span>
+              <span className="text-xs text-foreground">You&apos;ll earn</span>
               <span className="font-display text-lg text-ember">+{points} pts</span>
             </div>
 
@@ -258,7 +355,7 @@ export function CartPage() {
 
             <button
               onClick={handlePlaceOrder}
-              disabled={placing}
+              disabled={placing || !!error}
               className="mt-4 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-ink text-base font-medium text-primary-foreground shadow-ember transition-transform active:scale-[0.98] disabled:opacity-60"
             >
               {placing ? (
@@ -266,11 +363,34 @@ export function CartPage() {
                   <Loader2 className="h-4 w-4 animate-spin" /> Placing order…
                 </>
               ) : (
-                `Place order · ${sym} ${total.toLocaleString()}`
+                `Place order · ${formatCurrency(total, symFromCatalog, 0)}`
               )}
             </button>
           </div>
         </div>
+      )}
+
+      {editing && (
+        <ProductDetailSheet
+          open
+          item={editing.item}
+          currencySymbol={symFromCatalog}
+          resetKey={editing.line.key}
+          initialQty={editing.line.qty}
+          initialSelections={editing.line.selections}
+          initialInstructions={editing.line.specialInstructions}
+          submitLabel="Update item"
+          onClose={() => setEditing(null)}
+          onAdd={(draft: ProductDraft) => {
+            replaceLine(editing.line.key, {
+              itemId: draft.itemId,
+              qty: draft.qty,
+              selections: draft.selections,
+              specialInstructions: draft.specialInstructions,
+              unitPrice: draft.unitPrice,
+            });
+          }}
+        />
       )}
     </MobileShell>
   );

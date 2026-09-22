@@ -217,7 +217,7 @@ export default function PreparationAreaScreen({ areaId }: Props) {
 
   // WebSocket connection
   useEffect(() => {
-    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) || "ws://127.0.0.1:8000";
+    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) || "ws://127.0.0.1:8001";
     const merchant = usePosStore.getState().merchant;
     if (!merchant) return;
 

@@ -200,7 +200,154 @@ class MerchantProfile(models.Model):
         return self.business_name
 
 
+class MenuCategory(models.Model):
+    """Structured category for a merchant's menu (replaces free-text category)."""
+
+    merchant = models.ForeignKey(
+        MerchantProfile,
+        on_delete=models.CASCADE,
+        related_name="menu_categories",
+    )
+    name = models.CharField(max_length=100)
+    emoji = models.CharField(max_length=10, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "menu_categories"
+        ordering = ["display_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["merchant", "name"],
+                name="unique_category_name_per_merchant",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.merchant.business_name})"
+
+
+class MenuOptionGroup(models.Model):
+    """
+    A selectable group attached to a menu item.
+
+    Two kinds:
+      - variant:  mutually-exclusive choices that change the base product
+                  (Size, Temperature, Serving). Each option carries an
+                  absolute `price`.
+      - modifier: optional ad-ons you can pick multiple of (Extra cheese,
+                  no onion). Each option carries a `price_delta`.
+    """
+
+    KIND_VARIANT = "variant"
+    KIND_MODIFIER = "modifier"
+    KIND_CHOICES = [
+        (KIND_VARIANT, "Variant"),
+        (KIND_MODIFIER, "Modifier"),
+    ]
+
+    merchant = models.ForeignKey(
+        MerchantProfile,
+        on_delete=models.CASCADE,
+        related_name="option_groups",
+    )
+    menu_item = models.ForeignKey(
+        "MenuItem",
+        on_delete=models.CASCADE,
+        related_name="option_groups",
+    )
+    name = models.CharField(max_length=100)
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES, default=KIND_MODIFIER)
+    required = models.BooleanField(default=False)
+    min_select = models.PositiveIntegerField(default=0)
+    max_select = models.PositiveIntegerField(default=1)
+    is_active = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "menu_option_groups"
+        ordering = ["display_order", "id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(min_select__gte=0) & models.Q(max_select__gte=1),
+                name="menu_option_group_selection_bounds",
+            ),
+        ]
+
+    def __str__(self):
+        kind_label = "Variant" if self.kind == self.KIND_VARIANT else "Modifier"
+        return f"{self.name} ({kind_label}) — {self.menu_item.name}"
+
+
+class MenuOption(models.Model):
+    """A single selectable option inside a MenuOptionGroup."""
+
+    merchant = models.ForeignKey(
+        MerchantProfile,
+        on_delete=models.CASCADE,
+        related_name="menu_options",
+    )
+    group = models.ForeignKey(
+        MenuOptionGroup,
+        on_delete=models.CASCADE,
+        related_name="options",
+    )
+    name = models.CharField(max_length=100)
+    sku = models.CharField(max_length=100, blank=True, default="")
+    price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Absolute price for variant options. Falls back to the item price when null.",
+    )
+    price_delta = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Price add-on for modifier options (e.g. +50 for extra cheese).",
+    )
+    is_default = models.BooleanField(default=False)
+    is_available = models.BooleanField(default=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "menu_options"
+        ordering = ["display_order", "id"]
+
+    def __str__(self):
+        return f"{self.name} ({self.group.name})"
+
+
 class MenuItem(models.Model):
+    STATUS_ACTIVE = "active"
+    STATUS_DRAFT = "draft"
+    STATUS_ARCHIVED = "archived"
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_DRAFT, "Draft"),
+        (STATUS_ARCHIVED, "Archived"),
+    ]
+
+    DISCOUNT_NONE = "none"
+    DISCOUNT_PERCENTAGE = "percentage"
+    DISCOUNT_FIXED = "fixed"
+    DISCOUNT_TYPE_CHOICES = [
+        (DISCOUNT_NONE, "No discount"),
+        (DISCOUNT_PERCENTAGE, "Percentage"),
+        (DISCOUNT_FIXED, "Fixed amount"),
+    ]
+    DISCOUNT_SOURCE_MANUAL = "manual"
+    DISCOUNT_SOURCE_SPECIAL = "special"
+    DISCOUNT_SOURCE_CHOICES = [
+        (DISCOUNT_SOURCE_MANUAL, "Set by merchant"),
+        (DISCOUNT_SOURCE_SPECIAL, "Synced from Today's Special"),
+    ]
+
     merchant = models.ForeignKey(
         MerchantProfile,
         on_delete=models.CASCADE,
@@ -208,14 +355,49 @@ class MenuItem(models.Model):
     )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    short_description = models.CharField(
+        max_length=200, blank=True,
+        help_text="One-line subtitle shown under the product tile name.",
+    )
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    discount_type = models.CharField(
+        max_length=20, choices=DISCOUNT_TYPE_CHOICES, default=DISCOUNT_NONE,
+        help_text="Item-level discount applied to the base price (variants keep their own price).",
+    )
+    discount_value = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Percentage (0-100) or fixed amount depending on discount_type.",
+    )
+    discount_source = models.CharField(
+        max_length=20, choices=DISCOUNT_SOURCE_CHOICES, default=DISCOUNT_SOURCE_MANUAL,
+        help_text="Whether the discount was set directly or synced from a Today's Special.",
+    )
     image_url = models.URLField(blank=True)
     category = models.CharField(max_length=100, blank=True)
+    category_ref = models.ForeignKey(
+        MenuCategory,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="menu_items",
+    )
     is_available = models.BooleanField(default=True)
     is_featured = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE,
+        help_text="Lifecycle status; archived items are hidden everywhere.",
+    )
     loyalty_reward = models.BooleanField(default=True)
     points_per_item = models.IntegerField(default=1)
     emoji = models.CharField(max_length=10, default="☕")
+    dietary_tags = models.JSONField(
+        default=list, blank=True,
+        help_text='e.g. ["vegetarian", "vegan", "spicy", "gluten-free", "bestseller"]',
+    )
+    allergens = models.JSONField(
+        default=list, blank=True,
+        help_text='e.g. ["dairy", "nuts", "shellfish"]',
+    )
+    display_order = models.PositiveIntegerField(default=0)
 
     # ── Preparation routing (optional) ─────────────────────────────────────────
     preparation_area = models.ForeignKey(

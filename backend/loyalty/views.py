@@ -36,6 +36,7 @@ from .models import (
     CustomerMerchantWallet,
     MerchantPunchCard,
     CustomerPunchCard,
+    PunchCardEvent,
     PointTransaction,
 )
 from .serializers import (
@@ -47,6 +48,7 @@ from .serializers import (
     CustomerMerchantWalletSerializer,
     MerchantPunchCardSerializer,
     CustomerPunchCardSerializer,
+    PunchCardEventSerializer,
     PointTransactionSerializer,
     MembershipSerializer,
     MembershipCardSerializer,
@@ -84,13 +86,25 @@ def _paginate(request, qs, default=50, max_limit=200):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def customer_today_special(request, slug):
-    """GET /api/loyalty/specials/<slug>/ — public, returns all active specials for a merchant."""
+    """GET /api/loyalty/specials/<slug>/ — public, returns active specials currently scheduled."""
     try:
         merchant = MerchantProfile.objects.get(slug=slug)
     except MerchantProfile.DoesNotExist:
         return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    specials = TodaySpecial.objects.filter(merchant=merchant, is_active=True)
+    now = timezone.now()
+    specials = list(
+        TodaySpecial.objects.filter(
+            merchant=merchant,
+            is_active=True,
+        ).filter(
+            # Outside an explicit schedule window the special is always shown.
+            Q(starts_at__isnull=True) | Q(starts_at__lte=now),
+            Q(ends_at__isnull=True) | Q(ends_at__gte=now),
+        ).order_by("-created_at")
+    )
+    # Prefer specials linked to a real menu item (spec 9).
+    specials.sort(key=lambda s: (s.linked_menu_item_id is None, -s.id))
     return Response(TodaySpecialSerializer(specials, many=True).data)
 
 
@@ -444,6 +458,71 @@ def merchant_punch_card_detail(request, pk):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
+def merchant_punch_card_history(request):
+    """Category-able punch card history for the merchant.
+
+    Returns per-customer card journeys (started → punches → completed → claimed)
+    plus summary counters and the merchant's punch card templates for filtering.
+    """
+    try:
+        merchant = get_merchant_profile(request.user)
+    except PermissionError as e:
+        return _merchant_error(str(e))
+
+    qs = PunchCardEvent.objects.filter(merchant=merchant).select_related(
+        "customer__user", "punch_card", "card", "order"
+    )
+
+    event_type = (request.query_params.get("event_type") or "").upper()
+    if event_type:
+        qs = qs.filter(event_type=event_type)
+
+    card_id = request.query_params.get("card")
+    if card_id:
+        qs = qs.filter(punch_card_id=card_id)
+
+    customer_query = (request.query_params.get("customer") or "").strip()
+    if customer_query:
+        qs = qs.filter(
+            Q(customer__full_name__icontains=customer_query)
+            | Q(customer__user__email__icontains=customer_query)
+        )
+
+    qs = qs.order_by("-created_at")
+    try:
+        limit = max(1, min(int(request.query_params.get("limit", 300)), 1000))
+    except (TypeError, ValueError):
+        limit = 300
+    events = qs[:limit]
+
+    active_customers = CustomerPunchCard.objects.filter(
+        merchant=merchant, is_completed=False, is_redeemed=False
+    ).count()
+    summary = {
+        "customers_active": active_customers,
+        "cards_started": PunchCardEvent.objects.filter(
+            merchant=merchant, event_type=PunchCardEvent.EVENT_STARTED
+        ).count(),
+        "punches_awarded": PunchCardEvent.objects.filter(
+            merchant=merchant, event_type=PunchCardEvent.EVENT_PUNCHED
+        ).count(),
+        "cards_completed": PunchCardEvent.objects.filter(
+            merchant=merchant, event_type=PunchCardEvent.EVENT_COMPLETED
+        ).count(),
+        "claimed": PunchCardEvent.objects.filter(
+            merchant=merchant, event_type=PunchCardEvent.EVENT_REDEEMED
+        ).count(),
+    }
+
+    return Response({
+        "summary": summary,
+        "cards": MerchantPunchCardSerializer(merchant.punch_cards.all(), many=True).data,
+        "events": PunchCardEventSerializer(events, many=True).data,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
 def customer_punch_cards(request):
     merchant_id = request.query_params.get("merchant")
     if not merchant_id:
@@ -470,12 +549,16 @@ def customer_punch_cards(request):
                 is_redeemed=False
             ).exists()
             if not has_completed_unredeemed:
-                CustomerPunchCard.objects.create(
+                created_card = CustomerPunchCard.objects.create(
                     customer=customer,
                     punch_card=template,
                     merchant=template.merchant,
                     current_stamps=0,
-                    is_completed=False
+                    is_completed=False,
+                )
+                created_card.record_event(
+                    PunchCardEvent.EVENT_STARTED,
+                    note="Started from customer app",
                 )
 
     cards = CustomerPunchCard.objects.filter(customer=customer, merchant_id=merchant_id, is_completed=False, punch_card__is_active=True)
@@ -510,13 +593,18 @@ def customer_punch_card_redeem(request, pk):
     except ValueError as e:
         return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-    CustomerPunchCard.objects.get_or_create(
+    new_card, created = CustomerPunchCard.objects.get_or_create(
         customer=customer,
         punch_card=card.punch_card,
         merchant=card.merchant,
         is_completed=False,
         defaults={"current_stamps": 0},
     )
+    if created:
+        new_card.record_event(
+            PunchCardEvent.EVENT_STARTED,
+            note="New card started after claiming reward",
+        )
 
     merchant = card.merchant
     customer_name = customer.full_name or request.user.email
@@ -795,7 +883,6 @@ def confirm_punch_proof(request):
 
     card.proof_code_used = True
     card.save(update_fields=["proof_code_used", "updated_at"])
-    card.redeem()
 
     from orders.models import Order, OrderItem
     redemption_order = Order.objects.create(
@@ -816,13 +903,20 @@ def confirm_punch_proof(request):
         subtotal=0,
     )
 
-    CustomerPunchCard.objects.get_or_create(
+    card.redeem(order=redemption_order)
+
+    new_card, created = CustomerPunchCard.objects.get_or_create(
         customer=card.customer,
         punch_card=card.punch_card,
         merchant=merchant,
         is_completed=False,
         defaults={"current_stamps": 0},
     )
+    if created:
+        new_card.record_event(
+            PunchCardEvent.EVENT_STARTED,
+            note="New card started after claiming reward",
+        )
 
     customer_name = card.customer.full_name or card.customer.user.email
     transaction.on_commit(lambda: _notify_safe(

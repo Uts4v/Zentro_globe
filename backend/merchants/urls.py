@@ -21,6 +21,11 @@ urlpatterns = [
     path("slug/<slug:slug>/",    views.merchant_by_slug,        name="merchant-by-slug"),
     path("<int:pk>/",            views.merchant_detail,         name="merchant-detail"),
     path("<int:pk>/menu/",       views.merchant_menu,           name="merchant-public-menu"),
+    path("<int:pk>/menu/catalog/", views.public_merchant_catalog, name="merchant-public-catalog"),
+    # ── Menu categories ─────────────────────────────────────────────────────────
+    path("categories/",             views.merchant_categories,          name="merchant-categories"),
+    path("categories/reorder/",     views.merchant_categories_reorder,  name="merchant-categories-reorder"),
+    path("categories/<int:pk>/",    views.merchant_category_detail,     name="merchant-category-detail"),
     # ── Menu items ────────────────────────────────────────────────────────────
     path("menu-items/my-items/", views.my_menu_items,           name="my-menu-items"),
     path("menu-items/",          views.menu_item_list_create,   name="menu-item-list-create"),
@@ -30,6 +35,11 @@ urlpatterns = [
         views.toggle_availability,
         name="toggle-availability",
     ),
+    # ── Option groups & options (variants / modifiers / extras) ───────────────
+    path("menu-items/<int:pk>/option-groups/",  views.menu_item_option_groups,     name="menu-item-option-groups"),
+    path("menu-items/<int:pk>/option-groups/<int:gpk>/", views.menu_item_option_group_detail, name="menu-item-option-group-detail"),
+    path("menu-items/<int:pk>/option-groups/<int:gpk>/options/", views.menu_item_option_create, name="menu-item-option-create"),
+    path("menu-items/<int:pk>/option-groups/<int:gpk>/options/<int:opk>/", views.menu_item_option_detail, name="menu-item-option-detail"),
 
     # ── Table management ──────────────────────────────────────────────────────
     path("tables/",                          views.merchant_tables,            name="merchant-tables"),

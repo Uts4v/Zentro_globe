@@ -16,7 +16,7 @@ function resolveBase(): string {
     typeof window !== "undefined" && window.__DJANGO_API_BASE__
       ? window.__DJANGO_API_BASE__
       : undefined;
-  return injected || BUILD_BASE || "http://127.0.0.1:8000/api";
+  return injected || BUILD_BASE || "http://127.0.0.1:8001/api";
 }
 
 export const DJANGO_BASE = resolveBase().replace(/\/$/, "");

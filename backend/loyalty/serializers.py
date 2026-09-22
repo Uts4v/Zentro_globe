@@ -14,6 +14,7 @@ from .models import (
     CustomerMerchantWallet,
     MerchantPunchCard,
     CustomerPunchCard,
+    PunchCardEvent,
     PointTransaction,
     TodaySpecial,
     MembershipQrToken,
@@ -75,6 +76,38 @@ class CustomerPunchCardSerializer(serializers.ModelSerializer):
             "id", "customer", "punch_card", "merchant", "merchant_name",
             "created_at", "updated_at",
         ]
+
+class PunchCardEventSerializer(serializers.ModelSerializer):
+    customer_id    = serializers.IntegerField(source="customer.id", read_only=True)
+    customer_name  = serializers.SerializerMethodField()
+    card_id        = serializers.IntegerField(source="card.id", read_only=True)
+    card_name      = serializers.CharField(source="punch_card.name", read_only=True)
+    stamps_required = serializers.IntegerField(source="punch_card.stamps_required", read_only=True)
+    order_id       = serializers.IntegerField(source="order.id", read_only=True)
+    event_display  = serializers.CharField(source="get_event_type_display", read_only=True)
+    card_state     = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PunchCardEvent
+        fields = [
+            "id", "event_type", "event_display", "stamp_number", "note",
+            "created_at", "order_id",
+            "customer_id", "customer_name",
+            "card_id", "card_name", "stamps_required", "card_state",
+        ]
+
+    def get_customer_name(self, obj):
+        return obj.customer.full_name or obj.customer.user.email
+
+    def get_card_state(self, obj):
+        return {
+            "current_stamps": obj.card.current_stamps,
+            "is_completed": obj.card.is_completed,
+            "completed_at": obj.card.completed_at,
+            "is_redeemed": obj.card.is_redeemed,
+            "redeemed_at": obj.card.redeemed_at,
+            "started_at": obj.card.created_at,
+        }
 
 class PointTransactionSerializer(serializers.ModelSerializer):
     customer_name = serializers.CharField(source="customer.full_name", read_only=True)
@@ -155,6 +188,7 @@ class TodaySpecialSerializer(serializers.ModelSerializer):
             "linked_menu_item", "linked_menu_item_name", "linked_menu_item_price",
             "linked_reward", "linked_reward_name",
             "discount_type", "discount_value",
+            "cta_label", "starts_at", "ends_at",
             "is_active", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "created_at", "updated_at"]

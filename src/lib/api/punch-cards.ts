@@ -1,8 +1,25 @@
 import { apiUrl, djangoFetch } from "@/lib/django-api-base";
 import { djangoHeaders as authHeaders } from "@/lib/auth";
-import type { MerchantPunchCard, CustomerPunchCard } from "./types";
+import type { MerchantPunchCard, CustomerPunchCard, PunchCardHistory } from "./types";
 
 export const punchCardApi = {
+  history: async (params?: {
+    event_type?: string;
+    card?: string;
+    customer?: string;
+  }): Promise<PunchCardHistory> => {
+    const q = new URLSearchParams();
+    if (params?.event_type) q.set("event_type", params.event_type);
+    if (params?.card) q.set("card", params.card);
+    if (params?.customer) q.set("customer", params.customer);
+    const suffix = q.toString() ? `?${q.toString()}` : "";
+    return djangoFetch<PunchCardHistory>(
+      apiUrl(`/loyalty/merchant/punch-cards/history/${suffix}`),
+      {
+        headers: authHeaders(),
+      },
+    );
+  },
   generateProof: async (
     id: string,
   ): Promise<{

@@ -141,6 +141,19 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
 class CreateOrderItemSerializer(serializers.Serializer):
     menu_item_id = serializers.IntegerField()
     quantity     = serializers.IntegerField(min_value=1)
+    selections = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        default=list,
+        help_text='[{"group_id": <id>, "option_id": <id>}, ...] selected variants/extras.',
+    )
+    special_instructions = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        max_length=500,
+        help_text="Per-line special requests (stored as an immutable snapshot).",
+    )
 
 
 class CreateOrderSerializer(serializers.Serializer):

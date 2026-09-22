@@ -2,9 +2,10 @@
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
-import { Loader2, Mail, Lock, User, Phone } from "lucide-react";
+import { Loader2, Mail, Lock, User, Phone, ChevronDown } from "lucide-react";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { GoogleAuthButton } from "@/components/auth/GoogleAuthButton";
+import { COUNTRY_CODES, DEFAULT_DIAL_CODE } from "@/lib/country-codes";
 
 export const Route = createFileRoute("/auth/signup")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -19,12 +20,23 @@ function CustomerSignup() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [dialCode, setDialCode] = useState(DEFAULT_DIAL_CODE);
+  const [localNumber, setLocalNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { signUp, googleAuth } = useAuth();
   const navigate = useNavigate();
   const { redirect } = useSearch({ from: "/auth/signup" });
+
+  const phone = `${dialCode}${localNumber}`;
+
+  const handlePhoneChange = (raw: string) => {
+    let rest = raw;
+    if (rest.startsWith(dialCode)) rest = rest.slice(dialCode.length);
+    else if (dialCode.startsWith("+") && rest.startsWith(dialCode.slice(1)))
+      rest = rest.slice(dialCode.length - 1);
+    setLocalNumber(rest);
+  };
 
   const handleGoogleToken = async (idToken: string) => {
     setError(null);
@@ -108,20 +120,38 @@ function CustomerSignup() {
         {/* Mobile number (OTP verification arrives in a future update) */}
         <label className="block">
           <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Mobile number <span className="lowercase normal-case">(incl. country code, e.g. +91)</span>
+            Mobile number
           </span>
-          <div className="relative mt-1.5">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground">
-              <Phone className="h-4 w-4" />
-            </span>
-            <input
-              type="tel"
-              inputMode="tel"
-              placeholder="+91 98765 43210"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              className="h-14 w-full rounded-2xl bg-mist pl-11 pr-4 text-sm text-ink outline-none transition-all placeholder:text-muted-foreground/60 focus:ring-2 focus:ring-ember/40"
-            />
+          <div className="mt-1.5 flex h-14 items-stretch overflow-hidden rounded-2xl bg-mist transition-all focus-within:ring-2 focus-within:ring-ember/40">
+            <div className="relative shrink-0">
+              <select
+                value={dialCode}
+                onChange={(e) => setDialCode(e.target.value)}
+                aria-label="Country code"
+                className="h-full cursor-pointer appearance-none bg-transparent pl-4 pr-7 text-sm font-medium text-ink outline-none"
+              >
+                {COUNTRY_CODES.map((c) => (
+                  <option key={c.code} value={c.dial}>
+                    {c.flag} {c.dial}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            </div>
+            <span className="my-4 w-px shrink-0 bg-border" />
+            <div className="relative flex flex-1 items-center">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                <Phone className="h-4 w-4" />
+              </span>
+              <input
+                type="tel"
+                inputMode="tel"
+                placeholder="98765 43210"
+                value={phone}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                className="h-full w-full bg-transparent pl-10 pr-4 text-sm text-ink outline-none placeholder:text-muted-foreground/60"
+              />
+            </div>
           </div>
         </label>
 

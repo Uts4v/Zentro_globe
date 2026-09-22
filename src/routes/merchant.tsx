@@ -26,6 +26,7 @@ import {
 import { MerchantNav } from "@/components/merchant-nav";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
 import { ChatWidget } from "@/features/ai/components/ChatWidget";
+import MerchantNotificationBell from "@/components/MerchantNotificationBell";
 
 export const Route = createFileRoute("/merchant")({
   beforeLoad: async ({ context, location }) => {
@@ -75,7 +76,11 @@ function MerchantLayout() {
     <div className="flex min-h-dvh bg-background">
       {/* Desktop sidebar */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-background lg:flex">
-        <MerchantNav navItems={navItems} onSignOut={handleSignOut} />
+        <MerchantNav
+          navItems={navItems}
+          onSignOut={handleSignOut}
+          bell={<MerchantNotificationBell />}
+        />
       </aside>
 
       {/* Mobile sidebar overlay */}
@@ -114,6 +119,7 @@ function MerchantLayout() {
           </Link>
           <div className="ml-auto flex items-center gap-2">
             <ThemeCycleButton />
+            <MerchantNotificationBell />
             <button
               onClick={handleSignOut}
               className="grid h-8 w-8 place-items-center rounded-full border border-border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"

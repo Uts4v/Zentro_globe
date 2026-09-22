@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import type { LucideIcon } from "lucide-react";
+import type React from "react";
 
 interface NavItem {
   to: string;
@@ -16,9 +17,10 @@ interface MerchantNavProps {
   navItems: NavItem[];
   onSignOut: () => void;
   onLinkClick?: () => void;
+  bell?: React.ReactNode;
 }
 
-export function MerchantNav({ navItems, onSignOut, onLinkClick }: MerchantNavProps) {
+export function MerchantNav({ navItems, onSignOut, onLinkClick, bell }: MerchantNavProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   let lastSection = "";
@@ -26,14 +28,17 @@ export function MerchantNav({ navItems, onSignOut, onLinkClick }: MerchantNavPro
   return (
     <div className="flex h-full flex-col gap-1 p-4">
       {/* Logo */}
-      <Link
-        to="/"
-        className="mb-4 flex items-center px-2 py-1 text-foreground"
-        onClick={onLinkClick}
-        aria-label="Zentro home"
-      >
-        <ZentroLogo className="h-7 w-auto" title="" />
-      </Link>
+      <div className="mb-4 flex items-center justify-between px-2 py-1">
+        <Link
+          to="/"
+          className="flex items-center text-foreground"
+          onClick={onLinkClick}
+          aria-label="Zentro home"
+        >
+          <ZentroLogo className="h-7 w-auto" title="" />
+        </Link>
+        {bell && <div className="flex items-center">{bell}</div>}
+      </div>
 
       {/* Nav links */}
       <nav className="flex flex-1 flex-col gap-1">
@@ -73,7 +78,7 @@ export function MerchantNav({ navItems, onSignOut, onLinkClick }: MerchantNavPro
 
       {/* Theme toggle */}
       <div className="px-2 py-2">
-        <ThemeToggle />
+        <ThemeToggle compact />
       </div>
 
       {/* Sign out */}

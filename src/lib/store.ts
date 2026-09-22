@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { orderApi } from "@/lib/api/orders";
+import { cartKey } from "@/lib/menu-utils";
+import type { MenuSelection } from "@/lib/api/types";
 
 export type MenuItem = {
   id: string;
@@ -15,7 +17,23 @@ export type MenuItem = {
   image_url?: string | null;
 };
 
-export type CartItem = { itemId: string; qty: number };
+/** One cart line. `key` uniquely identifies an item + option selection + notes. */
+export type CartItem = {
+  key: string;
+  itemId: string;
+  qty: number;
+  selections: MenuSelection[];
+  specialInstructions: string;
+  unitPrice: number;
+};
+
+export type CartLineInput = {
+  itemId: string;
+  qty?: number;
+  selections?: MenuSelection[];
+  specialInstructions?: string;
+  unitPrice?: number;
+};
 
 export type OrderStatus =
   | "pending"
@@ -71,16 +89,33 @@ type State = {
   setGuestName: (name: string) => void;
   add: (id: string) => void;
   remove: (id: string) => void;
+  addLine: (line: CartLineInput) => void;
+  setQty: (key: string, qty: number) => void;
+  removeLine: (key: string) => void;
+  replaceLine: (oldKey: string, line: CartLineInput) => void;
   clearCart: () => void;
   clearTable: () => void;
-  placeOrder: (menuItems: MenuItem[], notes?: string) => Promise<string>;
-  placeGuestOrder: (menuItems: MenuItem[], notes?: string, guestName?: string) => Promise<string>;
+  placeOrder: (notes?: string) => Promise<string>;
+  placeGuestOrder: (notes?: string, guestName?: string) => Promise<string>;
   updateOrderStatus: (id: string, s: OrderStatus) => void;
   setOrders: (orders: Order[]) => void;
   setPoints: (pts: number) => void;
   setStreak: (s: number) => void;
   setCustomerName: (name: string) => void;
 };
+
+function materialise(line: CartLineInput, id: string): CartItem {
+  const selections = line.selections ?? [];
+  const specialInstructions = line.specialInstructions ?? "";
+  return {
+    key: cartKey(id, selections, specialInstructions),
+    itemId: id,
+    qty: line.qty ?? 1,
+    selections,
+    specialInstructions,
+    unitPrice: line.unitPrice ?? 0,
+  };
+}
 
 export const useStore = create<State>()(
   persist(
@@ -111,41 +146,81 @@ export const useStore = create<State>()(
           guestSession: s.guestSession ? { ...s.guestSession, guestName: name } : null,
         })),
 
-      add: (id) =>
+      /** Legacy quick-add (no options). Same item/selection → increments qty. */
+      add: (id) => {
+        const line = materialise({ itemId: id }, id);
         set((s) => {
-          const ex = s.cart.find((c) => c.itemId === id);
+          const ex = s.cart.find((c) => c.key === line.key);
           return ex
-            ? { cart: s.cart.map((c) => (c.itemId === id ? { ...c, qty: c.qty + 1 } : c)) }
-            : { cart: [...s.cart, { itemId: id, qty: 1 }] };
+            ? { cart: s.cart.map((c) => (c.key === line.key ? { ...c, qty: c.qty + 1 } : c)) }
+            : { cart: [...s.cart, line] };
+        });
+      },
+
+      /** Legacy decrement-by-item (no options). Removes the line when it hits 0. */
+      remove: (id) =>
+        set((s) => {
+          const matches = s.cart.filter((c) => String(c.itemId) === String(id)).map((c) => c.key);
+          if (matches.length === 0) return s;
+          const first = matches[0];
+          return {
+            cart: s.cart
+              .map((c) => (c.key === first ? { ...c, qty: c.qty - 1 } : c))
+              .filter((c) => c.qty > 0),
+          };
         }),
 
-      remove: (id) =>
-        set((s) => ({
-          cart: s.cart
-            .map((c) => (c.itemId === id ? { ...c, qty: c.qty - 1 } : c))
-            .filter((c) => c.qty > 0),
-        })),
+      addLine: (line) =>
+        set((s) => {
+          const key = cartKey(line.itemId, line.selections ?? [], line.specialInstructions ?? "");
+          const ex = s.cart.find((c) => c.key === key);
+          if (ex) {
+            return {
+              cart: s.cart.map((c) => (c.key === key ? { ...c, qty: c.qty + (line.qty ?? 1) } : c)),
+            };
+          }
+          return { cart: [...s.cart, materialise(line, line.itemId)] };
+        }),
+
+      setQty: (key, qty) =>
+        set((s) => {
+          if (qty <= 0) return { cart: s.cart.filter((c) => c.key !== key) };
+          return { cart: s.cart.map((c) => (c.key === key ? { ...c, qty } : c)) };
+        }),
+
+      removeLine: (key) => set((s) => ({ cart: s.cart.filter((c) => c.key !== key) })),
+
+      replaceLine: (oldKey, line) =>
+        set((s) => {
+          const rest = s.cart.filter((c) => c.key !== oldKey);
+          const key = cartKey(line.itemId, line.selections ?? [], line.specialInstructions ?? "");
+          const ex = rest.find((c) => c.key === key);
+          if (ex) {
+            return {
+              cart: rest.map((c) => (c.key === key ? { ...c, qty: c.qty + (line.qty ?? 1) } : c)),
+            };
+          }
+          return { cart: [...rest, materialise(line, line.itemId)] };
+        }),
 
       clearCart: () => set({ cart: [] }),
 
       clearTable: () => set({ activeTable: null, fulfillmentType: "pickup" }),
 
-      placeOrder: async (menuItems: MenuItem[], notes = "") => {
+      placeOrder: async (notes = "") => {
         const { cart, selectedMerchantId, activeTable, fulfillmentType } = get();
         if (!selectedMerchantId) throw new Error("No merchant selected");
         if (cart.length === 0) throw new Error("Cart is empty");
 
-        const items = cart.map((c) => {
-  const item = menuItems.find((m) => String(m.id) === String(c.itemId));
-  if (!item) throw new Error(`Item ${c.itemId} not found`);
-  return {
-    menu_item_id: c.itemId,
-    quantity: c.qty,
-    name: item.name,
-    price: item.price,
-    points_per_item: item.points_per_item ?? 0,
-  };
-});
+        const items = cart.map((c) => ({
+          menu_item_id: c.itemId,
+          quantity: c.qty,
+          selections: c.selections,
+          special_instructions: c.specialInstructions,
+          name: "",
+          price: c.unitPrice,
+          points_per_item: 0,
+        }));
 
         const apiOrder = await orderApi.create({
           merchant_id: selectedMerchantId,
@@ -176,23 +251,21 @@ export const useStore = create<State>()(
         return order.id;
       },
 
-      placeGuestOrder: async (menuItems: MenuItem[], notes = "", guestName = "") => {
+      placeGuestOrder: async (notes = "", guestName = "") => {
         const { cart, selectedMerchantId, activeTable, guestSession } = get();
         if (!selectedMerchantId) throw new Error("No merchant selected");
         if (cart.length === 0) throw new Error("Cart is empty");
         if (!activeTable) throw new Error("No table selected");
 
-        const items = cart.map((c) => {
-          const item = menuItems.find((m) => String(m.id) === String(c.itemId));
-          if (!item) throw new Error(`Item ${c.itemId} not found`);
-          return {
-            menu_item_id: c.itemId,
-            quantity: c.qty,
-            name: item.name,
-            price: item.price,
-            points_per_item: item.points_per_item ?? 0,
-          };
-        });
+        const items = cart.map((c) => ({
+          menu_item_id: c.itemId,
+          quantity: c.qty,
+          selections: c.selections,
+          special_instructions: c.specialInstructions,
+          name: "",
+          price: c.unitPrice,
+          points_per_item: 0,
+        }));
 
         const apiOrder = await orderApi.createGuest({
           merchant_id: selectedMerchantId,
@@ -246,13 +319,21 @@ export const useStore = create<State>()(
         customerName: state.customerName,
         guestSession: state.guestSession,
       }),
-    }
-  )
+    },
+  ),
 );
 
+/** Sum of the cart using stored unit prices (option-aware). */
+export const cartTotals = (cart: CartItem[]) =>
+  cart.reduce((sum, c) => sum + (c.unitPrice || 0) * c.qty, 0);
+
+export const cartCount = (cart: CartItem[]) => cart.reduce((sum, c) => sum + c.qty, 0);
+
+/** Legacy total — falls back to menu prices for items without a stored unit price. */
 export const cartTotal = (cart: CartItem[], menuItems?: MenuItem[]) =>
   cart.reduce((sum, c) => {
     const i = menuItems?.find((m) => String(m.id) === String(c.itemId));
+    if (c.unitPrice) return sum + c.unitPrice * c.qty;
     return i ? sum + i.price * c.qty : sum;
   }, 0);
 

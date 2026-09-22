@@ -11,11 +11,13 @@ import {
   ShoppingBag,
   Truck,
   Filter,
+  Ticket,
 } from "lucide-react";
 import { orderApi, type Order, type OrderStatus, type FulfillmentType } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { playOrderChime } from "@/lib/audio";
+import { printKOT, kotTicketFromOrder } from "@/features/pos/printing/KOTTicket";
 
 const NEXT_STATUS: Record<OrderStatus, OrderStatus | null> = {
   pending: "confirmed",
@@ -262,7 +264,14 @@ export function MerchantOrdersPage() {
 
       <Column title="Completed today" count={grouped.done.length}>
         {grouped.done.map((o) => (
-          <OrderCard key={o.id} order={o} advancing={false} cancelling={false} isNew={false} sym={sym} />
+          <OrderCard
+            key={o.id}
+            order={o}
+            advancing={false}
+            cancelling={false}
+            isNew={false}
+            sym={sym}
+          />
         ))}
         {grouped.done.length === 0 && <Empty text="Day's just starting" />}
       </Column>
@@ -492,7 +501,9 @@ function OrderCard({
               {item.quantity}× {item.name}
             </span>
             <span className="text-muted-foreground">
-              {Number(item.subtotal) > 0 ? `${sym} ${Number(item.subtotal).toLocaleString()}` : "FREE"}
+              {Number(item.subtotal) > 0
+                ? `${sym} ${Number(item.subtotal).toLocaleString()}`
+                : "FREE"}
             </span>
           </li>
         ))}
@@ -517,6 +528,15 @@ function OrderCard({
       </div>
 
       <div className="mt-3 flex gap-2">
+        {order.kot_number && (
+          <button
+            onClick={() => printKOT(kotTicketFromOrder(order, "order_items"))}
+            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-border px-4 text-xs font-medium text-muted-foreground hover:bg-mist"
+          >
+            <Ticket className="h-3.5 w-3.5" />
+            Print KOT
+          </button>
+        )}
         {next && onAdvance && (
           <button
             onClick={onAdvance}

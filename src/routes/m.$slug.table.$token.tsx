@@ -268,7 +268,7 @@ function TableQRScanPage() {
     setPlacing(true);
     try {
       setGuestName(guestName);
-      const orderId = await placeGuestOrder(menuItems, notes, guestName);
+      const orderId = await placeGuestOrder(notes, guestName);
       setOrderSuccess({ orderId });
       setShowCheckout(false);
     } catch (err: any) {

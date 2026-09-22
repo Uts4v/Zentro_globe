@@ -1,16 +1,46 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
-import { Plus, Pencil, Trash2, Eye, EyeOff, Star, X, Check, Loader2, ImageIcon, Upload, FileType, ArrowRight } from "lucide-react";
-import { menuApi, merchantApi, type MenuItem } from "@/lib/api";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Eye,
+  EyeOff,
+  Star,
+  X,
+  Check,
+  Loader2,
+  ImageIcon,
+  Upload,
+  FileType,
+  ArrowRight,
+  Layers,
+} from "lucide-react";
+import {
+  menuApi,
+  merchantApi,
+  type MenuItem,
+  type MenuCategory,
+  type MenuItemInput,
+} from "@/lib/api";
 import { optimizeImage } from "@/lib/image-optimize";
 import { uploadImage } from "@/lib/image-upload";
 import { usePreparationAreas, usePreparationSettings } from "@/features/preparation/hooks";
+import { OptionGroupsEditor } from "@/features/catalog/components/OptionGroupsEditor";
 
 const EMPTY_FORM = {
   name: "",
   description: "",
+  short_description: "",
   price: "",
+  discount_type: "none" as "none" | "percentage" | "fixed",
+  discount_value: "",
+  discount_source: "manual" as "manual" | "special",
   category: "",
+  category_ref: "" as string,
+  dietary_tags: "",
+  allergens: "",
+  status: "active",
   emoji: "☕",
   points_per_item: 1,
   loyalty_reward: true,
@@ -42,8 +72,12 @@ function catClass(cat: string) {
   return CAT_COLOURS[cat] ?? "bg-mist text-foreground";
 }
 
+function errMessage(e: unknown): string {
+  return (e as { message?: string }).message || "Something went wrong.";
+}
+
 export function MerchantMenuPage() {
-  if (typeof window === "undefined") return null;
+  const isClient = typeof window !== "undefined";
 
   const [items, setItems] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +91,9 @@ export function MerchantMenuPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
   const [filterCat, setFilterCat] = useState("All");
+  const [categories, setCategories] = useState<MenuCategory[]>([]);
+
+  const [optionItem, setOptionItem] = useState<MenuItem | null>(null);
 
   const [imgState, setImgState] = useState<ImgStatus>({ status: "idle" });
   const imgInputRef = useRef<HTMLInputElement>(null);
@@ -66,20 +103,24 @@ export function MerchantMenuPage() {
   const { data: prepAreas = [] } = usePreparationAreas();
   const showPrepFields = prepSettings?.preparation_routing_enabled && prepAreas.length > 0;
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => {
+    loadAll();
+  }, []);
 
   async function loadAll() {
     setLoading(true);
     setError("");
     try {
-      const [itemsData, merchantData] = await Promise.all([
+      const [itemsData, merchantData, catData] = await Promise.all([
         menuApi.myItems(),
         merchantApi.me(),
+        menuApi.categories().catch(() => [] as MenuCategory[]),
       ]);
       setItems(itemsData);
       setMerchantId(merchantData.id);
-    } catch (e: any) {
-      setError(e.message);
+      setCategories(catData);
+    } catch (e: unknown) {
+      setError(errMessage(e));
     } finally {
       setLoading(false);
     }
@@ -97,8 +138,16 @@ export function MerchantMenuPage() {
     setForm({
       name: item.name,
       description: item.description,
+      short_description: item.short_description ?? "",
       price: item.price,
+      discount_type: item.discount_type ?? "none",
+      discount_value: item.discount_value ?? "",
+      discount_source: item.discount_source ?? "manual",
       category: item.category,
+      category_ref: item.category_ref != null ? String(item.category_ref) : "",
+      dietary_tags: (item.dietary_tags ?? []).join(", "),
+      allergens: (item.allergens ?? []).join(", "),
+      status: item.status ?? "active",
       emoji: item.emoji,
       points_per_item: item.points_per_item,
       loyalty_reward: item.loyalty_reward,
@@ -109,9 +158,7 @@ export function MerchantMenuPage() {
       requires_preparation: item.requires_preparation ?? true,
     });
     setImgState(
-      item.image_url
-        ? { status: "done", previewUrl: item.image_url }
-        : { status: "idle" }
+      item.image_url ? { status: "done", previewUrl: item.image_url } : { status: "idle" },
     );
     setShowForm(true);
   }
@@ -123,26 +170,85 @@ export function MerchantMenuPage() {
     setImgState({ status: "idle" });
   }
 
+  const [showLayout, setShowLayout] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatEmoji, setNewCatEmoji] = useState("🍽️");
+
+  function openLayoutManager() {
+    setShowLayout(true);
+    menuApi
+      .categories()
+      .then(setCategories)
+      .catch(() => {});
+  }
+
+  const sortedCats = [...categories].sort((a, b) => a.display_order - b.display_order);
+
+  async function createCat() {
+    if (!newCatName.trim()) return;
+    try {
+      const created = await menuApi.createCategory({
+        name: newCatName.trim(),
+        emoji: newCatEmoji || "🍽️",
+      });
+      setCategories((prev) => [...prev, created]);
+      setNewCatName("");
+      setNewCatEmoji("🍽️");
+    } catch (e: unknown) {
+      setError(errMessage(e));
+    }
+  }
+
+  async function deleteCat(cat: MenuCategory) {
+    if (cat.item_count > 0) {
+      setError("Move items out of this section before deleting it.");
+      return;
+    }
+    if (!confirm(`Delete section "${cat.name}"?`)) return;
+    try {
+      await menuApi.deleteCategory(cat.id);
+      setCategories((prev) => prev.filter((c) => c.id !== cat.id));
+    } catch (e: unknown) {
+      setError(errMessage(e));
+    }
+  }
+
+  async function moveCat(index: number, dir: number) {
+    const next = [...sortedCats];
+    const j = index + dir;
+    if (j < 0 || j >= next.length) return;
+    [next[index], next[j]] = [next[j], next[index]];
+    try {
+      await menuApi.reorderCategories(next.map((c) => Number(c.id)));
+      setCategories(await menuApi.categories());
+    } catch (e: unknown) {
+      setError(errMessage(e));
+    }
+  }
+
   async function handleImageFile(file: File) {
     if (!merchantId) return;
     setImgState({ status: "processing" });
     let optimized;
     try {
       optimized = await optimizeImage(file, "product");
-    } catch (err: any) {
-      setImgState({ status: "error", error: err.message ?? "Could not process image." });
+    } catch (err: unknown) {
+      setImgState({ status: "error", error: errMessage(err) });
       return;
     }
     setImgState({ status: "uploading", previewUrl: optimized.previewUrl });
     try {
       const productKey = editing?.id ?? `tmp-${Date.now()}`;
       const { publicUrl } = await uploadImage(
-        file, "product", "product-images", `${merchantId}/${productKey}.webp`
+        file,
+        "product",
+        "product-images",
+        `${merchantId}/${productKey}.webp`,
       );
       setForm((f) => ({ ...f, image_url: publicUrl }));
       setImgState({ status: "done", previewUrl: optimized.previewUrl });
-    } catch (err: any) {
-      setImgState({ status: "error", error: err.message ?? "Upload failed." });
+    } catch (err: unknown) {
+      setImgState({ status: "error", error: errMessage(err) });
     }
   }
 
@@ -170,23 +276,37 @@ export function MerchantMenuPage() {
     setSaving(true);
     setError("");
     try {
-      const payload = {
+      const payload: Partial<MenuItemInput> = {
         ...form,
         price: form.price,
         points_per_item: Number(form.points_per_item),
         preparation_area: form.preparation_area ? Number(form.preparation_area) : null,
         requires_preparation: form.requires_preparation,
+        category_ref: form.category_ref ? Number(form.category_ref) : null,
+        dietary_tags: form.dietary_tags
+          .split(",")
+          .map((t: string) => t.trim())
+          .filter(Boolean),
+        allergens: form.allergens
+          .split(",")
+          .map((t: string) => t.trim())
+          .filter(Boolean),
+        short_description: form.short_description,
+        status: form.status as MenuItemInput["status"],
+        discount_source: undefined,
+        discount_type: form.discount_type,
+        discount_value:
+          form.discount_type === "none" || !form.discount_value ? null : form.discount_value,
       };
       if (editing) {
-        const updated = await menuApi.update(editing.id, payload);
-        setItems((prev) => prev.map((i) => (i.id === editing.id ? updated : i)));
+        await menuApi.update(editing.id, payload);
       } else {
-        const created = await menuApi.create(payload);
-        setItems((prev) => [created, ...prev]);
+        await menuApi.create(payload);
       }
+      await loadAll();
       closeForm();
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(errMessage(e));
     } finally {
       setSaving(false);
     }
@@ -198,8 +318,8 @@ export function MerchantMenuPage() {
     try {
       await menuApi.delete(id);
       setItems((prev) => prev.filter((i) => i.id !== id));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(errMessage(e));
     } finally {
       setDeleting(null);
     }
@@ -210,23 +330,25 @@ export function MerchantMenuPage() {
     try {
       const updated = await menuApi.toggleAvailability(id);
       setItems((prev) => prev.map((i) => (i.id === id ? updated : i)));
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(errMessage(e));
     } finally {
       setToggling(null);
     }
   }
 
-  const categories = ["All", ...Array.from(new Set(items.map((i) => i.category).filter(Boolean)))];
+  const catFilters = ["All", ...Array.from(new Set(items.map((i) => i.category).filter(Boolean)))];
   const visible = filterCat === "All" ? items : items.filter((i) => i.category === filterCat);
 
   const grouped = Array.from(
-    visible.reduce((map, item) => {
-      const key = item.category || "Uncategorized";
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(item);
-      return map;
-    }, new Map<string, MenuItem[]>()).entries()
+    visible
+      .reduce((map, item) => {
+        const key = item.category || "Uncategorized";
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(item);
+        return map;
+      }, new Map<string, MenuItem[]>())
+      .entries(),
   );
 
   const imgUploading = imgState.status === "processing" || imgState.status === "uploading";
@@ -235,6 +357,8 @@ export function MerchantMenuPage() {
       ? imgState.previewUrl
       : form.image_url || null;
 
+  if (!isClient) return null;
+
   return (
     <div className="space-y-8">
       <div className="flex items-end justify-between">
@@ -242,18 +366,28 @@ export function MerchantMenuPage() {
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Manage</p>
           <h1 className="font-display mt-1 text-5xl text-foreground">Menu</h1>
         </div>
-        <button
-          onClick={openCreate}
-          className="gradient-ember inline-flex h-11 items-center gap-2 rounded-2xl px-5 text-sm font-medium text-white transition-transform active:scale-[0.98]"
-        >
-          <Plus className="h-4 w-4" /> Add item
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openLayoutManager}
+            className="inline-flex h-11 items-center gap-2 rounded-2xl border border-border px-4 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
+            <Layers className="h-4 w-4" /> Layout
+          </button>
+          <button
+            onClick={openCreate}
+            className="gradient-ember inline-flex h-11 items-center gap-2 rounded-2xl px-5 text-sm font-medium text-white transition-transform active:scale-[0.98]"
+          >
+            <Plus className="h-4 w-4" /> Add item
+          </button>
+        </div>
       </div>
 
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
-          <button onClick={() => setError("")} className="ml-3 underline">Dismiss</button>
+          <button onClick={() => setError("")} className="ml-3 underline">
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -265,9 +399,7 @@ export function MerchantMenuPage() {
           <FileType className="h-4.5 w-4.5" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-foreground">
-            Give customers your menu as a PDF
-          </p>
+          <p className="text-sm font-semibold text-foreground">Give customers your menu as a PDF</p>
           <p className="text-xs text-muted-foreground">
             Upload a PDF and get a QR code your customers can scan — no app needed.
           </p>
@@ -275,14 +407,17 @@ export function MerchantMenuPage() {
         <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
       </Link>
 
-      {categories.length > 1 && (
+      {catFilters.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {categories.map((cat) => (
+          {catFilters.map((cat) => (
             <button
               key={cat}
               onClick={() => setFilterCat(cat)}
-              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${filterCat === cat ? "bg-ink text-primary-foreground" : "bg-mist text-foreground hover:bg-ink/10"
-                }`}
+              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+                filterCat === cat
+                  ? "bg-ink text-primary-foreground"
+                  : "bg-mist text-foreground hover:bg-ink/10"
+              }`}
             >
               {cat}
             </button>
@@ -298,7 +433,9 @@ export function MerchantMenuPage() {
         ].map(({ label, value }) => (
           <div key={label} className="glass rounded-2xl p-4 text-center">
             <p className="font-display text-3xl text-foreground">{value}</p>
-            <p className="mt-1 text-[11px] uppercase tracking-widest text-muted-foreground">{label}</p>
+            <p className="mt-1 text-[11px] uppercase tracking-widest text-muted-foreground">
+              {label}
+            </p>
           </div>
         ))}
       </div>
@@ -311,7 +448,9 @@ export function MerchantMenuPage() {
         <div className="glass rounded-3xl py-16 text-center">
           <p className="text-4xl">🍵</p>
           <p className="mt-3 text-sm text-muted-foreground">
-            {filterCat === "All" ? "No items yet — add your first one." : `No items in "${filterCat}".`}
+            {filterCat === "All"
+              ? "No items yet — add your first one."
+              : `No items in "${filterCat}".`}
           </p>
         </div>
       ) : (
@@ -324,7 +463,9 @@ export function MerchantMenuPage() {
                   <span className="rounded-full bg-mist px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {catItems.length}
                   </span>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${catClass(cat)}`}>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${catClass(cat)}`}
+                  >
                     {cat}
                   </span>
                 </div>
@@ -336,6 +477,7 @@ export function MerchantMenuPage() {
                       onEdit={() => openEdit(item)}
                       onDelete={() => handleDelete(item.id)}
                       onToggle={() => handleToggle(item.id)}
+                      onOptions={() => setOptionItem(item)}
                       deleting={deleting === item.id}
                       toggling={toggling === item.id}
                       catClass={catClass(item.category)}
@@ -353,6 +495,7 @@ export function MerchantMenuPage() {
                   onEdit={() => openEdit(item)}
                   onDelete={() => handleDelete(item.id)}
                   onToggle={() => handleToggle(item.id)}
+                  onOptions={() => setOptionItem(item)}
                   deleting={deleting === item.id}
                   toggling={toggling === item.id}
                   catClass={catClass(item.category)}
@@ -386,7 +529,6 @@ export function MerchantMenuPage() {
             </div>
 
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-
               {/* Product image upload */}
               <div>
                 <p className="mb-1.5 text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -417,7 +559,9 @@ export function MerchantMenuPage() {
                     <div className="flex h-full flex-col items-center justify-center gap-2 bg-mist">
                       <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
                       <p className="text-xs text-muted-foreground">Click or drag image here</p>
-                      <p className="text-[10px] text-muted-foreground/60">JPG · PNG · WebP · max 5 MB</p>
+                      <p className="text-[10px] text-muted-foreground/60">
+                        JPG · PNG · WebP · max 5 MB
+                      </p>
                     </div>
                   )}
 
@@ -444,7 +588,10 @@ export function MerchantMenuPage() {
                   {imgPreviewUrl && !imgUploading && (
                     <button
                       type="button"
-                      onClick={(e) => { e.stopPropagation(); clearImage(); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearImage();
+                      }}
                       className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -475,7 +622,9 @@ export function MerchantMenuPage() {
               {/* Emoji + Name */}
               <div className="flex gap-3">
                 <div className="shrink-0">
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Emoji</label>
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Emoji
+                  </label>
                   <input
                     value={form.emoji}
                     onChange={(e) => setForm((f) => ({ ...f, emoji: e.target.value }))}
@@ -484,7 +633,9 @@ export function MerchantMenuPage() {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Name *</label>
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Name *
+                  </label>
                   <input
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -496,7 +647,9 @@ export function MerchantMenuPage() {
 
               {/* Description */}
               <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Description</label>
+                <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Description
+                </label>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -506,69 +659,217 @@ export function MerchantMenuPage() {
                 />
               </div>
 
+              {/* Short description (menu cards) */}
+              <div>
+                <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Menu card blurb (optional)
+                </label>
+                <textarea
+                  value={form.short_description}
+                  onChange={(e) => setForm((f) => ({ ...f, short_description: e.target.value }))}
+                  placeholder="One line for the menu grid, e.g. “Double ristretto over silky milk.”"
+                  rows={1}
+                  maxLength={200}
+                  className="w-full resize-none rounded-xl border border-border bg-white/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                />
+              </div>
+
               {/* Price + Category */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Price (NPR) *</label>
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Price (NPR) *
+                  </label>
                   <input
-                    type="number" min="0" step="0.01"
+                    type="number"
+                    min="0"
+                    step="0.01"
                     value={form.price}
                     onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
                     placeholder="350.00"
                     className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   />
-                  <p className="mt-1 text-[10px] text-muted-foreground">Set to 0 for free / comp items (e.g. staff food)</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Set to 0 for free / comp items (e.g. staff food)
+                  </p>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Category</label>
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Section
+                  </label>
+                  <select
+                    value={form.category_ref || "__new"}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__new") return;
+                      const cat = categories.find((c) => String(c.id) === v);
+                      setForm((f) => ({
+                        ...f,
+                        category_ref: v,
+                        category: cat ? cat.name : f.category,
+                      }));
+                    }}
+                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  >
+                    {categories.map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.emoji} {c.name}
+                      </option>
+                    ))}
+                    <option value="__new">New section…</option>
+                  </select>
+                  {!form.category_ref && (
+                    <input
+                      value={form.category}
+                      onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                      placeholder="New section name (Coffee, Tea…)"
+                      className="mt-1.5 h-9 w-full rounded-xl border border-border bg-white/50 px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    />
+                  )}
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Pick a section or type a new one.
+                  </p>
+                </div>
+              </div>
+
+              {/* Discount */}
+              <div>
+                <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Discount
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    value={form.discount_type}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        discount_type: e.target.value as FormState["discount_type"],
+                        discount_value: e.target.value === "none" ? "" : f.discount_value,
+                      }))
+                    }
+                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  >
+                    <option value="none">No discount</option>
+                    <option value="percentage">Percentage (%)</option>
+                    <option value="fixed">Fixed amount (NPR)</option>
+                  </select>
                   <input
-                    value={form.category}
-                    onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
-                    placeholder="Coffee, Tea, Food…"
-                    list="cats"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    disabled={form.discount_type === "none"}
+                    value={form.discount_value}
+                    onChange={(e) => setForm((f) => ({ ...f, discount_value: e.target.value }))}
+                    placeholder={form.discount_type === "percentage" ? "10" : "50.00"}
+                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20 disabled:opacity-40"
+                  />
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {form.discount_source === "special"
+                    ? "Managed by an active Today's Special — editing it will switch to a manual discount."
+                    : "Applies to the base price; variants keep their own price."}
+                </p>
+              </div>
+
+              {/* Dietary + allergens */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Dietary tags
+                  </label>
+                  <input
+                    value={form.dietary_tags}
+                    onChange={(e) => setForm((f) => ({ ...f, dietary_tags: e.target.value }))}
+                    placeholder="Vegan, Gluten-free…"
                     className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   />
-                  <datalist id="cats">
-                    {["Coffee", "Tea", "Food", "Snacks", "Drinks"].map((c) => <option key={c} value={c} />)}
-                  </datalist>
+                  <p className="mt-1 text-[10px] text-muted-foreground">Comma separated</p>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Allergens
+                  </label>
+                  <input
+                    value={form.allergens}
+                    onChange={(e) => setForm((f) => ({ ...f, allergens: e.target.value }))}
+                    placeholder="Milk, Nuts…"
+                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  />
+                  <p className="mt-1 text-[10px] text-muted-foreground">Comma separated</p>
                 </div>
               </div>
 
               {/* Points */}
-              <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Points per item</label>
-                <input
-                  type="number" min="0"
-                  value={form.points_per_item}
-                  onChange={(e) => setForm((f) => ({ ...f, points_per_item: Number(e.target.value) }))}
-                  className="h-11 w-40 rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
-                />
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Points per item
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={form.points_per_item}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, points_per_item: Number(e.target.value) }))
+                    }
+                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Status
+                  </label>
+                  <select
+                    value={form.status}
+                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
+                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  >
+                    <option value="active">Active</option>
+                    <option value="draft">Draft</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    Draft hides from customers; archived hides everywhere.
+                  </p>
+                </div>
               </div>
 
               {/* Preparation Area (only shown when routing is enabled) */}
               {showPrepFields && (
                 <div className="space-y-2">
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">Preparation Area</label>
+                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Preparation Area
+                  </label>
                   <select
                     value={form.preparation_area}
                     onChange={(e) => setForm((f) => ({ ...f, preparation_area: e.target.value }))}
                     className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   >
                     <option value="">No specific area</option>
-                    {prepAreas.filter((a) => a.is_active).map((area) => (
-                      <option key={area.id} value={String(area.id)}>{area.name}</option>
-                    ))}
+                    {prepAreas
+                      .filter((a) => a.is_active)
+                      .map((area) => (
+                        <option key={area.id} value={String(area.id)}>
+                          {area.name}
+                        </option>
+                      ))}
                   </select>
                   <button
                     type="button"
-                    onClick={() => setForm((f) => ({ ...f, requires_preparation: !f.requires_preparation }))}
+                    onClick={() =>
+                      setForm((f) => ({ ...f, requires_preparation: !f.requires_preparation }))
+                    }
                     className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
                       form.requires_preparation
                         ? "border-ink bg-ink text-primary-foreground"
                         : "border-border bg-white/50 text-muted-foreground"
                     }`}
                   >
-                    {form.requires_preparation ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                    {form.requires_preparation ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <X className="h-3.5 w-3.5" />
+                    )}
                     Requires preparation
                   </button>
                 </div>
@@ -576,30 +877,42 @@ export function MerchantMenuPage() {
 
               {/* Toggles */}
               <div className="grid grid-cols-3 gap-2">
-                {([
-                  ["loyalty_reward", "Earns points"],
-                  ["is_available", "Available"],
-                  ["is_featured", "Featured"],
-                ] as [keyof FormState, string][]).map(([key, label]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setForm((f) => ({ ...f, [key]: !f[key as keyof FormState] }))}
-                    className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition-colors ${form[key as keyof FormState]
-                        ? "border-ink bg-ink text-primary-foreground"
-                        : "border-border bg-white/50 text-muted-foreground"
+                {(
+                  [
+                    ["loyalty_reward", "Earns points"],
+                    ["is_available", "Available"],
+                    ["is_featured", "Featured"],
+                  ] as [
+                    keyof FormState & ("loyalty_reward" | "is_available" | "is_featured"),
+                    string,
+                  ][]
+                ).map(([key, label]) => {
+                  const on = Boolean(form[key]);
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, [key]: !f[key] }))}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition-colors ${
+                        on
+                          ? "border-ink bg-ink text-primary-foreground"
+                          : "border-border bg-white/50 text-muted-foreground"
                       }`}
-                  >
-                    {form[key as keyof FormState] ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
-                    {label}
-                  </button>
-                ))}
+                    >
+                      {on ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
+                      {label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Actions */}
             <div className="mt-6 flex gap-3">
-              <button onClick={closeForm} className="h-11 flex-1 rounded-2xl border border-border text-sm text-muted-foreground hover:text-foreground">
+              <button
+                onClick={closeForm}
+                className="h-11 flex-1 rounded-2xl border border-border text-sm text-muted-foreground hover:text-foreground"
+              >
                 Cancel
               </button>
               <button
@@ -608,7 +921,121 @@ export function MerchantMenuPage() {
                 className="gradient-ember flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl text-sm font-medium text-white disabled:opacity-50"
               >
                 {(saving || imgUploading) && <Loader2 className="h-4 w-4 animate-spin" />}
-                {imgUploading ? "Uploading image…" : saving ? "Saving…" : editing ? "Save changes" : "Add item"}
+                {imgUploading
+                  ? "Uploading image…"
+                  : saving
+                    ? "Saving…"
+                    : editing
+                      ? "Save changes"
+                      : "Add item"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Option groups editor */}
+      {optionItem && (
+        <OptionGroupsEditor
+          itemId={optionItem.id}
+          itemName={optionItem.name}
+          onClose={() => setOptionItem(null)}
+          onChanged={() => loadAll()}
+        />
+      )}
+
+      {/* Layout manager */}
+      {showLayout && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
+          onClick={(e) => e.target === e.currentTarget && setShowLayout(false)}
+        >
+          <div className="glass-strong w-full max-w-lg rounded-t-3xl p-6 sm:rounded-3xl">
+            <div className="mb-5 flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl text-foreground">Menu layout</h2>
+                <p className="text-xs text-muted-foreground">
+                  Reorder sections — customers see them in this order.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowLayout(false)}
+                className="grid h-8 w-8 place-items-center rounded-full bg-mist text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+              {categories.length === 0 && (
+                <p className="rounded-2xl border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                  No sections yet. Categories are created automatically as you write a category on
+                  an item, or add one below.
+                </p>
+              )}
+              {[...categories]
+                .sort((a, b) => a.display_order - b.display_order)
+                .map((c, i) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center gap-2 rounded-2xl border border-border bg-white/40 px-3 py-2.5"
+                  >
+                    <span className="text-lg">{c.emoji}</span>
+                    <span className="text-sm font-medium text-foreground">{c.name}</span>
+                    <span className="rounded-full bg-mist px-2 py-0.5 text-[10px] text-muted-foreground">
+                      {c.item_count} items
+                    </span>
+                    <div className="ml-auto flex items-center gap-1">
+                      <button
+                        disabled={i === 0}
+                        onClick={() => moveCat(i, -1)}
+                        className="grid h-7 w-7 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        disabled={i === categories.length - 1}
+                        onClick={() => moveCat(i, 1)}
+                        className="grid h-7 w-7 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
+                      <button
+                        onClick={() => setNewCatName(c.name)}
+                        className="grid h-7 w-7 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                      <button
+                        disabled={c.item_count > 0}
+                        onClick={() => deleteCat(c)}
+                        className="grid h-7 w-7 place-items-center rounded-lg bg-rose-50 text-rose-400 hover:text-rose-600 disabled:opacity-30"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+
+            <div className="mt-4 flex gap-2">
+              <input
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                placeholder="New section name (e.g. Pastries)"
+                className="h-11 flex-1 rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
+              />
+              <input
+                value={newCatEmoji}
+                onChange={(e) => setNewCatEmoji(e.target.value)}
+                className="h-11 w-14 rounded-2xl bg-mist text-center text-lg outline-none focus:ring-2 focus:ring-ember/40"
+                maxLength={4}
+              />
+              <button
+                onClick={createCat}
+                disabled={!newCatName.trim()}
+                className="gradient-ember inline-flex h-11 items-center gap-1.5 rounded-2xl px-4 text-sm font-medium text-white disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" /> Add
               </button>
             </div>
           </div>
@@ -619,24 +1046,41 @@ export function MerchantMenuPage() {
 }
 
 function ItemCard({
-  item, onEdit, onDelete, onToggle, deleting, toggling, catClass,
+  item,
+  onEdit,
+  onDelete,
+  onToggle,
+  onOptions,
+  deleting,
+  toggling,
+  catClass,
 }: {
   item: MenuItem;
   onEdit: () => void;
   onDelete: () => void;
   onToggle: () => void;
+  onOptions: () => void;
   deleting: boolean;
   toggling: boolean;
   catClass: string;
 }) {
   return (
-    <article className={`glass-strong cv-auto overflow-hidden rounded-3xl transition-opacity ${!item.is_available ? "opacity-60" : ""}`}>
+    <article
+      className={`glass-strong cv-auto overflow-hidden rounded-3xl transition-opacity ${!item.is_available ? "opacity-60" : ""}`}
+    >
       {item.image_url ? (
         <div className="h-40 w-full overflow-hidden">
-          <img src={item.image_url} alt={item.name} className="h-full w-full object-cover" loading="lazy" />
+          <img
+            src={item.image_url}
+            alt={item.name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
         </div>
       ) : (
-        <div className="flex h-40 w-full items-center justify-center bg-mist text-5xl">{item.emoji}</div>
+        <div className="flex h-40 w-full items-center justify-center bg-mist text-5xl">
+          {item.emoji}
+        </div>
       )}
       <div className="p-5">
         <div className="flex items-start justify-between gap-3">
@@ -648,7 +1092,9 @@ function ItemCard({
                 {item.is_featured && <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
               </div>
               {item.category && (
-                <span className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${catClass}`}>
+                <span
+                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${catClass}`}
+                >
                   {item.category}
                 </span>
               )}
@@ -656,28 +1102,76 @@ function ItemCard({
           </div>
           <p className="font-display shrink-0 text-xl text-foreground">
             {Number(item.price) === 0 ? (
-              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-sm font-bold text-emerald-700">FREE</span>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-sm font-bold text-emerald-700">
+                FREE
+              </span>
             ) : (
               `NPR ${Number(item.price).toLocaleString()}`
             )}
           </p>
         </div>
         {item.description && (
-          <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{item.description}</p>
+          <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {item.description}
+          </p>
         )}
         <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
-          <span className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${item.loyalty_reward ? "bg-emerald-100 text-emerald-700" : "bg-mist text-muted-foreground"}`}>
+          {item.discount_type && item.discount_type !== "none" && (
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-medium text-emerald-700">
+              {item.discount_type === "percentage"
+                ? `-${Number(item.discount_value)}%`
+                : `-NPR ${Number(item.discount_value).toLocaleString()}`}
+              {item.discount_source === "special" ? " · Special" : ""}
+            </span>
+          )}
+          <span
+            className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${item.loyalty_reward ? "bg-emerald-100 text-emerald-700" : "bg-mist text-muted-foreground"}`}
+          >
             {item.loyalty_reward ? `+${item.points_per_item} pts` : "No points"}
           </span>
+          {(item.groups?.length ?? 0) > 0 && (
+            <span className="rounded-full bg-teal-100 px-2.5 py-1 text-[10px] font-medium text-teal-700">
+              {(item.groups ?? []).map((g) => g.options.length).reduce((a, b) => a + b, 0)} options
+            </span>
+          )}
           <span className="ml-auto" />
-          <button onClick={onToggle} disabled={toggling} title={item.is_available ? "Mark unavailable" : "Mark available"} className="grid h-8 w-8 place-items-center rounded-xl bg-mist text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50">
-            {toggling ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : item.is_available ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+          <button
+            onClick={onOptions}
+            title="Variants & modifiers"
+            className="grid h-8 w-8 place-items-center rounded-xl bg-teal-50 text-teal-700 transition-colors hover:bg-teal-100"
+          >
+            <Layers className="h-3.5 w-3.5" />
           </button>
-          <button onClick={onEdit} className="grid h-8 w-8 place-items-center rounded-xl bg-mist text-muted-foreground transition-colors hover:text-foreground">
+          <button
+            onClick={onToggle}
+            disabled={toggling}
+            title={item.is_available ? "Mark unavailable" : "Mark available"}
+            className="grid h-8 w-8 place-items-center rounded-xl bg-mist text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            {toggling ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : item.is_available ? (
+              <Eye className="h-3.5 w-3.5" />
+            ) : (
+              <EyeOff className="h-3.5 w-3.5" />
+            )}
+          </button>
+          <button
+            onClick={onEdit}
+            className="grid h-8 w-8 place-items-center rounded-xl bg-mist text-muted-foreground transition-colors hover:text-foreground"
+          >
             <Pencil className="h-3.5 w-3.5" />
           </button>
-          <button onClick={onDelete} disabled={deleting} className="grid h-8 w-8 place-items-center rounded-xl bg-rose-50 text-rose-400 transition-colors hover:bg-rose-100 hover:text-rose-600 disabled:opacity-50">
-            {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            className="grid h-8 w-8 place-items-center rounded-xl bg-rose-50 text-rose-400 transition-colors hover:bg-rose-100 hover:text-rose-600 disabled:opacity-50"
+          >
+            {deleting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" />
+            )}
           </button>
         </div>
       </div>

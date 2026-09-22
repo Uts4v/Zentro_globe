@@ -73,6 +73,18 @@ class TodaySpecial(models.Model):
         help_text="Percentage (0-100) or fixed amount depending on discount_type",
     )
     is_active = models.BooleanField(default=True)
+    cta_label = models.CharField(
+        max_length=60, blank=True, default="Order now",
+        help_text="Call-to-action text on the banner button.",
+    )
+    starts_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Optional: special only shows from this time (local to merchant timezone).",
+    )
+    ends_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Optional: special only shows until this time (local to merchant timezone).",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -82,6 +94,69 @@ class TodaySpecial(models.Model):
 
     def __str__(self):
         return f"{self.title} — {self.merchant.business_name}"
+
+    def save(self, *args, **kwargs):
+        previous_linked_id = None
+        if self.pk:
+            previous_linked_id = (
+                TodaySpecial.objects.filter(pk=self.pk)
+                .values_list("linked_menu_item_id", flat=True)
+                .first()
+            )
+        super().save(*args, **kwargs)
+        affected = {item_id for item_id in (previous_linked_id, self.linked_menu_item_id) if item_id}
+        for item_id in affected:
+            sync_menu_item_discount(item_id)
+
+    def delete(self, *args, **kwargs):
+        linked_id = self.linked_menu_item_id
+        result = super().delete(*args, **kwargs)
+        if linked_id:
+            sync_menu_item_discount(linked_id)
+        return result
+
+
+def sync_menu_item_discount(menu_item_id):
+    """
+    Recompute and persist the special-sourced discount on a linked MenuItem.
+
+    The most recently updated active special that carries a discount wins; if no
+    such special remains, any previously special-sourced discount is cleared.
+    The time window is intentionally NOT enforced here — expiry is evaluated at
+    pricing/display time via ``config.menu_pricing.resolve_discount`` so a
+    scheduled or elapsed special never needs a background job to stay correct.
+    """
+    from merchants.models import MenuItem
+
+    item = MenuItem.objects.filter(pk=menu_item_id).first()
+    if item is None:
+        return
+
+    live = (
+        TodaySpecial.objects.filter(
+            linked_menu_item_id=menu_item_id,
+            merchant_id=item.merchant_id,
+            is_active=True,
+        )
+        .exclude(discount_type=TodaySpecial.DISCOUNT_NONE)
+        .order_by("-updated_at")
+        .first()
+    )
+
+    if live is not None and live.discount_value and live.discount_value > 0:
+        item.discount_type = live.discount_type
+        item.discount_value = live.discount_value
+        item.discount_source = MenuItem.DISCOUNT_SOURCE_SPECIAL
+    elif item.discount_source == MenuItem.DISCOUNT_SOURCE_SPECIAL:
+        item.discount_type = MenuItem.DISCOUNT_NONE
+        item.discount_value = None
+        item.discount_source = MenuItem.DISCOUNT_SOURCE_MANUAL
+    else:
+        return
+
+    item.save(
+        update_fields=["discount_type", "discount_value", "discount_source", "updated_at"]
+    )
 
 
 class CustomerMerchantProfile(models.Model):
@@ -294,7 +369,7 @@ class CustomerPunchCard(models.Model):
         self.proof_code_used       = False
         self.save(update_fields=["proof_code", "proof_code_expires_at", "proof_code_used", "updated_at"])
         return self.proof_code
-    def add_punch(self) -> bool:
+    def add_punch(self, order=None) -> bool:
         """Award one punch. Returns True if this punch completed the card."""
         if self.is_completed:
             return False
@@ -309,9 +384,22 @@ class CustomerPunchCard(models.Model):
 
         # Use update_fields to avoid triggering unique constraint issues
         self.save(update_fields=["current_stamps", "is_completed", "completed_at", "updated_at"])
+
+        self.record_event(
+            PunchCardEvent.EVENT_PUNCHED,
+            order=order,
+            stamp_number=self.current_stamps,
+        )
+        if completed:
+            self.record_event(
+                PunchCardEvent.EVENT_COMPLETED,
+                order=order,
+                stamp_number=self.current_stamps,
+                note="Card completed",
+            )
         return completed
 
-    def redeem(self):
+    def redeem(self, order=None):
         if not self.is_completed:
             raise ValueError("Card is not completed yet.")
         if self.is_redeemed:
@@ -320,6 +408,89 @@ class CustomerPunchCard(models.Model):
         from django.utils import timezone
         self.redeemed_at = timezone.now()
         self.save(update_fields=["is_redeemed", "redeemed_at", "updated_at"])
+        self.record_event(
+            PunchCardEvent.EVENT_REDEEMED,
+            order=order,
+            stamp_number=self.current_stamps,
+            note=f"Reward claimed: {self.punch_card.reward_text}",
+        )
+
+    def record_event(self, event_type, *, order=None, stamp_number=None, note=""):
+        """Write an immutable audit event to this card's history timeline."""
+        return PunchCardEvent.objects.create(
+            merchant=self.merchant,
+            customer=self.customer,
+            card=self,
+            punch_card=self.punch_card,
+            event_type=event_type,
+            order=order,
+            stamp_number=stamp_number,
+            note=note,
+        )
+
+
+class PunchCardEvent(models.Model):
+    """Immutable audit trail of a customer's punch card journey.
+
+    Records when a card was started, every punch earned (with the order that
+    earned it), when the card was completed, and when the reward was claimed.
+    """
+
+    EVENT_STARTED = "STARTED"
+    EVENT_PUNCHED = "PUNCHED"
+    EVENT_COMPLETED = "COMPLETED"
+    EVENT_REDEEMED = "REDEEMED"
+    EVENT_TYPES = [
+        (EVENT_STARTED, "Started"),
+        (EVENT_PUNCHED, "Punched"),
+        (EVENT_COMPLETED, "Completed"),
+        (EVENT_REDEEMED, "Claimed"),
+    ]
+
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="punch_card_events",
+    )
+    customer = models.ForeignKey(
+        "accounts.CustomerProfile",
+        on_delete=models.CASCADE,
+        related_name="punch_card_events",
+    )
+    card = models.ForeignKey(
+        CustomerPunchCard,
+        on_delete=models.CASCADE,
+        related_name="events",
+    )
+    punch_card = models.ForeignKey(
+        MerchantPunchCard,
+        on_delete=models.CASCADE,
+        related_name="events",
+    )
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPES)
+    order = models.ForeignKey(
+        "orders.Order",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="punch_card_events",
+    )
+    stamp_number = models.IntegerField(null=True, blank=True)
+    note = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "loyalty_punch_card_events"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["merchant", "event_type"]),
+            models.Index(fields=["merchant", "-created_at"]),
+            models.Index(fields=["customer", "-created_at"]),
+            models.Index(fields=["card", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_event_type_display()}: {self.customer} / {self.punch_card.name} @ {self.created_at:%Y-%m-%d %H:%M}"
 
 
 class PointTransaction(models.Model):
