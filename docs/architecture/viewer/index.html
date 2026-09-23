@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Zentro Architecture Map</title>
+<style>
+:root{
+  --void:#070B0A; --void2:#0C1613; --panel:rgba(15,26,22,.72); --line:rgba(255,255,255,.08);
+  --ink:#EAF3EE; --muted:#8FA79D;
+  --app:#33C9AC; --model:#FF6E7C; --feature:#F2B84B; --realtime:#54E3E3; --bg-node:#B58BFF; --service:#C3DE6B; --uses:#9AA6B8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+@media (prefers-reduced-motion: reduce){ * { animation:none !important; transition:none !important; } }
+body{
+  background:
+    radial-gradient(1200px 700px at 22% 8%, #0F221D 0%, transparent 60%),
+    radial-gradient(900px 600px at 85% 85%, #14231F 0%, transparent 55%),
+    var(--void);
+  color:var(--ink);
+  font:13px/1.45 -apple-system,"Segoe UI",Roboto,sans-serif;
+  height:100vh; overflow:hidden;
+}
+#app{display:flex;flex-direction:column;height:100%}
+header{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);background:rgba(7,11,10,.75);backdrop-filter:blur(10px);
+  z-index:4;
+}
+h1{font-size:14px;margin:0;font-weight:600;letter-spacing:.2px;color:var(--ink)}
+h1 b{color:var(--app);font-weight:600}
+.tag{font-size:11px;color:var(--app);background:rgba(51,201,172,.12);border:1px solid rgba(51,201,172,.3);padding:3px 10px;border-radius:20px;white-space:nowrap}
+.meta{font-size:11px;color:var(--muted)}
+.spacer{flex:1}
+.search{
+  background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:20px;color:var(--ink);
+  font:inherit;font-size:12px;padding:5px 12px;width:180px;outline:none;
+}
+.search::placeholder{color:var(--muted)}
+.search:focus{border-color:var(--app)}
+button{
+  font:inherit;font-size:12px;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--ink);
+  border-radius:20px;padding:5px 12px;cursor:pointer;transition:background .15s,border-color .15s;
+}
+button:hover{border-color:rgba(255,255,255,.25)}
+button.active{background:var(--app);color:#04140F;border-color:var(--app);font-weight:600}
+button:focus-visible,.search:focus-visible{outline:2px solid var(--app);outline-offset:2px}
+#wrap{position:relative;flex:1;overflow:hidden}
+#svg{width:100%;height:100%;display:block;cursor:grab}
+#svg.grabbing{cursor:grabbing}
+.halo{animation:breathe 5s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.28}50%{opacity:.5}}
+#legend{
+  position:absolute;right:14px;top:14px;background:var(--panel);border:1px solid var(--line);
+  backdrop-filter:blur(10px);border-radius:10px;padding:10px 14px;font-size:11.5px;line-height:1.95;
+  box-shadow:0 10px 30px rgba(0,0,0,.4);
+}
+#legend .grp{color:var(--muted);font-size:10px;margin:5px 0 2px;letter-spacing:.02em}
+#legend .row{display:flex;align-items:center;gap:8px}
+#legend i{width:9px;height:9px;border-radius:50%;flex:none;box-shadow:0 0 8px currentColor}
+#legend .edge-swatch{width:16px;height:2px;border-radius:2px;flex:none}
+#tip{
+  position:fixed;pointer-events:none;background:rgba(10,18,15,.95);border:1px solid var(--line);color:#fff;
+  padding:9px 12px;border-radius:8px;font-size:11.5px;display:none;max-width:300px;
+  box-shadow:0 10px 26px rgba(0,0,0,.5);z-index:6;
+}
+#tip b{display:block;margin-bottom:3px;font-size:12px;color:var(--app)}
+#tip .ev{display:block;font-size:10.5px;color:#A9C1B7;word-break:break-all;margin-top:2px;font-family:ui-monospace,Menlo,monospace}
+footer{padding:6px 16px;border-top:1px solid var(--line);font-size:10.5px;color:var(--muted);background:rgba(7,11,10,.75)}
+footer code{color:#B7CFC5}
+#hint{
+  position:absolute;left:14px;bottom:14px;font-size:11px;color:var(--muted);background:var(--panel);
+  border:1px solid var(--line);backdrop-filter:blur(10px);border-radius:8px;padding:5px 12px;
+}
+text{user-select:none}
+.lbl{fill:#DCEBE4;font-weight:400;transition:opacity .18s}
+.lbl.hub{font-weight:600;fill:#fff}
+</style>
+</head>
+<body>
+<div id="app">
+<header>
+  <h1>Zentro <b>Architecture Map</b></h1>
+  <span class="tag" id="generated"></span>
+  <span class="meta" id="counts"></span>
+  <span class="spacer"></span>
+  <input class="search" id="search" type="text" placeholder="Find a node..." />
+  <span class="meta">filter</span>
+  <button data-f="all" class="active">All</button>
+  <button data-f="app">Apps</button>
+  <button data-f="model">Models</button>
+  <button data-f="feature">Features</button>
+  <button data-f="realtime">Realtime</button>
+  <button data-f="background">Background</button>
+</header>
+<div id="wrap">
+  <svg id="svg" viewBox="0 0 1400 900"></svg>
+  <div id="legend"></div>
+  <div id="tip"></div>
+  <div id="hint">drag to pan · scroll to zoom · click a node to trace its neighborhood (esc resets) · hover for evidence · zoom in to reveal more labels</div>
+</div>
+<footer>read-only · facts from <code>docs/architecture/graph/zentro-graph.json</code> — intent lives in the <code>.md</code> docs</footer>
+</div>
+<script>
+window.ZENTRO_GRAPH = {"schema":"zentro-graph/1.0","generator":"scripts/architecture/generate.py","generated_at":"2026-09-22T00:00:00Z","note":"Machine-readable facts ONLY. Intent lives in the .md files. edge.type in [uses, couples, realtime, background, fk, depends]","nodes":[{"id":"app:accounts","type":"app","label":"accounts","filePath":"backend/accounts/models.py"},{"id":"app:ai_core","type":"app","label":"ai_core","filePath":"backend/ai_core"},{"id":"app:loyalty","type":"app","label":"loyalty","filePath":"backend/loyalty"},{"id":"app:merchants","type":"app","label":"merchants","filePath":"backend/merchants"},{"id":"app:notifications","type":"app","label":"notifications","filePath":"backend/notifications"},{"id":"app:orders","type":"app","label":"orders","filePath":"backend/orders"},{"id":"app:pos","type":"app","label":"pos","filePath":"backend/pos"},{"id":"model:Order","type":"model","label":"Order","filePath":"backend/orders/models.py"},{"id":"model:OrderItem","type":"model","label":"OrderItem","filePath":"backend/orders/models.py"},{"id":"model:OrderPayment","type":"model","label":"OrderPayment","filePath":"backend/orders/models.py"},{"id":"model:PosPayment","type":"model","label":"PosPayment","filePath":"backend/pos/models.py"},{"id":"model:CustomerMerchantWallet","type":"model","label":"CustomerMerchantWallet","filePath":"backend/loyalty/models.py"},{"id":"model:PunchCard","type":"model","label":"PunchCard","filePath":"backend/loyalty/models.py"},{"id":"model:PunchCardReward","type":"model","label":"PunchCardReward","filePath":"backend/loyalty/models.py"},{"id":"model:Mission","type":"model","label":"Mission","filePath":"backend/loyalty/models.py"},{"id":"model:Reward","type":"model","label":"Reward","filePath":"backend/loyalty/models.py"},{"id":"model:PosDevice","type":"model","label":"PosDevice","filePath":"backend/pos/models.py"},{"id":"model:ShiftWorker","type":"model","label":"ShiftWorker","filePath":"backend/pos/models.py"},{"id":"model:StaffShift","type":"model","label":"StaffShift","filePath":"backend/pos/models.py"},{"id":"model:CashShift","type":"model","label":"CashShift","filePath":"backend/pos/models.py"},{"id":"model:PreparationArea","type":"model","label":"PreparationArea","filePath":"backend/orders/models.py"},{"id":"model:PreparationSettings","type":"model","label":"PreparationSettings","filePath":"backend/orders/models.py"},{"id":"model:MerchantProfile","type":"model","label":"MerchantProfile","filePath":"backend/merchants/models.py"},{"id":"model:MenuItem","type":"model","label":"MenuItem","filePath":"backend/merchants/models.py"},{"id":"model:MenuItemOption","type":"model","label":"MenuItemOption","filePath":"backend/merchants/models.py"},{"id":"model:Notification","type":"model","label":"Notification","filePath":"backend/notifications/models.py"},{"id":"model:AIRequest","type":"model","label":"AIRequest","filePath":"backend/ai_core/models.py"},{"id":"service:preparation","type":"service","label":"orders/services/preparation","filePath":"backend/orders/services/preparation.py"},{"id":"service:notifications","type":"service","label":"notifications/services","filePath":"backend/notifications/services.py"},{"id":"realtime:user_group","type":"realtime","label":"user_{id} (ws)","filePath":"backend/notifications/consumers.py"},{"id":"realtime:prep_group","type":"realtime","label":"merchant_{mid}_preparation_{area}","filePath":"backend/orders/services/preparation.py"},{"id":"background:generate_merchant_report","type":"background","label":"celery: generate_merchant_report","filePath":"backend/ai_core/tasks/generate_report.py"},{"id":"background:dispatch_due_reports","type":"background","label":"celery-beat: dispatch_due_reports","filePath":"backend/ai_core/tasks/scheduler.py"},{"id":"feature:pos","type":"feature","label":"src/features/pos","filePath":"src/features/pos"},{"id":"feature:loyalty-engine","type":"feature","label":"src/features/loyalty-engine","filePath":"src/features/loyalty-engine"},{"id":"feature:preparation","type":"feature","label":"src/features/preparation","filePath":"src/features/preparation"},{"id":"feature:ai","type":"feature","label":"src/features/ai","filePath":"src/features/ai"},{"id":"feature:transactions","type":"feature","label":"src/features/transactions","filePath":"src/features/transactions"},{"id":"store:http","type":"uses","label":"@tanstack/react-query + api layer","filePath":"src/lib/api"}],"edges":[{"source":"app:orders","target":"app:loyalty","type":"couples","evidences":["backend/orders/views.py:_award_loyalty"]},{"source":"app:pos","target":"app:orders","type":"uses","evidences":["backend/pos/views.py:create_pos_order"]},{"source":"app:pos","target":"app:loyalty","type":"couples","evidences":["backend/pos/views.py:_award_loyalty reuse"]},{"source":"app:orders","target":"app:notifications","type":"uses","evidences":["backend/orders/views.py"]},{"source":"app:orders","target":"app:merchants","type":"uses","evidences":["order create merchant lookup"]},{"source":"app:ai_core","target":"app:orders","type":"uses","evidences":["ai_core services read orders"]},{"source":"app:ai_core","target":"app:merchants","type":"uses","evidences":["ai_core tool: menu_tools"]},{"source":"app:ai_core","target":"app:loyalty","type":"uses","evidences":["ai_core use_cases"]},{"source":"app:notifications","target":"app:accounts","type":"uses","evidences":["notifications/services.py send_notification(user)"]},{"source":"service:preparation","target":"realtime:prep_group","type":"realtime","evidences":["orders/services/preparation.py broadcast_area_event"]},{"source":"service:notifications","target":"realtime:user_group","type":"realtime","evidences":["notifications/services.py group_send user_{id}"]},{"source":"app:orders","target":"background:generate_merchant_report","type":"background","evidences":["ai_core/tasks"]},{"source":"background:dispatch_due_reports","target":"background:generate_merchant_report","type":"depends","evidences":["config/celery.py beat_schedule"]},{"source":"model:Order","target":"model:CustomerMerchantWallet","type":"fk","evidences":["loyalty wallet order linking"]},{"source":"model:Order","target":"model:OrderPayment","type":"fk","evidences":["backend/orders/models.py"]},{"source":"model:PunchCard","target":"model:PunchCardReward","type":"fk","evidences":["backend/loyalty/models.py"]},{"source":"model:OrderItem","target":"model:PreparationArea","type":"fk","evidences":["KDS area routing"]},{"source":"feature:pos","target":"store:http","type":"uses","evidences":["pos/api/index.ts"]},{"source":"feature:loyalty-engine","target":"store:http","type":"uses","evidences":["loyalty-engine api"]},{"source":"feature:preparation","target":"realtime:prep_group","type":"realtime","evidences":["src/lib/ws.ts PreparationAreaFilter"]},{"source":"feature:ai","target":"app:ai_core","type":"couples","evidences":["src/lib/api/ai.ts"]}]};
+</script>
+<script>
+(function(){
+"use strict";
+var NS = "http://www.w3.org/2000/svg";
+var G = window.ZENTRO_GRAPH;
+var svg = document.getElementById("svg");
+var tip = document.getElementById("tip");
+var legend = document.getElementById("legend");
+var counts = document.getElementById("counts");
+var generatedTag = document.getElementById("generated");
+var searchBox = document.getElementById("search");
+
+var COL = {app:"#33C9AC", model:"#FF6E7C", feature:"#F2B84B", realtime:"#54E3E3", background:"#B58BFF", service:"#C3DE6B", uses:"#9AA6B8"};
+var EDGE_COL = {uses:"#8FA0AE", couples:"#F2B84B", realtime:"#54E3E3", background:"#B58BFF", fk:"#C99A6B", depends:"#C7A6EA"};
+var TYPE_LABEL = {app:"app", model:"model", feature:"feature", realtime:"realtime", background:"background", service:"service", uses:"uses"};
+
+function el(tag, attrs){
+  var e = document.createElementNS(NS, tag);
+  for (var k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+
+// ---- index nodes / edges, compute degree ----
+var nodeById = {};
+G.nodes.forEach(function(n){ nodeById[n.id] = n; n.degree = 0; });
+G.edges = G.edges.filter(function(ed){ return nodeById[ed.source] && nodeById[ed.target]; });
+G.edges.forEach(function(ed){ nodeById[ed.source].degree++; nodeById[ed.target].degree++; });
+
+function measureWidth(label){ return Math.max(26, label.length * 5.5 + 10); }
+function nodeRadius(n){ return Math.max(8, Math.min(22, 8 + n.degree * 2.6)); }
+
+// ---- seeded pseudo-random layout (stable across reloads) ----
+function mulberry32(seed){
+  return function(){
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    var t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+var rand = mulberry32(2026);
+
+var W = 1400, H = 900, CX = W/2, CY = H/2;
+var LINK_DIST = 170;
+
+G.nodes.forEach(function(n, i){
+  var ang = (i / G.nodes.length) * Math.PI * 2 + rand()*0.6;
+  var rad = 160 + rand() * 340;
+  n.x = CX + Math.cos(ang) * rad;
+  n.y = CY + Math.sin(ang) * rad;
+  n.vx = 0; n.vy = 0;
+});
+
+function simulate(iterations){
+  var links = G.edges;
+  for (var it = 0; it < iterations; it++){
+    var temp = Math.max(0.15, 1 - it / iterations); // cooling schedule
+    // repulsion between every pair (label-aware minimum distance)
+    for (var i = 0; i < G.nodes.length; i++){
+      for (var j = i + 1; j < G.nodes.length; j++){
+        var a = G.nodes[i], b = G.nodes[j];
+        var dx = a.x - b.x, dy = a.y - b.y;
+        var distSq = dx*dx + dy*dy || 0.01;
+        var dist = Math.sqrt(distSq);
+        var desired = nodeRadius(a) + nodeRadius(b) + Math.max(measureWidth(a.label), measureWidth(b.label)) * 0.62 + 30;
+        if (dist < desired * 2.6){
+          var force = (desired * desired * 3.2) / distSq;
+          force = Math.min(force, 26) * temp;
+          var fx = (dx / dist) * force, fy = (dy / dist) * force;
+          a.vx += fx; a.vy += fy;
+          b.vx -= fx; b.vy -= fy;
+        }
+      }
+    }
+    // attraction along edges (springs)
+    links.forEach(function(ed){
+      var a = nodeById[ed.source], b = nodeById[ed.target];
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var dist = Math.sqrt(dx*dx + dy*dy) || 0.01;
+      var k = ed.type === "couples" ? 0.018 : 0.01;
+      var force = (dist - LINK_DIST) * k;
+      var fx = (dx / dist) * force, fy = (dy / dist) * force;
+      a.vx += fx; a.vy += fy;
+      b.vx -= fx; b.vy -= fy;
+    });
+    // gentle centering pull + integrate + damping
+    G.nodes.forEach(function(n){
+      n.vx += (CX - n.x) * 0.0018;
+      n.vy += (CY - n.y) * 0.0018;
+      n.vx *= 0.83; n.vy *= 0.83;
+      n.x += n.vx; n.y += n.vy;
+      n.x = Math.max(60, Math.min(W - 60, n.x));
+      n.y = Math.max(60, Math.min(H - 60, n.y));
+    });
+  }
+}
+simulate(700);
+
+// final label-collision cleanup pass: push apart bounding boxes that still overlap
+function resolveLabelOverlap(passes){
+  for (var p = 0; p < passes; p++){
+    for (var i = 0; i < G.nodes.length; i++){
+      for (var j = i + 1; j < G.nodes.length; j++){
+        var a = G.nodes[i], b = G.nodes[j];
+        var dx = b.x - a.x, dy = b.y - a.y;
+        var minX = (measureWidth(a.label) + measureWidth(b.label)) / 2 + 6;
+        var minY = nodeRadius(a) + nodeRadius(b) + 22;
+        if (Math.abs(dx) < minX && Math.abs(dy) < minY){
+          var overlapX = minX - Math.abs(dx), overlapY = minY - Math.abs(dy);
+          if (overlapX < overlapY){
+            var pushX = (dx < 0 ? -1 : 1) * overlapX * 0.5;
+            a.x -= pushX; b.x += pushX;
+          } else {
+            var pushY = (dy < 0 ? -1 : 1) * overlapY * 0.5;
+            a.y -= pushY; b.y += pushY;
+          }
+        }
+      }
+    }
+  }
+}
+resolveLabelOverlap(60);
+
+// ---- svg scaffolding ----
+var viewBox = {x:0, y:0, w:W, h:H};
+function applyViewBox(){
+  svg.setAttribute("viewBox", viewBox.x+" "+viewBox.y+" "+viewBox.w+" "+viewBox.h);
+  updateLabelVisibility();
+}
+
+var defs = el("defs");
+["app","model","feature","realtime","background","service","uses"].forEach(function(t){
+  var f = el("filter", {id:"glow-"+t, x:"-100%", y:"-100%", width:"300%", height:"300%"});
+  var blur = el("feGaussianBlur", {"in":"SourceGraphic", stdDeviation:"3.2"});
+  f.appendChild(blur);
+  defs.appendChild(f);
+});
+svg.appendChild(defs);
+
+var gEdge = el("g");
+var gHalo = el("g");
+var gNode = el("g");
+svg.appendChild(gEdge);
+svg.appendChild(gHalo);
+svg.appendChild(gNode);
+
+// legend
+var legendTypes = ["app","model","feature","realtime","background","service"];
+var nodeGrp = document.createElement("div");
+nodeGrp.className = "grp"; nodeGrp.textContent = "nodes";
+legend.appendChild(nodeGrp);
+legendTypes.forEach(function(t){
+  var d = document.createElement("div"); d.className = "row";
+  var dot = document.createElement("i"); dot.style.background = COL[t]; dot.style.color = COL[t];
+  d.appendChild(dot); d.appendChild(document.createTextNode(t));
+  legend.appendChild(d);
+});
+var edgeGrp = document.createElement("div");
+edgeGrp.className = "grp"; edgeGrp.textContent = "edges";
+legend.appendChild(edgeGrp);
+Object.keys(EDGE_COL).forEach(function(t){
+  var d = document.createElement("div"); d.className = "row";
+  var dot = document.createElement("i"); dot.className = "edge-swatch"; dot.style.background = EDGE_COL[t];
+  d.appendChild(dot); d.appendChild(document.createTextNode(t));
+  legend.appendChild(d);
+});
+
+var nodeGroups = {}, labelEls = {}, haloEls = {}, edgePaths = [];
+
+function curvePath(a, b, key){
+  var dx = b.x - a.x, dy = b.y - a.y;
+  var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  var len = Math.sqrt(dx*dx + dy*dy) || 1;
+  // stable pseudo-random curvature per edge so lines don't all bow the same way
+  var h = 0; for (var i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  var sign = (h % 2 === 0) ? 1 : -1;
+  var bow = Math.min(46, len * 0.16) * sign;
+  var nx = -dy / len, ny = dx / len;
+  var cx = mx + nx * bow, cy = my + ny * bow;
+  return "M" + a.x + "," + a.y + " Q" + cx + "," + cy + " " + b.x + "," + b.y;
+}
+
+function draw(){
+  gEdge.textContent = ""; gHalo.textContent = ""; gNode.textContent = "";
+  edgePaths = [];
+
+  G.edges.forEach(function(ed){
+    var a = nodeById[ed.source], b = nodeById[ed.target];
+    var key = ed.source + "|" + ed.target;
+    var p = el("path", {
+      d: curvePath(a, b, key), fill:"none",
+      stroke: EDGE_COL[ed.type] || "#888",
+      "stroke-width": ed.type === "couples" ? 2 : 1.3,
+      "stroke-opacity": ed.type === "couples" ? 0.55 : 0.32,
+      "data-key": key, "data-a": ed.source, "data-b": ed.target
+    });
+    gEdge.appendChild(p);
+    edgePaths.push(p);
+  });
+
+  G.nodes.forEach(function(n){
+    var r = nodeRadius(n);
+    var color = COL[n.type] || "#888";
+
+    var halo = el("circle", {
+      cx:n.x, cy:n.y, r:r+6, fill:color, opacity:0.35,
+      filter:"url(#glow-"+n.type+")"
+    });
+    if (n.degree >= 3) halo.setAttribute("class", "halo");
+    gHalo.appendChild(halo);
+    haloEls[n.id] = halo;
+
+    var gr = el("g", {transform:"translate("+n.x+","+n.y+")", "data-id": n.id});
+    var circ = el("circle", {
+      r:r, fill: color,
+      stroke: n.isFocused ? "#fff" : "rgba(255,255,255,.55)",
+      "stroke-width": n.isFocused ? 2.5 : 1
+    });
+    gr.appendChild(circ);
+
+    var t = el("text", {
+      class: "lbl" + (n.degree >= 3 ? " hub" : ""),
+      y: r + 13, "text-anchor":"middle", "font-size":10.5
+    });
+    t.textContent = n.label || n.id;
+    gr.appendChild(t);
+    labelEls[n.id] = t;
+
+    gr.addEventListener("mouseenter", function(){
+      tip.style.display = "block";
+      tip.innerHTML = "<b>" + n.label + "</b>" + TYPE_LABEL[n.type] + " · " + n.degree + " connection" + (n.degree===1?"":"s") + "<span class='ev'>" + (n.filePath || "") + "</span>";
+      t.style.opacity = 1;
+    });
+    gr.addEventListener("mousemove", function(ev){
+      tip.style.left = (ev.clientX + 14) + "px";
+      tip.style.top = (ev.clientY + 14) + "px";
+    });
+    gr.addEventListener("mouseleave", function(){
+      tip.style.display = "none";
+      updateLabelVisibility();
+    });
+    gr.addEventListener("click", function(ev){ ev.stopPropagation(); focusNode(n); });
+
+    nodeGroups[n.id] = gr;
+    gNode.appendChild(gr);
+  });
+
+  applyActiveFilter();
+  updateLabelVisibility();
+}
+
+function updateLabelVisibility(){
+  var scale = viewBox.w / W; // < 1 means zoomed in
+  G.nodes.forEach(function(n){
+    var t = labelEls[n.id];
+    if (!t) return;
+    var show = n.isFocused || n.degree >= 3 || scale < 0.55;
+    t.style.opacity = show ? (scale < 0.3 ? 1 : 0.85) : 0;
+  });
+}
+
+function focusNode(n){
+  var hot = {}; hot[n.id] = 1;
+  G.edges.forEach(function(ed){
+    if (ed.source === n.id || ed.target === n.id){ hot[ed.source] = 1; hot[ed.target] = 1; }
+  });
+  G.nodes.forEach(function(x){ x.isFocused = !!hot[x.id]; });
+  draw();
+  edgePaths.forEach(function(p){
+    var connected = p.getAttribute("data-a") === n.id || p.getAttribute("data-b") === n.id;
+    p.style.opacity = connected ? 1 : 0.08;
+  });
+  Object.keys(nodeGroups).forEach(function(id){
+    var dim = !hot[id];
+    nodeGroups[id].style.opacity = dim ? 0.25 : 1;
+    if (haloEls[id]) haloEls[id].style.opacity = dim ? 0.05 : 0.35;
+  });
+}
+
+function clearFocus(){
+  G.nodes.forEach(function(n){ n.isFocused = false; });
+  draw();
+}
+
+// ---- search ----
+searchBox.addEventListener("input", function(){
+  var q = searchBox.value.trim().toLowerCase();
+  if (!q){ clearFocus(); return; }
+  var match = G.nodes.find(function(n){ return n.label.toLowerCase().indexOf(q) !== -1; });
+  if (match) focusNode(match);
+});
+
+// ---- pan ----
+var dragging = false, last = null, moved = false;
+svg.addEventListener("mousedown", function(ev){
+  dragging = true; moved = false;
+  last = {x: ev.clientX, y: ev.clientY};
+  svg.classList.add("grabbing");
+  tip.style.display = "none";
+});
+window.addEventListener("mousemove", function(ev){
+  if (!dragging) return;
+  var dx = ev.clientX - last.x, dy = ev.clientY - last.y;
+  if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+  last = {x: ev.clientX, y: ev.clientY};
+  var scale = viewBox.w / svg.clientWidth;
+  viewBox.x -= dx * scale;
+  viewBox.y -= dy * scale;
+  applyViewBox();
+});
+window.addEventListener("mouseup", function(){ dragging = false; svg.classList.remove("grabbing"); });
+svg.addEventListener("click", function(){
+  if (moved) return;
+  clearFocus();
+});
+
+// ---- zoom ----
+svg.addEventListener("wheel", function(ev){
+  ev.preventDefault();
+  var rect = svg.getBoundingClientRect();
+  var mx = viewBox.x + (ev.clientX - rect.left) / rect.width * viewBox.w;
+  var my = viewBox.y + (ev.clientY - rect.top) / rect.height * viewBox.h;
+  var factor = ev.deltaY > 0 ? 1.1 : 0.9;
+  var newW = Math.max(260, Math.min(2800, viewBox.w * factor));
+  var newH = newW * (H / W);
+  viewBox.x = mx - (mx - viewBox.x) * (newW / viewBox.w);
+  viewBox.y = my - (my - viewBox.y) * (newH / viewBox.h);
+  viewBox.w = newW; viewBox.h = newH;
+  applyViewBox();
+}, {passive:false});
+
+// ---- filters ----
+var filters = document.querySelectorAll("button[data-f]");
+var activeFilter = "all";
+filters.forEach(function(btn){
+  btn.addEventListener("click", function(){
+    filters.forEach(function(b){ b.classList.remove("active"); });
+    btn.classList.add("active");
+    activeFilter = btn.getAttribute("data-f");
+    applyActiveFilter();
+  });
+});
+function applyActiveFilter(){
+  G.nodes.forEach(function(n){
+    var gr = nodeGroups[n.id], halo = haloEls[n.id];
+    if (!gr) return;
+    var on = (activeFilter === "all" || n.type === activeFilter);
+    gr.style.opacity = on ? 1 : 0.1;
+    if (halo) halo.style.opacity = on ? (n.degree>=3?0.35:0.22) : 0.03;
+  });
+  edgePaths.forEach(function(p){
+    var a = nodeById[p.getAttribute("data-a")], b = nodeById[p.getAttribute("data-b")];
+    var visible = activeFilter === "all" || a.type === activeFilter || b.type === activeFilter;
+    p.style.opacity = visible ? 1 : 0.05;
+  });
+}
+
+document.addEventListener("keydown", function(ev){
+  if (ev.key === "Escape"){ searchBox.value = ""; clearFocus(); }
+});
+
+generatedTag.textContent = "generated " + (G.generated_at || "").slice(0,10);
+counts.textContent = G.nodes.length + " nodes · " + G.edges.length + " edges";
+applyViewBox();
+draw();
+})();
+</script>
+</body>
+</html>

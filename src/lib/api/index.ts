@@ -17,3 +17,4 @@ export { reportsApi } from "./reports";
 export { transferApi } from "./transfers";
 export { merchantCardDesignApi, membershipCardApi, publicQrApi } from "./cards";
 export { leaderboardApi } from "./leaderboard";
+export * from "./inventory";

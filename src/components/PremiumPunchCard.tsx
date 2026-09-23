@@ -9,7 +9,7 @@ interface PremiumPunchCardProps {
 
 function withAlpha(color: string | undefined, alpha: number): string {
   if (!color?.startsWith("#") || color.length < 7) {
-    return `rgba(109, 94, 247, ${alpha})`;
+    return `rgba(15, 61, 58, ${alpha})`;
   }
 
   const r = parseInt(color.slice(1, 3), 16);
@@ -30,7 +30,7 @@ export function PremiumPunchCard({
   const punchCount = card.current_stamps;
   const freeRewardReady = card.is_completed && !card.is_redeemed;
   const remaining = Math.max(punchesNeeded - punchCount, 0);
-  const accent = config.color_scheme || "#6D5EF7";
+  const accent = config.color_scheme || "#0F3D3A";
   const progress = Math.min(100, (punchCount / Math.max(punchesNeeded, 1)) * 100);
 
   return (

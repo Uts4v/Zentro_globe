@@ -43,6 +43,24 @@
   --color-mist: var(--mist);
   --color-surface: var(--surface);
   --color-surface-elevated: var(--surface-elevated);
+
+  /* ── Zentro signature accents ───────────────────────── */
+  --color-bordeaux: var(--bordeaux);
+  --color-bordeaux-soft: var(--bordeaux-soft);
+  --color-olive: var(--olive);
+  --color-olive-soft: var(--olive-soft);
+  --color-periwinkle: var(--periwinkle);
+  --color-periwinkle-soft: var(--periwinkle-soft);
+  --color-butter: var(--butter);
+  --color-butter-soft: var(--butter-soft);
+  --color-butter-strong: var(--butter-strong);
+
+  /* ── Semantic states ───────────────────────────────── */
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -53,72 +71,110 @@
 :root {
   --radius: 1rem;
 
-  /* Premium warm palette */
-  --background: #faf9f5;
-  --foreground: #14262a;
-  --ink: #073f4b;
-  --mist: #f5f3ef;
-  --surface: #ffffff;
+  /* ══════════════════════════════════════════════════════════════════════
+     ZENTRO COLOR SYSTEM — Premium Café
+     Warm ivory canvas · Deep café teal identity · Espresso ink text
+     Bordeaux luxe accent · Olive natural/success · Butter rewards
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /* Brand primitives */
+  --brand-primary: #0f3d3a;
+  --brand-primary-hover: #0b302e;
+  --brand-primary-active: #082725;
+
+  --bordeaux: #761c26;
+  --bordeaux-hover: #651821;
+  --bordeaux-soft: #f7e9ea;
+
+  --olive: #596b32;
+  --olive-hover: #4a5a2a;
+  --olive-soft: #edf0e3;
+
+  --periwinkle: #949ab1;
+  --periwinkle-soft: #e9ebf1;
+
+  --butter: #f3d98b;
+  --butter-strong: #d6a925;
+  --butter-soft: #fbf1d9;
+
+  /* Backgrounds / surfaces */
+  --background: #fbf7ef; /* Warm Ivory */
+  --foreground: #172a2b; /* Espresso Ink */
+  --ink: #172a2b;
+  --mist: #efe8dd; /* Muted surface */
+  --surface: #fffdf9; /* Porcelain */
   --surface-elevated: #ffffff;
 
-  --card: #ffffff;
-  --card-foreground: #14262a;
-  --popover: #ffffff;
-  --popover-foreground: #14262a;
+  --card: #fffdf9;
+  --card-foreground: #172a2b;
+  --popover: #fffdf9;
+  --popover-foreground: #172a2b;
 
-  --primary: #073f4b;
-  --primary-foreground: #ffffff;
+  /* Primary — Deep Café Teal */
+  --primary: #0f3d3a;
+  --primary-hover: #0b302e;
+  --primary-active: #082725;
+  --primary-foreground: #fff9f0;
 
-  --secondary: #f5f3ef;
-  --secondary-foreground: #14262a;
+  /* Secondary — Oat Cream */
+  --secondary: #f3e7d5;
+  --secondary-hover: #e9dac5;
+  --secondary-foreground: #172a2b;
 
-  --muted: #f5f3ef;
-  --muted-foreground: #667476;
+  --muted: #efe8dd;
+  --muted-foreground: #74746f;
 
-  --accent: #f5f3ef;
-  --accent-foreground: #14262a;
+  --accent: #f3e7d5;
+  --accent-foreground: #172a2b;
 
-  /* Warm ember accent for loyalty/CTA */
-  --ember: #e85d3a;
-  --ember-soft: #fef0eb;
+  /* Legacy warm accent → Bordeaux (luxury accent). Kept for compatibility. */
+  --ember: #761c26;
+  --ember-soft: #f7e9ea;
 
-  --destructive: oklch(0.62 0.22 27);
-  --destructive-foreground: #ffffff;
+  /* Semantic states */
+  --success: #596b32;
+  --warning: #b98134;
+  --danger: #a63d40;
+  --info: #6d7896;
 
-  --border: #f0ede8;
-  --input: #f0ede8;
-  --ring: #e85d3a;
+  --destructive: #a63d40;
+  --destructive-foreground: #fff9f0;
 
-  --chart-1: #e85d3a;
-  --chart-2: #3b82f6;
-  --chart-3: #10b981;
-  --chart-4: #f59e0b;
-  --chart-5: #8b5cf6;
+  --border: #eae3d6;
+  --input: #f2ece2;
+  --ring: rgba(15, 61, 58, 0.35);
 
-  /* Premium card shadow system */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.04), 0 8px 24px -8px rgba(0, 0, 0, 0.06);
-  --shadow-card-hover: 0 2px 6px rgba(0, 0, 0, 0.06), 0 12px 32px -6px rgba(0, 0, 0, 0.1);
-  --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.06), 0 20px 48px -12px rgba(0, 0, 0, 0.12);
+  --chart-1: #0f3d3a;
+  --chart-2: #761c26;
+  --chart-3: #596b32;
+  --chart-4: #949ab1;
+  --chart-5: #d6a925;
+
+  /* Premium card shadow system (warm, restrained) */
+  --shadow-card: 0 1px 2px rgba(33, 36, 32, 0.06), 0 8px 24px -8px rgba(33, 36, 32, 0.1);
+  --shadow-card-hover: 0 2px 6px rgba(33, 36, 32, 0.06), 0 12px 32px -6px rgba(33, 36, 32, 0.14);
+  --shadow-elevated: 0 4px 12px rgba(33, 36, 32, 0.06), 0 20px 48px -12px rgba(33, 36, 32, 0.18);
 
   /* Glass system (kept for backward compat) */
-  --glass-bg: color-mix(in oklab, white 60%, transparent);
-  --glass-border: color-mix(in oklab, white 70%, transparent);
-  --glass-strong-bg: color-mix(in oklab, white 78%, transparent);
-  --glass-strong-border: color-mix(in oklab, white 85%, transparent);
+  --glass-bg: color-mix(in oklab, var(--surface) 60%, transparent);
+  --glass-border: color-mix(in oklab, var(--surface) 70%, transparent);
+  --glass-strong-bg: color-mix(in oklab, var(--surface) 78%, transparent);
+  --glass-strong-border: color-mix(in oklab, var(--surface) 85%, transparent);
   --glass-shadow:
     0 1px 0 0 color-mix(in oklab, white 80%, transparent) inset,
-    0 10px 40px -12px color-mix(in oklab, oklch(0.2 0.02 270) 18%, transparent),
-    0 2px 6px -2px color-mix(in oklab, oklch(0.2 0.02 270) 8%, transparent);
+    0 10px 40px -12px color-mix(in oklab, oklch(0.24 0.02 200) 16%, transparent),
+    0 2px 6px -2px color-mix(in oklab, oklch(0.24 0.02 200) 8%, transparent);
 
   --shadow-soft:
-    0 1px 2px color-mix(in oklab, oklch(0.2 0.02 270) 6%, transparent),
-    0 8px 24px -8px color-mix(in oklab, oklch(0.2 0.02 270) 12%, transparent);
-  --shadow-ember: 0 10px 40px -10px color-mix(in oklab, var(--ember) 45%, transparent);
+    0 1px 2px color-mix(in oklab, oklch(0.24 0.02 200) 6%, transparent),
+    0 8px 24px -8px color-mix(in oklab, oklch(0.24 0.02 200) 12%, transparent);
+  --shadow-ember: 0 10px 40px -10px color-mix(in oklab, var(--primary) 45%, transparent);
 
   --gradient-warm:
-    radial-gradient(120% 80% at 0% 0%, oklch(0.97 0.03 60) 0%, transparent 55%),
-    radial-gradient(100% 70% at 100% 100%, oklch(0.96 0.04 30) 0%, transparent 50%);
-  --gradient-ember: linear-gradient(135deg, #e85d3a, #d44828);
+    radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--butter) 14%, transparent) 0%, transparent 55%),
+    radial-gradient(100% 70% at 100% 100%, color-mix(in oklab, var(--periwinkle) 9%, transparent) 0%, transparent 50%);
+  --gradient-ember: linear-gradient(135deg, #761c26, #651821);
+  --gradient-teal: linear-gradient(135deg, #0f3d3a, #0b302e);
 
   /* ── Zentro typography system ─────────────────────────────────────────
      Manrope = UI (≈95%). Instrument Serif = rare editorial accents.
@@ -151,55 +207,80 @@
 }
 
 .dark {
-  --background: #0f0f0f;
-  --foreground: #f5f5f5;
-  --ink: #f5f5f5;
-  --mist: #1a1a1a;
-  --surface: #1a1a1a;
-  --surface-elevated: #242424;
+  --background: #122122;
+  --foreground: #f7efe2;
+  --ink: #f7efe2;
+  --mist: #192d2e;
+  --surface: #192d2e;
+  --surface-elevated: #213839;
 
-  --card: #1a1a1a;
-  --card-foreground: #f5f5f5;
-  --popover: #1a1a1a;
-  --popover-foreground: #f5f5f5;
+  --card: #192d2e;
+  --card-foreground: #f7efe2;
+  --popover: #192d2e;
+  --popover-foreground: #f7efe2;
 
-  --primary: #f5f5f5;
-  --primary-foreground: #0f0f0f;
+  --primary: #6fa29a;
+  --primary-hover: #82b0a9;
+  --primary-active: #5d9189;
+  --primary-foreground: #102322;
 
-  --secondary: #1a1a1a;
-  --secondary-foreground: #e0e0e0;
+  --secondary: #213839;
+  --secondary-hover: #263e3f;
+  --secondary-foreground: #f7efe2;
 
-  --muted: #1a1a1a;
-  --muted-foreground: #7a7a7a;
+  --muted: #213839;
+  --muted-foreground: #b5b3aa;
 
-  --accent: #242424;
-  --accent-foreground: #f5f5f5;
+  --accent: #213839;
+  --accent-foreground: #f7efe2;
 
-  --destructive: oklch(0.65 0.2 27);
-  --destructive-foreground: #f5f5f5;
+  /* Legacy warm accent → dark Bordeaux */
+  --ember: #a94b57;
+  --ember-soft: rgba(169, 75, 87, 0.16);
 
-  --border: rgba(255, 255, 255, 0.06);
-  --input: rgba(255, 255, 255, 0.08);
-  --ring: #e85d3a;
+  --bordeaux: #a94b57;
+  --bordeaux-hover: #b95b66;
+  --bordeaux-soft: rgba(169, 75, 87, 0.16);
 
-  --ember: #f0704e;
-  --ember-soft: rgba(240, 112, 78, 0.15);
+  --olive: #899a60;
+  --olive-hover: #97a96f;
+  --olive-soft: rgba(137, 154, 96, 0.16);
 
-  --chart-1: #f0704e;
-  --chart-2: #60a5fa;
-  --chart-3: #34d399;
-  --chart-4: #fbbf24;
-  --chart-5: #a78bfa;
+  --periwinkle: #aeb4cc;
+  --periwinkle-soft: rgba(174, 180, 204, 0.14);
 
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.2), 0 8px 24px -8px rgba(0, 0, 0, 0.4);
+  --butter: #e8ce85;
+  --butter-strong: #f2dfa4;
+  --butter-soft: rgba(232, 206, 133, 0.16);
+
+  /* Semantic states */
+  --success: #899a60;
+  --warning: #c99a54;
+  --danger: #c25b5f;
+  --info: #aeb4cc;
+
+  --destructive: #c25b5f;
+  --destructive-foreground: #f7efe2;
+
+  --border: rgba(255, 255, 255, 0.08);
+  --input: #213839;
+  --ring: rgba(111, 162, 154, 0.5);
+
+  --chart-1: #6fa29a;
+  --chart-2: #a94b57;
+  --chart-3: #899a60;
+  --chart-4: #aeb4cc;
+  --chart-5: #e8ce85;
+
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px -8px rgba(0, 0, 0, 0.4);
   --shadow-card-hover: 0 2px 6px rgba(0, 0, 0, 0.3), 0 12px 32px -6px rgba(0, 0, 0, 0.5);
   --shadow-elevated: 0 4px 12px rgba(0, 0, 0, 0.3), 0 20px 48px -12px rgba(0, 0, 0, 0.6);
 
   /* Glass system (dark mode) */
   --glass-bg: color-mix(in oklab, white 4%, transparent);
   --glass-border: color-mix(in oklab, white 8%, transparent);
-  --glass-strong-bg: oklch(0.16 0.01 270);
-  --glass-strong-border: oklch(1 0 0 / 6%);
+  --glass-strong-bg: #192d2e;
+  --glass-strong-border: oklch(1 0 0 / 8%);
   --glass-shadow:
     0 1px 0 0 color-mix(in oklab, white 6%, transparent) inset,
     0 10px 40px -12px color-mix(in oklab, black 50%, transparent),
@@ -208,11 +289,13 @@
   --shadow-soft:
     0 1px 2px color-mix(in oklab, black 20%, transparent),
     0 8px 24px -8px color-mix(in oklab, black 40%, transparent);
-  --shadow-ember: 0 10px 40px -10px color-mix(in oklab, var(--ember) 30%, transparent);
+  --shadow-ember: 0 10px 40px -10px color-mix(in oklab, var(--primary) 25%, transparent);
 
   --gradient-warm:
-    radial-gradient(120% 80% at 0% 0%, oklch(0.15 0.02 270) 0%, transparent 55%),
-    radial-gradient(100% 70% at 100% 100%, oklch(0.14 0.015 270) 0%, transparent 50%);
+    radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--primary) 18%, transparent) 0%, transparent 55%),
+    radial-gradient(100% 70% at 100% 100%, color-mix(in oklab, var(--bordeaux) 12%, transparent) 0%, transparent 50%);
+  --gradient-ember: linear-gradient(135deg, #a94b57, #832f3b);
+  --gradient-teal: linear-gradient(135deg, #6fa29a, #5d9189);
 }
 
 @layer base {
@@ -324,6 +407,14 @@
 }
 
 @utility gradient-ember {
+  background: var(--gradient-ember);
+}
+
+@utility gradient-teal {
+  background: var(--gradient-teal);
+}
+
+@utility gradient-special {
   background: var(--gradient-ember);
 }
 

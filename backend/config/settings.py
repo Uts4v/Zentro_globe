@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     "notifications",
     "pos",
     "ai_core",
+    "inventory",
     "config",
 ]
 

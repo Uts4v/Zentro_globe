@@ -13,13 +13,18 @@ Verifies that uploaded files are treated as untrusted:
 import io
 import shutil
 import tempfile
+import unittest
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
-from PIL import Image
 
 from rest_framework.test import APIClient
 from rest_framework import status
+
+try:
+    from PIL import Image
+except ImportError:  # Pillow OS-blocked (e.g. Windows Smart App Control)
+    Image = None
 
 
 def _png_bytes(size=(1, 1)):
@@ -44,6 +49,7 @@ def _svg_bytes():
     return b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
 
 
+@unittest.skipIf(Image is None, "Pillow unavailable (blocked by OS policy)")
 class UploadImageTests(TestCase):
     def setUp(self):
         self._media = tempfile.mkdtemp(prefix="zentro_test_media_")

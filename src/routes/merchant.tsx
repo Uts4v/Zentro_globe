@@ -22,6 +22,7 @@ import {
   FileText,
   Settings,
   FileType,
+  Package,
 } from "lucide-react";
 import { MerchantNav } from "@/components/merchant-nav";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
@@ -49,6 +50,7 @@ const navItems = [
   { to: "/merchant/analytics", label: "Analytics", icon: BarChart3, section: "Dashboard" },
   { to: "/merchant/reports", label: "Reports", icon: FileText, section: "Dashboard" },
   { to: "/merchant/orders", label: "Orders", icon: ShoppingBag, section: "Operations" },
+  { to: "/merchant/inventory", label: "Inventory", icon: Package, section: "Operations" },
   { to: "/merchant/preparation", label: "Preparation", icon: ChefHat, section: "Operations" },
   { to: "/merchant/tables", label: "Tables & QR", icon: QrCode, section: "Operations" },
   { to: "/pos", label: "POS Terminal", icon: Monitor, section: "Operations" },

@@ -24,7 +24,6 @@ import io
 import logging
 
 from django.core.exceptions import ValidationError
-from PIL import Image, ImageOps, UnidentifiedImageError
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +38,31 @@ ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "WEBP"}
 # Canonical server-side extension per re-encoded format.
 _FORMAT_EXT = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}
 
-# Pillow raises DecompressionBombError beyond this pixel count at decode time.
-Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+# Pillow is imported lazily: it ships an unsigned native DLL (`_imaging.pyd`),
+# which Windows Smart App Control / WDAC policies may block (WinError 4551,
+# "An Application Control policy has blocked this file"). Keeping it out of the
+# module import path lets the app boot and non-image endpoints keep working on
+# such machines; image uploads surface a clear error instead of a server 500.
+_PIL = None
+
+
+def _load_pil():
+    """Import Pillow on first use; raise UploadValidationError if unavailable."""
+    global _PIL
+    if _PIL is None:
+        try:
+            import PIL  # noqa: F401  (package initialisation)
+            from PIL import Image, ImageOps, UnidentifiedImageError
+            # Pillow raises DecompressionBombError beyond this pixel count at
+            # decode time.
+            Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+        except ImportError as exc:
+            raise UploadValidationError(
+                "Image processing is unavailable on this server "
+                "(Pillow could not be loaded)."
+            ) from exc
+        _PIL = (Image, ImageOps, UnidentifiedImageError)
+    return _PIL
 
 
 class UploadValidationError(ValidationError):
@@ -75,6 +97,8 @@ def sanitize_image_bytes(data: bytes, *, max_dimension: int = MAX_IMAGE_DIMENSIO
     """Validate + sanitise raw image bytes (re-encode pass)."""
     if data.startswith(b"<svg") or b"<svg" in data[:4096]:
         raise UploadValidationError("SVG uploads are not permitted.")
+
+    Image, ImageOps, UnidentifiedImageError = _load_pil()
 
     detected = None
     try:

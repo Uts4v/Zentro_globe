@@ -18,8 +18,6 @@ from ..constants import (
     REQUEST_STATUS_QUEUED, REQUEST_STATUS_RUNNING, REQUEST_STATUS_COMPLETED,
     ARTIFACT_TYPE_DAILY_INSIGHT,
 )
-from ..use_cases.merchant_assistant import chat_with_merchant_assistant
-from ..tasks.generate_report import enqueue_merchant_report
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +99,7 @@ def generate_daily_insight_endpoint(request):
         prompt_version="1.0.0",
     )
 
+    from ..tasks.generate_report import enqueue_merchant_report
     enqueue_merchant_report(
         merchant.id, report_date.isoformat(), str(request_obj.id),
     )
@@ -153,6 +152,7 @@ def chat(request):
             title=message_text[:100],
         )
 
+    from ..use_cases.merchant_assistant import chat_with_merchant_assistant
     result = chat_with_merchant_assistant(
         merchant=merchant,
         user=request.user,

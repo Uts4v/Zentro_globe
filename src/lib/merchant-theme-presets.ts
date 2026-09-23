@@ -11,6 +11,16 @@ export interface MerchantThemePreset {
 
 export const MERCHANT_THEME_PRESETS: MerchantThemePreset[] = [
   {
+    id: "zentro-cafe",
+    label: "Zentro Café",
+    primary: "#0F3D3A",
+    secondary: "#14504B",
+    accent: "#F3D98B",
+    gradient: "linear-gradient(145deg, #0F3D3A 0%, #14504B 55%, #761C26 100%)",
+    illustration: "steam",
+    businessType: "cafe",
+  },
+  {
     id: "tea",
     label: "Tea Shop",
     primary: "#1B5E3B",

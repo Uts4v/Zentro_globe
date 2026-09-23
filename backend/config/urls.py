@@ -23,6 +23,7 @@ urlpatterns = [
     path("api/orders/", include("orders.urls")),
     path("api/notifications/", include("notifications.urls")),
     path("api/pos/", include("pos.urls")),
+    path("api/inventory/", include("inventory.urls")),
     path("api/ai/", include("ai_core.api.urls")),
     # Serve media (uploads) in all modes with safety headers — required when
     # DEBUG=False since Django stops auto-serving them.

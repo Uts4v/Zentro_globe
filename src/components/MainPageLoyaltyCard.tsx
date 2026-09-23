@@ -105,7 +105,7 @@ export interface LoyaltyCardProps {
 
 export function MainPageLoyaltyCardSkeleton() {
   return (
-    <div className="relative min-h-[360px] animate-pulse overflow-hidden rounded-[36px] bg-[#EEEAF8] dark:bg-white/[0.06]">
+    <div className="relative min-h-[360px] animate-pulse overflow-hidden rounded-[36px] bg-[#EAE4DA] dark:bg-white/[0.06]">
       <div className="absolute inset-0 p-6">
         <div className="h-12 w-44 rounded-2xl bg-black/[0.06] dark:bg-white/[0.07]" />
         <div className="mt-12 h-4 w-24 rounded-lg bg-black/[0.06] dark:bg-white/[0.07]" />
@@ -155,7 +155,7 @@ export function MainPageLoyaltyCard({
   const safeProgress = Math.max(0, Math.min(100, progressPercent));
 
   // ── Theme color resolution (priority: cardDesign > theme > themeColor > fallback) ──
-  const primary = cardDesign?.primary_color || theme?.primary || themeColor || "#6E57FF";
+  const primary = cardDesign?.primary_color || theme?.primary || themeColor || "#0F3D3A";
   const secondary = cardDesign?.secondary_color || theme?.secondary || lighten(primary, 0.18);
   const accent = cardDesign?.accent_color || theme?.accent || lighten(primary, 0.32);
   const textDark = cardDesign ? cardDesign.text_mode === "dark" : isLightColor(primary);
@@ -441,12 +441,12 @@ export function MainPageLoyaltyCard({
                     background: `linear-gradient(135deg, ${primary} 0%, ${secondary} 100%)`,
                     boxShadow: `0 12px 26px ${hexToRGBA(primary, 0.3)}`,
                   }}
-                >
-                  <Sparkles className="h-4 w-4 text-[#FFD700]" />
-                  <span className="whitespace-nowrap">
-                    {pointsToNextTier} pts to {nextTier(tier)}
-                  </span>
-                </div>
+>
+                    <Sparkles className="h-4 w-4 text-butter-strong" />
+                    <span className="whitespace-nowrap">
+                      {pointsToNextTier} pts to {nextTier(tier)}
+                    </span>
+                  </div>
               </div>
             </div>
 
@@ -498,8 +498,8 @@ export function MainPageLoyaltyCard({
         >
           {/* Section 1: Day Streak */}
           <div className="flex flex-col items-center justify-center gap-1 text-center">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-[#FFE2C7] shadow-sm">
-              <Flame className="h-5 w-5 text-[#FF7A00]" />
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-butter-soft shadow-sm">
+              <Flame className="h-5 w-5 text-butter-strong" />
             </span>
             <span className="text-[20px] font-black leading-none text-[#18102B]">{streak}</span>
             <span className="text-[10px] font-semibold text-[#7D7D9C]">Day streak</span>
@@ -524,8 +524,8 @@ export function MainPageLoyaltyCard({
 
           {/* Section 3: Orders */}
           <div className="flex flex-col items-center justify-center gap-1 text-center">
-            <span className="grid h-10 w-10 place-items-center rounded-full bg-[#DFF7EC] shadow-sm">
-              <ShoppingBag className="h-5 w-5 text-[#10B981]" />
+            <span className="grid h-10 w-10 place-items-center rounded-full bg-olive-soft shadow-sm">
+              <ShoppingBag className="h-5 w-5 text-olive" />
             </span>
             <span className="text-[20px] font-black leading-none text-[#18102B]">
               {ordersCount ?? 6}

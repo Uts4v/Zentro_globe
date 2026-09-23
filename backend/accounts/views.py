@@ -27,9 +27,6 @@ from django.core import signing
 from django.conf import settings
 from django.db import transaction
 
-from google.oauth2 import id_token as google_id_token
-from google.auth.transport import requests as google_requests
-
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
@@ -532,6 +529,8 @@ def google_auth(request):
         )
 
     try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
         info = google_id_token.verify_oauth2_token(
             data["id_token"],
             google_requests.Request(),

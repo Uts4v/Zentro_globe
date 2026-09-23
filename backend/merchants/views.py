@@ -27,10 +27,6 @@ from datetime import date, datetime, timedelta, time as dt_time
 from zoneinfo import ZoneInfo
 
 import qrcode
-try:
-    import pymupdf as fitz
-except ImportError:  # older pymupdf versions expose the classic `fitz` alias
-    import fitz
 from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import ContentFile
@@ -1330,6 +1326,10 @@ def _render_pdf_menu_pages(pdf_rel_path, request, merchant):
     base_name = pdf_rel_path[:-4] if pdf_rel_path.endswith(".pdf") else pdf_rel_path
     count = 0
     try:
+        try:
+            import pymupdf as fitz
+        except ImportError:  # older pymupdf versions expose the classic `fitz` alias
+            import fitz
         with fitz.open(stream=opened.read(), filetype="pdf") as doc:
             count = doc.page_count
             matrix = fitz.Matrix(2.0, 2.0)  # ~144dpi for crisp text on phones

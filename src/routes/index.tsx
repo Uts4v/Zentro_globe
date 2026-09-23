@@ -538,7 +538,7 @@ function Index() {
                       )}
                       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/45 via-black/5 to-transparent" />
                       {discountLabel && (
-                        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-emerald-500 px-2.5 py-1 text-[10px] font-extrabold text-white shadow-md">
+                        <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-bordeaux px-2.5 py-1 text-[10px] font-extrabold text-[#fff8ee] shadow-md">
                           <Tag className="h-3 w-3" />
                           {discountLabel}
                         </span>
@@ -568,7 +568,7 @@ function Index() {
                               <span className="line-through opacity-50">
                                 {formatCurrency(parseFloat(s.linked_menu_item_price), currencySymbol)}
                               </span>{" "}
-                              <span className="font-extrabold text-emerald-600">
+                              <span className="font-extrabold text-bordeaux">
                                 {formatCurrency(parseFloat(discountedPrice), currencySymbol)}
                               </span>
                             </span>
@@ -627,7 +627,7 @@ function Index() {
                             {m.title}
                           </p>
                           {m.is_completed ? (
-                            <span className="shrink-0 rounded-full bg-emerald-500 px-2.5 py-0.5 text-[10px] font-extrabold text-emerald-500">
+                            <span className="shrink-0 rounded-full bg-olive px-2.5 py-0.5 text-[10px] font-extrabold text-[#fff9f0]">
                               Done ✓
                             </span>
                           ) : (
@@ -653,7 +653,7 @@ function Index() {
                               style={{
                                 width: `${pct}%`,
                                 background: m.is_completed
-                                  ? "#10B981"
+                                  ? "var(--success)"
                                   : "linear-gradient(90deg, var(--primary) 0%, var(--primary) 100%)",
                               }}
                             />
@@ -688,7 +688,7 @@ function Index() {
                   </p>
                   <div className="mt-2 flex items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full w-1/2 rounded-full bg-emerald-500" />
+                      <div className="h-full w-1/2 rounded-full bg-olive" />
                     </div>
                     <span className="shrink-0 text-[10px] font-extrabold text-muted-foreground">
                       1 / 2
