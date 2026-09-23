@@ -102,6 +102,7 @@ type State = {
   setPoints: (pts: number) => void;
   setStreak: (s: number) => void;
   setCustomerName: (name: string) => void;
+  resetSession: () => void;
 };
 
 function materialise(line: CartLineInput, id: string): CartItem {
@@ -306,6 +307,17 @@ export const useStore = create<State>()(
       setPoints: (pts) => set({ points: pts }),
       setStreak: (s) => set({ streak: s }),
       setCustomerName: (name) => set({ customerName: name }),
+      resetSession: () =>
+        set({
+          cart: [],
+          orders: [],
+          points: 0,
+          streak: 0,
+          customerName: "",
+          selectedMerchantId: null,
+          activeTable: null,
+          guestSession: null,
+        }),
     }),
     {
       name: "zentro-store",

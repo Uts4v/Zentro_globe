@@ -46,6 +46,7 @@ AUTHENTICATION_BACKENDS = [
 
 # ── Installed apps ────────────────────────────────────────────────────────────
 INSTALLED_APPS = [
+    "daphne",                        # ← required for ASGI runserver (Channels 4+)
     "unfold",                        # ← modern admin theme (before django.contrib.admin)
     "unfold.contrib.filters",        # ← Unfold sidebar filters
     "django.contrib.admin",
@@ -270,15 +271,21 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 CORS_ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL_ORIGINS", "False").lower() in ("true", "1", "yes")
 _raw_cors = os.getenv(
     "CORS_ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://localhost:8082",
+    "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://localhost:8081,http://localhost:8082",
 )
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _raw_cors.split(",") if o.strip()]
 CORS_ALLOW_CREDENTIALS = True
 
+# In development, allow any localhost / 127.0.0.1 port so dynamic Vite dev ports never get blocked
+if DEBUG:
+    CORS_ALLOWED_ORIGIN_REGEXES = [
+        r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
+    ]
+
 # ── CSRF ──────────────────────────────────────────────────────────────────────
 _raw_csrf = os.getenv(
     "CSRF_TRUSTED_ORIGINS",
-    "http://localhost:8000,http://localhost:5173,http://127.0.0.1:8000",
+    "http://localhost:8000,http://localhost:5173,http://localhost:8080,http://localhost:8081,http://localhost:8082,http://127.0.0.1:8000",
 )
 _csrf_origins = [o.strip() for o in _raw_csrf.split(",") if o.strip()]
 if _railway_domain:

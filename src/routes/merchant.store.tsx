@@ -13,7 +13,6 @@ import {
   QrCode,
   ExternalLink,
   RefreshCw,
-  LocateFixed,
   Palette,
   CreditCard,
   Send,
@@ -27,6 +26,13 @@ import {
   type MembershipCardDesign,
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { LocationPicker } from "@/features/store-locator/components/LocationPicker";
+import {
+  DISCOVERY_RADIUS_KM,
+  sameLatLng,
+  toLatLng,
+  type LatLng,
+} from "@/features/store-locator/lib/geo";
 import { optimizeImage } from "@/lib/image-optimize";
 import { uploadImage } from "@/lib/image-upload";
 import { useMutation } from "@tanstack/react-query";
@@ -324,14 +330,13 @@ function QRSection({
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 function StoreConfig() {
-  const { merchantProfile: authMerchant } = useAuth();
+  const { refreshMerchantProfile } = useAuth();
   const [profile, setProfile] = useState<MerchantProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [locating, setLocating] = useState(false);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [savingLocation, setSavingLocation] = useState(false);
 
   const [form, setForm] = useState({
     business_name: "",
@@ -525,32 +530,36 @@ function StoreConfig() {
     setCardDesignSaving(false);
   }
 
-  function handleUseCurrentLocation() {
-    if (!navigator.geolocation) {
-      setLocationError("Your browser doesn't support location.");
-      return;
+  // The map pin saves on its own, straight away: it's what places the café in
+  // customers' Discover, so it must not hinge on the page-wide Save button.
+  async function saveLocation(point: LatLng | null) {
+    setSavingLocation(true);
+    try {
+      const updated = await merchantApi.update({
+        latitude: point ? point.lat.toFixed(6) : null,
+        longitude: point ? point.lng.toFixed(6) : null,
+      });
+      setProfile(updated);
+      setForm((prev) => ({
+        ...prev,
+        latitude: updated.latitude ?? "",
+        longitude: updated.longitude ?? "",
+      }));
+      void refreshMerchantProfile();
+      toast.success(point ? "Location saved" : "Map pin removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't save your location");
+    } finally {
+      setSavingLocation(false);
     }
-    setLocating(true);
-    setLocationError(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setForm((prev) => ({
-          ...prev,
-          latitude: pos.coords.latitude.toFixed(6),
-          longitude: pos.coords.longitude.toFixed(6),
-        }));
-        setLocating(false);
-      },
-      (err) => {
-        setLocationError(
-          err.code === err.PERMISSION_DENIED
-            ? "Location permission was denied. Enable it in your browser settings."
-            : "Couldn't get your location. Try again.",
-        );
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
+  }
+
+  function setPin(point: LatLng) {
+    setForm((prev) => ({
+      ...prev,
+      latitude: point.lat.toFixed(6),
+      longitude: point.lng.toFixed(6),
+    }));
   }
 
   if (loading) {
@@ -576,7 +585,9 @@ function StoreConfig() {
   }
 
   const merchantId = String(profile?.id ?? "");
-  const hasLocation = form.latitude !== "" && form.longitude !== "";
+  const pin = toLatLng(form.latitude, form.longitude);
+  const savedPin = toLatLng(profile?.latitude, profile?.longitude);
+  const locationDirty = !sameLatLng(pin, savedPin);
 
   return (
     <div className="space-y-8">
@@ -1397,42 +1408,74 @@ function StoreConfig() {
               placeholder="+977 98-0000-0000"
             />
 
-            {/* ── Map coordinates ── */}
+            {/* ── Map location — places the café in customers' Discover ── */}
             <div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   Map location
                 </span>
-                {hasLocation && <span className="text-[11px] text-emerald-600">Set ✓</span>}
+                {locationDirty ? (
+                  <span className="text-[11px] text-amber-600">Not saved yet</span>
+                ) : (
+                  savedPin && <span className="text-[11px] text-emerald-600">Saved ✓</span>
+                )}
               </div>
 
-              <button
-                type="button"
-                onClick={handleUseCurrentLocation}
-                disabled={locating}
-                className="mt-2 inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-border text-sm font-medium text-ink transition-colors hover:border-ink disabled:opacity-50"
-              >
-                {locating ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <LocateFixed className="h-4 w-4" />
-                )}
-                {locating
-                  ? "Getting your location…"
-                  : hasLocation
-                    ? "Update to my current location"
-                    : "Use my current location"}
-              </button>
+              <div className="mt-2">
+                <LocationPicker value={pin} onChange={setPin} />
+              </div>
 
-              {hasLocation && (
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {Number(form.latitude).toFixed(5)}, {Number(form.longitude).toFixed(5)}
+              {locationDirty && pin && (
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => saveLocation(pin)}
+                    disabled={savingLocation}
+                    className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-ink text-sm font-medium text-primary-foreground disabled:opacity-50"
+                  >
+                    {savingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Save location
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        latitude: profile?.latitude ?? "",
+                        longitude: profile?.longitude ?? "",
+                      }))
+                    }
+                    disabled={savingLocation}
+                    className="h-10 rounded-full border border-border px-4 text-sm text-muted-foreground hover:text-foreground"
+                  >
+                    Undo
+                  </button>
+                </div>
+              )}
+
+              {!savedPin && !locationDirty && (
+                <p className="mt-2 rounded-xl bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+                  Customers can't find you in Discover until you set a map location. Stand at your
+                  store and tap the button above, or paste your coordinates.
                 </p>
               )}
-              {locationError && <p className="mt-2 text-xs text-rose-500">{locationError}</p>}
-              {!hasLocation && !locationError && (
+              {savedPin && !locationDirty && (
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Stand at your store and tap this so customers can find you on the map.
+                  {profile?.is_approved
+                    ? `Customers within ${DISCOVERY_RADIUS_KM} km see you in Discover, ranked by distance.`
+                    : "You'll appear in Discover once your store is approved."}{" "}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Remove your map pin? You won't appear in Discover until you set it again.")) {
+                        void saveLocation(null);
+                      }
+                    }}
+                    disabled={savingLocation}
+                    className="underline underline-offset-2 hover:text-foreground"
+                  >
+                    Remove pin
+                  </button>
                 </p>
               )}
             </div>

@@ -106,11 +106,14 @@ def _create_merchant_profile(user: User, store_name: str) -> None:
         slug = f"{base_slug}-{idx}"
         idx += 1
 
+    auto_approve_default = "true" if settings.DEBUG else "false"
+    is_approved = os.getenv("AUTO_APPROVE_MERCHANTS", auto_approve_default).lower() == "true"
+
     MerchantProfile.objects.create(
         user=user,
         business_name=store_name,
         slug=slug,
-        is_approved=os.getenv("AUTO_APPROVE_MERCHANTS", "false").lower() == "true",
+        is_approved=is_approved,
         onboarding_complete=False,
         pos_enabled=False,
         offline_pos_enabled=False,

@@ -110,42 +110,89 @@ def merchant_list(request):
     return Response(data)
 
 
+DISCOVERY_DEFAULT_RADIUS_KM = 25.0
+DISCOVERY_MAX_RADIUS_KM = 100.0
+DISCOVERY_MAX_RESULTS = 100
+_KM_PER_DEGREE_LAT = 111.32
+
+
+def _parse_float(value):
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def merchant_discovery_nearby(request):
     """
-    GET /api/merchants/nearby/?lat=<float>&lng=<float>
+    GET /api/merchants/nearby/?lat=<float>&lng=<float>[&radius_km=<float>]
     Public discovery feed for the map + nearby list.
-    """
-    lat_param = request.query_params.get("lat")
-    lng_param = request.query_params.get("lng")
 
-    user_lat = user_lng = None
-    if lat_param is not None and lng_param is not None:
-        try:
-            user_lat = float(lat_param)
-            user_lng = float(lng_param)
-        except ValueError:
+    Returns approved merchants that have a map location within `radius_km`
+    (default 25, max 100) of the caller, nearest first, each with
+    `distance_km`. A location is required — without one there is nothing
+    "nearby" to rank, and falling back to an arbitrary list would show cafés
+    from somewhere unrelated to the user.
+    """
+    user_lat = _parse_float(request.query_params.get("lat"))
+    user_lng = _parse_float(request.query_params.get("lng"))
+    if user_lat is None or user_lng is None:
+        return Response(
+            {"error": "lat and lng query parameters are required and must be numbers."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if not (-90 <= user_lat <= 90 and -180 <= user_lng <= 180):
+        return Response(
+            {"error": "lat must be between -90 and 90, lng between -180 and 180."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    radius_param = request.query_params.get("radius_km")
+    radius_km = DISCOVERY_DEFAULT_RADIUS_KM
+    if radius_param is not None:
+        radius_km = _parse_float(radius_param)
+        if radius_km is None or radius_km <= 0:
             return Response(
-                {"error": "lat and lng must be valid numbers."},
+                {"error": "radius_km must be a positive number."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        radius_km = min(radius_km, DISCOVERY_MAX_RADIUS_KM)
 
-    merchants = MerchantProfile.objects.filter(is_approved=True)
+    merchants = MerchantProfile.objects.filter(
+        is_approved=True, latitude__isnull=False, longitude__isnull=False
+    )
+
+    # Cheap bounding-box prefilter in SQL; the exact haversine check below
+    # trims the corners. Skip the longitude bound near the poles or when the
+    # box would wrap the antimeridian.
+    lat_delta = radius_km / _KM_PER_DEGREE_LAT
+    merchants = merchants.filter(
+        latitude__gte=user_lat - lat_delta, latitude__lte=user_lat + lat_delta
+    )
+    cos_lat = math.cos(math.radians(user_lat))
+    if cos_lat > 0.01:
+        lng_delta = radius_km / (_KM_PER_DEGREE_LAT * cos_lat)
+        if -180 <= user_lng - lng_delta and user_lng + lng_delta <= 180:
+            merchants = merchants.filter(
+                longitude__gte=user_lng - lng_delta, longitude__lte=user_lng + lng_delta
+            )
 
     distances = {}
-    if user_lat is not None and user_lng is not None:
-        for m in merchants:
-            if m.latitude is not None and m.longitude is not None:
-                distances[m.id] = _haversine_km(
-                    user_lat, user_lng, float(m.latitude), float(m.longitude)
-                )
-        merchants = sorted(merchants, key=lambda m: distances.get(m.id, float("inf")))
-    else:
-        merchants = merchants.order_by("business_name")
+    for m in merchants:
+        d = _haversine_km(user_lat, user_lng, float(m.latitude), float(m.longitude))
+        if d <= radius_km:
+            distances[m.id] = (d, m)
+
+    ranked = sorted(distances.values(), key=lambda pair: (pair[0], pair[1].business_name.lower()))
+    ranked = ranked[:DISCOVERY_MAX_RESULTS]
 
     serializer = MerchantDiscoverySerializer(
-        merchants, many=True, context={"distances": distances}
+        [m for _, m in ranked],
+        many=True,
+        context={"distances": {m.id: d for d, m in ranked}},
     )
     return Response(serializer.data)
 

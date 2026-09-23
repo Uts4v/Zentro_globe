@@ -1,11 +1,10 @@
 // src/features/store-locator/pages/StoresPage.tsx
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   MapPin,
   Phone,
   Loader2,
-  ChevronRight,
   ArrowRight,
   Search,
   SlidersHorizontal,
@@ -17,8 +16,20 @@ import {
   Compass,
   Sparkles,
 } from "lucide-react";
-import { merchantApi, type MerchantDiscoveryItem } from "@/lib/api";
+import type { MerchantDiscoveryItem } from "@/lib/api";
 import { CafeDiscoveryMap } from "@/features/store-locator/pages/CafeDiscoveryMap";
+import { useUserLocation } from "@/features/store-locator/hooks/useUserLocation";
+import { useNearbyCafes } from "@/features/store-locator/hooks/useNearbyCafes";
+import {
+  LocationChip,
+  LocationPrompt,
+  NoCafesNearby,
+} from "@/features/store-locator/components/DiscoverStates";
+import {
+  DISCOVERY_RADIUS_KM,
+  DISCOVERY_WIDE_RADIUS_KM,
+  formatDistance,
+} from "@/features/store-locator/lib/geo";
 
 // Fields your backend doesn't return yet — kept optional so real data can
 // be wired in later (see notes below the component) without breaking this UI.
@@ -48,8 +59,20 @@ function getGreeting() {
 }
 
 function distanceLabel(km: number | null) {
-  if (km === null) return null;
-  return km < 1 ? `${Math.round(km * 1000)}m away` : `${km.toFixed(1)}km away`;
+  const d = formatDistance(km);
+  return d && `${d} away`;
+}
+
+/** Same number as the café's pin on the map. */
+function RankBadge({ rank, className = "" }: { rank: number; className?: string }) {
+  return (
+    <span
+      className={`grid h-6 w-6 place-items-center rounded-full bg-ink text-[11px] font-semibold text-primary-foreground ${className}`}
+      aria-label={`Map pin ${rank}`}
+    >
+      {rank}
+    </span>
+  );
 }
 
 function CafeImage({ store, className }: { store: DiscoveryItem; className: string }) {
@@ -107,8 +130,8 @@ function FeaturedCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => v
     <div className="glass-strong overflow-hidden rounded-3xl md:flex">
       <div className="relative h-56 shrink-0 md:h-auto md:w-[42%]">
         <CafeImage store={store} className="h-full w-full" />
-        <span className="absolute left-4 top-4 inline-flex items-center gap-1 rounded-full bg-amber-400 dark:bg-amber-500 px-3 py-1 text-xs font-semibold text-foreground">
-          ★ Featured
+        <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-amber-400 dark:bg-amber-500 py-1 pl-1 pr-3 text-xs font-semibold text-foreground">
+          <RankBadge rank={1} className="h-5 w-5 text-[10px]" /> Nearest to you
         </span>
       </div>
 
@@ -156,10 +179,29 @@ function FeaturedCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => v
   );
 }
 
-function CafeGridCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => void }) {
+function CafeGridCard({
+  store,
+  rank,
+  highlighted,
+  onOpen,
+  onHighlight,
+}: {
+  store: DiscoveryItem;
+  rank: number;
+  highlighted: boolean;
+  onOpen: () => void;
+  onHighlight: (on: boolean) => void;
+}) {
   return (
-    <div className="glass flex items-stretch gap-3 rounded-3xl p-3">
-      <CafeImage store={store} className="h-full min-h-[104px] w-28 shrink-0 rounded-2xl" />
+    <div
+      onMouseEnter={() => onHighlight(true)}
+      onMouseLeave={() => onHighlight(false)}
+      className={`glass flex items-stretch gap-3 rounded-3xl p-3 transition-shadow ${highlighted ? "ring-2 ring-ember/40" : ""}`}
+    >
+      <div className="relative shrink-0">
+        <CafeImage store={store} className="h-full min-h-[104px] w-28 rounded-2xl" />
+        <RankBadge rank={rank} className="absolute left-2 top-2" />
+      </div>
 
       <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
         <div className="space-y-1">
@@ -207,55 +249,24 @@ function CafeGridCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => v
 }
 
 export function StoresPage() {
-  const [stores, setStores] = useState<DiscoveryItem[]>([]);
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { location, status, refreshing, refresh } = useUserLocation();
+  const [radiusKm, setRadiusKm] = useState(DISCOVERY_RADIUS_KM);
+  const { data: stores = [], isPending, isError, refetch } = useNearbyCafes(location, radiusKm);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<FilterKey>("nearby");
-  const [showAll, setShowAll] = useState(false);
+  const [highlightedId, setHighlightedId] = useState<DiscoveryItem["id"] | null>(null);
   const navigate = useNavigate();
 
   const greeting = useMemo(getGreeting, []);
-
-  useEffect(() => {
-    if (!navigator.geolocation) {
-      loadStores();
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setUserLocation(loc);
-        loadStores(loc.lat, loc.lng);
-      },
-      () => {
-        loadStores();
-      },
-      { timeout: 8000 }
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function loadStores(lat?: number, lng?: number) {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await merchantApi.nearby(lat, lng);
-      setStores(data);
-    } catch (e: any) {
-      setError(e.message || "Failed to load nearby stores");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function openStore(slug: string) {
     navigate({ to: "/m/$slug", params: { slug } });
   }
 
+  // Filtering keeps the backend's nearest-first order. The map, the featured
+  // card and the list all render this one array, so pin N is always card N.
   const filtered = useMemo(() => {
-    let list = stores;
+    let list: DiscoveryItem[] = stores;
 
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -272,23 +283,14 @@ export function StoresPage() {
     } else if (activeFilter === "coffee" || activeFilter === "tea" || activeFilter === "bakery") {
       list = list.filter((s) => (s.business_type ?? "").toLowerCase().includes(activeFilter));
     }
-    // "rewards" and "nearby" are cosmetic until the backend exposes reward
-    // counts on the discovery endpoint — see notes below the component.
+    // "rewards" is cosmetic until the backend exposes reward counts on the
+    // discovery endpoint; "nearby" is the default (everything in radius).
 
     return list;
   }, [stores, search, activeFilter]);
 
-  const featured = filtered.find((s) => s.is_open) ?? filtered[0];
-  const rest = filtered.filter((s) => s.id !== featured?.id);
-  const visibleRest = showAll ? rest : rest.slice(0, 4);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const [featured, ...rest] = filtered;
+  const located = status === "ready" && location !== null;
 
   return (
     <div className="space-y-6 px-5 pb-10 pt-6">
@@ -306,11 +308,14 @@ export function StoresPage() {
           <p className="mt-2 text-sm text-muted-foreground">Earn rewards while you sip.</p>
         </div>
 
-        <span className="mt-1 inline-flex shrink-0 items-center gap-2 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground">
-          <MapPin className="h-3.5 w-3.5" />
-          {userLocation ? "Using your location" : "Location off"}
-          <span className={`h-1.5 w-1.5 rounded-full ${userLocation ? "bg-emerald-500" : "bg-muted-foreground"}`} />
-        </span>
+        <button
+          onClick={refresh}
+          disabled={refreshing}
+          className="mt-1 disabled:opacity-60"
+          aria-label="Update my location"
+        >
+          <LocationChip status={refreshing ? "locating" : status} location={location} />
+        </button>
       </div>
 
       {/* Search */}
@@ -319,7 +324,7 @@ export function StoresPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search cafés, places or cuisines..."
+          placeholder="Search nearby cafés..."
           className="h-12 w-full rounded-full bg-mist pl-11 pr-11 text-sm text-foreground placeholder:text-muted-foreground/70 outline-none focus:ring-2 focus:ring-ink/15"
         />
         <button
@@ -348,59 +353,44 @@ export function StoresPage() {
         })}
       </div>
 
-      {error && (
+      {!located ? (
+        <LocationPrompt
+          status={status === "ready" ? "locating" : status}
+          refreshing={refreshing}
+          onRetry={refresh}
+        />
+      ) : isPending ? (
+        <div className="flex min-h-[30vh] items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : isError ? (
         <div className="rounded-2xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-400">
-          {error}
+          Couldn't load nearby cafés.{" "}
+          <button onClick={() => refetch()} className="font-semibold underline">
+            Try again
+          </button>
         </div>
-      )}
-
-      {filtered.length === 0 ? (
-        <div className="glass rounded-3xl py-16 text-center">
-          <p className="text-4xl">🔍</p>
-          <p className="mt-3 text-sm text-muted-foreground">No cafés match right now</p>
-        </div>
+      ) : stores.length === 0 ? (
+        <NoCafesNearby radiusKm={radiusKm} onWiden={() => setRadiusKm(DISCOVERY_WIDE_RADIUS_KM)} />
       ) : (
         <>
-          {/* Featured */}
-          {featured && <FeaturedCard store={featured} onOpen={() => openStore(featured.slug)} />}
-
-          {/* Grid */}
-          {rest.length > 0 && (
-            <section className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h2 className="font-display text-2xl text-foreground">Nearby Cafés</h2>
-                {rest.length > 4 && (
-                  <button
-                    onClick={() => setShowAll((v) => !v)}
-                    className="inline-flex items-center gap-1 text-sm font-medium text-foreground"
-                  >
-                    {showAll ? "Show less" : "View all"} <ChevronRight className="h-3.5 w-3.5" />
-                  </button>
-                )}
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {visibleRest.map((store) => (
-                  <CafeGridCard key={store.id} store={store} onOpen={() => openStore(store.slug)} />
-                ))}
-              </div>
-            </section>
-          )}
-
           {/* Map — square on the left, headline on the right */}
           <section className="glass-strong overflow-hidden rounded-3xl md:flex md:items-stretch">
             <div className="p-4 md:w-1/2 md:p-5">
               <CafeDiscoveryMap
                 merchants={filtered}
-                userLocation={userLocation}
+                userLocation={location}
                 onSelectSlug={openStore}
+                highlightedId={highlightedId}
+                onHighlight={setHighlightedId}
                 className="aspect-square w-full overflow-hidden rounded-2xl"
               />
             </div>
 
             <div className="flex flex-col justify-center gap-3 p-6 md:w-1/2 md:p-10">
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-mist px-3 py-1 text-xs font-medium text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5" /> {filtered.length} café{filtered.length === 1 ? "" : "s"} pinned
+                <MapPin className="h-3.5 w-3.5" /> {filtered.length} café{filtered.length === 1 ? "" : "s"}{" "}
+                within {radiusKm} km
               </span>
               <h2 className="font-display text-4xl leading-[1.1] tracking-tight text-foreground sm:text-5xl">
                 Find Cafés
@@ -408,10 +398,39 @@ export function StoresPage() {
                 <span className="text-ember">on the Map</span>
               </h2>
               <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Every pin is a place waiting to be sipped. Tap one to see what's brewing.
+                Pins are numbered nearest first, matching the list below. Tap one to see what's brewing.
               </p>
             </div>
           </section>
+
+          {filtered.length === 0 ? (
+            <div className="glass rounded-3xl py-16 text-center">
+              <p className="text-4xl">🔍</p>
+              <p className="mt-3 text-sm text-muted-foreground">No nearby cafés match right now</p>
+            </div>
+          ) : (
+            <>
+              <FeaturedCard store={featured} onOpen={() => openStore(featured.slug)} />
+
+              {rest.length > 0 && (
+                <section className="space-y-3">
+                  <h2 className="font-display text-2xl text-foreground">Nearby Cafés</h2>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {rest.map((store, index) => (
+                      <CafeGridCard
+                        key={store.id}
+                        store={store}
+                        rank={index + 2}
+                        highlighted={highlightedId === store.id}
+                        onHighlight={(on) => setHighlightedId(on ? store.id : null)}
+                        onOpen={() => openStore(store.slug)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+            </>
+          )}
         </>
       )}
     </div>

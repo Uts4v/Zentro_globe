@@ -17,6 +17,7 @@ import {
   type ReactNode,
 } from "react";
 import { apiUrl, tokenStore, djangoFetch } from "@/lib/django-api-base";
+import { useStore } from "@/lib/store";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -436,6 +437,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }).catch(() => {});
     }
     tokenStore.clear();
+    useStore.getState().resetSession();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     setUser(null);
     setMerchantProfile(null);

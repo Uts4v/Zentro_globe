@@ -14,6 +14,7 @@ import {
   type MissionView,
   type MembershipCardDesign,
   type Reward,
+  type MerchantProfile,
 } from "@/lib/api";
 import { MobileShell, TopBar } from "@/components/MobileShell";
 import {
@@ -27,6 +28,8 @@ import {
   Flame,
   Tag,
   ArrowRight,
+  Store,
+  ChevronDown,
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth-guard";
 import { lazy, Suspense, useState, useEffect, useMemo } from "react";
@@ -101,12 +104,57 @@ function Index() {
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [redeemingRewardId, setRedeemingRewardId] = useState<string | null>(null);
   const [showTableScanner, setShowTableScanner] = useState(false);
+  const [showStoreSwitcher, setShowStoreSwitcher] = useState(false);
+  const [allStores, setAllStores] = useState<MerchantProfile[]>([]);
 
   // Resolve merchant theme preset
   const themePreset: MerchantThemePreset | null = useMemo(
     () => resolveMerchantPreset(merchantBusinessType),
     [merchantBusinessType],
   );
+
+  // Auto-resolve selected merchant if none selected
+  useEffect(() => {
+    if (!selectedMerchantId) {
+      let cancelled = false;
+      customerApi
+        .joinedMerchants()
+        .then((joinedList) => {
+          if (cancelled) return;
+          if (joinedList && joinedList.length > 0) {
+            setSelectedMerchant(String(joinedList[0].merchant_id));
+          } else {
+            merchantApi
+              .list()
+              .then((merchants) => {
+                if (cancelled) return;
+                const list = Array.isArray(merchants) ? merchants : (merchants as any).results ?? [];
+                if (list.length > 0) {
+                  setSelectedMerchant(String(list[list.length - 1].id));
+                }
+              })
+              .catch(() => {});
+          }
+        })
+        .catch(() => {});
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [selectedMerchantId, setSelectedMerchant]);
+
+  // Load stores when switcher opens
+  useEffect(() => {
+    if (showStoreSwitcher) {
+      merchantApi
+        .list()
+        .then((data) => {
+          const list = Array.isArray(data) ? data : (data as any).results ?? [];
+          setAllStores(list);
+        })
+        .catch(() => {});
+    }
+  }, [showStoreSwitcher]);
 
   // Load merchant data
   useEffect(() => {
@@ -330,7 +378,26 @@ function Index() {
         />
       )}
 
-      <div className="relative flex min-w-0 flex-col gap-5 overflow-x-hidden pb-6">
+      <div className="relative flex min-w-0 flex-col gap-5 overflow-x-hidden pb-6 bg-[url(/hero-bg.jpg)] bg-cover bg-center bg-no-repeat pt-10">
+        {/* Café Quick Switcher Bar */}
+        <section className="mx-auto w-[100%] max-w-[550px] px-3 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setShowStoreSwitcher(true)}
+            className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-background/90 px-3.5 py-1.5 text-xs font-semibold text-foreground backdrop-blur-md shadow-sm hover:bg-background active:scale-95 transition-all"
+          >
+            <Store className="h-3.5 w-3.5 text-ember" />
+            <span className="max-w-[170px] truncate">{merchantName || "Select Café"}</span>
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          </button>
+          <Link
+            to="/stores"
+            className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1"
+          >
+            All cafés <ArrowRight className="h-3 w-3" />
+          </Link>
+        </section>
+
         {/* Hero Loyalty Card */}
         <section className="mx-auto w-[100%] max-w-[550px] px-2">
           {loading ? (
@@ -824,6 +891,109 @@ function Index() {
         <Suspense fallback={null}>
           <TableQRScanner onClose={() => setShowTableScanner(false)} />
         </Suspense>
+      )}
+
+      {/* Café Switcher Modal */}
+      {showStoreSwitcher && (
+        <div
+          className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/60 px-0 sm:px-4 backdrop-blur-sm animate-fade-in"
+          onClick={() => setShowStoreSwitcher(false)}
+        >
+          <div
+            className="glass-strong relative w-full max-w-md rounded-t-[32px] sm:rounded-[32px] p-6 max-h-[85vh] flex flex-col bg-background/95 border border-border shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Store className="h-5 w-5 text-ember" />
+                <h3 className="font-display text-xl text-foreground">Select Café</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowStoreSwitcher(false)}
+                className="grid h-8 w-8 place-items-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80"
+              >
+                <XIcon className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto py-3 space-y-2.5 flex-1 pr-1">
+              {allStores.length === 0 ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2 text-ember" />
+                  Loading cafés…
+                </div>
+              ) : (
+                allStores.map((store) => {
+                  const isSelected = String(store.id) === String(selectedMerchantId);
+                  return (
+                    <button
+                      key={store.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedMerchant(String(store.id));
+                        setShowStoreSwitcher(false);
+                        toast.success(`Switched to ${store.business_name}`);
+                      }}
+                      className={`w-full flex items-center justify-between p-3.5 rounded-2xl transition-all text-left ${
+                        isSelected
+                          ? "bg-foreground/5 border-2 border-primary/40 shadow-sm"
+                          : "hover:bg-muted/60 border border-transparent"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="h-11 w-11 shrink-0 rounded-xl grid place-items-center bg-mist text-lg overflow-hidden border border-border/40"
+                          style={
+                            store.logo_url
+                              ? { backgroundImage: `url(${store.logo_url})`, backgroundSize: "cover", backgroundPosition: "center" }
+                              : undefined
+                          }
+                        >
+                          {!store.logo_url && "☕"}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-semibold text-sm text-foreground truncate">
+                            {store.business_name}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {store.address || store.business_type || "Café"}
+                          </p>
+                        </div>
+                      </div>
+                      {isSelected ? (
+                        <span className="shrink-0 text-xs font-semibold text-primary px-2.5 py-1 rounded-full bg-primary/10">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="shrink-0 text-xs text-muted-foreground px-2.5 py-1">
+                          Select
+                        </span>
+                      )}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-border flex items-center justify-between gap-3">
+              <Link
+                to="/stores"
+                onClick={() => setShowStoreSwitcher(false)}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
+              >
+                Browse all cafés <ArrowRight className="h-3 w-3" />
+              </Link>
+              <Link
+                to="/map"
+                onClick={() => setShowStoreSwitcher(false)}
+                className="inline-flex h-9 items-center justify-center rounded-full bg-ink px-4 text-xs font-medium text-primary-foreground active:scale-95"
+              >
+                Explore on Map
+              </Link>
+            </div>
+          </div>
+        </div>
       )}
     </MobileShell>
   );

@@ -13,14 +13,11 @@ export const merchantApi = {
     return djangoFetch<MerchantProfile[]>(apiUrl("/merchants/"));
   },
 
-  nearby: async (lat?: number, lng?: number): Promise<MerchantDiscoveryItem[]> => {
-    const params = new URLSearchParams();
-    if (lat !== undefined && lng !== undefined) {
-      params.set("lat", String(lat));
-      params.set("lng", String(lng));
-    }
-    const qs = params.toString();
-    return djangoFetch<MerchantDiscoveryItem[]>(apiUrl(`/merchants/nearby/${qs ? `?${qs}` : ""}`));
+  /** Approved cafés within `radiusKm` of the point, nearest first, with `distance_km`. */
+  nearby: async (lat: number, lng: number, radiusKm?: number): Promise<MerchantDiscoveryItem[]> => {
+    const params = new URLSearchParams({ lat: String(lat), lng: String(lng) });
+    if (radiusKm !== undefined) params.set("radius_km", String(radiusKm));
+    return djangoFetch<MerchantDiscoveryItem[]>(apiUrl(`/merchants/nearby/?${params}`));
   },
 
   get: async (id: string): Promise<MerchantProfile> => {

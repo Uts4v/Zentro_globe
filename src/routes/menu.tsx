@@ -7,7 +7,7 @@ import ProductDetailSheet, {
   type ProductDraft,
 } from "@/features/catalog/components/ProductDetailSheet";
 import { MobileShell, TopBar } from "@/components/MobileShell";
-import { Plus, ShoppingBag, ArrowRight, Loader2, Search, X } from "lucide-react";
+import { Plus, ShoppingBag, ArrowRight, Loader2, Search, X, Store } from "lucide-react";
 import { requireAuth } from "@/lib/auth-guard";
 import { useState, useEffect, useMemo } from "react";
 import { formatCurrency } from "@/lib/currency";
@@ -182,7 +182,21 @@ function MenuPage() {
 
   useEffect(() => {
     const stored = useStore.getState().selectedMerchantId;
-    setSelectedMerchantId(stored);
+    if (stored) {
+      setSelectedMerchantId(stored);
+    } else {
+      merchantApi
+        .list()
+        .then((merchants) => {
+          const list = Array.isArray(merchants) ? merchants : (merchants as any).results ?? [];
+          if (list.length > 0) {
+            const latest = list[list.length - 1];
+            useStore.getState().setSelectedMerchant(String(latest.id));
+            setSelectedMerchantId(String(latest.id));
+          }
+        })
+        .catch(() => {});
+    }
 
     const unsub = useStore.subscribe((s) => {
       setSelectedMerchantId(s.selectedMerchantId);
@@ -299,6 +313,26 @@ function MenuPage() {
                     if (linked) openItem(linked);
                   }}
                 />
+              </section>
+            )}
+
+            {/* Active Store Indicator */}
+            {merchant && (
+              <section className="px-5 flex items-center justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="grid h-6 w-6 place-items-center rounded-lg bg-ember/15 text-xs text-ember">
+                    ☕
+                  </div>
+                  <p className="text-xs font-semibold text-foreground truncate">
+                    {merchant.name}
+                  </p>
+                </div>
+                <Link
+                  to="/stores"
+                  className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1 shrink-0"
+                >
+                  Change café <ArrowRight className="h-3 w-3" />
+                </Link>
               </section>
             )}
 

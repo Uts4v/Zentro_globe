@@ -1,7 +1,35 @@
 # merchants/serializers.py 
+from decimal import ROUND_HALF_UP
+
 from rest_framework import serializers
 from .models import MerchantProfile, MenuItem, MenuCategory, MenuOptionGroup, MenuOption
 import re
+
+
+class CoordinateField(serializers.DecimalField):
+    """
+    Map coordinate stored as DECIMAL(9, 6).
+
+    Browsers report GPS fixes with 10+ decimal places; round them to the
+    column's 6 (~0.1 m) instead of rejecting the whole save.
+    """
+
+    def __init__(self, bound, **kwargs):
+        kwargs.setdefault("max_digits", 9)
+        kwargs.setdefault("decimal_places", 6)
+        kwargs.setdefault("rounding", ROUND_HALF_UP)
+        kwargs.setdefault("required", False)
+        kwargs.setdefault("allow_null", True)
+        super().__init__(min_value=-bound, max_value=bound, **kwargs)
+
+    def validate_precision(self, value):
+        # Range-check before quantize(): an out-of-range value would overflow
+        # the 9-digit context there and raise instead of failing validation.
+        if value > self.max_value:
+            self.fail("max_value", max_value=self.max_value)
+        if value < self.min_value:
+            self.fail("min_value", min_value=self.min_value)
+        return value
 
 
 class MenuCategorySerializer(serializers.ModelSerializer):
@@ -278,6 +306,8 @@ def _discount_amount(menu_item):
 
 class MerchantProfileSerializer(serializers.ModelSerializer):
     menu_items = MenuItemSerializer(many=True, read_only=True)
+    latitude = CoordinateField(bound=90)
+    longitude = CoordinateField(bound=180)
 
     class Meta:
         model = MerchantProfile
@@ -302,6 +332,19 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "menu_items", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "is_approved", "qr_code", "pdf_menu_token", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        # A lone latitude or longitude is a pin in the wrong place: either
+        # both change together (set or cleared) or neither does.
+        if ("latitude" in attrs) != ("longitude" in attrs):
+            raise serializers.ValidationError(
+                {"location": "latitude and longitude must be sent together."}
+            )
+        if "latitude" in attrs and (attrs["latitude"] is None) != (attrs["longitude"] is None):
+            raise serializers.ValidationError(
+                {"location": "latitude and longitude must both be set or both be cleared."}
+            )
+        return attrs
 
     def validate_slug(self, value):
         value = value.lower().strip()

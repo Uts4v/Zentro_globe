@@ -46,6 +46,9 @@ db.sqlite3.*
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+venv/
+backend/.venv/
 
 # Django collectstatic output
 backend/staticfiles/

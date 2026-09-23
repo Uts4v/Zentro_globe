@@ -39,13 +39,16 @@ export function CustomerLoyaltyPage() {
   const [transactions, setTransactions] = useState<PointTransaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(true);
 
-  // FIX: Auto-select first merchant if none is selected
+  // Auto-select a café the customer has joined. Never fall back to an
+  // arbitrary café (the alphabetically-first one used to be picked for every
+  // new customer regardless of where they are) — new customers find cafés
+  // near them through Discover.
   useEffect(() => {
     if (selectedMerchantId) return;
-    merchantApi
-      .list()
-      .then((list) => {
-        if (list[0]) setSelectedMerchant(list[0].id);
+    customerApi
+      .joinedMerchants()
+      .then((joined) => {
+        if (joined[0]) setSelectedMerchant(String(joined[0].merchant_id));
       })
       .catch(console.error);
   }, [selectedMerchantId, setSelectedMerchant]);
