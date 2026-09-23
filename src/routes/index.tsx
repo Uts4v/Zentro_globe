@@ -378,7 +378,7 @@ function Index() {
         />
       )}
 
-      <div className="relative flex min-w-0 flex-col gap-5 overflow-x-hidden pb-6 bg-[url(/hero-bg.jpg)] bg-cover bg-center bg-no-repeat pt-10">
+      <div className="relative flex min-w-0 flex-col gap-5 overflow-x-hidden pb-6 pt-10">
         {/* Café Quick Switcher Bar */}
         <section className="mx-auto w-[100%] max-w-[550px] px-3 flex items-center justify-between">
           <button
