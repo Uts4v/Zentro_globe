@@ -46,6 +46,8 @@ export type MerchantProfile = {
   is_approved: boolean;
   is_open: boolean;
   onboarding_complete: boolean;
+  latitude?: string | null;
+  longitude?: string | null;
   ai_enabled: boolean;
   currency_code?: string;
   currency_symbol?: string;
