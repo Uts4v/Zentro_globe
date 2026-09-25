@@ -96,14 +96,14 @@ export default function NotificationBell() {
       >
         <Bell className="h-5 w-5" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white ring-2 ring-background">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-bold text-white ring-2 ring-background">
             {unreadCount > 9 ? "9+" : unreadCount}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-2xl border border-border bg-card shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-2xl border border-border bg-card shadow-xl">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h3 className="text-sm font-bold text-foreground">Notifications</h3>
             <div className="flex items-center gap-1">
@@ -111,14 +111,14 @@ export default function NotificationBell() {
                 <button
                   onClick={clearNotifications}
                   disabled={clearing}
-                  className="rounded-lg px-2 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+                  className="min-h-[36px] rounded-lg px-2.5 py-1 text-xs font-semibold text-warning hover:bg-warning/10 disabled:opacity-50"
                 >
                   {clearing ? "Clearing..." : "Clear all"}
                 </button>
               )}
               <button
                 onClick={() => setOpen(false)}
-                className="rounded-lg p-1 text-muted-foreground hover:bg-muted"
+                className="rounded-lg p-2.5 text-muted-foreground hover:bg-muted"
                 aria-label="Close notifications"
               >
                 <X className="h-4 w-4" />
@@ -145,15 +145,15 @@ export default function NotificationBell() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium text-foreground">{n.title}</p>
                     <p className="text-xs text-muted-foreground line-clamp-2">{n.message}</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
+                    <p className="mt-1 text-xs text-muted-foreground">
                       {n.created_at ? new Date(n.created_at).toLocaleString() : ""}
                     </p>
                   </div>
                   {!n.is_read && (
                     <button
                       onClick={() => markRead(n.id)}
-                      className="shrink-0 rounded-lg p-1 text-green-600 hover:bg-green-50"
-                      title="Mark as read"
+                      className="shrink-0 rounded-lg p-2.5 text-success hover:bg-success/10"
+                      aria-label="Mark as read"
                     >
                       <Check className="h-4 w-4" />
                     </button>

@@ -182,6 +182,8 @@ export interface ShiftSummary {
   total_cash_sales: string;
   total_card_sales: string;
   total_other_sales: string;
+  /** Every method used in the shift, e.g. cash, card, bank_qr, mobile_wallet. */
+  payment_methods?: Array<{ method: string; count: number; amount: string }>;
   total_orders: number;
   opening_cash: string;
   cash_payouts: string;
@@ -597,6 +599,8 @@ export interface PosSettings {
   manager_approval_threshold: string;
   offline_discounts_allowed: boolean;
   offline_credit_allowed: boolean;
+  /** Merchant's payment QR image for QR payments; "" when not configured. */
+  payment_qr_url?: string;
   tax_enabled: boolean;
   tax_rate_percent: string;
   currency_code: string;
@@ -826,6 +830,8 @@ export interface PosStaffDailyReportData {
     total_revenue: string;
     cash_amount: string;
     card_amount: string;
+    qr_amount?: string;
+    digital_amount?: string;
     credit_amount: string;
     other_amount: string;
     total_discount: string;
@@ -1206,3 +1212,56 @@ export interface PosCashMovementPayload {
   amount: number;
   reason?: string;
 }
+
+// ── POS Inventory / Minus Stock ──────────────────────────────────────────
+
+export interface PosInventoryProduct {
+  id: number;
+  inventory_item_id: number;
+  name: string;
+  sku: string;
+  category: string;
+  unit: string;
+  available_stock: number;
+  location_id: number | null;
+  location_name: string;
+  menu_item_ids: number[];
+}
+
+export interface PosMinusStockPayload {
+  inventory_item_id?: number;
+  menu_item_id?: number;
+  quantity: number;
+  reason?: string;
+  note?: string;
+  order_id?: number;
+  location_id?: number;
+  idempotency_key?: string;
+}
+
+export interface PosMinusStockResult {
+  success: boolean;
+  already_processed?: boolean;
+  inventory_item_id: number;
+  item_name: string;
+  deducted_quantity: string;
+  balance_before: string;
+  balance_after: string;
+  available_stock: number;
+  unit: string;
+  location_name: string;
+  movement_id: number;
+}
+
+export const posGetInventoryProducts = () =>
+  djangoFetch<PosInventoryProduct[]>(apiUrl("/pos/inventory/products/"), {
+    headers: headers(),
+  });
+
+export const posMinusStock = (data: PosMinusStockPayload) =>
+  djangoFetch<PosMinusStockResult>(apiUrl("/pos/inventory/minus-stock/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
+

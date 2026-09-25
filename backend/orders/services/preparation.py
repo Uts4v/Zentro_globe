@@ -14,6 +14,7 @@ from django.db import transaction
 from django.db.models import Prefetch, Q
 from django.utils import timezone
 
+from inventory.order_stock import safe_restore_stock_for_order
 from orders.models import Order, OrderItem, PreparationArea
 
 logger = logging.getLogger(__name__)
@@ -215,7 +216,16 @@ def update_area_order_status(
     if staff_shift is not None:
         update_fields["preparation_staff_shift"] = staff_shift
 
+    cancelled_ids = (
+        list(to_change.values_list("id", flat=True))
+        if target_status == OrderItem.CANCELLED else []
+    )
     to_change.update(**update_fields)
+
+    # Items the kitchen cancels were never made — put back any stock they
+    # consumed (a no-op for lines that deducted nothing).
+    if cancelled_ids:
+        safe_restore_stock_for_order(order, lines=cancelled_ids)
 
     # Refresh from DB to get updated values
     items = (

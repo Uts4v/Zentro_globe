@@ -9,8 +9,8 @@ interface CustomerSearchModalProps {
 }
 
 const TIER_COLORS: Record<string, string> = {
-  bronze: "bg-orange-100 text-orange-700",
-  silver: "bg-gray-100 text-gray-700",
+  bronze: "bg-ember-soft text-ember",
+  silver: "bg-muted text-muted-foreground",
   gold: "bg-yellow-100 text-yellow-700",
   platinum: "bg-purple-100 text-purple-700",
 };
@@ -40,6 +40,14 @@ export default function CustomerSearchModal({
       newNameRef.current?.focus();
     }
   }, [showNewForm]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     if (debouncedQuery.length < 2) {
@@ -86,6 +94,9 @@ export default function CustomerSearchModal({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="customer-search-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
     >
@@ -95,8 +106,11 @@ export default function CustomerSearchModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="text-lg font-bold text-foreground">Select Customer</h2>
+          <h2 id="customer-search-title" className="text-lg font-bold text-foreground">
+            Select Customer
+          </h2>
           <button
+            aria-label="Close"
             onClick={onClose}
             className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-mist"
           >
@@ -165,7 +179,7 @@ export default function CustomerSearchModal({
                       </p>
                       {customer.tier && (
                         <span
-                          className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold capitalize ${TIER_COLORS[customer.tier] || "bg-mist text-muted-foreground"}`}
+                          className={`shrink-0 rounded-full px-1.5 py-0.5 text-xs font-bold capitalize ${TIER_COLORS[customer.tier] || "bg-mist text-muted-foreground"}`}
                         >
                           {customer.tier}
                         </span>
@@ -175,18 +189,18 @@ export default function CustomerSearchModal({
                       {customer.phone || customer.email || "No contact"}
                     </p>
                     <div className="mt-1 flex items-center gap-2">
-                      <span className="flex items-center gap-1 text-[11px] text-amber-600">
+                      <span className="flex items-center gap-1 text-xs text-amber-600">
                         <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                         {customer.loyalty_points} pts
                       </span>
-                      <span className="text-[11px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {customer.total_orders}{" "}
                         {customer.total_orders === 1
                           ? "previous order"
                           : "previous orders"}
                       </span>
                       {customer.membership_number && (
-                        <span className="rounded bg-ink/10 px-1.5 py-0.5 text-[10px] font-mono font-bold text-ink">
+                        <span className="rounded bg-ink/10 px-1.5 py-0.5 text-xs font-mono font-bold text-ink">
                           {customer.membership_number}
                         </span>
                       )}

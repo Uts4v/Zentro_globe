@@ -87,12 +87,12 @@ interface AnalyticsData {
 }
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
-  pending: "bg-amber-100 text-amber-700",
-  confirmed: "bg-sky-100 text-sky-700",
-  preparing: "bg-violet-100 text-violet-700",
-  ready: "bg-emerald-100 text-emerald-700",
+  pending: "bg-warning/15 text-warning",
+  confirmed: "bg-info/15 text-info",
+  preparing: "bg-periwinkle-soft text-ink",
+  ready: "bg-success/15 text-success",
   completed: "bg-mist text-muted-foreground",
-  cancelled: "bg-rose-100 text-rose-500",
+  cancelled: "bg-destructive/10 text-destructive",
 };
 
 const FULFILLMENT_LABEL: Record<string, string> = {
@@ -229,7 +229,7 @@ export function MerchantAnalyticsPage() {
     );
   if (error)
     return (
-      <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+      <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
         {error}
       </div>
     );
@@ -273,14 +273,14 @@ export function MerchantAnalyticsPage() {
   return (
     <div className="space-y-8">
       {/* Header + date range */}
-      <div className="flex flex-wrap items-end justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             {dateRange.dateFrom} → {dateRange.dateTo}
           </p>
-          <h1 className="font-display mt-1 text-5xl text-foreground">Analytics</h1>
+          <h1 className="font-display mt-1 text-3xl text-foreground sm:text-4xl">Analytics</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             disabled={refreshing || loading}
             onClick={() => {
@@ -315,7 +315,7 @@ export function MerchantAnalyticsPage() {
 
       {/* Empty state banner */}
       {(data?.total_orders ?? 0) === 0 && (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-3.5 text-sm text-amber-700">
+        <div className="rounded-2xl border border-warning/30 bg-warning/10 px-5 py-3.5 text-sm text-warning">
           No orders found for <strong>{dateRange.label}</strong> ({dateRange.dateFrom} → {dateRange.dateTo}).
           Try selecting a wider range like <em>This Month</em> or <em>This Year</em>.
         </div>
@@ -443,7 +443,7 @@ export function MerchantAnalyticsPage() {
                     {count}
                   </p>
                   <p
-                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] capitalize ${STATUS_COLOR[status as OrderStatus]}`}
+                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs capitalize ${STATUS_COLOR[status as OrderStatus]}`}
                   >
                     {status}
                   </p>
@@ -575,7 +575,7 @@ export function MerchantAnalyticsPage() {
                   </span>
                   <span className="flex-1 truncate text-sm text-foreground">{item.name}</span>
                   <span className="text-xs text-muted-foreground">{item.total_qty}× sold</span>
-                  <span className="font-display text-sm text-ember">
+                  <span className="numeric font-display text-sm text-ember">
                     {formatNPR(item.total_revenue, sym)}
                   </span>
                 </li>
@@ -603,11 +603,11 @@ export function MerchantAnalyticsPage() {
                   <span
                     className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-medium ${
                       i === 0
-                        ? "bg-amber-100 text-amber-700"
+                        ? "bg-butter-soft text-ink"
                         : i === 1
-                          ? "bg-slate-100 text-slate-600"
+                          ? "bg-muted text-muted-foreground"
                           : i === 2
-                            ? "bg-orange-100 text-orange-700"
+                            ? "bg-warning/15 text-warning"
                             : "bg-mist text-muted-foreground"
                     }`}
                   >
@@ -617,7 +617,7 @@ export function MerchantAnalyticsPage() {
                   <span className="text-xs text-muted-foreground">
                     {c.order_count} order{c.order_count !== 1 ? "s" : ""}
                   </span>
-                  <span className="font-display text-sm text-ember">
+                  <span className="numeric font-display text-sm text-ember">
                     {formatNPR(c.total_spent, sym)}
                   </span>
                 </li>
@@ -647,11 +647,13 @@ export function MerchantAnalyticsPage() {
               placeholder="Search by customer or item..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search orders"
               className="h-10 w-full rounded-2xl bg-mist pl-10 pr-10 text-sm text-foreground outline-none border border-transparent focus:border-border transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery("")}
+                aria-label="Clear date"
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />
@@ -663,6 +665,7 @@ export function MerchantAnalyticsPage() {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
+              aria-label="Filter by status"
               className="h-10 rounded-2xl bg-mist px-3 text-sm text-foreground outline-none border border-transparent focus:border-border transition-colors cursor-pointer"
             >
               <option value="">All Status</option>
@@ -691,6 +694,7 @@ export function MerchantAnalyticsPage() {
                 setDateFrom(val);
               }}
               max={dateTo || toLocalDateStr(new Date())}
+              aria-label="Date from"
               className="h-10 rounded-2xl bg-mist px-3 text-sm text-foreground outline-none border border-transparent focus:border-border transition-colors cursor-pointer"
             />
             <span className="text-xs text-muted-foreground">to</span>
@@ -700,13 +704,14 @@ export function MerchantAnalyticsPage() {
               onChange={(e) => setDateTo(e.target.value)}
               min={dateFrom || undefined}
               max={toLocalDateStr(new Date())}
+              aria-label="Date to"
               className="h-10 rounded-2xl bg-mist px-3 text-sm text-foreground outline-none border border-transparent focus:border-border transition-colors cursor-pointer"
             />
           </div>
         </div>
 
         {historyError && (
-          <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+          <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {historyError}
           </div>
         )}
@@ -776,21 +781,21 @@ function HistoryOrderCard({ order, sym = "Rs" }: { order: Order; sym?: string })
     <div className="glass cv-auto rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
             #{String(order.id).slice(0, 8)}
           </p>
           <span
-            className={`rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-widest font-medium ${STATUS_COLOR[order.status]}`}
+            className={`rounded-full px-2.5 py-0.5 text-xs uppercase tracking-widest font-medium ${STATUS_COLOR[order.status]}`}
           >
             {order.status}
           </span>
           {isPunchCard && (
-            <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+            <span className="rounded-full bg-periwinkle-soft px-2 py-0.5 text-xs font-medium text-ink">
               Punch Card
             </span>
           )}
           {isReward && (
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+            <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
               Reward
             </span>
           )}
@@ -811,7 +816,7 @@ function HistoryOrderCard({ order, sym = "Rs" }: { order: Order; sym?: string })
           <Clock className="h-3 w-3" />
           {timeLabel}
         </span>
-        <span className="font-display text-base text-foreground">
+        <span className="numeric font-display text-base text-foreground">
           {Number(order.total_amount) > 0 ? formatNPR(order.total_amount, sym) : "FREE"}
         </span>
       </div>
@@ -825,8 +830,8 @@ function Delta({ value, suffix = "%" }: { value: number; suffix?: string }) {
   const up = value >= 0;
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-        up ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-600"
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+        up ? "bg-success/15 text-success" : "bg-danger/15 text-danger"
       }`}
     >
       {up ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -856,13 +861,15 @@ function Kpi({
         <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
         <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
-      <p className="numeric mt-2 text-3xl font-bold tracking-tight text-foreground">{value}</p>
+      <p className="numeric font-display mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+        {value}
+      </p>
       {delta !== undefined && (
         <div className="mt-2">
           <Delta value={delta} />
         </div>
       )}
-      {sub && <p className="mt-1 text-[11px] text-muted-foreground">{sub}</p>}
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
     </div>
   );
 }
@@ -872,7 +879,7 @@ function StatRow({ label, value, hint }: { label: string; value: string; hint?: 
     <div className="flex items-center justify-between rounded-2xl bg-mist px-4 py-3">
       <div>
         <p className="text-xs text-foreground">{label}</p>
-        {hint && <p className="mt-0.5 text-[10px] text-muted-foreground">{hint}</p>}
+        {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
       </div>
       <p className="numeric text-xl font-semibold tracking-tight text-foreground">{value}</p>
     </div>
@@ -891,8 +898,8 @@ function LoyaltyStat({
   return (
     <div className="rounded-2xl bg-mist p-4">
       <Icon className="h-4 w-4 text-ember" />
-      <p className="font-display mt-3 text-2xl text-foreground">{value}</p>
-      <p className="mt-0.5 text-[10px] text-muted-foreground">{label}</p>
+      <p className="numeric font-display mt-3 text-2xl text-foreground">{value}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }
@@ -919,7 +926,7 @@ function PeriodCard({
       <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">{title}</p>
       <div className="mt-3 flex items-end justify-between gap-4">
         <div>
-          <p className="font-display text-3xl text-foreground">{formatNPR(revenue, sym)}</p>
+          <p className="numeric font-display text-3xl text-foreground">{formatNPR(revenue, sym)}</p>
           <p className="mt-1 text-xs text-muted-foreground">{orders} orders</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
@@ -927,7 +934,7 @@ function PeriodCard({
             <>
               <Delta value={deltaRev} />
               {deltaOrders !== undefined && <Delta value={deltaOrders} suffix=" orders" />}
-              {vsLabel && <span className="text-[10px] text-muted-foreground">{vsLabel}</span>}
+              {vsLabel && <span className="text-xs text-muted-foreground">{vsLabel}</span>}
             </>
           )}
         </div>
@@ -946,12 +953,12 @@ function ProgressList({ items }: { items: { label: string; value: number }[] }) 
         <li key={item.label}>
           <div className="flex items-center justify-between text-sm">
             <span className="capitalize text-foreground">{item.label}</span>
-            <span className="text-xs text-muted-foreground">{item.value}</span>
+            <span className="numeric text-xs text-muted-foreground">{item.value}</span>
           </div>
           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-mist">
             <div
               className="h-full rounded-full"
-              style={{ width: `${(item.value / max) * 100}%`, backgroundColor: "#E85D3A" }}
+              style={{ width: `${(item.value / max) * 100}%`, backgroundColor: "var(--ember)" }}
             />
           </div>
         </li>
@@ -968,16 +975,16 @@ function PaymentList({ rows, sym = "Rs" }: { rows: { method: string; count: numb
         <li key={row.method}>
           <div className="flex items-center justify-between text-sm">
             <span className="capitalize text-foreground">{row.method.replace(/_/g, " ")}</span>
-            <span className="font-display text-sm text-foreground">{formatNPR(row.revenue, sym)}</span>
+            <span className="numeric font-display text-sm text-foreground">{formatNPR(row.revenue, sym)}</span>
           </div>
           <div className="mt-1.5 flex items-center gap-2">
             <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-mist">
               <div
                 className="h-full rounded-full"
-                style={{ width: `${(row.revenue / maxRev) * 100}%`, backgroundColor: "#E85D3A" }}
+                style={{ width: `${(row.revenue / maxRev) * 100}%`, backgroundColor: "var(--ember)" }}
               />
             </div>
-            <span className="text-[10px] text-muted-foreground">{row.count} orders</span>
+            <span className="numeric text-xs text-muted-foreground">{row.count} orders</span>
           </div>
         </li>
       ))}

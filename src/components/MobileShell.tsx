@@ -162,15 +162,15 @@ export function TopBar({
             <ZentroLogo className="h-7 w-auto" title="" />
           </Link>
           {title ? (
-            <h1 className="zh-page-title">{title}</h1>
+            <p className="zh-page-title">{title}</p>
           ) : loading ? (
             <div className="zh-greeting-skeleton" />
           ) : (
             <div className="zh-greeting">
               <p>{getGreeting()},</p>
-              <h1>
+              <p>
                 {firstName || "Welcome"} <span aria-hidden>👋</span>
-              </h1>
+              </p>
             </div>
           )}
         </div>

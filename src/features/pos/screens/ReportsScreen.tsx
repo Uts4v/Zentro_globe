@@ -15,6 +15,7 @@ import {
   FileText,
   Users,
 } from "lucide-react";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 
 export default function ReportsScreen() {
   const activeShift = usePosStore((s) => s.activeShift);
@@ -78,25 +79,25 @@ export default function ReportsScreen() {
       label: "Today's Orders",
       value: todayOrders.length,
       icon: ShoppingBag,
-      color: "bg-blue-100 text-blue-600",
+      color: "bg-info/10 text-info",
     },
     {
       label: "Revenue",
       value: formatCurrency(totalRevenue, currencySymbol),
       icon: DollarSign,
-      color: "bg-green-100 text-green-600",
+      color: "bg-success/10 text-success",
     },
     {
       label: "Avg Order",
       value: formatCurrency(avgOrderValue, currencySymbol),
       icon: TrendingUp,
-      color: "bg-purple-100 text-purple-600",
+      color: "bg-primary/10 text-primary",
     },
     {
       label: "Debit Balances",
       value: formatCurrency(totalDebitBalance, currencySymbol),
       icon: Wallet,
-      color: "bg-amber-100 text-amber-600",
+      color: "bg-warning/10 text-warning",
     },
   ];
 
@@ -115,29 +116,29 @@ export default function ReportsScreen() {
 
   return (
     <div className="mx-auto max-w-4xl p-4 lg:p-6">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <BarChart3 className="h-5 w-5 text-ink" />
           <h1 className="text-xl font-bold text-foreground">Reports</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
           <Link
             to="/pos/reports/z-report"
-            className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted sm:w-auto"
           >
             <FileText className="h-4 w-4" />
             Z-Report
           </Link>
           <Link
             to="/pos/staff-report"
-            className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted sm:w-auto"
           >
             <Users className="h-4 w-4" />
             Staff Report
           </Link>
           <button
             onClick={loadData}
-            className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
+            className="flex w-full items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted sm:w-auto"
           >
             <RefreshCw className="h-4 w-4" />
             Refresh
@@ -153,25 +154,25 @@ export default function ReportsScreen() {
           </h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
-              <p className="text-[10px] text-muted-foreground">Opening</p>
-              <p className="text-sm font-bold">
+              <p className="text-xs text-muted-foreground">Opening</p>
+              <p className="numeric text-sm font-bold">
                 {formatCurrency(Number(activeShift.opening_cash), currencySymbol)}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Cash Sales</p>
-              <p className="text-sm font-bold text-green-600">
+              <p className="text-xs text-muted-foreground">Cash Sales</p>
+              <p className="numeric text-sm font-bold text-success">
                 {formatCurrency(Number(activeShift.total_cash_sales), currencySymbol)}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Card Sales</p>
-              <p className="text-sm font-bold text-blue-600">
+              <p className="text-xs text-muted-foreground">Card Sales</p>
+              <p className="numeric text-sm font-bold text-info">
                 {formatCurrency(Number(activeShift.total_card_sales), currencySymbol)}
               </p>
             </div>
             <div>
-              <p className="text-[10px] text-muted-foreground">Orders</p>
+              <p className="text-xs text-muted-foreground">Orders</p>
               <p className="text-sm font-bold">{activeShift.total_orders}</p>
             </div>
           </div>
@@ -187,8 +188,8 @@ export default function ReportsScreen() {
               <div className={`mb-2 grid h-8 w-8 place-items-center rounded-lg ${stat.color}`}>
                 <Icon className="h-4 w-4" />
               </div>
-              <p className="text-lg font-bold text-foreground">{stat.value}</p>
-              <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+              <p className="numeric text-lg font-bold text-foreground">{stat.value}</p>
+              <p className="text-xs text-muted-foreground">{stat.label}</p>
             </div>
           );
         })}
@@ -212,7 +213,7 @@ export default function ReportsScreen() {
                     <div key={method}>
                       <div className="mb-1 flex justify-between text-sm">
                         <span className="capitalize text-foreground">
-                          {method.replace("_", " ")}
+                          {paymentMethodLabel(method)}
                         </span>
                         <span className="font-medium">{formatCurrency(amount, currencySymbol)}</span>
                       </div>

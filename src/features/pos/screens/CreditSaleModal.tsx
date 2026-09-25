@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
 import { posCreditSale, CreditAccount } from "../api";
@@ -28,6 +28,15 @@ export default function CreditSaleModal({
   const [success, setSuccess] = useState(false);
   const [newBalance, setNewBalance] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -69,13 +78,20 @@ export default function CreditSaleModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="credit-sale-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    >
       <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl">
         {success ? (
           <div className="flex flex-col items-center py-4">
             <CheckCircle className="mb-3 h-12 w-12 text-green-500" />
-            <p className="text-lg font-bold text-foreground">Sale Recorded</p>
-            <p className="text-sm text-muted-foreground">
+            <p id="credit-sale-title" className="text-lg font-bold text-foreground">
+              Sale Recorded
+            </p>
+            <p className="numeric text-sm text-muted-foreground">
               New balance: {formatCurrency(newBalance || 0, currencySymbol)}
             </p>
           </div>
@@ -84,9 +100,15 @@ export default function CreditSaleModal({
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ArrowUpRight className="h-5 w-5 text-amber-500" />
-                <h2 className="text-lg font-bold text-foreground">Credit Sale</h2>
+                <h2 id="credit-sale-title" className="text-lg font-bold text-foreground">
+                  Credit Sale
+                </h2>
               </div>
-              <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+              <button
+                aria-label="Close"
+                onClick={onClose}
+                className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -94,7 +116,7 @@ export default function CreditSaleModal({
             <div className="mb-4 rounded-xl bg-muted/50 p-3">
               <p className="text-xs text-muted-foreground">Account</p>
               <p className="text-sm font-bold text-foreground">{account.contact_name}</p>
-              <p className="text-xs text-muted-foreground">
+              <p className="numeric text-xs text-muted-foreground">
                 Available credit: {formatCurrency(avail, currencySymbol)}
               </p>
             </div>

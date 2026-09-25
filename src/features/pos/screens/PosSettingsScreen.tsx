@@ -77,13 +77,16 @@ export default function PosSettingsScreen() {
               <label key={key} className="flex items-center justify-between">
                 <span className="text-sm text-foreground">{label}</span>
                 <button
+                  role="switch"
+                  aria-checked={settings[key]}
+                  aria-label={label}
                   onClick={() => setSettings((s) => (s ? { ...s, [key]: !s[key] } : s))}
                   className={`relative h-6 w-11 rounded-full transition-colors ${
-                    settings[key] ? "bg-ink" : "bg-gray-200"
+                    settings[key] ? "bg-ink" : "bg-muted"
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-[left] ${
                       settings[key] ? "left-[22px]" : "left-0.5"
                     }`}
                   />
@@ -139,50 +142,56 @@ export default function PosSettingsScreen() {
             </div>
             <label className="flex items-center justify-between">
               <span className="text-sm text-foreground">Offline Discounts Allowed</span>
-              <button
-                onClick={() =>
-                  setSettings((s) =>
-                    s
-                      ? {
-                          ...s,
-                          offline_discounts_allowed: !s.offline_discounts_allowed,
-                        }
-                      : s,
-                  )
-                }
-                className={`relative h-6 w-11 rounded-full transition-colors ${
-                  settings.offline_discounts_allowed ? "bg-ink" : "bg-gray-200"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
-                    settings.offline_discounts_allowed ? "left-[22px]" : "left-0.5"
+                <button
+                  role="switch"
+                  aria-checked={settings.offline_discounts_allowed}
+                  aria-label="Offline Discounts Allowed"
+                  onClick={() =>
+                    setSettings((s) =>
+                      s
+                        ? {
+                            ...s,
+                            offline_discounts_allowed: !s.offline_discounts_allowed,
+                          }
+                        : s,
+                    )
+                  }
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    settings.offline_discounts_allowed ? "bg-ink" : "bg-muted"
                   }`}
-                />
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-[left] ${
+                      settings.offline_discounts_allowed ? "left-[22px]" : "left-0.5"
+                    }`}
+                  />
               </button>
             </label>
             <label className="flex items-center justify-between">
               <span className="text-sm text-foreground">Offline Credit Allowed</span>
-              <button
-                onClick={() =>
-                  setSettings((s) =>
-                    s
-                      ? {
-                          ...s,
-                          offline_credit_allowed: !s.offline_credit_allowed,
-                        }
-                      : s,
-                  )
-                }
-                className={`relative h-6 w-11 rounded-full transition-colors ${
-                  settings.offline_credit_allowed ? "bg-ink" : "bg-gray-200"
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
-                    settings.offline_credit_allowed ? "left-[22px]" : "left-0.5"
+                <button
+                  role="switch"
+                  aria-checked={settings.offline_credit_allowed}
+                  aria-label="Offline Credit Allowed"
+                  onClick={() =>
+                    setSettings((s) =>
+                      s
+                        ? {
+                            ...s,
+                            offline_credit_allowed: !s.offline_credit_allowed,
+                          }
+                        : s,
+                    )
+                  }
+                  className={`relative h-6 w-11 rounded-full transition-colors ${
+                    settings.offline_credit_allowed ? "bg-ink" : "bg-muted"
                   }`}
-                />
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-[left] ${
+                      settings.offline_credit_allowed ? "left-[22px]" : "left-0.5"
+                    }`}
+                  />
               </button>
             </label>
           </div>

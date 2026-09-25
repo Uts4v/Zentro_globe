@@ -1,5 +1,5 @@
 import { usePosStore } from "../store";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { PosReceiptData, PosCustomer, posCreateOrder } from "../api";
 import { safeUuid } from "@/lib/utils";
 import { formatCurrency, calculateTax } from "@/lib/currency";
@@ -18,7 +18,9 @@ import {
   Check,
   Gift,
   Star,
+  PackageMinus,
 } from "lucide-react";
+import MinusStockModal from "./MinusStockModal";
 
 interface CartPanelProps {
   onCheckout: () => void;
@@ -59,6 +61,12 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const [showFreeConfirm, setShowFreeConfirm] = useState(false);
   const [freeOrderLoading, setFreeOrderLoading] = useState(false);
   const [freeOrderError, setFreeOrderError] = useState<string | null>(null);
+  const [showMinusStock, setShowMinusStock] = useState(false);
+  const [selectedMinusStockItem, setSelectedMinusStockItem] = useState<{
+    name: string;
+    menu_item_id?: number | null;
+    quantity?: number;
+  } | null>(null);
 
   const menuItemById = useMemo(() => {
     const map = new Map<number, any>();
@@ -69,6 +77,18 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
     }
     return map;
   }, [menu]);
+
+  useEffect(() => {
+    if (!showFreeConfirm) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setShowFreeConfirm(false);
+        setFreeOrderError(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showFreeConfirm]);
 
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
   const { total: tax, breakdown: taxBreakdown } = calculateTax(subtotal, posSettings?.tax_components || []);
@@ -237,7 +257,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
             <ShoppingBag className="h-4 w-4 text-ember" />
             <h2 className="text-base font-bold text-foreground">Current Order</h2>
             {!isEmpty && (
-              <span className="rounded-full bg-mist px-2.5 py-0.5 text-[11px] font-semibold text-muted-foreground">
+              <span className="rounded-full bg-mist px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
                 {itemCount} {itemCount === 1 ? "item" : "items"}
               </span>
             )}
@@ -294,11 +314,11 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                 <p className="truncate text-sm font-semibold text-foreground">
                   {linkedCustomer.full_name}
                 </p>
-                <p className="truncate text-[11px] text-muted-foreground">
+                <p className="truncate text-xs text-muted-foreground">
                   {linkedCustomer.phone || linkedCustomer.email || "No contact"}
                   {linkedCustomer.membership_number && ` · ${linkedCustomer.membership_number}`}
                 </p>
-                <div className="mt-1 flex items-center gap-2 text-[11px]">
+                <div className="mt-1 flex items-center gap-2 text-xs">
                   <span className="flex items-center gap-1 font-semibold text-amber-600">
                     <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                     {linkedCustomer.loyalty_points} pts
@@ -312,7 +332,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
               <div className="flex shrink-0 flex-col gap-1">
                 <button
                   onClick={() => setShowCustomerSearch(true)}
-                  className="text-right text-[11px] font-semibold text-ember hover:underline"
+                  className="text-right text-xs font-semibold text-ember hover:underline"
                 >
                   Change
                 </button>
@@ -321,7 +341,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                     setPickedCustomer(null);
                     setSelectedCustomer(null);
                   }}
-                  className="text-right text-[11px] font-medium text-muted-foreground hover:text-destructive"
+                  className="text-right text-xs font-medium text-muted-foreground hover:text-destructive"
                 >
                   Remove
                 </button>
@@ -337,7 +357,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
               </div>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-foreground">Customer</p>
-                <p className="text-[11px] text-muted-foreground">Link a customer to this order</p>
+                <p className="text-xs text-muted-foreground">Link a customer to this order</p>
               </div>
               <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
             </button>
@@ -393,7 +413,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                     <div className="flex items-start justify-between gap-2">
                       <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
                       {item.price === 0 ? (
-                        <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
+                        <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-xs font-bold text-success">
                           FREE
                         </span>
                       ) : (
@@ -402,7 +422,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                         </p>
                       )}
                     </div>
-                    <p className="numeric text-[11px] text-muted-foreground">
+                    <p className="numeric text-xs text-muted-foreground">
                       {item.price === 0 ? "No charge" : `${formatCurrency(item.price, currencySymbol)} each`}
                     </p>
 
@@ -415,6 +435,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                               ? updateCartItemQty(idx, item.quantity - 1)
                               : removeItemFromCart(idx)
                           }
+                          aria-label={item.quantity === 1 ? `Remove ${item.name}` : `Decrease quantity of ${item.name}`}
                           className="grid h-9 w-9 place-items-center rounded-l-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
                         >
                           {item.quantity === 1 ? (
@@ -428,6 +449,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                         </span>
                         <button
                           onClick={() => updateCartItemQty(idx, item.quantity + 1)}
+                          aria-label={`Increase quantity of ${item.name}`}
                           className="grid h-9 w-9 place-items-center rounded-r-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
                         >
                           <Plus className="h-4 w-4" />
@@ -436,10 +458,29 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                       <button
                         onClick={() => removeItemFromCart(idx)}
                         title="Remove item"
-                        className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-red-200 hover:bg-red-50 hover:text-destructive"
+                        aria-label={`Remove ${item.name}`}
+                        className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
+                      {fulfillmentType === "dine-in" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMinusStockItem({
+                              name: item.name,
+                              menu_item_id: item.menu_item_id,
+                              quantity: item.quantity,
+                            });
+                            setShowMinusStock(true);
+                          }}
+                          title="Minus stock for this item"
+                          className="flex h-9 items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+                        >
+                          <PackageMinus className="h-3.5 w-3.5" />
+                          <span>Minus Stock</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -525,10 +566,23 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         {!isEmpty && (
           <button
             onClick={() => setShowFreeConfirm(true)}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-emerald-300 bg-emerald-50 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-success/40 bg-success/10 text-sm font-medium text-success transition-colors hover:bg-success/20"
           >
             <Gift className="h-4 w-4" />
             Staff Free Order
+          </button>
+        )}
+        {fulfillmentType === "dine-in" && (
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedMinusStockItem(null);
+              setShowMinusStock(true);
+            }}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 shadow-sm"
+          >
+            <PackageMinus className="h-4 w-4" />
+            Minus Stock
           </button>
         )}
         <button
@@ -551,19 +605,26 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
       {/* ── Staff Free Order Confirmation ── */}
       {showFreeConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-          <div className="mx-4 w-full max-w-sm rounded-3xl border border-border bg-background p-6 shadow-xl">
-            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100">
-              <Gift className="h-6 w-6 text-emerald-600" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="staff-free-order-title"
+            className="mx-4 w-full max-w-sm rounded-3xl border border-border bg-background p-6 shadow-xl"
+          >
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
+              <Gift className="h-6 w-6 text-success" />
             </div>
-            <h3 className="text-lg font-bold text-foreground">Staff Free Order</h3>
+            <h3 id="staff-free-order-title" className="text-lg font-bold text-foreground">
+              Staff Free Order
+            </h3>
             <p className="mt-1 text-sm text-muted-foreground">
               Create a free order for staff. All items will be recorded at Rs 0 — no payment required.
             </p>
             <div className="mt-3 rounded-xl bg-mist px-4 py-3 text-xs text-muted-foreground">
-              {cart.length} item{cart.length !== 1 && "s"} · Total: <span className="font-bold text-foreground">{formatCurrency(total, currencySymbol)}</span> → <span className="font-bold text-emerald-600">FREE</span>
+              {cart.length} item{cart.length !== 1 && "s"} · Total: <span className="numeric font-bold text-foreground">{formatCurrency(total, currencySymbol)}</span> → <span className="font-bold text-success">FREE</span>
             </div>
             {freeOrderError && (
-              <p className="mt-2 text-xs text-rose-600">{freeOrderError}</p>
+              <p className="mt-2 text-xs text-destructive">{freeOrderError}</p>
             )}
             <div className="mt-5 flex gap-2">
               <button
@@ -576,13 +637,34 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
               <button
                 onClick={handleStaffFreeOrder}
                 disabled={freeOrderLoading}
-                className="flex-1 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
               >
                 {freeOrderLoading ? "Creating..." : "Confirm Free"}
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Minus Stock Modal ── */}
+      {showMinusStock && (
+        <MinusStockModal
+          open={showMinusStock}
+          onClose={() => {
+            setShowMinusStock(false);
+            setSelectedMinusStockItem(null);
+          }}
+          tableName={selectedTable ? (selectedTable.name || `Table ${selectedTable.table_number}`) : null}
+          initialItem={selectedMinusStockItem}
+          orderItems={cart.map((item) => ({
+            name: item.name,
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+          }))}
+          onStockDeducted={() => {
+            // stock updated
+          }}
+        />
       )}
     </div>
   );

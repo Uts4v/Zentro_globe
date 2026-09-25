@@ -65,6 +65,8 @@ export type MerchantProfile = {
   manager_approval_threshold?: number;
   offline_discounts_allowed?: boolean;
   offline_credit_allowed?: boolean;
+  /** Merchant's own payment QR image, shown at POS for QR payments. */
+  payment_qr_url?: string;
 };
 
 export type AuthUser = {

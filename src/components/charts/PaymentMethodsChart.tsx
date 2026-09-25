@@ -8,6 +8,7 @@ import {
   CartesianGrid,
   Cell,
 } from "recharts";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 
 interface PaymentMethodItem {
   method: string;
@@ -40,7 +41,7 @@ export function PaymentMethodsChart({
   if (methods.length === 0) return null;
 
   const data = methods.map((m) => ({
-    name: m.method.replace(/_/g, " "),
+    name: paymentMethodLabel(m.method),
     methodKey: m.method,
     amount: Number(m.amount || 0),
     count: m.count || 0,

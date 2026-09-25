@@ -27,6 +27,9 @@ import { optimizeImage } from "@/lib/image-optimize";
 import { uploadImage } from "@/lib/image-upload";
 import { usePreparationAreas, usePreparationSettings } from "@/features/preparation/hooks";
 import { OptionGroupsEditor } from "@/features/catalog/components/OptionGroupsEditor";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth";
+import { formatCurrency } from "@/lib/currency";
 
 const EMPTY_FORM = {
   name: "",
@@ -102,6 +105,8 @@ export function MerchantMenuPage() {
   const { data: prepSettings } = usePreparationSettings();
   const { data: prepAreas = [] } = usePreparationAreas();
   const showPrepFields = prepSettings?.preparation_routing_enabled && prepAreas.length > 0;
+  const { merchantProfile } = useAuth();
+  const currencySymbol = merchantProfile?.currency_symbol || "Rs";
 
   useEffect(() => {
     loadAll();
@@ -183,6 +188,24 @@ export function MerchantMenuPage() {
   }
 
   const sortedCats = [...categories].sort((a, b) => a.display_order - b.display_order);
+
+  useEffect(() => {
+    if (!showForm) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeForm();
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [showForm]);
+
+  useEffect(() => {
+    if (!showLayout) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowLayout(false);
+    };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [showLayout]);
 
   async function createCat() {
     if (!newCatName.trim()) return;
@@ -361,24 +384,22 @@ export function MerchantMenuPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Manage</p>
-          <h1 className="font-display mt-1 text-5xl text-foreground">Menu</h1>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Manage</p>
+          <h1 className="font-display mt-1 text-3xl sm:text-4xl text-foreground">Menu</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <button
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
             onClick={openLayoutManager}
-            className="inline-flex h-11 items-center gap-2 rounded-2xl border border-border px-4 text-sm font-medium text-muted-foreground hover:text-foreground"
+            className="h-11 rounded-2xl text-muted-foreground"
           >
             <Layers className="h-4 w-4" /> Layout
-          </button>
-          <button
-            onClick={openCreate}
-            className="gradient-ember inline-flex h-11 items-center gap-2 rounded-2xl px-5 text-sm font-medium text-white transition-transform active:scale-[0.98]"
-          >
+          </Button>
+          <Button onClick={openCreate} className="h-11 rounded-2xl px-5">
             <Plus className="h-4 w-4" /> Add item
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -408,11 +429,13 @@ export function MerchantMenuPage() {
       </Link>
 
       {catFilters.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="flex gap-2 overflow-x-auto pb-1" role="tablist">
           {catFilters.map((cat) => (
             <button
               key={cat}
               onClick={() => setFilterCat(cat)}
+              role="tab"
+              aria-selected={filterCat === cat}
               className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
                 filterCat === cat
                   ? "bg-ink text-primary-foreground"
@@ -433,7 +456,7 @@ export function MerchantMenuPage() {
         ].map(({ label, value }) => (
           <div key={label} className="glass rounded-2xl p-4 text-center">
             <p className="font-display text-3xl text-foreground">{value}</p>
-            <p className="mt-1 text-[11px] uppercase tracking-widest text-muted-foreground">
+            <p className="mt-1 text-xs uppercase tracking-widest text-muted-foreground">
               {label}
             </p>
           </div>
@@ -464,7 +487,7 @@ export function MerchantMenuPage() {
                     {catItems.length}
                   </span>
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${catClass(cat)}`}
+                    className={`rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wider ${catClass(cat)}`}
                   >
                     {cat}
                   </span>
@@ -514,15 +537,19 @@ export function MerchantMenuPage() {
         >
           <div
             ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="menu-item-dialog-title"
             className="glass-strong w-full max-w-lg rounded-t-3xl p-6 sm:rounded-3xl"
           >
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="font-display text-2xl text-foreground">
+              <h2 id="menu-item-dialog-title" className="font-display text-2xl text-foreground">
                 {editing ? "Edit item" : "New item"}
               </h2>
               <button
                 onClick={closeForm}
-                className="grid h-8 w-8 place-items-center rounded-full bg-mist text-muted-foreground hover:text-foreground"
+                aria-label="Close dialog"
+                className="grid h-10 w-10 place-items-center rounded-full bg-mist text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -531,7 +558,7 @@ export function MerchantMenuPage() {
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
               {/* Product image upload */}
               <div>
-                <p className="mb-1.5 text-[11px] uppercase tracking-widest text-muted-foreground">
+                <p className="mb-1.5 text-xs uppercase tracking-widest text-muted-foreground">
                   Product image
                 </p>
                 <input
@@ -559,7 +586,7 @@ export function MerchantMenuPage() {
                     <div className="flex h-full flex-col items-center justify-center gap-2 bg-mist">
                       <ImageIcon className="h-8 w-8 text-muted-foreground/40" />
                       <p className="text-xs text-muted-foreground">Click or drag image here</p>
-                      <p className="text-[10px] text-muted-foreground/60">
+                      <p className="text-xs text-muted-foreground/60">
                         JPG · PNG · WebP · max 5 MB
                       </p>
                     </div>
@@ -588,6 +615,7 @@ export function MerchantMenuPage() {
                   {imgPreviewUrl && !imgUploading && (
                     <button
                       type="button"
+                      aria-label="Remove image"
                       onClick={(e) => {
                         e.stopPropagation();
                         clearImage();
@@ -611,7 +639,7 @@ export function MerchantMenuPage() {
                     <button
                       type="button"
                       onClick={() => imgInputRef.current?.click()}
-                      className="ml-auto inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-[11px] text-muted-foreground hover:border-ink hover:text-foreground"
+                      className="ml-auto inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground hover:border-ink hover:text-foreground"
                     >
                       <Upload className="h-3 w-3" /> Change
                     </button>
@@ -622,82 +650,106 @@ export function MerchantMenuPage() {
               {/* Emoji + Name */}
               <div className="flex gap-3">
                 <div className="shrink-0">
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  <label
+                    htmlFor="menu-item-emoji"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
                     Emoji
                   </label>
                   <input
+                    id="menu-item-emoji"
                     value={form.emoji}
                     onChange={(e) => setForm((f) => ({ ...f, emoji: e.target.value }))}
-                    className="h-11 w-16 rounded-xl border border-border bg-white/50 text-center text-xl focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-16 rounded-xl border border-border bg-muted text-center text-xl focus:outline-none focus:ring-2 focus:ring-ink/20"
                     maxLength={2}
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  <label
+                    htmlFor="menu-item-name"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
                     Name *
                   </label>
                   <input
+                    id="menu-item-name"
                     value={form.name}
                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                     placeholder="Flat white"
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   />
                 </div>
               </div>
 
               {/* Description */}
               <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                <label
+                  htmlFor="menu-item-description"
+                  className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                >
                   Description
                 </label>
                 <textarea
+                  id="menu-item-description"
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                   placeholder="A short description…"
                   rows={2}
-                  className="w-full resize-none rounded-xl border border-border bg-white/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  className="w-full resize-none rounded-xl border border-border bg-muted px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                 />
               </div>
 
               {/* Short description (menu cards) */}
               <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                <label
+                  htmlFor="menu-item-short-description"
+                  className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                >
                   Menu card blurb (optional)
                 </label>
                 <textarea
+                  id="menu-item-short-description"
                   value={form.short_description}
                   onChange={(e) => setForm((f) => ({ ...f, short_description: e.target.value }))}
                   placeholder="One line for the menu grid, e.g. “Double ristretto over silky milk.”"
                   rows={1}
                   maxLength={200}
-                  className="w-full resize-none rounded-xl border border-border bg-white/50 px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  className="w-full resize-none rounded-xl border border-border bg-muted px-3 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                 />
               </div>
 
               {/* Price + Category */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
-                    Price (NPR) *
+                  <label
+                    htmlFor="menu-item-price"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
+                    Price ({currencySymbol}) *
                   </label>
                   <input
+                    id="menu-item-price"
                     type="number"
                     min="0"
                     step="0.01"
                     value={form.price}
                     onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
                     placeholder="350.00"
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   />
-                  <p className="mt-1 text-[10px] text-muted-foreground">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Set to 0 for free / comp items (e.g. staff food)
                   </p>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  <label
+                    htmlFor="menu-item-section"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
                     Section
                   </label>
                   <select
+                    id="menu-item-section"
                     value={form.category_ref || "__new"}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -709,7 +761,7 @@ export function MerchantMenuPage() {
                         category: cat ? cat.name : f.category,
                       }));
                     }}
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   >
                     {categories.map((c) => (
                       <option key={c.id} value={String(c.id)}>
@@ -723,10 +775,11 @@ export function MerchantMenuPage() {
                       value={form.category}
                       onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                       placeholder="New section name (Coffee, Tea…)"
-                      className="mt-1.5 h-9 w-full rounded-xl border border-border bg-white/50 px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                      aria-label="New section name"
+                      className="mt-1.5 h-9 w-full rounded-xl border border-border bg-muted px-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                     />
                   )}
-                  <p className="mt-1 text-[10px] text-muted-foreground">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Pick a section or type a new one.
                   </p>
                 </div>
@@ -734,11 +787,15 @@ export function MerchantMenuPage() {
 
               {/* Discount */}
               <div>
-                <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                <label
+                  htmlFor="menu-item-discount-type"
+                  className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                >
                   Discount
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <select
+                    id="menu-item-discount-type"
                     value={form.discount_type}
                     onChange={(e) =>
                       setForm((f) => ({
@@ -747,13 +804,14 @@ export function MerchantMenuPage() {
                         discount_value: e.target.value === "none" ? "" : f.discount_value,
                       }))
                     }
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   >
                     <option value="none">No discount</option>
                     <option value="percentage">Percentage (%)</option>
-                    <option value="fixed">Fixed amount (NPR)</option>
+                    <option value="fixed">Fixed amount ({currencySymbol})</option>
                   </select>
                   <input
+                    id="menu-item-discount-value"
                     type="number"
                     min="0"
                     step="0.01"
@@ -761,10 +819,11 @@ export function MerchantMenuPage() {
                     value={form.discount_value}
                     onChange={(e) => setForm((f) => ({ ...f, discount_value: e.target.value }))}
                     placeholder={form.discount_type === "percentage" ? "10" : "50.00"}
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20 disabled:opacity-40"
+                    aria-label="Discount value"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20 disabled:opacity-40"
                   />
                 </div>
-                <p className="mt-1 text-[10px] text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {form.discount_source === "special"
                     ? "Managed by an active Today's Special — editing it will switch to a manual discount."
                     : "Applies to the base price; variants keep their own price."}
@@ -774,61 +833,77 @@ export function MerchantMenuPage() {
               {/* Dietary + allergens */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  <label
+                    htmlFor="menu-item-dietary"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
                     Dietary tags
                   </label>
                   <input
+                    id="menu-item-dietary"
                     value={form.dietary_tags}
                     onChange={(e) => setForm((f) => ({ ...f, dietary_tags: e.target.value }))}
                     placeholder="Vegan, Gluten-free…"
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   />
-                  <p className="mt-1 text-[10px] text-muted-foreground">Comma separated</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Comma separated</p>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  <label
+                    htmlFor="menu-item-allergens"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
                     Allergens
                   </label>
                   <input
+                    id="menu-item-allergens"
                     value={form.allergens}
                     onChange={(e) => setForm((f) => ({ ...f, allergens: e.target.value }))}
                     placeholder="Milk, Nuts…"
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   />
-                  <p className="mt-1 text-[10px] text-muted-foreground">Comma separated</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Comma separated</p>
                 </div>
               </div>
 
               {/* Points */}
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+              <div className="flex flex-wrap gap-3">
+                <div className="min-w-[10rem] flex-1">
+                  <label
+                    htmlFor="menu-item-points"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
                     Points per item
                   </label>
                   <input
+                    id="menu-item-points"
                     type="number"
                     min="0"
                     value={form.points_per_item}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, points_per_item: Number(e.target.value) }))
                     }
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   />
                 </div>
-                <div className="flex-1">
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                <div className="min-w-[10rem] flex-1">
+                  <label
+                    htmlFor="menu-item-status"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
                     Status
                   </label>
                   <select
+                    id="menu-item-status"
                     value={form.status}
                     onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   >
                     <option value="active">Active</option>
                     <option value="draft">Draft</option>
                     <option value="archived">Archived</option>
                   </select>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
+                  <p className="mt-1 text-xs text-muted-foreground">
                     Draft hides from customers; archived hides everywhere.
                   </p>
                 </div>
@@ -837,13 +912,17 @@ export function MerchantMenuPage() {
               {/* Preparation Area (only shown when routing is enabled) */}
               {showPrepFields && (
                 <div className="space-y-2">
-                  <label className="mb-1.5 block text-[11px] uppercase tracking-widest text-muted-foreground">
+                  <label
+                    htmlFor="menu-item-prep-area"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
                     Preparation Area
                   </label>
                   <select
+                    id="menu-item-prep-area"
                     value={form.preparation_area}
                     onChange={(e) => setForm((f) => ({ ...f, preparation_area: e.target.value }))}
-                    className="h-11 w-full rounded-xl border border-border bg-white/50 px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                   >
                     <option value="">No specific area</option>
                     {prepAreas
@@ -856,13 +935,15 @@ export function MerchantMenuPage() {
                   </select>
                   <button
                     type="button"
+                    role="switch"
+                    aria-checked={form.requires_preparation}
                     onClick={() =>
                       setForm((f) => ({ ...f, requires_preparation: !f.requires_preparation }))
                     }
                     className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
                       form.requires_preparation
                         ? "border-ink bg-ink text-primary-foreground"
-                        : "border-border bg-white/50 text-muted-foreground"
+                        : "border-border bg-muted text-muted-foreground"
                     }`}
                   >
                     {form.requires_preparation ? (
@@ -876,7 +957,7 @@ export function MerchantMenuPage() {
               )}
 
               {/* Toggles */}
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 {(
                   [
                     ["loyalty_reward", "Earns points"],
@@ -892,11 +973,14 @@ export function MerchantMenuPage() {
                     <button
                       key={key}
                       type="button"
+                      role="switch"
+                      aria-checked={on}
+                      aria-label={label}
                       onClick={() => setForm((f) => ({ ...f, [key]: !f[key] }))}
                       className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium transition-colors ${
                         on
                           ? "border-ink bg-ink text-primary-foreground"
-                          : "border-border bg-white/50 text-muted-foreground"
+                          : "border-border bg-muted text-muted-foreground"
                       }`}
                     >
                       {on ? <Check className="h-3.5 w-3.5" /> : <X className="h-3.5 w-3.5" />}
@@ -909,16 +993,17 @@ export function MerchantMenuPage() {
 
             {/* Actions */}
             <div className="mt-6 flex gap-3">
-              <button
+              <Button
+                variant="outline"
                 onClick={closeForm}
-                className="h-11 flex-1 rounded-2xl border border-border text-sm text-muted-foreground hover:text-foreground"
+                className="h-11 flex-1 rounded-2xl text-muted-foreground"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
                 onClick={handleSave}
                 disabled={saving || imgUploading || !form.name.trim() || !form.price}
-                className="gradient-ember flex h-11 flex-1 items-center justify-center gap-2 rounded-2xl text-sm font-medium text-white disabled:opacity-50"
+                className="h-11 flex-1 rounded-2xl"
               >
                 {(saving || imgUploading) && <Loader2 className="h-4 w-4 animate-spin" />}
                 {imgUploading
@@ -928,7 +1013,7 @@ export function MerchantMenuPage() {
                     : editing
                       ? "Save changes"
                       : "Add item"}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -949,17 +1034,25 @@ export function MerchantMenuPage() {
           className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm sm:items-center"
           onClick={(e) => e.target === e.currentTarget && setShowLayout(false)}
         >
-          <div className="glass-strong w-full max-w-lg rounded-t-3xl p-6 sm:rounded-3xl">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="menu-layout-dialog-title"
+            className="glass-strong w-full max-w-lg rounded-t-3xl p-6 sm:rounded-3xl"
+          >
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <h2 className="font-display text-2xl text-foreground">Menu layout</h2>
+                <h2 id="menu-layout-dialog-title" className="font-display text-2xl text-foreground">
+                  Menu layout
+                </h2>
                 <p className="text-xs text-muted-foreground">
                   Reorder sections — customers see them in this order.
                 </p>
               </div>
               <button
                 onClick={() => setShowLayout(false)}
-                className="grid h-8 w-8 place-items-center rounded-full bg-mist text-muted-foreground hover:text-foreground"
+                aria-label="Close dialog"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-mist text-muted-foreground hover:text-foreground"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -977,66 +1070,72 @@ export function MerchantMenuPage() {
                 .map((c, i) => (
                   <div
                     key={c.id}
-                    className="flex items-center gap-2 rounded-2xl border border-border bg-white/40 px-3 py-2.5"
+                    className="flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-muted px-3 py-2.5"
                   >
                     <span className="text-lg">{c.emoji}</span>
                     <span className="text-sm font-medium text-foreground">{c.name}</span>
-                    <span className="rounded-full bg-mist px-2 py-0.5 text-[10px] text-muted-foreground">
+                    <span className="rounded-full bg-mist px-2 py-0.5 text-xs text-muted-foreground">
                       {c.item_count} items
                     </span>
                     <div className="ml-auto flex items-center gap-1">
                       <button
                         disabled={i === 0}
                         onClick={() => moveCat(i, -1)}
-                        className="grid h-7 w-7 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        aria-label={`Move ${c.name} up`}
+                        className="grid h-10 w-10 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground disabled:opacity-30"
                       >
                         ↑
                       </button>
                       <button
                         disabled={i === categories.length - 1}
                         onClick={() => moveCat(i, 1)}
-                        className="grid h-7 w-7 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        aria-label={`Move ${c.name} down`}
+                        className="grid h-10 w-10 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground disabled:opacity-30"
                       >
                         ↓
                       </button>
                       <button
                         onClick={() => setNewCatName(c.name)}
-                        className="grid h-7 w-7 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground"
+                        aria-label={`Rename ${c.name}`}
+                        className="grid h-10 w-10 place-items-center rounded-lg bg-mist text-muted-foreground hover:text-foreground"
                       >
-                        <Pencil className="h-3 w-3" />
+                        <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         disabled={c.item_count > 0}
                         onClick={() => deleteCat(c)}
-                        className="grid h-7 w-7 place-items-center rounded-lg bg-rose-50 text-rose-400 hover:text-rose-600 disabled:opacity-30"
+                        aria-label={`Delete ${c.name}`}
+                        className="grid h-10 w-10 place-items-center rounded-lg bg-destructive/10 text-destructive hover:bg-destructive/20 disabled:opacity-30"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </div>
                 ))}
             </div>
 
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <input
                 value={newCatName}
                 onChange={(e) => setNewCatName(e.target.value)}
                 placeholder="New section name (e.g. Pastries)"
-                className="h-11 flex-1 rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
+                aria-label="New section name"
+                className="h-11 min-w-[10rem] flex-1 rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
               />
               <input
                 value={newCatEmoji}
                 onChange={(e) => setNewCatEmoji(e.target.value)}
+                aria-label="Section emoji"
                 className="h-11 w-14 rounded-2xl bg-mist text-center text-lg outline-none focus:ring-2 focus:ring-ember/40"
                 maxLength={4}
               />
-              <button
+              <Button
                 onClick={createCat}
                 disabled={!newCatName.trim()}
-                className="gradient-ember inline-flex h-11 items-center gap-1.5 rounded-2xl px-4 text-sm font-medium text-white disabled:opacity-50"
+                className="h-11 rounded-2xl px-4"
               >
                 <Plus className="h-4 w-4" /> Add
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1064,6 +1163,8 @@ function ItemCard({
   toggling: boolean;
   catClass: string;
 }) {
+  const { merchantProfile } = useAuth();
+  const currencySymbol = merchantProfile?.currency_symbol || "Rs";
   return (
     <article
       className={`glass-strong cv-auto overflow-hidden rounded-3xl transition-opacity ${!item.is_available ? "opacity-60" : ""}`}
@@ -1093,7 +1194,7 @@ function ItemCard({
               </div>
               {item.category && (
                 <span
-                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${catClass}`}
+                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium uppercase tracking-wider ${catClass}`}
                 >
                   {item.category}
                 </span>
@@ -1106,7 +1207,7 @@ function ItemCard({
                 FREE
               </span>
             ) : (
-              `NPR ${Number(item.price).toLocaleString()}`
+              formatCurrency(item.price, currencySymbol)
             )}
           </p>
         </div>
@@ -1115,22 +1216,22 @@ function ItemCard({
             {item.description}
           </p>
         )}
-        <div className="mt-4 flex items-center gap-2 border-t border-border pt-3">
+        <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border pt-3">
           {item.discount_type && item.discount_type !== "none" && (
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-medium text-emerald-700">
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
               {item.discount_type === "percentage"
                 ? `-${Number(item.discount_value)}%`
-                : `-NPR ${Number(item.discount_value).toLocaleString()}`}
+                : `-${formatCurrency(item.discount_value, currencySymbol)}`}
               {item.discount_source === "special" ? " · Special" : ""}
             </span>
           )}
           <span
-            className={`rounded-full px-2.5 py-1 text-[10px] font-medium ${item.loyalty_reward ? "bg-emerald-100 text-emerald-700" : "bg-mist text-muted-foreground"}`}
+            className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.loyalty_reward ? "bg-emerald-100 text-emerald-700" : "bg-mist text-muted-foreground"}`}
           >
             {item.loyalty_reward ? `+${item.points_per_item} pts` : "No points"}
           </span>
           {(item.groups?.length ?? 0) > 0 && (
-            <span className="rounded-full bg-teal-100 px-2.5 py-1 text-[10px] font-medium text-teal-700">
+            <span className="rounded-full bg-teal-100 px-2.5 py-1 text-xs font-medium text-teal-700">
               {(item.groups ?? []).map((g) => g.options.length).reduce((a, b) => a + b, 0)} options
             </span>
           )}
@@ -1138,39 +1239,43 @@ function ItemCard({
           <button
             onClick={onOptions}
             title="Variants & modifiers"
-            className="grid h-8 w-8 place-items-center rounded-xl bg-teal-50 text-teal-700 transition-colors hover:bg-teal-100"
+            aria-label="Variants & modifiers"
+            className="grid h-10 w-10 place-items-center rounded-xl bg-teal-50 text-teal-700 transition-colors hover:bg-teal-100"
           >
-            <Layers className="h-3.5 w-3.5" />
+            <Layers className="h-4 w-4" />
           </button>
           <button
             onClick={onToggle}
             disabled={toggling}
             title={item.is_available ? "Mark unavailable" : "Mark available"}
-            className="grid h-8 w-8 place-items-center rounded-xl bg-mist text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+            aria-label={item.is_available ? "Mark unavailable" : "Mark available"}
+            className="grid h-10 w-10 place-items-center rounded-xl bg-mist text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           >
             {toggling ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : item.is_available ? (
-              <Eye className="h-3.5 w-3.5" />
+              <Eye className="h-4 w-4" />
             ) : (
-              <EyeOff className="h-3.5 w-3.5" />
+              <EyeOff className="h-4 w-4" />
             )}
           </button>
           <button
             onClick={onEdit}
-            className="grid h-8 w-8 place-items-center rounded-xl bg-mist text-muted-foreground transition-colors hover:text-foreground"
+            aria-label="Edit item"
+            className="grid h-10 w-10 place-items-center rounded-xl bg-mist text-muted-foreground transition-colors hover:text-foreground"
           >
-            <Pencil className="h-3.5 w-3.5" />
+            <Pencil className="h-4 w-4" />
           </button>
           <button
             onClick={onDelete}
             disabled={deleting}
-            className="grid h-8 w-8 place-items-center rounded-xl bg-rose-50 text-rose-400 transition-colors hover:bg-rose-100 hover:text-rose-600 disabled:opacity-50"
+            aria-label="Delete item"
+            className="grid h-10 w-10 place-items-center rounded-xl bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-50"
           >
             {deleting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="h-4 w-4" />
             )}
           </button>
         </div>

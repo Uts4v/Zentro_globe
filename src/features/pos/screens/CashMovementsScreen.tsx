@@ -19,9 +19,9 @@ import {
 type MovementType = "payin" | "payout" | "cashdrop";
 
 const TYPE_CONFIG: Record<MovementType, { label: string; icon: any; color: string; bg: string }> = {
-  payin: { label: "Pay-in", icon: ArrowDownToLine, color: "text-green-600", bg: "bg-green-50" },
-  payout: { label: "Pay-out", icon: ArrowUpRight, color: "text-red-600", bg: "bg-red-50" },
-  cashdrop: { label: "Cash Drop", icon: Banknote, color: "text-blue-600", bg: "bg-blue-50" },
+  payin: { label: "Pay-in", icon: ArrowDownToLine, color: "text-success", bg: "bg-success/10" },
+  payout: { label: "Pay-out", icon: ArrowUpRight, color: "text-destructive", bg: "bg-destructive/10" },
+  cashdrop: { label: "Cash Drop", icon: Banknote, color: "text-info", bg: "bg-info/10" },
 };
 
 export default function CashMovementsScreen() {
@@ -42,6 +42,20 @@ export default function CashMovementsScreen() {
   useEffect(() => {
     loadMovements();
   }, [activeShift?.id]);
+
+  useEffect(() => {
+    if (!showForm) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setShowForm(false);
+        setAmount("");
+        setReason("");
+        setError(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showForm]);
 
   async function loadMovements() {
     if (!activeShift) {
@@ -135,22 +149,22 @@ export default function CashMovementsScreen() {
 
       {/* Summary */}
       {activeShift && (
-        <div className="mb-6 grid grid-cols-3 gap-3">
+        <div className="mb-6 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <div className="rounded-2xl border border-border bg-card p-4">
-            <p className="text-[10px] font-bold uppercase text-muted-foreground">Pay-ins</p>
-            <p className="mt-1 text-lg font-bold text-green-600">
+            <p className="text-xs font-bold uppercase text-muted-foreground">Pay-ins</p>
+            <p className="numeric mt-1 text-lg font-bold text-success">
               {formatCurrency(totalPayins, currencySymbol)}
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4">
-            <p className="text-[10px] font-bold uppercase text-muted-foreground">Pay-outs</p>
-            <p className="mt-1 text-lg font-bold text-red-600">
+            <p className="text-xs font-bold uppercase text-muted-foreground">Pay-outs</p>
+            <p className="numeric mt-1 text-lg font-bold text-destructive">
               {formatCurrency(totalPayouts, currencySymbol)}
             </p>
           </div>
           <div className="rounded-2xl border border-border bg-card p-4">
-            <p className="text-[10px] font-bold uppercase text-muted-foreground">Net</p>
-            <p className={`mt-1 text-lg font-bold ${totalPayins - totalPayouts >= 0 ? "text-green-600" : "text-red-600"}`}>
+            <p className="text-xs font-bold uppercase text-muted-foreground">Net</p>
+            <p className={`numeric mt-1 text-lg font-bold ${totalPayins - totalPayouts >= 0 ? "text-success" : "text-destructive"}`}>
               {formatCurrency(totalPayins - totalPayouts, currencySymbol)}
             </p>
           </div>
@@ -191,11 +205,11 @@ export default function CashMovementsScreen() {
                   {m.reason && (
                     <p className="text-xs text-muted-foreground truncate">{m.reason}</p>
                   )}
-                  <p className="text-[10px] text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     {new Date(m.created_at).toLocaleTimeString()} · {m.worker_name || "Unknown"}
                   </p>
                 </div>
-                <p className={`text-lg font-bold ${isPositive ? "text-green-600" : "text-red-600"}`}>
+                <p className={`numeric text-lg font-bold ${isPositive ? "text-success" : "text-destructive"}`}>
                   {isPositive ? "+" : "-"} {formatCurrency(m.amount, currencySymbol)}
                 </p>
               </div>
@@ -207,14 +221,21 @@ export default function CashMovementsScreen() {
       {/* New Entry Modal */}
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cash-entry-title"
+            className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl"
+          >
             {success ? (
               <div className="flex flex-col items-center py-4">
                 <p className="text-lg font-bold text-foreground">Recorded</p>
               </div>
             ) : (
               <>
-                <h2 className="mb-4 text-lg font-bold text-foreground">New Cash Entry</h2>
+                <h2 id="cash-entry-title" className="mb-4 text-lg font-bold text-foreground">
+                  New Cash Entry
+                </h2>
 
                 {/* Type selector */}
                 <div className="mb-4 flex gap-2">
@@ -273,7 +294,7 @@ export default function CashMovementsScreen() {
                 </div>
 
                 {error && (
-                  <div className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-600">
+                  <div className="mb-4 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
                     {error}
                   </div>
                 )}

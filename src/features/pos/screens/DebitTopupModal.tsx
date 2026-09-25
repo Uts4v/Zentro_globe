@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { safeUuid } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import { usePosStore } from "../store";
@@ -29,6 +29,15 @@ export default function DebitTopupModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -65,16 +74,23 @@ export default function DebitTopupModal({
   if (success) {
     const newBalance = Number(account.balance) + numAmount;
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="mx-4 w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="debit-topup-success-title"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      >
+        <div className="mx-4 w-full max-w-sm rounded-3xl bg-card p-8 text-center shadow-2xl">
           <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-green-100">
             <Check className="h-8 w-8 text-green-600" />
           </div>
-          <h3 className="text-lg font-bold text-foreground">Top-up Complete</h3>
+          <h3 id="debit-topup-success-title" className="text-lg font-bold text-foreground">
+            Top-up Complete
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             {formatCurrency(numAmount, currencySymbol)} added to {account.contact_name || "account"}
           </p>
-          <p className="mt-3 text-2xl font-bold text-ink">
+          <p className="numeric mt-3 text-2xl font-bold text-ink">
             New Balance: {formatCurrency(newBalance, currencySymbol)}
           </p>
         </div>
@@ -83,21 +99,27 @@ export default function DebitTopupModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="debit-topup-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <div className="mx-4 w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-foreground">
+            <h3 id="debit-topup-title" className="text-base font-bold text-foreground">
               Top-up Wallet
             </h3>
-            <p className="text-xs text-muted-foreground">
+            <p className="numeric text-xs text-muted-foreground">
               {account.contact_name || "Walk-in"} — Balance: {formatCurrency(account.balance, currencySymbol)}
             </p>
           </div>
           <button
+            aria-label="Close"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
@@ -126,7 +148,7 @@ export default function DebitTopupModal({
             <button
               key={amt}
               onClick={() => setAmount(String(amt))}
-              className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${
+              className={`flex-1 min-h-[44px] rounded-xl py-2.5 text-xs font-medium transition-colors ${
                 numAmount === amt
                   ? "bg-ink text-white"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"

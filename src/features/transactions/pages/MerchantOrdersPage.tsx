@@ -38,12 +38,12 @@ const ADVANCE_LABEL: Record<OrderStatus, string> = {
 };
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
-  pending: "bg-amber-100 text-amber-700",
-  confirmed: "bg-sky-100 text-sky-700",
-  preparing: "bg-violet-100 text-violet-700",
-  ready: "bg-emerald-100 text-emerald-700",
+  pending: "bg-warning/15 text-warning",
+  confirmed: "bg-info/15 text-info",
+  preparing: "bg-periwinkle-soft text-ink",
+  ready: "bg-success/15 text-success",
   completed: "bg-mist text-muted-foreground",
-  cancelled: "bg-rose-100 text-rose-500",
+  cancelled: "bg-destructive/10 text-destructive",
 };
 
 function isToday(dateStr: string) {
@@ -177,15 +177,17 @@ export function MerchantOrdersPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Live queue</p>
-          <h1 className="font-display mt-1 text-5xl text-foreground">Today's Orders</h1>
+          <h1 className="font-display mt-1 text-3xl text-foreground sm:text-4xl">
+            Today's Orders
+          </h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-full bg-mist px-3 py-1.5">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-[10px] text-muted-foreground">Auto-refresh</span>
+            <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+            <span className="text-xs text-muted-foreground">Auto-refresh</span>
           </div>
           <button
             onClick={() => load(true)}
@@ -199,7 +201,7 @@ export function MerchantOrdersPage() {
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -220,7 +222,7 @@ export function MerchantOrdersPage() {
             onClick={() => setFulfillmentFilter(f.key)}
             className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors ${
               fulfillmentFilter === f.key
-                ? "bg-foreground text-background"
+                ? "bg-primary text-primary-foreground"
                 : "bg-mist text-muted-foreground hover:bg-mist/80"
             }`}
           >
@@ -305,7 +307,7 @@ function Column({
         <h2 className="font-display text-2xl text-foreground">{title}</h2>
         <span
           className={`grid h-6 min-w-6 place-items-center rounded-full px-2 text-[11px] font-medium ${
-            accent ? "gradient-ember text-white" : "bg-mist text-foreground"
+            accent ? "gradient-ember text-primary-foreground" : "bg-mist text-foreground"
           }`}
         >
           {count}
@@ -352,10 +354,14 @@ function CancelOrderModal({
         <p className="text-sm text-muted-foreground">Customer will be notified immediately.</p>
 
         <div>
-          <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          <label
+            htmlFor="cancel-order-reason"
+            className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
+          >
             Reason
           </label>
           <select
+            id="cancel-order-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             className="mt-1.5 h-11 w-full rounded-2xl bg-mist px-4 text-sm text-foreground outline-none"
@@ -377,7 +383,7 @@ function CancelOrderModal({
           <button
             onClick={() => onConfirm(reason)}
             disabled={loading}
-            className="h-11 flex-1 rounded-2xl bg-rose-500 text-sm font-medium text-white disabled:opacity-50"
+            className="h-11 flex-1 rounded-2xl bg-destructive text-sm font-medium text-destructive-foreground disabled:opacity-50"
           >
             {loading ? "Cancelling…" : "Cancel order"}
           </button>
@@ -422,73 +428,73 @@ function OrderCard({
   const tableName = order.table_name_snapshot;
 
   const fulfillmentBadge = isDineIn
-    ? { label: "Dine-in", icon: "🍽️", color: "bg-blue-100 text-blue-700" }
+    ? { label: "Dine-in", icon: "🍽️", color: "bg-info/15 text-info" }
     : isDelivery
-      ? { label: "Delivery", icon: "🚗", color: "bg-orange-100 text-orange-700" }
-      : { label: "Pickup", icon: "🛍️", color: "bg-green-100 text-green-700" };
+      ? { label: "Delivery", icon: "🚗", color: "bg-warning/15 text-warning" }
+      : { label: "Pickup", icon: "🛍️", color: "bg-success/15 text-success" };
 
   return (
     <article
       className={`glass-strong cv-auto rounded-3xl p-5 transition-all ${
         isNew ? "ring-2 ring-ember shadow-ember animate-pulse" : ""
-      } ${isPunchCard ? "ring-2 ring-violet-300" : ""}`}
+      } ${isPunchCard ? "ring-2 ring-info/40" : ""}`}
     >
       <div className="flex items-start justify-between">
         <div>
           {isNew && (
-            <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-[10px] font-medium text-ember">
+            <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-xs font-medium text-ember">
               <Bell className="h-2.5 w-2.5" /> New order!
             </div>
           )}
           {isPunchCard && (
-            <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-medium text-violet-700">
+            <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-periwinkle-soft px-2 py-0.5 text-xs font-medium text-ink">
               🎟️ Punch Card Reward
             </div>
           )}
           {isReward && (
-            <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+            <div className="mb-1 inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning">
               🎁 Reward Redemption
             </div>
           )}
 
           {/* Table number - prominently displayed for dine-in */}
           {isDineIn && tableName && (
-            <div className="mb-2 inline-flex items-center gap-2 rounded-xl bg-blue-50 border border-blue-100 px-3 py-1.5">
-              <Utensils className="h-4 w-4 text-blue-600" />
-              <span className="font-display text-sm font-bold text-blue-800">{tableName}</span>
-              {tableNum && <span className="text-xs text-blue-500">#{tableNum}</span>}
+            <div className="mb-2 inline-flex items-center gap-2 rounded-xl bg-info/10 border border-info/20 px-3 py-1.5">
+              <Utensils className="h-4 w-4 text-info" />
+              <span className="font-display text-sm font-bold text-info">{tableName}</span>
+              {tableNum && <span className="text-xs text-info">#{tableNum}</span>}
             </div>
           )}
 
           <div className="flex items-center gap-2">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">
               #{String(order.id).slice(0, 8)}
             </p>
             {(order as any).kot_number && (
-              <span className="inline-flex items-center rounded-full bg-ember-soft px-2 py-0.5 text-[10px] font-bold text-ember">
+              <span className="inline-flex items-center rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
                 KOT #{String((order as any).kot_number).padStart(3, "0")}
               </span>
             )}
             <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${fulfillmentBadge.color}`}
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${fulfillmentBadge.color}`}
             >
               {fulfillmentBadge.icon} {fulfillmentBadge.label}
             </span>
           </div>
           <h3 className="font-display mt-1 text-xl text-foreground">{customerName}</h3>
           {isGuest && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
               👤 Guest Order
             </div>
           )}
           {!isGuest && (order as any).customer_id && (
-            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-600">
+            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
               ⭐ Member
             </div>
           )}
         </div>
         <span
-          className={`rounded-full px-3 py-1 text-[10px] uppercase tracking-widest font-medium ${STATUS_COLOR[order.status]}`}
+          className={`rounded-full px-3 py-1 text-xs uppercase tracking-widest font-medium ${STATUS_COLOR[order.status]}`}
         >
           {order.status}
         </span>
@@ -500,7 +506,7 @@ function OrderCard({
             <span className="text-foreground">
               {item.quantity}× {item.name}
             </span>
-            <span className="text-muted-foreground">
+            <span className="numeric text-muted-foreground">
               {Number(item.subtotal) > 0
                 ? `${sym} ${Number(item.subtotal).toLocaleString()}`
                 : "FREE"}
@@ -510,7 +516,7 @@ function OrderCard({
       </ul>
 
       {order.notes && (
-        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700 border border-amber-100">
+        <p className="mt-3 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning border border-warning/20">
           📝 {order.notes}
         </p>
       )}
@@ -520,7 +526,7 @@ function OrderCard({
           <Clock className="h-3 w-3" />
           {mins < 1 ? "Just now" : `${mins}m ago`}
         </span>
-        <span className="font-display text-lg text-foreground">
+        <span className="numeric font-display text-lg text-foreground">
           {Number(order.total_amount) > 0
             ? `${sym} ${Number(order.total_amount).toLocaleString()}`
             : "FREE"}
@@ -555,7 +561,8 @@ function OrderCard({
           <button
             onClick={onCancel}
             disabled={cancelling}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 text-sm font-medium text-rose-600 hover:bg-rose-100 disabled:opacity-50"
+            aria-label="Cancel order"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 text-sm font-medium text-destructive hover:bg-destructive/20 disabled:opacity-50"
           >
             {cancelling ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
           </button>

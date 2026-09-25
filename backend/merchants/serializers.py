@@ -324,7 +324,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "credit_accounts_enabled", "debit_accounts_enabled",
             "discounts_enabled", "shift_management_enabled", "receipt_printing_enabled",
             "max_worker_discount_percent", "manager_approval_threshold",
-            "offline_discounts_allowed", "offline_credit_allowed",
+            "offline_discounts_allowed", "offline_credit_allowed", "payment_qr_url",
             "tax_enabled", "tax_rate_percent", "tax_components",
             "currency_code", "currency_symbol",
             "ai_enabled", "ai_insights_enabled", "ai_insights_time", "timezone",

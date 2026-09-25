@@ -56,6 +56,10 @@ export async function uploadMerchantBanner(file: File, merchantId: string): Prom
   return uploadImage(file, "banner", "banner-images", `${merchantId}/banner`);
 }
 
+export async function uploadMerchantPaymentQr(file: File, merchantId: string): Promise<UploadResult> {
+  return uploadImage(file, "qr", "merchant-images", `${merchantId}/payment_qr`);
+}
+
 export async function uploadCustomerProfile(file: File, customerId: string): Promise<UploadResult> {
   return uploadImage(file, "profile", "customer-images", `${customerId}/profile`);
 }

@@ -59,7 +59,7 @@ function NavItem({
       <Icon className="h-4 w-4" />
       <span>{label}</span>
       {badge !== undefined && badge > 0 && (
-        <span className="ml-auto rounded-full bg-ember px-2 py-0.5 text-[10px] font-bold text-white">
+        <span className="ml-auto rounded-full bg-ember px-2 py-0.5 text-xs font-bold text-white">
           {badge}
         </span>
       )}
@@ -70,7 +70,7 @@ function NavItem({
 function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="px-4 pb-1 pt-4 text-[10px] font-semibold uppercase tracking-[0.15em] text-muted-foreground/70">
+      <p className="px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground/70">
         {title}
       </p>
       {children}
@@ -255,7 +255,7 @@ export default function PosLayout() {
             >
               <ZentroLogo className="h-6 w-auto" title="" />
             </Link>
-            <span className="rounded-md bg-ember-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-ember">
+            <span className="rounded-md bg-ember-soft px-1.5 py-0.5 text-xs font-bold uppercase text-ember">
               POS
             </span>
           </div>
@@ -272,14 +272,14 @@ export default function PosLayout() {
               <p className="truncate text-sm font-semibold text-foreground">
                 {currentWorker?.display_name ?? "Staff"}
               </p>
-              <p className="truncate text-[11px] text-muted-foreground">
+              <p className="truncate text-xs text-muted-foreground">
                 {merchant?.business_name}
               </p>
             </div>
           </div>
           {/* Shift status */}
           {activeShift ? (
-            <div className="mt-3 flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2 text-[11px] font-medium text-green-700">
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2 text-xs font-medium text-green-700">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
@@ -287,7 +287,7 @@ export default function PosLayout() {
               Shift active — {activeShift.total_orders} orders
             </div>
           ) : (
-            <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-medium text-amber-700">
+            <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
               <span className="h-2 w-2 rounded-full bg-amber-500" />
               No active shift
             </div>
@@ -326,7 +326,7 @@ export default function PosLayout() {
         {/* Footer */}
         <div className="space-y-2 border-t border-border px-3 py-4">
           <div className="px-1">
-            <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <p className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Theme
             </p>
             <ThemeToggle />
@@ -394,7 +394,7 @@ export default function PosLayout() {
           >
             <ZentroLogo className="h-6 w-auto" title="" />
           </Link>
-          <span className="rounded-md bg-ink/10 px-1.5 py-0.5 text-[10px] font-bold uppercase text-ink">
+          <span className="rounded-md bg-ink/10 px-1.5 py-0.5 text-xs font-bold uppercase text-ink">
             POS
           </span>
           <div className="ml-auto flex items-center gap-2">
@@ -408,7 +408,7 @@ export default function PosLayout() {
             {activeShift && (
               <button
                 onClick={() => setShowShiftClose(true)}
-                className="hidden rounded-lg bg-amber-100 px-2 py-1 text-[10px] font-bold text-amber-700 sm:block"
+                className="hidden rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700 sm:block"
               >
                 CLOSE SHIFT
               </button>
@@ -416,7 +416,7 @@ export default function PosLayout() {
             {!activeShift && (
               <button
                 onClick={() => navigate({ to: "/pos" })}
-                className="hidden rounded-lg bg-green-100 px-2 py-1 text-[10px] font-bold text-green-700 sm:block"
+                className="hidden rounded-lg bg-green-100 px-2 py-1 text-xs font-bold text-green-700 sm:block"
               >
                 OPEN SHIFT
               </button>
@@ -440,7 +440,7 @@ export default function PosLayout() {
               <div className="flex items-center justify-between border-b border-border px-4 py-4">
                 <div className="flex items-center gap-2">
                   <ZentroLogo className="h-6 w-auto" title="" />
-                  <span className="rounded-md bg-ember-soft px-1.5 py-0.5 text-[10px] font-bold uppercase text-ember">
+                  <span className="rounded-md bg-ember-soft px-1.5 py-0.5 text-xs font-bold uppercase text-ember">
                     POS
                   </span>
                 </div>

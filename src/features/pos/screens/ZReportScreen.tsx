@@ -16,16 +16,7 @@ import {
   ArrowUp,
   Users,
 } from "lucide-react";
-
-const METHOD_LABELS: Record<string, string> = {
-  cash: "Cash",
-  card: "Card",
-  bank_qr: "Bank QR",
-  mobile_wallet: "Mobile Wallet",
-  credit: "Credit",
-  split: "Split",
-  other: "Other",
-};
+import { paymentMethodLabel } from "@/lib/payment-methods";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
@@ -130,10 +121,11 @@ export default function ZReportScreen() {
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
-        <AlertCircle className="h-10 w-10 text-red-500" />
+        <AlertCircle className="h-10 w-10 text-destructive" />
         <p className="text-sm text-muted-foreground">{error}</p>
         <button
           onClick={() => loadReport()}
+          aria-label="Refresh"
           className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink/90"
         >
           <RefreshCw className="h-4 w-4" />
@@ -166,12 +158,14 @@ export default function ZReportScreen() {
         <div className="flex items-center gap-2">
           <input
             type="date"
+            aria-label="Report date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
             className="rounded-xl border border-border bg-card px-3 py-2 text-sm"
           />
           <button
             onClick={() => loadReport()}
+            aria-label="Refresh"
             className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
           >
             <RefreshCw className="h-4 w-4" />
@@ -202,25 +196,25 @@ export default function ZReportScreen() {
             label="Total Orders"
             value={String(data.total_orders)}
             icon={ShoppingCart}
-            color="bg-blue-100 text-blue-600"
+            color="bg-info/10 text-info"
           />
           <StatCard
             label="Revenue"
             value={formatCurrency(revenue, currencySymbol)}
             icon={DollarSign}
-            color="bg-green-100 text-green-600"
+            color="bg-success/10 text-success"
           />
           <StatCard
             label="Avg Order"
             value={formatCurrency(avgOrder, currencySymbol)}
             icon={TrendingUp}
-            color="bg-purple-100 text-purple-600"
+            color="bg-primary/10 text-primary"
           />
           <StatCard
             label="Discounts"
             value={formatCurrency(data.total_discounts_value, currencySymbol)}
             icon={ArrowDown}
-            color="bg-amber-100 text-amber-600"
+            color="bg-warning/10 text-warning"
           />
         </div>
 
@@ -235,7 +229,7 @@ export default function ZReportScreen() {
             <Row label="Actual Closing" value={formatCurrency(data.cash_summary.total_actual_cash, currencySymbol)} bold />
             {hasCashDifference && (
               <div className={`mt-2 rounded-xl px-3 py-2 text-sm font-bold ${
-                cashDiff > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                cashDiff > 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
               }`}>
                 {cashDiff > 0 ? "+" : ""} {formatCurrency(cashDiff, currencySymbol)} {cashDiff > 0 ? "Over" : "Short"}
               </div>
@@ -252,7 +246,7 @@ export default function ZReportScreen() {
                 return (
                   <div key={pm.method} className="mb-3">
                     <div className="mb-1 flex justify-between text-sm">
-                      <span className="text-foreground">{METHOD_LABELS[pm.method] || pm.method}</span>
+                      <span className="text-foreground">{paymentMethodLabel(pm.method)}</span>
                       <span className="font-medium">{formatCurrency(pm.amount, currencySymbol)}</span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
@@ -261,7 +255,7 @@ export default function ZReportScreen() {
                         style={{ width: `${pct}%` }}
                       />
                     </div>
-                    <p className="mt-0.5 text-[10px] text-muted-foreground">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {pm.count} payment{pm.count !== 1 ? "s" : ""} &middot; {pct.toFixed(1)}%
                     </p>
                   </div>
@@ -298,12 +292,12 @@ export default function ZReportScreen() {
                 {data.top_selling_items.slice(0, 8).map((item, i) => (
                   <div key={item.name} className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2">
                     <div className="flex items-center gap-3">
-                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-[10px] font-bold text-white">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">
                         {i + 1}
                       </span>
                       <div>
                         <p className="text-sm font-medium">{item.name}</p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {item.quantity_sold} sold
                         </p>
                       </div>
@@ -386,7 +380,7 @@ export default function ZReportScreen() {
                       <tr key={staff.worker_id} className="border-b border-border/50 last:border-0">
                         <td className="py-2.5 pr-4">
                           <div className="flex items-center gap-2">
-                            <div className="grid h-7 w-7 place-items-center rounded-full bg-ink/10 text-[10px] font-bold text-ink">
+                            <div className="grid h-7 w-7 place-items-center rounded-full bg-ink/10 text-xs font-bold text-ink">
                               {staff.worker_name?.charAt(0) || "?"}
                             </div>
                             <span className="font-medium text-foreground">{staff.worker_name}</span>
@@ -420,8 +414,8 @@ export default function ZReportScreen() {
                       <span className="text-xs font-bold text-foreground">
                         {s.opened_by} → {s.closed_by || "(open)"}
                       </span>
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        s.status === "closed" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                        s.status === "closed" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
                       }`}>
                         {s.status}
                       </span>
@@ -453,7 +447,7 @@ export default function ZReportScreen() {
                       </div>
                       {s.cash_difference !== null && Number(s.cash_difference) !== 0 && (
                         <div className={`col-span-2 rounded-lg px-2 py-1 text-xs font-bold ${
-                          Number(s.cash_difference) > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                          Number(s.cash_difference) > 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
                         }`}>
                           Difference: {Number(s.cash_difference) > 0 ? "+" : ""} {formatCurrency(s.cash_difference, currencySymbol)}
                         </div>
@@ -467,7 +461,7 @@ export default function ZReportScreen() {
         )}
 
         {/* Footer */}
-        <div className="mt-6 text-center text-[10px] text-muted-foreground">
+        <div className="mt-6 text-center text-xs text-muted-foreground">
           Generated {new Date(data.generated_at).toLocaleString()} &middot; {data.merchant.name}
         </div>
       </div>
@@ -499,8 +493,8 @@ function Row({
 }) {
   return (
     <div className={`flex justify-between py-1 text-sm ${bold ? "font-bold" : ""}`}>
-      <span className={accent ? "text-green-600" : "text-foreground"}>{label}</span>
-      <span className={accent ? "font-medium text-green-600" : "text-foreground"}>{value}</span>
+      <span className={accent ? "text-success" : "text-foreground"}>{label}</span>
+      <span className={`numeric ${accent ? "font-medium text-success" : "text-foreground"}`}>{value}</span>
     </div>
   );
 }
@@ -521,8 +515,8 @@ function StatCard({
       <div className={`mb-2 grid h-8 w-8 place-items-center rounded-lg ${color}`}>
         <Icon className="h-4 w-4" />
       </div>
-      <p className="text-lg font-bold text-foreground">{value}</p>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="numeric text-lg font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }

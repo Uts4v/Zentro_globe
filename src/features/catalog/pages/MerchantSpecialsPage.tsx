@@ -25,6 +25,7 @@ import { uploadImage } from "@/lib/image-upload";
 import { optimizeImage } from "@/lib/image-optimize";
 import { useAuth } from "@/lib/auth";
 import { formatCurrency } from "@/lib/currency";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 export function MerchantSpecialsPage() {
@@ -80,21 +81,18 @@ export function MerchantSpecialsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-end justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Promotions</p>
-          <h1 className="font-display mt-1 text-5xl text-foreground">Today's Special</h1>
+          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Promotions</p>
+          <h1 className="font-display mt-1 text-3xl sm:text-4xl text-foreground">Today's Special</h1>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
             A popup banner shown to customers when they first open your store page. Add multiple
             specials — customers can swipe through them all.
           </p>
         </div>
-        <button
-          onClick={() => setModal("new")}
-          className="inline-flex h-10 items-center gap-2 rounded-full bg-ink px-5 text-sm font-medium text-primary-foreground"
-        >
+        <Button onClick={() => setModal("new")} className="h-10 rounded-full px-5">
           <Plus className="h-4 w-4" /> New special
-        </button>
+        </Button>
       </div>
 
       {specials.length === 0 ? (
@@ -127,12 +125,12 @@ export function MerchantSpecialsPage() {
                       </p>
                     )}
                     {(s.linked_menu_item_name || s.linked_reward_name) && (
-                      <p className="mt-2 text-[11px] text-ember">
+                      <p className="mt-2 text-xs text-ember">
                         Linked to: {s.linked_menu_item_name ?? s.linked_reward_name}
                       </p>
                     )}
                     {s.discount_type !== "none" && s.discount_value != null && (
-                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                      <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                         <Tag className="h-3 w-3" />
                         {s.discount_type === "percentage"
                           ? `${s.discount_value}% off`
@@ -141,11 +139,11 @@ export function MerchantSpecialsPage() {
                     )}
                   </div>
                   <div className="flex shrink-0 gap-1">
-                    <IconBtn onClick={() => setModal(s)}>
-                      <Pencil className="h-3.5 w-3.5" />
+                    <IconBtn onClick={() => setModal(s)} label={`Edit ${s.title}`}>
+                      <Pencil className="h-4 w-4" />
                     </IconBtn>
-                    <IconBtn onClick={() => handleDelete(s.id)} danger>
-                      <Trash2 className="h-3.5 w-3.5" />
+                    <IconBtn onClick={() => handleDelete(s.id)} danger label={`Delete ${s.title}`}>
+                      <Trash2 className="h-4 w-4" />
                     </IconBtn>
                   </div>
                 </div>
@@ -155,7 +153,11 @@ export function MerchantSpecialsPage() {
                   >
                     {s.is_active ? "Active — visible to customers" : "Inactive"}
                   </span>
-                  <Toggle active={s.is_active} onToggle={() => handleToggle(s)} />
+                  <Toggle
+                    active={s.is_active}
+                    onToggle={() => handleToggle(s)}
+                    label={`${s.title} active`}
+                  />
                 </div>
               </div>
             </div>
@@ -275,15 +277,19 @@ function SpecialModal({
     >
       <div
         className="w-full max-w-lg space-y-4 rounded-t-3xl bg-background p-6 shadow-2xl sm:rounded-3xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="special-dialog-title"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between">
-          <h3 className="font-display text-xl text-foreground">
+          <h3 id="special-dialog-title" className="font-display text-xl text-foreground">
             {initial ? "Edit special" : "New special"}
           </h3>
           <button
             onClick={onClose}
-            className="flex h-8 w-8 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-mist"
+            aria-label="Close dialog"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-mist"
           >
             <X className="h-4 w-4" />
           </button>
@@ -292,7 +298,7 @@ function SpecialModal({
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
           {/* Image upload */}
           <div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
               Banner image
             </p>
             <input
@@ -328,6 +334,7 @@ function SpecialModal({
               {imageUrl && !imgBusy && (
                 <button
                   type="button"
+                  aria-label="Remove banner image"
                   onClick={(e) => {
                     e.stopPropagation();
                     setImageUrl("");
@@ -343,7 +350,7 @@ function SpecialModal({
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
-                className="mt-1 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
               >
                 <Upload className="h-3 w-3" /> Change image
               </button>
@@ -352,10 +359,14 @@ function SpecialModal({
 
           {/* Title */}
           <div>
-            <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <label
+              htmlFor="special-title"
+              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+            >
               Title
             </label>
             <input
+              id="special-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Buy one get one free today!"
@@ -365,10 +376,14 @@ function SpecialModal({
 
           {/* Description */}
           <div>
-            <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <label
+              htmlFor="special-description"
+              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+            >
               Description (optional)
             </label>
             <textarea
+              id="special-description"
               value={description}
               onChange={(e) => setDesc(e.target.value)}
               placeholder="Add more details about the offer…"
@@ -379,10 +394,14 @@ function SpecialModal({
 
           {/* Link to menu item */}
           <div>
-            <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <label
+              htmlFor="special-linked-item"
+              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+            >
               Link to menu item (optional)
             </label>
             <select
+              id="special-linked-item"
               value={linkedItem}
               onChange={(e) => {
                 setLinkedItem(e.target.value);
@@ -401,10 +420,14 @@ function SpecialModal({
 
           {/* Link to reward */}
           <div>
-            <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <label
+              htmlFor="special-linked-reward"
+              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+            >
               Link to reward (optional)
             </label>
             <select
+              id="special-linked-reward"
               value={linkedReward}
               onChange={(e) => {
                 setLinkedReward(e.target.value);
@@ -423,10 +446,14 @@ function SpecialModal({
 
           {/* CTA label */}
           <div>
-            <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            <label
+              htmlFor="special-cta-label"
+              className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+            >
               Button label (optional)
             </label>
             <input
+              id="special-cta-label"
               value={ctaLabel}
               onChange={(e) => setCtaLabel(e.target.value)}
               placeholder="e.g. Order now · Get today's deal"
@@ -438,14 +465,17 @@ function SpecialModal({
           <div className="rounded-2xl border border-dashed border-border p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Clock3 className="h-3.5 w-3.5 text-muted-foreground" />
-              <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              <label className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
                 Schedule (optional window)
               </label>
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <div>
-                <label className="text-[10px] text-muted-foreground">Starts</label>
+                <label htmlFor="special-starts" className="text-xs text-muted-foreground">
+                  Starts
+                </label>
                 <input
+                  id="special-starts"
                   type="datetime-local"
                   value={startsAt}
                   onChange={(e) => setStartsAt(e.target.value)}
@@ -453,8 +483,11 @@ function SpecialModal({
                 />
               </div>
               <div>
-                <label className="text-[10px] text-muted-foreground">Ends</label>
+                <label htmlFor="special-ends" className="text-xs text-muted-foreground">
+                  Ends
+                </label>
                 <input
+                  id="special-ends"
                   type="datetime-local"
                   value={endsAt}
                   onChange={(e) => setEndsAt(e.target.value)}
@@ -462,7 +495,7 @@ function SpecialModal({
                 />
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Leave blank for an always-on special. Outside the window the banner is hidden.
             </p>
           </div>
@@ -471,25 +504,29 @@ function SpecialModal({
           <div className="rounded-2xl border border-dashed border-border p-4 space-y-3">
             <div className="flex items-center gap-2">
               <Percent className="h-3.5 w-3.5 text-muted-foreground" />
-              <label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              <label
+                htmlFor="special-discount-type"
+                className="text-xs uppercase tracking-[0.18em] text-muted-foreground"
+              >
                 Discount (optional)
               </label>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap items-end gap-2">
               <select
+                id="special-discount-type"
                 value={discountType}
                 onChange={(e) => {
                   setDiscountType(e.target.value as "none" | "percentage" | "fixed");
                   if (e.target.value === "none") setDiscountValue("");
                 }}
-                className="h-11 w-36 rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
+                className="h-11 min-w-[9rem] flex-1 rounded-2xl bg-mist px-4 text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40"
               >
                 <option value="none">No discount</option>
                 <option value="percentage">Percentage %</option>
                 <option value="fixed">Fixed amount</option>
               </select>
               {discountType !== "none" && (
-                <div className="relative flex-1">
+                <div className="relative min-w-[9rem] flex-1">
                   {discountType === "fixed" && (
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
                       {currencySymbol}
@@ -503,6 +540,7 @@ function SpecialModal({
                     value={discountValue}
                     onChange={(e) => setDiscountValue(e.target.value)}
                     placeholder={discountType === "percentage" ? "0-100" : "Amount"}
+                    aria-label="Discount value"
                     className={`h-11 w-full rounded-2xl bg-mist text-sm text-foreground outline-none focus:ring-2 focus:ring-ember/40 ${
                       discountType === "fixed" ? "pl-8 pr-4" : "px-4"
                     }`}
@@ -519,29 +557,41 @@ function SpecialModal({
         </div>
 
         <div className="flex gap-2 pt-2">
-          <button
+          <Button
+            variant="outline"
             onClick={onClose}
-            className="h-11 flex-1 rounded-2xl border border-border text-sm text-muted-foreground hover:bg-mist"
+            className="h-11 flex-1 rounded-2xl text-muted-foreground"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={handleSubmit}
             disabled={saving || !title.trim() || imgBusy}
-            className="h-11 flex-1 rounded-2xl bg-ink text-sm font-medium text-primary-foreground disabled:opacity-50"
+            className="h-11 flex-1 rounded-2xl"
           >
             {saving ? "Saving…" : initial ? "Save changes" : "Create"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>
   );
 }
 
-function Toggle({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+function Toggle({
+  active,
+  onToggle,
+  label = "Active",
+}: {
+  active: boolean;
+  onToggle: () => void;
+  label?: string;
+}) {
   return (
     <button
       onClick={onToggle}
+      role="switch"
+      aria-checked={active}
+      aria-label={label}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
         active ? "bg-ink" : "bg-border"
       }`}
@@ -558,17 +608,20 @@ function Toggle({ active, onToggle }: { active: boolean; onToggle: () => void })
 function IconBtn({
   onClick,
   danger,
+  label,
   children,
 }: {
   onClick: () => void;
   danger?: boolean;
+  label: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex h-7 w-7 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors ${
-        danger ? "hover:bg-rose-50 hover:text-rose-500" : "hover:bg-mist"
+      aria-label={label}
+      className={`flex h-10 w-10 items-center justify-center rounded-full border border-border text-muted-foreground transition-colors ${
+        danger ? "hover:bg-destructive/10 hover:text-destructive" : "hover:bg-mist"
       }`}
     >
       {children}

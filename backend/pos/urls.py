@@ -88,6 +88,10 @@ urlpatterns = [
     # Menu snapshot for offline bootstrap
     path("menu/snapshot/", views.menu_snapshot, name="pos-menu-snapshot"),
 
+    # Inventory deduction (Dine-In Minus Stock)
+    path("inventory/products/", views.pos_inventory_products, name="pos-inventory-products"),
+    path("inventory/minus-stock/", views.pos_minus_stock, name="pos-minus-stock"),
+
     # Audit logs
     path("audit/", views.audit_logs, name="pos-audit-logs"),
 

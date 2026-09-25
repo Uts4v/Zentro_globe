@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { PosReceiptData } from "../api";
 import { formatCurrency } from "@/lib/currency";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 
 function formatDate(iso: string | null) {
   if (!iso) return "-";
@@ -235,7 +236,7 @@ export default function Receipt({
               <p className="receipt-bold">Payment</p>
               {data.payments.map((p, i) => (
                 <div key={i} className="receipt-line">
-                  <span className="capitalize">{p.method.replace("_", " ")}</span>
+                  <span>{paymentMethodLabel(p.method)}</span>
                   <span>{formatCurrency(p.amount, currencySymbol)}</span>
                 </div>
               ))}

@@ -115,19 +115,21 @@ export default function MenuGrid() {
             ref={inputRef}
             type="text"
             placeholder="Search menu items..."
+            aria-label="Search menu"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-2xl border border-border bg-card py-3.5 pl-12 pr-20 text-[15px] text-foreground shadow-[var(--shadow-card)] placeholder:text-muted-foreground focus:border-ember focus:outline-none focus:ring-2 focus:ring-ember/20"
+            className="w-full rounded-2xl border border-border bg-card py-3.5 pl-12 pr-24 text-[15px] text-foreground shadow-[var(--shadow-card)] placeholder:text-muted-foreground focus:border-ember focus:outline-none focus:ring-2 focus:ring-ember/20"
           />
           <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-            <span className="hidden items-center gap-1 rounded-lg border border-border bg-mist px-2 py-1 text-[10px] font-medium text-muted-foreground sm:flex">
+            <span className="hidden items-center gap-1 rounded-lg border border-border bg-mist px-2 py-1 text-xs font-medium text-muted-foreground sm:flex">
               <Command className="h-3 w-3" />
               K
             </span>
             <button
               onClick={() => setShowUnavailable((v) => !v)}
               title="Toggle unavailable items"
-              className={`grid h-8 w-8 place-items-center rounded-lg transition-colors ${
+              aria-label="Toggle unavailable items"
+              className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${
                 showUnavailable
                   ? "bg-ember-soft text-ember"
                   : "text-muted-foreground hover:bg-mist"
@@ -246,7 +248,7 @@ function ProductGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
       {items.map((item) => {
         const justAdded = lastAddedId === item.id;
         return (
@@ -273,18 +275,18 @@ function ProductGrid({
               {/* Badges */}
               <div className="absolute left-2 top-2 flex gap-1.5">
                 {Number(item.price) === 0 && (
-                  <span className="flex items-center gap-0.5 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                  <span className="flex items-center gap-0.5 rounded-full bg-success px-2 py-0.5 text-xs font-bold text-white">
                     <Gift className="h-2.5 w-2.5" />
                     Free
                   </span>
                 )}
                 {item.is_featured && (
-                  <span className="rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+                  <span className="rounded-full bg-black/70 px-2 py-0.5 text-xs font-bold text-white backdrop-blur-sm">
                     Popular
                   </span>
                 )}
                 {item.loyalty_reward && (
-                  <span className="rounded-full bg-ember px-2 py-0.5 text-[10px] font-bold text-white">
+                  <span className="rounded-full bg-ember px-2 py-0.5 text-xs font-bold text-white">
                     Loyalty
                   </span>
                 )}
@@ -293,7 +295,7 @@ function ProductGrid({
               {/* Unavailable overlay */}
               {!item.is_available && (
                 <div className="absolute inset-0 grid place-items-center bg-black/40 backdrop-blur-[1px]">
-                  <span className="rounded-full bg-black/70 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-white">
+                  <span className="rounded-full bg-black/70 px-3 py-1 text-xs font-bold uppercase tracking-wide text-white">
                     Unavailable
                   </span>
                 </div>
@@ -302,7 +304,7 @@ function ProductGrid({
               {/* Big add button */}
               <div
                 className={`absolute bottom-2 right-2 grid h-9 w-9 place-items-center rounded-full text-white shadow-lg transition-all ${
-                  justAdded ? "scale-110 bg-green-500" : "bg-ember group-hover:scale-110"
+                  justAdded ? "scale-110 bg-success" : "bg-ember group-hover:scale-110"
                 } ${!item.is_available ? "bg-muted-foreground" : ""}`}
               >
                 {justAdded ? (
@@ -319,20 +321,20 @@ function ProductGrid({
                 {item.name}
               </p>
               {item.description && (
-                <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                <p className="line-clamp-2 text-xs leading-snug text-muted-foreground">
                   {item.description}
                 </p>
               )}
               <div className="mt-auto flex items-center justify-between pt-1">
                 {Number(item.price) === 0 ? (
-                  <span className="text-sm font-bold text-emerald-600">FREE</span>
+                  <span className="text-sm font-bold text-success">FREE</span>
                 ) : (
-                  <p className="text-sm font-bold text-foreground">
+                  <p className="numeric text-sm font-bold text-foreground">
                     {formatCurrency(Number(item.price), currencySymbol)}
                   </p>
                 )}
                 {item.points_per_item > 0 && (
-                  <span className="flex items-center gap-0.5 text-[10px] font-medium text-amber-600">
+                  <span className="flex items-center gap-0.5 text-xs font-medium text-amber-600">
                     <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
                     {item.points_per_item} pts
                   </span>

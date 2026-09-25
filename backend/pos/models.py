@@ -232,8 +232,8 @@ class PosPayment(models.Model):
     METHOD_CHOICES = [
         (METHOD_CASH, "Cash"),
         (METHOD_CARD, "Card"),
-        (METHOD_BANK_QR, "Bank QR"),
-        (METHOD_MOBILE_WALLET, "Mobile Wallet"),
+        (METHOD_BANK_QR, "QR Payment"),
+        (METHOD_MOBILE_WALLET, "Digital Payment"),
         (METHOD_CREDIT, "Credit"),
         (METHOD_DEBIT, "Debit"),
         (METHOD_SPLIT, "Split"),

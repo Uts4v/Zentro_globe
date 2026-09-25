@@ -91,7 +91,7 @@ export default function PosOrderScreen() {
       </div>
 
       {/* Right: current order panel */}
-      <div className="hidden w-[480px] shrink-0 lg:block xl:w-[500px]">
+      <div className="hidden w-[380px] shrink-0 xl:block xl:w-[460px]">
         <CartPanel
           onCheckout={() => setShowPayment(true)}
           onDiscount={() => setShowDiscount(true)}
@@ -155,9 +155,9 @@ function MobileCartButton({
       {/* Floating button — visible on mobile only */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-full bg-ink px-5 py-3 text-white shadow-2xl lg:hidden"
+        className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-full bg-ink px-5 py-3 text-white shadow-2xl xl:hidden"
       >
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-white/20 text-xs font-bold">
+        <span className="grid h-6 w-6 place-items-center rounded-full bg-primary-foreground/20 text-xs font-bold">
           {count}
         </span>
         <span className="text-sm font-bold">{formatCurrency(grandTotal, currencySymbol)}</span>
@@ -165,7 +165,7 @@ function MobileCartButton({
 
       {/* Mobile cart drawer */}
       {open && (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className="fixed inset-0 z-50 xl:hidden">
           <div
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={() => setOpen(false)}

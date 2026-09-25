@@ -21,6 +21,7 @@ from collections import defaultdict
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Q
 
 from .models import (
     InventoryBalance,
@@ -157,8 +158,11 @@ def deduct_stock_for_order(order, lines=None, performed_by=None):
     return created
 
 
-def restore_stock_for_order(order, performed_by=None):
-    """Put back everything a cancelled order consumed. Safe to call repeatedly."""
+def restore_stock_for_order(order, lines=None, performed_by=None):
+    """Put back what a cancelled order (or its cancelled `lines`) consumed.
+
+    Safe to call repeatedly.
+    """
     performed_by = _user_or_none(performed_by)
     sales = InventoryMovement.objects.filter(
         merchant=order.merchant,
@@ -166,6 +170,14 @@ def restore_stock_for_order(order, performed_by=None):
         source_type=MovementSource.ORDER,
         source_id=str(order.id),
     ).select_related("location", "inventory_item")
+    if lines is not None:
+        line_filter = Q()
+        for line in lines:
+            line_id = getattr(line, "id", line)
+            line_filter |= Q(idempotency_key__startswith=_sale_key(line_id, ""))
+        if not line_filter:
+            return []
+        sales = sales.filter(line_filter)
 
     restored = []
     for sale in sales:
@@ -181,7 +193,10 @@ def restore_stock_for_order(order, performed_by=None):
             movement_type=MovementType.REVERSAL,
             source_type=MovementSource.ORDER,
             source_id=order.id,
-            reason=f"Order #{order.id} cancelled",
+            reason=(
+                f"Order #{order.id} cancelled" if lines is None
+                else f"Order #{order.id}: item cancelled"
+            ),
             note=f"Restoring movement #{sale.id}",
             performed_by=performed_by,
             reversal_of=sale,
@@ -200,11 +215,11 @@ def safe_deduct_stock_for_order(order, lines=None, performed_by=None):
         return []
 
 
-def safe_restore_stock_for_order(order, performed_by=None):
+def safe_restore_stock_for_order(order, lines=None, performed_by=None):
     """restore_stock_for_order, but a stock failure never blocks the order flow."""
     try:
         with transaction.atomic():
-            return restore_stock_for_order(order, performed_by=performed_by)
+            return restore_stock_for_order(order, lines=lines, performed_by=performed_by)
     except Exception:
         logger.exception("Stock restore failed for order %s (order flow continues)", order.pk)
         return []

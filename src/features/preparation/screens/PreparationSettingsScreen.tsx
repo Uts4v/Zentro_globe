@@ -73,6 +73,15 @@ export default function PreparationSettingsScreen() {
     loadStaff();
   }, []);
 
+  useEffect(() => {
+    if (!manageArea) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setManageArea(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [manageArea]);
+
   const handleStaffToggle = async (workerId: string, areaId: number) => {
     const current = workerAreaIds[workerId] ?? [];
     const next = current.includes(areaId)
@@ -93,7 +102,7 @@ export default function PreparationSettingsScreen() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-gray-500">Loading preparation settings...</div>
+        <div className="text-muted-foreground">Loading preparation settings...</div>
       </div>
     );
   }
@@ -170,10 +179,10 @@ export default function PreparationSettingsScreen() {
       <h1 className="text-2xl font-bold">Preparation Workflow</h1>
 
       {/* Toggle Section */}
-      <div className="bg-white rounded-lg border p-6">
+      <div className="bg-card rounded-2xl border border-border p-6">
         <h2 className="text-lg font-semibold mb-4">How are orders prepared?</h2>
         <div className="space-y-3">
-          <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
+          <label className="flex items-start gap-3 p-4 border border-border rounded-lg cursor-pointer hover:bg-muted">
             <input
               type="radio"
               name="preparation_mode"
@@ -183,14 +192,14 @@ export default function PreparationSettingsScreen() {
             />
             <div>
               <div className="font-medium">Simple preparation</div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 Send the complete order to one order screen. Best for smaller cafés and
                 single-counter businesses.
               </div>
             </div>
           </label>
 
-          <label className="flex items-start gap-3 p-4 border rounded-lg cursor-pointer hover:bg-gray-50">
+          <label className="flex items-start gap-3 p-4 border border-border rounded-lg cursor-pointer hover:bg-muted">
             <input
               type="radio"
               name="preparation_mode"
@@ -200,7 +209,7 @@ export default function PreparationSettingsScreen() {
             />
             <div>
               <div className="font-medium">Separate preparation areas</div>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-muted-foreground">
                 Route products to teams such as Bar, Kitchen or Bakery. Best for businesses with
                 separate preparation areas.
               </div>
@@ -211,7 +220,7 @@ export default function PreparationSettingsScreen() {
 
       {/* Area Management (shown when routing enabled or areas exist) */}
       {(enabled || areas.length > 0) && (
-        <div className="bg-white rounded-lg border p-6">
+        <div className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold">Preparation Areas</h2>
             {areas.length === 0 && (
@@ -225,7 +234,7 @@ export default function PreparationSettingsScreen() {
             )}
           </div>
 
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-muted-foreground mb-4">
             Use Café Setup creates: Bar, Kitchen, and Main Counter (default).
           </p>
 
@@ -236,7 +245,7 @@ export default function PreparationSettingsScreen() {
               value={newAreaName}
               onChange={(e) => setNewAreaName(e.target.value)}
               placeholder="New area name (e.g. Bakery)"
-              className="flex-1 px-3 py-2 border rounded-lg text-sm"
+              className="flex-1 px-3 py-2 border border-border rounded-lg text-sm"
               onKeyDown={(e) => e.key === "Enter" && handleAddArea()}
             />
             <button
@@ -255,7 +264,7 @@ export default function PreparationSettingsScreen() {
               .map((area) => (
                 <div
                   key={area.id}
-                  className="flex items-center justify-between p-3 border rounded-lg"
+                  className="flex items-center justify-between p-3 border border-border rounded-lg"
                 >
                   <div className="flex items-center gap-3">
                     {editingId === area.id ? (
@@ -263,7 +272,7 @@ export default function PreparationSettingsScreen() {
                         type="text"
                         value={editingName}
                         onChange={(e) => setEditingName(e.target.value)}
-                        className="px-2 py-1 border rounded text-sm"
+                        className="px-2 py-1 border border-border rounded text-sm"
                         onKeyDown={(e) => e.key === "Enter" && handleSaveEdit(area.id)}
                         autoFocus
                       />
@@ -281,7 +290,7 @@ export default function PreparationSettingsScreen() {
                       <>
                         <button
                           onClick={() => handleSaveEdit(area.id)}
-                          className="text-green-600 text-sm hover:underline"
+                          className="text-success text-sm hover:underline"
                         >
                           Save
                         </button>
@@ -290,7 +299,7 @@ export default function PreparationSettingsScreen() {
                             setEditingId(null);
                             setEditingName("");
                           }}
-                          className="text-gray-500 text-sm hover:underline"
+                          className="text-muted-foreground text-sm hover:underline"
                         >
                           Cancel
                         </button>
@@ -310,13 +319,13 @@ export default function PreparationSettingsScreen() {
                             setEditingId(area.id);
                             setEditingName(area.name);
                           }}
-                          className="text-gray-600 text-sm hover:underline"
+                          className="text-foreground text-sm hover:underline"
                         >
                           Edit
                         </button>
                         <button
                           onClick={() => handleDelete(area)}
-                          className="text-red-600 text-sm hover:underline"
+                          className="text-destructive text-sm hover:underline"
                         >
                           Remove
                         </button>
@@ -331,20 +340,20 @@ export default function PreparationSettingsScreen() {
 
       {/* Menu Item Assignment (shown when routing enabled and areas exist) */}
       {enabled && areas.length > 0 && (
-        <div className="bg-white rounded-lg border p-6">
+        <div className="bg-card rounded-2xl border border-border p-6">
           <h2 className="text-lg font-semibold mb-2">Assign Menu Items</h2>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="numeric text-sm text-muted-foreground mb-4">
             {settings?.stats?.assigned_items ?? 0} products assigned ·{" "}
             {settings?.stats?.unassigned_items ?? 0} will use the default area
           </p>
 
           {/* Bulk assign controls */}
-          <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
-            <span className="text-sm text-gray-600">{selectedItems.length} selected</span>
+          <div className="flex items-center gap-3 mb-4 p-3 bg-muted rounded-lg">
+            <span className="numeric text-sm text-foreground">{selectedItems.length} selected</span>
             <select
               value={bulkAreaId ?? ""}
               onChange={(e) => setBulkAreaId(e.target.value ? Number(e.target.value) : null)}
-              className="px-3 py-1 border rounded text-sm"
+              className="px-3 py-1 border border-border rounded text-sm"
             >
               <option value="">No area (use default)</option>
               {areas
@@ -364,7 +373,7 @@ export default function PreparationSettingsScreen() {
             </button>
             <button
               onClick={() => setSelectedItems([])}
-              className="text-gray-500 text-sm hover:underline"
+              className="text-muted-foreground text-sm hover:underline"
             >
               Clear
             </button>
@@ -377,7 +386,7 @@ export default function PreparationSettingsScreen() {
               return (
                 <div key={cat}>
                   <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-medium text-sm text-gray-700">{cat}</h3>
+                    <h3 className="font-medium text-sm text-foreground">{cat}</h3>
                     <button
                       onClick={() => selectAllInCategory(cat)}
                       className="text-xs text-indigo-600 hover:underline"
@@ -389,7 +398,7 @@ export default function PreparationSettingsScreen() {
                     {catItems.map((item) => (
                       <div
                         key={item.id}
-                        className="flex items-center justify-between p-2 hover:bg-gray-50 rounded"
+                        className="flex items-center justify-between p-2 hover:bg-muted rounded"
                       >
                         <div className="flex items-center gap-2">
                           <input
@@ -402,7 +411,7 @@ export default function PreparationSettingsScreen() {
                             {item.emoji} {item.name}
                           </span>
                           {!item.requires_preparation && (
-                            <span className="text-xs text-gray-400">(no prep)</span>
+                            <span className="text-xs text-muted-foreground">(no prep)</span>
                           )}
                         </div>
                         <div className="flex items-center gap-2">
@@ -420,7 +429,7 @@ export default function PreparationSettingsScreen() {
                                   qc.invalidateQueries({ queryKey: preparationKeys.settings() });
                                 });
                             }}
-                            className="px-2 py-1 border rounded text-xs"
+                            className="px-2 py-1 border border-border rounded text-xs"
                           >
                             <option value="">Default</option>
                             {areas
@@ -431,7 +440,7 @@ export default function PreparationSettingsScreen() {
                                 </option>
                               ))}
                           </select>
-                          <label className="flex items-center gap-1 text-xs text-gray-500">
+                          <label className="flex items-center gap-1 text-xs text-muted-foreground">
                             <input
                               type="checkbox"
                               checked={item.requires_preparation}
@@ -462,12 +471,12 @@ export default function PreparationSettingsScreen() {
 
       {/* Staff Access (shown when routing enabled and areas exist) */}
       {enabled && areas.length > 0 && (
-        <div className="bg-white rounded-lg border p-6">
+        <div className="bg-card rounded-2xl border border-border p-6">
           <div className="flex items-center justify-between mb-1">
             <h2 className="text-lg font-semibold">Staff Access</h2>
-            {staffLoading && <span className="text-xs text-gray-400">Loading staff…</span>}
+            {staffLoading && <span className="text-xs text-muted-foreground">Loading staff…</span>}
           </div>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-muted-foreground mb-4">
             Decide which staff can operate each preparation screen. Managers and Admins always have
             access to every area.
           </p>
@@ -483,11 +492,11 @@ export default function PreparationSettingsScreen() {
                 return (
                   <div
                     key={area.id}
-                    className="flex items-center justify-between p-3 border rounded-lg"
+                    className="flex items-center justify-between p-3 border border-border rounded-lg"
                   >
                     <div>
                       <div className="font-medium">{area.name}</div>
-                      <div className="text-sm text-gray-500 mt-0.5">
+                      <div className="text-sm text-muted-foreground mt-0.5">
                         {assigned.length === 0 && always.length === 0 ? (
                           "No staff assigned"
                         ) : (
@@ -514,22 +523,30 @@ export default function PreparationSettingsScreen() {
       {/* Manage staff access modal */}
       {manageArea && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="staff-access-title"
+            className="w-full max-w-md bg-card rounded-2xl border border-border p-6"
+          >
             <div className="flex items-center justify-between mb-1">
-              <h3 className="text-lg font-semibold">Staff access · {manageArea.name}</h3>
+              <h3 id="staff-access-title" className="text-lg font-semibold">
+                Staff access · {manageArea.name}
+              </h3>
               <button
                 onClick={() => setManageArea(null)}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none"
+                aria-label="Close"
+                className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground text-xl leading-none"
               >
                 ×
               </button>
             </div>
-            <p className="text-sm text-gray-500 mb-4">
+            <p className="text-sm text-muted-foreground mb-4">
               Managers and Admins have access to every area automatically.
             </p>
 
             {workers.length === 0 ? (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-muted-foreground">
                 No staff yet. Add staff from Staff Management in the POS.
               </p>
             ) : (
@@ -546,7 +563,7 @@ export default function PreparationSettingsScreen() {
                     >
                       <div>
                         <div className="text-sm font-medium">{w.display_name}</div>
-                        <div className="text-xs text-gray-400">
+                        <div className="text-xs text-muted-foreground">
                           {isAllArea ? `${w.role} (all areas)` : w.role}
                         </div>
                       </div>
@@ -555,12 +572,12 @@ export default function PreparationSettingsScreen() {
                         disabled={isAllArea || !w.is_active}
                         onClick={() => handleStaffToggle(w.id, manageArea.id)}
                         className={`relative h-6 w-11 rounded-full transition-colors ${
-                          checked ? "bg-indigo-600" : "bg-gray-300"
+                          checked ? "bg-indigo-600" : "bg-muted"
                         } ${isAllArea ? "cursor-not-allowed" : ""}`}
                         aria-pressed={checked}
                       >
                         <span
-                          className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                          className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-transform ${
                             checked ? "left-[22px]" : "left-0.5"
                           }`}
                         />

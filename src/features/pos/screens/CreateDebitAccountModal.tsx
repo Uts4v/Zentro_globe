@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
 import { posCreateDebitAccount } from "../api";
@@ -26,6 +26,15 @@ export default function CreateDebitAccountModal({
 
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -58,17 +67,24 @@ export default function CreateDebitAccountModal({
 
   if (success) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="mx-4 w-full max-w-sm rounded-3xl bg-white p-8 text-center shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="debit-account-success-title"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      >
+        <div className="mx-4 w-full max-w-sm rounded-3xl bg-card p-8 text-center shadow-2xl">
           <div className="mx-auto mb-4 grid h-16 w-16 place-items-center rounded-full bg-green-100">
             <Check className="h-8 w-8 text-green-600" />
           </div>
-          <h3 className="text-lg font-bold text-foreground">Account Created</h3>
+          <h3 id="debit-account-success-title" className="text-lg font-bold text-foreground">
+            Account Created
+          </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Debit wallet created for {name}
           </p>
           {numBalance > 0 && (
-            <p className="mt-3 text-2xl font-bold text-ink">
+            <p className="numeric mt-3 text-2xl font-bold text-ink">
               {formatCurrency(numBalance, currencySymbol)} loaded
             </p>
           )}
@@ -78,11 +94,16 @@ export default function CreateDebitAccountModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="debit-account-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <div className="mx-4 w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
         <div className="mb-5 flex items-center justify-between">
           <div>
-            <h3 className="text-base font-bold text-foreground">
+            <h3 id="debit-account-title" className="text-base font-bold text-foreground">
               New Debit Account
             </h3>
             <p className="text-xs text-muted-foreground">
@@ -90,8 +111,9 @@ export default function CreateDebitAccountModal({
             </p>
           </div>
           <button
+            aria-label="Close"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
@@ -144,7 +166,7 @@ export default function CreateDebitAccountModal({
             <button
               key={amt}
               onClick={() => setBalance(String(amt))}
-              className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${
+              className={`flex-1 min-h-[44px] rounded-xl py-2.5 text-xs font-medium transition-colors ${
                 numBalance === amt
                   ? "bg-ink text-white"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"

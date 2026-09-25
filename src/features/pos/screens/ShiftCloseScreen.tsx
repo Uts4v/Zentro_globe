@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 import {
   posCloseShift,
   posListCashMovements,
@@ -168,14 +169,28 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
               <span>Cash Sales ({summary?.total_orders ?? 0} orders)</span>
               <span className="font-medium text-green-600">+{formatCurrency(liveCashSales, currencySymbol)}</span>
             </div>
-            {summary && Number(summary.total_card_sales) > 0 && (
-              <div className="flex justify-between text-muted-foreground">
-                <span>Card Sales</span>
-                <span className="font-medium text-foreground">
-                  {formatCurrency(summary.total_card_sales, currencySymbol)}
-                </span>
-              </div>
-            )}
+            {summary?.payment_methods
+              ? summary.payment_methods
+                  .filter((pm) => pm.method !== "cash" && Number(pm.amount) > 0)
+                  .map((pm) => (
+                    <div key={pm.method} className="flex justify-between text-muted-foreground">
+                      <span>
+                        {paymentMethodLabel(pm.method)} Sales ({pm.count}) · not in drawer
+                      </span>
+                      <span className="font-medium text-foreground">
+                        {formatCurrency(pm.amount, currencySymbol)}
+                      </span>
+                    </div>
+                  ))
+              : summary &&
+                Number(summary.total_card_sales) > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Card Sales</span>
+                    <span className="font-medium text-foreground">
+                      {formatCurrency(summary.total_card_sales, currencySymbol)}
+                    </span>
+                  </div>
+                )}
             {totalPayouts > 0 && (
               <div className="flex justify-between text-muted-foreground">
                 <span className="flex items-center gap-1">
@@ -196,7 +211,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
             )}
             <div className="border-t border-border pt-2 flex justify-between font-bold text-foreground">
               <span>Expected in Drawer</span>
-              <span>{formatCurrency(expectedCash, currencySymbol)}</span>
+              <span className="numeric">{formatCurrency(expectedCash, currencySymbol)}</span>
             </div>
           </div>
         </div>
@@ -213,7 +228,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
         {/* Recent movements */}
         {movements.length > 0 && (
           <div className="mb-4 rounded-xl bg-muted/30 px-3 py-2">
-            <p className="mb-1 text-[10px] font-bold uppercase text-muted-foreground">
+            <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">
               Cash Movements
             </p>
             {movements.slice(0, 5).map((m) => (
@@ -247,7 +262,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
             min={0}
             step="0.10"
             autoFocus
-            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-center text-3xl font-bold focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+            className="numeric w-full rounded-2xl border border-border bg-card px-5 py-4 text-center text-3xl font-bold focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
           />
         </div>
 
@@ -257,7 +272,7 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
             <button
               key={amt}
               onClick={() => setClosingCash(String(amt))}
-              className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${
+              className={`min-h-[44px] flex-1 rounded-xl px-1 py-2.5 text-sm font-medium transition-colors ${
                 cash === amt
                   ? "bg-ink text-white"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"

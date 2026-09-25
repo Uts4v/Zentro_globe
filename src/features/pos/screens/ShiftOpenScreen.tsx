@@ -73,7 +73,7 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
             min={0}
             step="0.10"
             autoFocus
-            className="w-full rounded-2xl border border-border bg-card px-5 py-4 text-center text-3xl font-bold focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+            className="numeric w-full rounded-2xl border border-border bg-card px-5 py-4 text-center text-3xl font-bold focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
           />
         </div>
 
@@ -83,7 +83,7 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
             <button
               key={amt}
               onClick={() => setOpeningCash(String(amt))}
-              className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${
+              className={`min-h-[44px] flex-1 rounded-xl px-1 py-2.5 text-sm font-medium transition-colors ${
                 cash === amt
                   ? "bg-ink text-white"
                   : "bg-muted text-muted-foreground hover:bg-muted/80"
@@ -97,7 +97,7 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
         {/* Expected cash from previous shift */}
         {expectedCash !== null && (
           <div className="mb-4 rounded-xl bg-muted/50 px-4 py-2.5 text-center text-xs text-muted-foreground">
-            Previous shift closing cash: <span className="font-bold text-foreground">{formatCurrency(expectedCash, currencySymbol)}</span>
+            Previous shift closing cash: <span className="numeric font-bold text-foreground">{formatCurrency(expectedCash, currencySymbol)}</span>
           </div>
         )}
 

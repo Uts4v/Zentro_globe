@@ -98,18 +98,18 @@ export default function AccountList({
   return (
     <div className="mx-auto max-w-4xl p-4 lg:p-6">
       {/* Header */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-foreground">Accounts</h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="max-w-[40ch] text-xs text-muted-foreground">
             Manage customer credit and debit (wallet) accounts
           </p>
         </div>
         <button
           onClick={tab === "debit" ? onCreateDebit : onCreateCredit}
-          className="flex items-center gap-1.5 rounded-xl bg-ink px-3 py-2 text-xs font-medium text-white hover:opacity-90"
+          className="flex min-h-[40px] items-center gap-1.5 rounded-xl bg-ink px-4 py-2.5 text-sm font-medium text-white hover:opacity-90"
         >
-          <UserPlus className="h-3.5 w-3.5" />
+          <UserPlus className="h-4 w-4" />
           New Account
         </button>
       </div>
@@ -137,6 +137,7 @@ export default function AccountList({
         <input
           type="text"
           placeholder="Search by name or phone..."
+          aria-label="Search accounts"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-xl border border-border bg-muted/50 py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
@@ -151,7 +152,7 @@ export default function AccountList({
       ) : error ? (
         <div className="flex flex-col items-center py-16 text-muted-foreground">
           <Wallet className="mb-3 h-10 w-10 opacity-30" />
-          <p className="text-sm text-red-500">{error}</p>
+          <p className="text-sm text-destructive">{error}</p>
           <button
             onClick={loadAccounts}
             className="mt-3 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
@@ -195,14 +196,15 @@ export default function AccountList({
                   )}
                 </div>
                 <div className="text-right">
-                  <p className="text-lg font-bold text-ink">
+                  <p className="numeric text-lg font-bold text-ink">
                     {formatCurrency(account.balance, currencySymbol)}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">balance</p>
+                  <p className="text-xs text-muted-foreground">balance</p>
                 </div>
                 <button
                   onClick={() => onTopup(account)}
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-green-50 text-green-600 hover:bg-green-100"
+                  aria-label={`Top up ${account.contact_name || "Walk-in"}`}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-success/10 text-success hover:bg-success/20"
                 >
                   <Plus className="h-5 w-5" />
                 </button>
@@ -266,19 +268,19 @@ export default function AccountList({
                 <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="rounded-lg bg-muted/50 p-2">
                     <p className="text-muted-foreground">Limit</p>
-                    <p className="font-bold text-foreground">
+                    <p className="numeric font-bold text-foreground">
                       {formatCurrency(account.credit_limit, currencySymbol)}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-red-50 p-2">
-                    <p className="text-red-600">Owed</p>
-                    <p className="font-bold text-red-700">
+                  <div className="rounded-lg bg-destructive/10 p-2">
+                    <p className="text-destructive">Owed</p>
+                    <p className="numeric font-bold text-destructive">
                       {formatCurrency(account.current_balance, currencySymbol)}
                     </p>
                   </div>
-                  <div className="rounded-lg bg-green-50 p-2">
-                    <p className="text-green-600">Available</p>
-                    <p className="font-bold text-green-700">
+                  <div className="rounded-lg bg-success/10 p-2">
+                    <p className="text-success">Available</p>
+                    <p className="numeric font-bold text-success">
                       {formatCurrency(account.available_credit, currencySymbol)}
                     </p>
                   </div>
@@ -286,7 +288,7 @@ export default function AccountList({
 
                 {/* Utilization bar */}
                 <div className="mb-3">
-                  <div className="mb-1 flex justify-between text-[10px]">
+                  <div className="mb-1 flex justify-between text-xs">
                     <span className="text-muted-foreground">
                       Utilization
                     </span>
@@ -297,7 +299,7 @@ export default function AccountList({
                   <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                     <div
                       className={`h-full rounded-full ${
-                        utilizationPct > 80 ? "bg-red-500" : utilizationPct > 50 ? "bg-amber-500" : "bg-green-500"
+                        utilizationPct > 80 ? "bg-destructive" : utilizationPct > 50 ? "bg-warning" : "bg-success"
                       }`}
                       style={{ width: `${Math.min(utilizationPct, 100)}%` }}
                     />
@@ -309,18 +311,18 @@ export default function AccountList({
                   {onCreditSale && (
                     <button
                       onClick={() => onCreditSale(account)}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                      className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-warning/10 px-3 py-2.5 text-sm font-medium text-warning hover:bg-warning/20"
                     >
-                      <ArrowUpRight className="h-3.5 w-3.5" />
+                      <ArrowUpRight className="h-4 w-4" />
                       New Sale
                     </button>
                   )}
                   {onCreditRepayment && (
                     <button
                       onClick={() => onCreditRepayment(account)}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-green-50 px-3 py-2 text-xs font-medium text-green-700 hover:bg-green-100"
+                      className="flex min-h-[40px] flex-1 items-center justify-center gap-1.5 rounded-xl bg-success/10 px-3 py-2.5 text-sm font-medium text-success hover:bg-success/20"
                     >
-                      <Minus className="h-3.5 w-3.5" />
+                      <Minus className="h-4 w-4" />
                       Record Payment
                     </button>
                   )}

@@ -2,7 +2,7 @@
 // Pure browser-side image optimization: resize → WebP → compress.
 // No server, no external libs — just the Canvas API.
 
-export type ImagePreset = "profile" | "logo" | "product" | "banner";
+export type ImagePreset = "profile" | "logo" | "product" | "banner" | "qr";
 
 interface PresetConfig {
   maxWidth: number;
@@ -18,6 +18,8 @@ const PRESETS: Record<ImagePreset, PresetConfig> = {
   logo:    { maxWidth: 500,  maxHeight: 500,  quality: 0.82, maxBytes: 250_000 },
   product: { maxWidth: 800,  maxHeight: 800,  quality: 0.80, maxBytes: 300_000 },
   banner:  { maxWidth: 1200, maxHeight: 500,  quality: 0.78, maxBytes: 450_000 },
+  // Payment QR codes must stay sharp enough to scan: bigger and near-lossless.
+  qr:      { maxWidth: 1000, maxHeight: 1000, quality: 0.95, maxBytes: 900_000 },
 };
 
 /** Allowed input MIME types. */

@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { syncQueue } from "../offline/db";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 
 export default function ConflictResolver() {
   const [data, setData] = useState<PosConflicts | null>(null);
@@ -175,7 +176,7 @@ export default function ConflictResolver() {
                         <p className="text-sm font-bold text-foreground">
                           Order #{order.id}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="numeric text-xs text-muted-foreground">
                           {order.status} &middot; {formatCurrency(Number(order.total_amount), currencySymbol)} &middot; v{order.version}
                         </p>
                       </div>
@@ -187,7 +188,7 @@ export default function ConflictResolver() {
                       <button
                         onClick={() => resolve("order", String(order.id), "keep_server")}
                         disabled={resolving === order.uuid}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-40"
+                        className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-40"
                       >
                         <Server className="h-3.5 w-3.5" />
                         Keep Server
@@ -195,7 +196,7 @@ export default function ConflictResolver() {
                       <button
                         onClick={() => resolve("order", String(order.id), "keep_client")}
                         disabled={resolving === order.uuid}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40"
+                        className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
                       >
                         <Smartphone className="h-3.5 w-3.5" />
                         Keep Offline
@@ -222,9 +223,9 @@ export default function ConflictResolver() {
                     <div className="mb-3 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-bold text-foreground">
-                          Payment {payment.payment_method}
+                          Payment · {paymentMethodLabel(payment.payment_method)}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="numeric text-xs text-muted-foreground">
                           {formatCurrency(Number(payment.amount), currencySymbol)} &middot;{" "}
                           {payment.status}
                         </p>
@@ -239,7 +240,7 @@ export default function ConflictResolver() {
                           resolve("payment", payment.id, "keep_server")
                         }
                         disabled={resolving === payment.id}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-40"
+                        className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-40"
                       >
                         <Server className="h-3.5 w-3.5" />
                         Keep Server
@@ -249,7 +250,7 @@ export default function ConflictResolver() {
                           resolve("payment", payment.id, "keep_client")
                         }
                         disabled={resolving === payment.id}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40"
+                        className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
                       >
                         <Smartphone className="h-3.5 w-3.5" />
                         Keep Offline
@@ -271,7 +272,8 @@ export default function ConflictResolver() {
                 <button
                   onClick={clearAllMutations}
                   disabled={clearing}
-                  className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 disabled:opacity-40"
+                  aria-label="Clear all recent failed mutations"
+                  className="flex min-h-[44px] items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-100 disabled:opacity-40"
                 >
                   {clearing ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
@@ -291,21 +293,22 @@ export default function ConflictResolver() {
                       <p className="text-sm font-medium text-foreground">
                         {m.entity_type} — {m.operation}
                       </p>
-                      <p className="text-[10px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         {m.client_mutation_id.slice(0, 8)}... &middot;{" "}
                         {m.processed_at
                           ? new Date(m.processed_at).toLocaleString()
                           : ""}
                       </p>
                     </div>
-                    <button
-                      onClick={() => dismissMutation(m.id)}
-                      disabled={clearing}
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-                      title="Dismiss"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
+                      <button
+                        onClick={() => dismissMutation(m.id)}
+                        disabled={clearing}
+                        className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                        aria-label="Dismiss"
+                        title="Dismiss"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                   </div>
                 ))}
               </div>
@@ -322,7 +325,8 @@ export default function ConflictResolver() {
                 <button
                   onClick={clearLocalQueue}
                   disabled={clearingLocal}
-                  className="flex items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-600 hover:bg-amber-100 disabled:opacity-40"
+                  aria-label="Clear local sync queue"
+                  className="flex min-h-[44px] items-center gap-1.5 rounded-lg bg-amber-50 px-3 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-100 disabled:opacity-40"
                 >
                   {clearingLocal ? (
                     <Loader2 className="h-3 w-3 animate-spin" />
