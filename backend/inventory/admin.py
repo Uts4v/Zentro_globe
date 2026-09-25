@@ -11,6 +11,7 @@ from .models import (
     InventoryBalance,
     InventoryWasteRecord,
     InventoryAdjustment,
+    MenuItemStockLink,
     InventoryReceiving,
     InventoryTransfer,
     StockCount,
@@ -30,6 +31,13 @@ class InventoryItemAdmin(ModelAdmin):
     list_filter = ["item_type", "active", "archived", "category"]
     search_fields = ["name", "sku", "barcode"]
     autocomplete_fields = ["category", "default_location", "primary_supplier", "base_unit"]
+
+
+@admin.register(MenuItemStockLink)
+class MenuItemStockLinkAdmin(ModelAdmin):
+    list_display = ["menu_item", "inventory_item", "quantity_per_unit", "merchant"]
+    search_fields = ["menu_item__name", "inventory_item__name"]
+    raw_id_fields = ["merchant", "menu_item", "inventory_item"]
 
 
 @admin.register(InventoryCategory)

@@ -38,6 +38,10 @@ import { formatCurrency } from "@/lib/currency";
 import { TransferForm } from "@/features/transfers/components/TransferForm";
 import { PremiumPunchCard } from "@/components/PremiumPunchCard";
 import { PunchCardProofModal } from "@/components/PunchCardProofModal";
+import {
+  RewardRedemptionModal,
+  type RewardRedemptionDetails,
+} from "@/components/RewardRedemptionModal";
 import { resolveMerchantPreset, type MerchantThemePreset } from "@/lib/merchant-theme-presets";
 
 import { toast } from "sonner";
@@ -103,6 +107,7 @@ function Index() {
   const [missions, setMissions] = useState<MissionView[]>([]);
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [redeemingRewardId, setRedeemingRewardId] = useState<string | null>(null);
+  const [redemption, setRedemption] = useState<RewardRedemptionDetails | null>(null);
   const [showTableScanner, setShowTableScanner] = useState(false);
   const [showStoreSwitcher, setShowStoreSwitcher] = useState(false);
   const [allStores, setAllStores] = useState<MerchantProfile[]>([]);
@@ -287,7 +292,13 @@ function Index() {
     setRedeemingRewardId(reward.id);
     try {
       const res = await rewardApi.redeem(reward.id);
-      toast.success(`Redeemed ${reward.name}! Code: ${res.code}`);
+      setRedemption({
+        code: res.code,
+        expiresAt: res.expires_at,
+        rewardName: reward.name,
+        rewardEmoji: reward.emoji,
+        pointsSpent: res.points_spent,
+      });
       if (selectedMerchantId) {
         customerApi
           .getWallet(selectedMerchantId)
@@ -657,7 +668,7 @@ function Index() {
         )}
 
         {/* Real Missions Section (Ultra-Premium Modern Style) */}
-        {selectedMerchantId && joined && (
+        {selectedMerchantId && joined && missions.length > 0 && (
           <section className="px-5">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
@@ -670,105 +681,74 @@ function Index() {
                 View all
               </Link>
             </div>
-            {missions.length > 0 ? (
-              <div className="space-y-3">
-                {missions.map((m) => {
-                  const pct = Math.min((m.current_count / m.target_count) * 100, 100);
-                  return (
-                    <div
-                      key={m.id}
-                      className="flex items-center gap-3.5 rounded-[26px] bg-card p-4 transition-all"
-                      style={{
-                        boxShadow: "var(--shadow-card)",
-                        border: "1px solid var(--border)",
-                      }}
-                    >
-                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
-                        <span style={{ filter: "grayscale(1) brightness(0)" }}>
-                          {m.icon || "🎯"}
+            <div className="space-y-3">
+              {missions.map((m) => {
+                const pct = Math.min((m.current_count / m.target_count) * 100, 100);
+                return (
+                  <div
+                    key={m.id}
+                    className="flex items-center gap-3.5 rounded-[26px] bg-card p-4 transition-all"
+                    style={{
+                      boxShadow: "var(--shadow-card)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
+                      <span style={{ filter: "grayscale(1) brightness(0)" }}>
+                        {m.icon || "🎯"}
+                      </span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-extrabold text-foreground">
+                          {m.title}
+                        </p>
+                        {m.is_completed ? (
+                          <span className="shrink-0 rounded-full bg-olive px-2.5 py-0.5 text-[10px] font-extrabold text-[#fff9f0]">
+                            Done ✓
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
+                            +{m.reward_points} pts
+                          </span>
+                        )}
+                      </div>
+                      {m.description && (
+                        <p className="mt-0.5 truncate text-[11.5px] font-medium text-muted-foreground">
+                          {m.description}
+                        </p>
+                      )}
+                      {m.linked_menu_item_name && (
+                        <p className="mt-0.5 truncate text-[11.5px] font-medium text-ember">
+                          Buy {m.linked_menu_item_name} {m.target_count}x
+                        </p>
+                      )}
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${pct}%`,
+                              background: m.is_completed
+                                ? "var(--success)"
+                                : "linear-gradient(90deg, var(--primary) 0%, var(--primary) 100%)",
+                            }}
+                          />
+                        </div>
+                        <span className="shrink-0 text-[10px] font-extrabold text-muted-foreground">
+                          {m.current_count}/{m.target_count}
                         </span>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="truncate text-sm font-extrabold text-foreground">
-                            {m.title}
-                          </p>
-                          {m.is_completed ? (
-                            <span className="shrink-0 rounded-full bg-olive px-2.5 py-0.5 text-[10px] font-extrabold text-[#fff9f0]">
-                              Done ✓
-                            </span>
-                          ) : (
-                            <span className="shrink-0 rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
-                              +{m.reward_points} pts
-                            </span>
-                          )}
-                        </div>
-                        {m.description && (
-                          <p className="mt-0.5 truncate text-[11.5px] font-medium text-muted-foreground">
-                            {m.description}
-                          </p>
-                        )}
-                        {m.linked_menu_item_name && (
-                          <p className="mt-0.5 truncate text-[11.5px] font-medium text-ember">
-                            Buy {m.linked_menu_item_name} {m.target_count}x
-                          </p>
-                        )}
-                        <div className="mt-2 flex items-center gap-2">
-                          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{
-                                width: `${pct}%`,
-                                background: m.is_completed
-                                  ? "var(--success)"
-                                  : "linear-gradient(90deg, var(--primary) 0%, var(--primary) 100%)",
-                              }}
-                            />
-                          </div>
-                          <span className="shrink-0 text-[10px] font-extrabold text-muted-foreground">
-                            {m.current_count}/{m.target_count}
-                          </span>
-                        </div>
-                      </div>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              /* Fallback Mission Display */
-              <div
-                className="flex items-center gap-3.5 rounded-[26px] bg-card p-4"
-                style={{ boxShadow: "var(--shadow-card)", border: "1px solid var(--border)" }}
-              >
-                <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
-                  <span style={{ filter: "grayscale(1) brightness(0)" }}>🎯</span>
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-extrabold text-foreground">Order any drink</p>
-                    <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-[10px] font-extrabold text-primary">
-                      +25 pts
-                    </span>
                   </div>
-                  <p className="mt-0.5 text-[11.5px] font-medium text-muted-foreground">
-                    Order 1 drink today to claim bonus points
-                  </p>
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-                      <div className="h-full w-1/2 rounded-full bg-olive" />
-                    </div>
-                    <span className="shrink-0 text-[10px] font-extrabold text-muted-foreground">
-                      1 / 2
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
+                );
+              })}
+            </div>
           </section>
         )}
 
         {/* Real Rewards Section (Ultra-Premium Modern Style) */}
-        {selectedMerchantId && joined && (
+        {selectedMerchantId && joined && rewards.length > 0 && (
           <section className="px-5">
             <div className="mb-3 flex items-center justify-between">
               <p className="text-[11px] font-extrabold uppercase tracking-[0.2em] text-muted-foreground">
@@ -781,88 +761,55 @@ function Index() {
                 Explore all
               </Link>
             </div>
-            {rewards.length > 0 ? (
-              <div className="space-y-3">
-                {rewards.map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex items-center justify-between rounded-[26px] bg-card p-4 transition-all"
-                    style={{
-                      boxShadow: "var(--shadow-card)",
-                      border: "1px solid var(--border)",
-                    }}
-                  >
-                    <div className="flex min-w-0 flex-1 items-center gap-3.5 pr-3">
-                      <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
-                        <span style={{ filter: "grayscale(1) brightness(0)" }}>
-                          {r.emoji || "🎁"}
-                        </span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-[14px] font-extrabold text-foreground">
-                          {r.name}
-                        </p>
-                        {r.description && (
-                          <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
-                            {r.description}
-                          </p>
-                        )}
-                        <span className="mt-1 inline-block text-[11px] font-extrabold text-primary">
-                          {r.points_cost} pts
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleRedeemReward(r)}
-                      disabled={redeemingRewardId === r.id || points < r.points_cost}
-                      className={`shrink-0 rounded-full px-4 py-2 text-[11px] font-extrabold transition-all active:scale-95 ${
-                        points >= r.points_cost
-                          ? "bg-primary text-primary-foreground shadow-md hover:opacity-90"
-                          : "bg-muted text-muted-foreground cursor-not-allowed"
-                      }`}
-                    >
-                      {redeemingRewardId === r.id
-                        ? "Redeeming…"
-                        : points >= r.points_cost
-                          ? "Redeem"
-                          : "Locked"}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              /* Fallback Reward Display */
-              <div className="space-y-3">
+            <div className="space-y-3">
+              {rewards.map((r) => (
                 <div
-                  className="flex items-center justify-between rounded-[26px] bg-card p-4"
-                  style={{ boxShadow: "var(--shadow-card)", border: "1px solid var(--border)" }}
+                  key={r.id}
+                  className="flex items-center justify-between rounded-[26px] bg-card p-4 transition-all"
+                  style={{
+                    boxShadow: "var(--shadow-card)",
+                    border: "1px solid var(--border)",
+                  }}
                 >
-                  <div className="flex items-center gap-3.5 min-w-0 flex-1 pr-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-xl text-primary">
-                      <Gift className="h-5 w-5" />
+                  <div className="flex min-w-0 flex-1 items-center gap-3.5 pr-3">
+                    <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
+                      <span style={{ filter: "grayscale(1) brightness(0)" }}>
+                        {r.emoji || "🎁"}
+                      </span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] font-extrabold text-foreground">
-                        Free Special Chiya
+                        {r.name}
                       </p>
-                      <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
-                        1 Free cup of signature Chiya Tea
-                      </p>
+                      {r.description && (
+                        <p className="mt-0.5 truncate text-[11px] font-medium text-muted-foreground">
+                          {r.description}
+                        </p>
+                      )}
                       <span className="mt-1 inline-block text-[11px] font-extrabold text-primary">
-                        100 pts
+                        {r.points_cost} pts
                       </span>
                     </div>
                   </div>
-                  <Link
-                    to="/rewards"
-                    className="shrink-0 rounded-full bg-primary px-4 py-2 text-[11px] font-extrabold text-primary-foreground shadow-md"
+                  <button
+                    type="button"
+                    onClick={() => handleRedeemReward(r)}
+                    disabled={redeemingRewardId === r.id || points < r.points_cost}
+                    className={`shrink-0 rounded-full px-4 py-2 text-[11px] font-extrabold transition-all active:scale-95 ${
+                      points >= r.points_cost
+                        ? "bg-primary text-primary-foreground shadow-md hover:opacity-90"
+                        : "bg-muted text-muted-foreground cursor-not-allowed"
+                    }`}
                   >
-                    View
-                  </Link>
+                    {redeemingRewardId === r.id
+                      ? "Redeeming…"
+                      : points >= r.points_cost
+                        ? "Redeem"
+                        : "Locked"}
+                  </button>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
           </section>
         )}
 
@@ -884,6 +831,11 @@ function Index() {
             }
           }}
         />
+      )}
+
+      {/* Reward redemption code */}
+      {redemption && (
+        <RewardRedemptionModal redemption={redemption} onClose={() => setRedemption(null)} />
       )}
 
       {/* Table QR scanner */}

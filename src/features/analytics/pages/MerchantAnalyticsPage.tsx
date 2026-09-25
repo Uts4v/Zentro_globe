@@ -11,6 +11,7 @@ import {
   Gift,
   Download,
   FileText,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
@@ -22,6 +23,7 @@ import {
   getDefaultDateRange,
   type DateRange,
 } from "@/components/DateRangeSelector";
+import { AnalyticsTrendChart, BusiestHoursChart } from "@/components/charts";
 
 function errorMessage(e: unknown, fallback: string) {
   return e instanceof Error ? e.message : fallback;
@@ -157,36 +159,27 @@ export function MerchantAnalyticsPage() {
   const [historyPage, setHistoryPage] = useState(1);
   const perPage = 10;
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadAnalytics = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError("");
-    console.log(
-      `[Analytics] fetching: date_from=${dateRange.dateFrom}, date_to=${dateRange.dateTo}`,
-    );
 
-    analyticsApi
-      .merchant(undefined, dateRange.dateFrom, dateRange.dateTo)
-      .then((d) => {
-        if (!cancelled) {
-          console.log(
-            `[Analytics] response: total_revenue=${d?.total_revenue}, total_orders=${d?.total_orders}, period_days=${d?.period_days}`,
-          );
-          setData(d);
-        }
-      })
-      .catch((e: unknown) => {
-        console.error("[Analytics] fetch error:", e);
-        if (!cancelled) setError(errorMessage(e, "Failed to load analytics"));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const d = await analyticsApi.merchant(undefined, dateRange.dateFrom, dateRange.dateTo);
+      setData(d);
+    } catch (e: unknown) {
+      setError(errorMessage(e, "Failed to load analytics"));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [dateRange.dateFrom, dateRange.dateTo]);
+
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
 
   async function handleExport(type: "csv" | "pdf") {
     const params = {
@@ -289,6 +282,18 @@ export function MerchantAnalyticsPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            disabled={refreshing || loading}
+            onClick={() => {
+              loadAnalytics(true);
+              loadHistory();
+            }}
+            className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 disabled:opacity-50 transition-colors"
+            title="Refresh analytics and orders"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-ember" : ""}`} />
+            Refresh
+          </button>
+          <button
             disabled={exporting}
             onClick={() => handleExport("csv")}
             className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 disabled:opacity-50"
@@ -373,37 +378,22 @@ export function MerchantAnalyticsPage() {
       {/* Trend + peak hours */}
       <section className="grid gap-3 lg:grid-cols-3">
         <section className="glass-strong rounded-3xl p-6 lg:col-span-2">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
-                Revenue & orders
-              </p>
-              <h2 className="font-display mt-1 text-3xl text-foreground">
-                Trend over selected period
-              </h2>
-            </div>
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#E85D3A" }} />
-                Revenue
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="h-2 w-2 rounded-full bg-muted-foreground" />
-                Orders
-              </span>
-            </div>
+          <div>
+            <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+              Revenue & orders
+            </p>
+            <h2 className="font-display mt-1 text-3xl text-foreground">
+              Trend over selected period
+            </h2>
           </div>
 
-          <div className="mt-6 h-48">
-            {daily.length === 0 || daily.every((d) => d.revenue === 0 && d.orders === 0) ? (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                No completed orders in this period yet
-              </div>
-            ) : (
-              <TrendChart points={daily} />
-            )}
+          <div className="mt-4">
+            <AnalyticsTrendChart
+              points={daily}
+              currencySymbol={sym}
+              isLoading={loading}
+            />
           </div>
-          <DateLabels points={daily} />
         </section>
 
         <section className="glass-strong rounded-3xl p-6">
@@ -995,102 +985,4 @@ function PaymentList({ rows, sym = "Rs" }: { rows: { method: string; count: numb
   );
 }
 
-// ── Charts ────────────────────────────────────────────────────────────────────
 
-function DateLabels({ points }: { points: DailyPoint[] }) {
-  const n = points.length;
-  if (n === 0) return null;
-  const indices =
-    n <= 4
-      ? points.map((_, i) => i)
-      : [0, Math.round((n - 1) / 3), Math.round((2 * (n - 1)) / 3), n - 1];
-  return (
-    <div className="mt-2 flex justify-between text-[10px] text-muted-foreground">
-      {indices.map((i) => (
-        <span key={i}>{formatDay(points[i].date)}</span>
-      ))}
-    </div>
-  );
-}
-
-function TrendChart({ points }: { points: DailyPoint[] }) {
-  const W = 320;
-  const H = 120;
-  const n = Math.max(points.length - 1, 1);
-  const maxRev = Math.max(...points.map((p) => Number(p.revenue)), 1);
-  const maxOrders = Math.max(...points.map((p) => Number(p.orders)), 1);
-
-  const revLine = points
-    .map((p, i) => {
-      const x = (i / n) * W;
-      const y = H - (Number(p.revenue) / maxRev) * (H - 8) - 4;
-      return `${x.toFixed(2)},${y.toFixed(2)}`;
-    })
-    .join(" L ");
-  const revArea = `M ${revLine} L ${W},${H} L 0,${H} Z`;
-  const barW = Math.max((W / points.length) * 0.4, 2);
-
-  return (
-    <svg
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      className="h-full w-full overflow-visible"
-    >
-      <defs>
-        <linearGradient id="analytics-rev" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#E85D3A" stopOpacity="0.35" />
-          <stop offset="100%" stopColor="#E85D3A" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      {points.map((p, i) => {
-        const center = ((i + 0.5) / points.length) * W;
-        const bh = (Number(p.orders) / maxOrders) * (H - 8);
-        return (
-          <rect
-            key={p.date}
-            x={center - barW / 2}
-            y={H - bh}
-            width={barW}
-            height={bh}
-            rx={1.5}
-            fill="#D8D5CE"
-            opacity={0.7}
-          />
-        );
-      })}
-
-      <path d={revArea} fill="url(#analytics-rev)" />
-      <path d={`M ${revLine}`} fill="none" stroke="#E85D3A" strokeWidth="1.5" />
-    </svg>
-  );
-}
-
-function BusiestHoursChart({ hours }: { hours: HourPoint[] }) {
-  const max = Math.max(...hours.map((h) => h.count), 1);
-  return (
-    <div className="flex h-32 items-end gap-1">
-      {hours.map((h) => {
-        const height = h.count > 0 ? Math.max((h.count / max) * 100, 8) : 2;
-        const showLabel = h.hour % 6 === 0;
-        return (
-          <div
-            key={h.hour}
-            className="group relative flex flex-1 flex-col items-center justify-end gap-1"
-            title={`${h.hour}:00 — ${h.count} order${h.count === 1 ? "" : "s"}`}
-          >
-            <div
-              className="w-full rounded-t transition-opacity group-hover:opacity-100"
-              style={{
-                height: `${height}%`,
-                backgroundColor: "#E85D3A",
-                opacity: h.count > 0 ? 0.85 : 0.12,
-              }}
-            />
-            {showLabel && <span className="text-[9px] text-muted-foreground">{h.hour}:00</span>}
-          </div>
-        );
-      })}
-    </div>
-  );
-}

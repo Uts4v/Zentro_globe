@@ -101,3 +101,11 @@ export function calculateTax(
     breakdown,
   };
 }
+
+/**
+ * Round a money value to cents. Float math like `120 - 113.11` yields
+ * 6.890000000000001, which the API's 2-decimal fields reject.
+ */
+export function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100;
+}

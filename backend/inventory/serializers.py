@@ -108,6 +108,7 @@ class InventoryItemSerializer(serializers.ModelSerializer):
     stock_value = serializers.SerializerMethodField()
     avg_cost = serializers.SerializerMethodField()
     balance_count = serializers.SerializerMethodField()
+    menu_links = serializers.SerializerMethodField()
 
     class Meta:
         model = InventoryItem
@@ -121,13 +122,24 @@ class InventoryItemSerializer(serializers.ModelSerializer):
             "primary_supplier", "supplier_name", "count_schedule",
             "last_count_at", "next_count_due", "last_received_at",
             "current_stock", "total_stock", "status", "suggested_order",
-            "stock_value", "avg_cost", "balance_count",
+            "stock_value", "avg_cost", "balance_count", "menu_links",
             "created_at", "updated_at",
         ]
         read_only_fields = [
             "created_at", "updated_at", "current_stock", "total_stock",
             "status", "suggested_order", "stock_value", "avg_cost",
             "balance_count", "last_count_at", "next_count_due", "last_received_at",
+        ]
+
+    def get_menu_links(self, obj):
+        return [
+            {
+                "id": link.id,
+                "menu_item": link.menu_item_id,
+                "menu_item_name": link.menu_item.name,
+                "quantity_per_unit": str(link.quantity_per_unit),
+            }
+            for link in obj.menu_links.all()
         ]
 
     def _balance(self, obj):

@@ -9,7 +9,7 @@ enforcing tenant scoping on every object.
 """
 
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from django.db.models import F, Q, Sum
 from django.utils import timezone
@@ -28,6 +28,7 @@ from .models import (
     InventoryReceiving,
     InventoryTransfer,
     InventoryWasteRecord,
+    MenuItemStockLink,
     PurchaseOrder,
     StockCount,
     Supplier,
@@ -314,11 +315,57 @@ def items_view(request):
     return _item_create(request, merchant)
 
 
+def _parse_menu_links(merchant, raw):
+    """Validate a `menu_links` payload: [{"menu_item": id, "quantity_per_unit": "1"}].
+
+    Returns [(MenuItem, Decimal)]; raises ValueError with a user-facing message.
+    """
+    from merchants.models import MenuItem
+
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise ValueError("menu_links must be a list.")
+    quantities = {}
+    for row in raw:
+        if not isinstance(row, dict):
+            raise ValueError("Each menu link needs a menu_item.")
+        try:
+            menu_item_id = int(row.get("menu_item"))
+        except (TypeError, ValueError):
+            raise ValueError("Each menu link needs a menu_item.")
+        try:
+            qty = Decimal(str(row.get("quantity_per_unit", 1)))
+        except (InvalidOperation, ValueError):
+            raise ValueError("Quantity used per sale must be a number.")
+        if not qty.is_finite() or qty <= 0:
+            raise ValueError("Quantity used per sale must be greater than zero.")
+        quantities[menu_item_id] = qty.quantize(Decimal("0.000001"))
+    menu_items = {
+        m.id: m for m in MenuItem.objects.filter(merchant=merchant, id__in=quantities)
+    }
+    if len(menu_items) != len(quantities):
+        raise ValueError("Unknown menu item.")
+    return [(menu_items[mid], qty) for mid, qty in quantities.items()]
+
+
+def _replace_menu_links(merchant, item, parsed):
+    keep = []
+    for menu_item, qty in parsed:
+        link, _ = MenuItemStockLink.objects.update_or_create(
+            menu_item=menu_item,
+            inventory_item=item,
+            defaults={"merchant": merchant, "quantity_per_unit": qty},
+        )
+        keep.append(link.id)
+    MenuItemStockLink.objects.filter(inventory_item=item).exclude(id__in=keep).delete()
+
+
 def _item_list(request, merchant):
     qs = InventoryItem.objects.filter(merchant=merchant, archived=False).select_related(
         "category", "default_location", "primary_supplier", "base_unit",
         "preferred_display_unit", "count_schedule",
-    )
+    ).prefetch_related("menu_links__menu_item")
     # Filters
     q = (request.query_params.get("q") or "").strip()
     if q:
@@ -379,7 +426,12 @@ def _item_create(request, merchant):
     )
     if not serializer.is_valid():
         return Response(serializer.errors, status=400)
+    try:
+        menu_links = _parse_menu_links(merchant, request.data.get("menu_links"))
+    except ValueError as exc:
+        return Response({"detail": str(exc)}, status=400)
     item = serializer.save()
+    _replace_menu_links(merchant, item, menu_links)
     services.InventoryAuditLog.objects.create(
         merchant=merchant,
         user=request.user,
@@ -410,6 +462,12 @@ def item_detail_view(request, pk):
         return Response({"detail": "Not found."}, status=404)
     if request.method == "PATCH":
         data = request.data
+        menu_links = None
+        if "menu_links" in data:
+            try:
+                menu_links = _parse_menu_links(merchant, data["menu_links"])
+            except ValueError as exc:
+                return Response({"detail": str(exc)}, status=400)
         for field in (
             "name", "item_type", "category", "description", "sku", "barcode",
             "purchase_unit_label", "purchase_unit_conversion", "active",
@@ -436,6 +494,8 @@ def item_detail_view(request, pk):
                 else:
                     setattr(item, field, data[field])
         item.save()
+        if menu_links is not None:
+            _replace_menu_links(merchant, item, menu_links)
         services.InventoryAuditLog.objects.create(
             merchant=merchant,
             user=request.user,

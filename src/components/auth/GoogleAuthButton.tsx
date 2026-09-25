@@ -1,8 +1,7 @@
 // src/components/auth/GoogleAuthButton.tsx
-// "Continue with Google" — Google Identity Services (GIS) one-tap button.
-// The button is custom-styled to match the Zentro auth pages; clicking it
-// triggers Google's One Tap / sign-in popup and returns the credential as an
-// ID token JWT via onToken. That token is sent to POST /api/auth/google/.
+// "Continue with Google" — Google Identity Services (GIS).
+// Uses Google's official rendered button overlay to guarantee reliable, popup-based
+// OAuth sign-in across all browsers without One Tap FedCM suppression or cooldowns.
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -17,7 +16,20 @@ declare global {
             auto_select?: boolean;
             cancel_on_tap_outside?: boolean;
           }) => void;
-          prompt: (listener?: (notification: { isNotDisplayed: () => boolean }) => void) => void;
+          prompt: (listener?: (notification: unknown) => void) => void;
+          renderButton: (
+            parent: HTMLElement,
+            options: {
+              type?: "standard" | "icon";
+              theme?: "outline" | "filled_blue" | "filled_black";
+              size?: "large" | "medium" | "small";
+              text?: "signin_with" | "signup_with" | "continue_with" | "signin";
+              shape?: "rectangular" | "pill" | "circle" | "square";
+              logo_alignment?: "left" | "center";
+              width?: number | string;
+              click_listener?: () => void;
+            }
+          ) => void;
         };
       };
     };
@@ -29,6 +41,7 @@ const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?
 let gsiPromise: Promise<void> | null = null;
 
 function loadGsi(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
   if (window.google?.accounts?.id) return Promise.resolve();
   if (gsiPromise) return gsiPromise;
   gsiPromise = new Promise((resolve, reject) => {
@@ -55,11 +68,11 @@ export function GoogleAuthButton({
   className?: string;
 }) {
   const [busy, setBusy] = useState(false);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
   const callbackRef = useRef<
     ((response: { credential?: string; error?: string }) => void) | undefined
   >(undefined);
 
-  // Keep the latest callback without re-initialising the SDK on each render.
   callbackRef.current = (response) => {
     setBusy(false);
     if (response.credential) {
@@ -69,7 +82,50 @@ export function GoogleAuthButton({
     }
   };
 
-  const handleClick = async () => {
+  useEffect(() => {
+    if (!CLIENT_ID) return;
+    let isMounted = true;
+
+    loadGsi()
+      .then(() => {
+        if (!isMounted || !window.google?.accounts?.id) return;
+        const google = window.google;
+
+        google.accounts.id.initialize({
+          client_id: CLIENT_ID,
+          callback: (response) => callbackRef.current?.(response),
+          auto_select: false,
+          cancel_on_tap_outside: true,
+        });
+
+        if (overlayRef.current) {
+          overlayRef.current.innerHTML = "";
+          google.accounts.id.renderButton(overlayRef.current, {
+            type: "standard",
+            theme: "outline",
+            size: "large",
+            text: "continue_with",
+            shape: "pill",
+            width: 380,
+            click_listener: () => {
+              setBusy(true);
+            },
+          });
+        }
+      })
+      .catch((e) => {
+        if (isMounted) {
+          onError?.(e instanceof Error ? e.message : "Failed to load Google sign-in.");
+        }
+      });
+
+    return () => {
+      isMounted = false;
+      setBusy(false);
+    };
+  }, [onError]);
+
+  const handleFallbackClick = async () => {
     if (!CLIENT_ID) {
       onError?.("Google sign-in is not configured (add VITE_GOOGLE_CLIENT_ID).");
       return;
@@ -77,46 +133,40 @@ export function GoogleAuthButton({
     setBusy(true);
     try {
       await loadGsi();
-      const google = window.google!;
-      google.accounts.id.initialize({
-        client_id: CLIENT_ID,
-        callback: (response) => callbackRef.current?.(response),
-        auto_select: false,
-        cancel_on_tap_outside: true,
-      });
-      google.accounts.id.prompt();
+      window.google?.accounts?.id.prompt();
     } catch (e: unknown) {
       setBusy(false);
       onError?.(e instanceof Error ? e.message : "Could not start Google sign-in.");
     }
   };
 
-  useEffect(() => {
-    return () => {
-      // Destroy any open popup when unmounting.
-      if (window.google?.accounts?.id) {
-        // Not exposed as a stable API — prompt is cancelled via close anyway.
-        setBusy(false);
-      }
-    };
-  }, []);
-
   return (
-    <button
-      type="button"
-      disabled={busy}
-      onClick={handleClick}
-      className={`grid h-14 w-full place-items-center gap-2.5 rounded-2xl border border-input bg-background text-sm font-medium text-ink transition-all hover:bg-mist/60 disabled:opacity-50 ${className}`}
-    >
-      {busy ? (
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-      ) : (
-        <span aria-hidden="true" className="inline-flex items-center gap-2.5">
-          <GoogleG />
-          <span>{label}</span>
-        </span>
-      )}
-    </button>
+    <div className="relative w-full overflow-hidden rounded-2xl">
+      {/* Custom stylized Zentro button (visible to user) */}
+      <button
+        type="button"
+        disabled={busy}
+        onClick={handleFallbackClick}
+        className={`grid h-14 w-full place-items-center gap-2.5 rounded-2xl border border-input bg-background text-sm font-medium text-ink transition-all hover:bg-mist/60 disabled:opacity-50 ${className}`}
+      >
+        {busy ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : (
+          <span aria-hidden="true" className="inline-flex items-center gap-2.5">
+            <GoogleG />
+            <span>{label}</span>
+          </span>
+        )}
+      </button>
+
+      {/* Invisible Google official button overlay — ensures clicking opens the native popup dialog */}
+      <div
+        ref={overlayRef}
+        aria-hidden="true"
+        className="absolute inset-0 flex items-center justify-center opacity-[0.0001] cursor-pointer overflow-hidden pointer-events-auto"
+        style={{ transform: "scale(1.4)", transformOrigin: "center" }}
+      />
+    </div>
   );
 }
 

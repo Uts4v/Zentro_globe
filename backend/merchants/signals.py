@@ -13,7 +13,18 @@ from .models import MenuItem, MerchantProfile
 
 def _invalidate_merchant(merchant_id: int) -> None:
     cache.delete(f"zentro:menu:{merchant_id}")
-    # RedisCache supports delete_pattern; LocMemCache does not (TTL covers it).
+    bump_merchant_analytics_version(merchant_id)
+
+
+def bump_merchant_analytics_version(merchant_id: int) -> None:
+    """Invalidate all cached analytics responses for this merchant across all date ranges."""
+    if not merchant_id:
+        return
+    try:
+        ver = cache.get(f"zentro:analytics_ver:{merchant_id}", 1)
+        cache.set(f"zentro:analytics_ver:{merchant_id}", ver + 1, timeout=None)
+    except Exception:
+        pass
     delete_pattern = getattr(cache, "delete_pattern", None)
     if delete_pattern is not None:
         try:
@@ -44,3 +55,38 @@ def _on_merchant_profile_deleted(sender, instance, **kwargs):
 def _on_menu_item_changed(sender, instance, **kwargs):
     if instance.merchant_id:
         cache.delete(f"zentro:menu:{instance.merchant_id}")
+
+
+# Invalidate analytics cache whenever an order or order item changes
+def _connect_order_signals():
+    try:
+        from orders.models import Order, OrderItem
+        from pos.models import PosPayment
+
+        @receiver(post_save, sender=Order, dispatch_uid="analytics_order_saved")
+        @receiver(post_delete, sender=Order, dispatch_uid="analytics_order_deleted")
+        def _on_order_changed(sender, instance, **kwargs):
+            if instance.merchant_id:
+                bump_merchant_analytics_version(instance.merchant_id)
+
+        @receiver(post_save, sender=OrderItem, dispatch_uid="analytics_order_item_saved")
+        @receiver(post_delete, sender=OrderItem, dispatch_uid="analytics_order_item_deleted")
+        def _on_order_item_changed(sender, instance, **kwargs):
+            if instance.order and instance.order.merchant_id:
+                bump_merchant_analytics_version(instance.order.merchant_id)
+
+        @receiver(post_save, sender=PosPayment, dispatch_uid="analytics_pos_payment_saved")
+        @receiver(post_delete, sender=PosPayment, dispatch_uid="analytics_pos_payment_deleted")
+        def _on_payment_changed(sender, instance, **kwargs):
+            m_id = None
+            if instance.order and instance.order.merchant_id:
+                m_id = instance.order.merchant_id
+            elif instance.shift and instance.shift.device and instance.shift.device.merchant_id:
+                m_id = instance.shift.device.merchant_id
+            if m_id:
+                bump_merchant_analytics_version(m_id)
+    except Exception:
+        pass
+
+
+_connect_order_signals()

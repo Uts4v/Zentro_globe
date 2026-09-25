@@ -30,6 +30,7 @@ from loyalty.services import (
 )
 from notifications.services import send_notification
 from notifications.models import Notification
+from inventory.order_stock import safe_deduct_stock_for_order, safe_restore_stock_for_order
 
 from .models import Order, OrderItem, OrderItemOption
 from .serializers import CustomerOrderSerializer, OrderSerializer, CreateOrderSerializer, CreateGuestOrderSerializer, AddItemsToOrderSerializer
@@ -246,13 +247,24 @@ def _refund_reward_redemption_points(order: Order):
         redemption.reward.save(update_fields=["stock"])
 
 
+def _counts_toward_loyalty(order: Order) -> bool:
+    """Claiming a punch card's free reward is not a new visit.
+
+    The claim order stays in history (and on the card's REDEEMED event), but
+    it must not earn points, punch the next card, bump the order count or
+    visit streak, or advance missions.
+    """
+    return order.order_type != Order.ORDER_TYPE_PUNCH_REDEMPTION
+
+
 def _award_loyalty(order: Order):
     customer = order.customer
     wallet   = get_or_create_wallet(customer, order.merchant)
+    counts   = _counts_toward_loyalty(order)
 
     old_balance = wallet.points_balance
 
-    if order.points_earned > 0:
+    if counts and order.points_earned > 0:
         award_wallet_points(
             wallet, order.points_earned,
             transaction_type="EARNED",
@@ -260,9 +272,11 @@ def _award_loyalty(order: Order):
             order=order,
         )
 
-    wallet.order_count += 1
-    wallet.save(update_fields=["order_count", "updated_at"])
-    streak_incremented = update_wallet_streak(wallet)
+    streak_incremented = False
+    if counts:
+        wallet.order_count += 1
+        wallet.save(update_fields=["order_count", "updated_at"])
+        streak_incremented = update_wallet_streak(wallet)
 
     user = customer.user
 
@@ -317,6 +331,9 @@ def _award_loyalty(order: Order):
                 )
 
     transaction.on_commit(_notify_completion)
+
+    if not counts:
+        return
 
     # Punch cards
     for merchant_card in MerchantPunchCard.objects.filter(
@@ -1037,6 +1054,13 @@ def update_order_status(request, pk):
     order.version += 1
     order.save(update_fields=["status", "loyalty_awarded", "version", "updated_at"])
 
+    # Accepting a pending dine-in order consumes its linked stock; cancelling
+    # puts back whatever was consumed.
+    if _previous_status == Order.STATUS_PENDING and new_status == Order.STATUS_CONFIRMED:
+        safe_deduct_stock_for_order(order, performed_by=request.user)
+    elif new_status == Order.STATUS_CANCELLED:
+        safe_restore_stock_for_order(order, performed_by=request.user)
+
     try:
         _audit_order(
             order, "order_status_change",
@@ -1125,6 +1149,8 @@ def cancel_order(request, pk):
         _refund_reward_redemption_points(order)
 
     order.save(update_fields=["status", "cancelled_by", "cancellation_reason", "updated_at"])
+
+    safe_restore_stock_for_order(order, performed_by=request.user)
 
     _audit_order(
         order,
@@ -1238,7 +1264,12 @@ def add_items_to_order(request, pk):
     # Apply preparation routing for new items
     new_items_data = prepare_order_items_for_routing(order, new_items_data)
 
-    _bulk_create_items_with_options(order, new_items_data, option_rows)
+    created_items = _bulk_create_items_with_options(order, new_items_data, option_rows)
+
+    # Items added to an already-confirmed dine-in order consume stock now;
+    # a pending order's items are consumed when it is confirmed.
+    if order.status != Order.STATUS_PENDING:
+        safe_deduct_stock_for_order(order, lines=created_items, performed_by=request.user)
 
     # Drop the stale prefetch cache so order.items.all() re-queries and
     # actually sees the rows we just created.

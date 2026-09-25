@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Check,
   Gift,
+  Star,
 } from "lucide-react";
 
 interface CartPanelProps {
@@ -41,6 +42,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const setCartNotes = usePosStore((s) => s.setCartNotes);
   const setFulfillmentType = usePosStore((s) => s.setFulfillmentType);
   const setSelectedTable = usePosStore((s) => s.setSelectedTable);
+  const selectedCustomerId = usePosStore((s) => s.selectedCustomerId);
   const setSelectedCustomer = usePosStore((s) => s.setSelectedCustomer);
 
   const currencySymbol = posSettings?.currency_symbol || "Rs";
@@ -48,7 +50,11 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const [showNotes, setShowNotes] = useState(false);
   const [printingBill, setPrintingBill] = useState(false);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
-  const [linkedCustomer, setLinkedCustomer] = useState<PosCustomer | null>(null);
+  const [pickedCustomer, setPickedCustomer] = useState<PosCustomer | null>(null);
+  // clearCart() drops the store's customer after an order is placed; only show
+  // the card while that customer is still the one attached to the cart.
+  const linkedCustomer =
+    pickedCustomer && pickedCustomer.id === selectedCustomerId ? pickedCustomer : null;
   const activeShift = usePosStore((s) => s.activeShift);
   const [showFreeConfirm, setShowFreeConfirm] = useState(false);
   const [freeOrderLoading, setFreeOrderLoading] = useState(false);
@@ -292,6 +298,16 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                   {linkedCustomer.phone || linkedCustomer.email || "No contact"}
                   {linkedCustomer.membership_number && ` · ${linkedCustomer.membership_number}`}
                 </p>
+                <div className="mt-1 flex items-center gap-2 text-[11px]">
+                  <span className="flex items-center gap-1 font-semibold text-amber-600">
+                    <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                    {linkedCustomer.loyalty_points} pts
+                  </span>
+                  <span className="text-muted-foreground">
+                    {linkedCustomer.total_orders}{" "}
+                    {linkedCustomer.total_orders === 1 ? "previous order" : "previous orders"}
+                  </span>
+                </div>
               </div>
               <div className="flex shrink-0 flex-col gap-1">
                 <button
@@ -302,7 +318,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                 </button>
                 <button
                   onClick={() => {
-                    setLinkedCustomer(null);
+                    setPickedCustomer(null);
                     setSelectedCustomer(null);
                   }}
                   className="text-right text-[11px] font-medium text-muted-foreground hover:text-destructive"
@@ -333,7 +349,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
       {showCustomerSearch && (
         <CustomerSearchModal
           onSelect={(customer) => {
-            setLinkedCustomer(customer);
+            setPickedCustomer(customer);
             setSelectedCustomer(customer.id || null);
             setShowCustomerSearch(false);
           }}

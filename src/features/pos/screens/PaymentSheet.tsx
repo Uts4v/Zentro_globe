@@ -9,7 +9,7 @@ import {
   posListDebitAccounts,
   DebitAccount,
 } from "../api";
-import { formatCurrency, calculateTax } from "@/lib/currency";
+import { formatCurrency, calculateTax, roundMoney } from "@/lib/currency";
 import Receipt from "../printing/Receipt";
 import KOTTicket, { kotTicketFromReceipt, printKOT, KOTTicketData } from "../printing/KOTTicket";
 import {
@@ -163,8 +163,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         worker_id: currentWorker.id,
         device_id: device.id,
         payment_method: method,
-        amount: total,
-        change_amount: method === "cash" ? change : 0,
+        amount: roundMoney(total),
+        change_amount: method === "cash" ? roundMoney(change) : 0,
         debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
         client_mutation_id: safeUuid(),
       });

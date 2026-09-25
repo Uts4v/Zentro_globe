@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { safeUuid } from "@/lib/utils";
-import { formatCurrency } from "@/lib/currency";
+import { formatCurrency, roundMoney } from "@/lib/currency";
 import { usePosStore } from "../store";
 import {
   posCreatePayment,
@@ -40,7 +40,8 @@ const PAYMENT_METHODS: Array<{
 interface CollectPaymentSheetProps {
   order: PosOrder;
   onClose: () => void;
-  onPaid: () => void;
+  /** Receives the order's payment state as reported by the server, when known. */
+  onPaid: (update?: Pick<PosOrder, "payment_status" | "payment_method" | "status">) => void;
 }
 
 export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectPaymentSheetProps) {
@@ -79,8 +80,22 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
       debitAccounts.find((a) => a.id === selectedDebitAccount && Number(a.balance) >= total));
   const canSubmit = !submitting && isCashValid && isDebitValid;
 
+  function paidUpdate() {
+    return receiptData
+      ? {
+          payment_status: receiptData.payment_status,
+          payment_method: receiptData.payment_method,
+          status: receiptData.status,
+        }
+      : undefined;
+  }
+
   async function handleSubmit() {
-    if (!canSubmit || !merchant || !currentWorker || !device || !activeShift) return;
+    if (!canSubmit || !merchant || !currentWorker || !device) return;
+    if (!activeShift) {
+      setError("Open a cash shift before collecting payment.");
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
@@ -92,8 +107,8 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
         worker_id: currentWorker.id,
         device_id: device.id,
         payment_method: method,
-        amount: total,
-        change_amount: method === "cash" ? change : 0,
+        amount: roundMoney(total),
+        change_amount: method === "cash" ? roundMoney(change) : 0,
         debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
         client_mutation_id: safeUuid(),
       });
@@ -126,9 +141,10 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
             </div>
             <button
               onClick={() => {
+                const update = paidUpdate();
                 setReceiptData(null);
                 onClose();
-                onPaid();
+                onPaid(update);
               }}
               className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
             >
@@ -164,9 +180,10 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
           <div className="flex gap-3 border-t border-border px-6 py-4">
             <button
               onClick={() => {
+                const update = paidUpdate();
                 setReceiptData(null);
                 onClose();
-                onPaid();
+                onPaid(update);
               }}
               className="flex-1 rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90"
             >

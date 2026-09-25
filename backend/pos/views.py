@@ -21,6 +21,7 @@ from notifications.services import send_notification
 from notifications.models import Notification
 from orders.views import _award_loyalty, _deduct_reward_redemption_points
 from config.order_utils import parse_quantity, QuantityValidationError
+from inventory.order_stock import safe_deduct_stock_for_order, safe_restore_stock_for_order
 
 from .models import (
     PosDevice, ShiftWorker, CashShift, PosPayment,
@@ -109,6 +110,15 @@ def _notify_safe(**kwargs):
         send_notification(**kwargs)
     except Exception:
         logger.exception("Notification failed (POS flow continues)")
+
+
+# The POS cart labels fulfillment "dine-in" / "takeaway"; map those onto the
+# Order model's choices so dine-in orders aren't silently stored as pickup.
+_POS_FULFILLMENT_ALIASES = {
+    "dine-in": Order.FULFILLMENT_DINE_IN,
+    "takeaway": Order.FULFILLMENT_PICKUP,
+    "take-away": Order.FULFILLMENT_PICKUP,
+}
 
 
 # ── Health Check ───────────────────────────────────────────────────────────────
@@ -1435,6 +1445,7 @@ def create_pos_order(request):
     # Determine order type and source
     customer = None
     fulfillment = data.get("fulfillment_type", Order.FULFILLMENT_PICKUP)
+    fulfillment = _POS_FULFILLMENT_ALIASES.get(fulfillment, fulfillment)
     if fulfillment not in dict(Order.FULFILLMENT_CHOICES):
         fulfillment = Order.FULFILLMENT_PICKUP
 
@@ -1528,6 +1539,10 @@ def create_pos_order(request):
                         display_order=display_order,
                     ))
             OrderItemOption.objects.bulk_create(snapshot_rows, batch_size=200)
+
+            # POS orders are created confirmed, so dine-in orders consume
+            # linked stock now (at most once per line).
+            safe_deduct_stock_for_order(order, lines=created_items, performed_by=request.user)
 
             # Record client mutation for idempotency
             if client_mutation_id:
@@ -1635,9 +1650,17 @@ def update_order_status_uuid(request):
         _award_loyalty(order)
         order.loyalty_awarded = True
 
+    previous_status = order.status
     order.status = new_status
     order.version += 1
     order.save(update_fields=["status", "loyalty_awarded", "version", "updated_at"])
+
+    # Accepting a pending dine-in order (e.g. table QR) consumes its linked
+    # stock; cancelling puts back whatever was consumed.
+    if previous_status == Order.STATUS_PENDING and new_status == Order.STATUS_CONFIRMED:
+        safe_deduct_stock_for_order(order, performed_by=request.user)
+    elif new_status == Order.STATUS_CANCELLED:
+        safe_restore_stock_for_order(order, performed_by=request.user)
 
     _audit(merchant, PosAuditLog.ACTION_ORDER_UPDATE,
            device=device, worker=worker, user=request.user,
@@ -1755,6 +1778,15 @@ def create_payment(request):
             return Response(PosPaymentSerializer(existing_payment).data)
         except PosPayment.DoesNotExist:
             pass
+
+    # A settled order must not be charged again — a stale screen or a second
+    # device would otherwise collect the same bill twice.
+    if order.payment_status in ("paid", "refunded"):
+        return Response(
+            {"error": f"This order is already {order.payment_status}.",
+             "payment_status": order.payment_status},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     # Validate debit account BEFORE creating the payment so a failed
     # debit check can never leave an orphan payment row behind.
@@ -1908,6 +1940,13 @@ def create_split_payment(request):
     except Order.DoesNotExist:
         return Response({"error": "Order not found."},
                         status=status.HTTP_404_NOT_FOUND)
+
+    if order.payment_status in ("paid", "refunded"):
+        return Response(
+            {"error": f"This order is already {order.payment_status}.",
+             "payment_status": order.payment_status},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     try:
         shift = CashShift.objects.get(
@@ -3259,9 +3298,7 @@ def search_customers(request):
     if len(q) < 2:
         return Response([])
 
-    from loyalty.models import CustomerMerchantProfile
-
-    profiles = (
+    profiles = list(
         CustomerProfile.objects
         .select_related("user")
         .filter(
@@ -3275,30 +3312,58 @@ def search_customers(request):
         .distinct()[:20]
     )
 
+    return Response(_pos_customer_payloads(profiles, merchant))
+
+
+def _pos_customer_payloads(profiles, merchant):
+    """Serialize customers for the POS with their loyalty data at this merchant.
+
+    Points and tier come from the customer's wallet at this merchant — the
+    global CustomerProfile.loyalty_points / total_orders counters are legacy
+    and never updated. The order count is the customer's non-cancelled
+    orders at this merchant, excluding free reward claims (punch card and
+    points redemptions), which aren't purchases.
+    """
+    from loyalty.models import CustomerMerchantProfile, CustomerMerchantWallet
+
+    ids = [p.id for p in profiles]
+    wallets = {
+        w.customer_id: w
+        for w in CustomerMerchantWallet.objects.filter(merchant=merchant, customer_id__in=ids)
+    }
+    memberships = dict(
+        CustomerMerchantProfile.objects
+        .filter(merchant=merchant, customer_id__in=ids)
+        .values_list("customer_id", "membership_number")
+    )
+    order_counts = dict(
+        Order.objects
+        .filter(merchant=merchant, customer_id__in=ids)
+        .exclude(status=Order.STATUS_CANCELLED)
+        .exclude(order_type__in=[
+            Order.ORDER_TYPE_PUNCH_REDEMPTION, Order.ORDER_TYPE_REWARD_REDEMPTION,
+        ])
+        .order_by()
+        .values("customer_id")
+        .annotate(n=Count("id"))
+        .values_list("customer_id", "n")
+    )
+
     results = []
     for p in profiles:
-        membership_number = ""
-        try:
-            cmp = CustomerMerchantProfile.objects.get(
-                customer=p, merchant=merchant
-            )
-            membership_number = cmp.membership_number or ""
-        except CustomerMerchantProfile.DoesNotExist:
-            pass
-
+        wallet = wallets.get(p.id)
         results.append({
             "id": p.id,
             "full_name": p.full_name,
             "email": p.user.email,
             "phone": p.user.phone,
-            "transfer_code": p.transfer_code,
-            "membership_number": membership_number,
-            "loyalty_points": p.loyalty_points,
-            "tier": p.tier,
-            "total_orders": p.total_orders,
+            "transfer_code": p.transfer_code or "",
+            "membership_number": memberships.get(p.id) or "",
+            "loyalty_points": wallet.points_balance if wallet else 0,
+            "tier": wallet.tier_level if wallet else CustomerMerchantWallet.TIER_BRONZE,
+            "total_orders": order_counts.get(p.id, 0),
         })
-
-    return Response(results)
+    return results
 
 
 @api_view(["POST"])
@@ -3316,7 +3381,6 @@ def create_customer(request):
     """
     import re
     from loyalty.services import join_merchant
-    from loyalty.models import CustomerMerchantProfile
 
     merchant = _get_merchant(request)
     if not _require_pos(merchant):
@@ -3384,19 +3448,10 @@ def create_customer(request):
            entity_type="customer", entity_id=str(profile.id),
            metadata={"full_name": full_name, "phone": phone, "email": email})
 
-    return Response({
-        "id": profile.id,
-        "full_name": profile.full_name,
-        "email": user.email,
-        "phone": user.phone,
-        "transfer_code": profile.transfer_code or "",
-        "membership_number": CustomerMerchantProfile.objects.filter(
-            customer=profile, merchant=merchant
-        ).values_list("membership_number", flat=True).first() or "",
-        "loyalty_points": profile.loyalty_points,
-        "tier": profile.tier,
-        "total_orders": profile.total_orders,
-    }, status=status.HTTP_201_CREATED)
+    return Response(
+        _pos_customer_payloads([profile], merchant)[0],
+        status=status.HTTP_201_CREATED,
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

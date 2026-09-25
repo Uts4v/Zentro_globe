@@ -753,6 +753,8 @@ def merchant_analytics(request):
             d_from = d_to = None
 
     if d_from is not None and d_to is not None:
+        if d_from > d_to:
+            d_from, d_to = d_to, d_from
         period_start = day_start(d_from)
         period_end = day_start(d_to) + timedelta(days=1)
         days = max(1, (d_to - d_from).days + 1)
@@ -760,18 +762,23 @@ def merchant_analytics(request):
         period_start = today_start - timedelta(days=days - 1)
         period_end = today_start + timedelta(days=1)
 
-    # Heavy aggregation below — serve a short-lived cache when possible.
-    analytics_key = f"zentro:analytics:{merchant.id}:{days}:{d_from or ''}:{d_to or ''}"
+    # Heavy aggregation below — serve a version-checked cache when possible.
+    analytics_ver = cache.get(f"zentro:analytics_ver:{merchant.id}", 1)
+    analytics_key = f"zentro:analytics:{merchant.id}:{analytics_ver}:{days}:{d_from or ''}:{d_to or ''}"
     cached = cache.get(analytics_key)
     if cached is not None:
         return Response(cached)
 
-    # Non-cancelled orders define revenue/orders; cancelled orders are excluded.
-    orders_qs = Order.objects.filter(
-        merchant=merchant,
+    # All merchant non-cancelled orders (for global today/weekly velocity and stats)
+    all_orders_qs = Order.objects.filter(
+        merchant=merchant
+    ).exclude(status=Order.STATUS_CANCELLED)
+
+    # Period-specific orders define revenue/orders for the requested date range
+    orders_qs = all_orders_qs.filter(
         created_at__gte=period_start,
         created_at__lt=period_end,
-    ).exclude(status=Order.STATUS_CANCELLED)
+    )
 
     agg = orders_qs.aggregate(
         total_revenue=Sum("total_amount"),
@@ -787,18 +794,20 @@ def merchant_analytics(request):
         .annotate(revenue=Sum("total_amount"), orders=Count("id"))
     )
     daily_map = {r["date"]: r for r in daily_rows}
+    daily_map_str = {str(r["date"]): r for r in daily_rows}
     daily_revenue = []
     for i in range(days):
         d = period_start.date() + timedelta(days=i)
-        row = daily_map.get(d) or {}
+        d_str = str(d)
+        row = daily_map.get(d) or daily_map_str.get(d_str) or {}
         daily_revenue.append({
-            "date": str(d),
+            "date": d_str,
             "revenue": float(row.get("revenue") or 0),
             "orders": int(row.get("orders") or 0),
         })
 
     def _day_summary(start):
-        sub = orders_qs.filter(created_at__gte=start, created_at__lt=start + timedelta(days=1))
+        sub = all_orders_qs.filter(created_at__gte=start, created_at__lt=start + timedelta(days=1))
         s = sub.aggregate(revenue=Sum("total_amount"), orders=Count("id"))
         return {"revenue": float(s["revenue"] or 0), "orders": int(s["orders"] or 0)}
 
@@ -817,9 +826,10 @@ def merchant_analytics(request):
         return [{"hour": h, "count": counts.get(h, 0)} for h in range(24)]
 
     hourly_velocity = _hourly_series(
-        orders_qs.filter(created_at__gte=today_start, created_at__lt=today_start + timedelta(days=1))
+        all_orders_qs.filter(created_at__gte=today_start, created_at__lt=today_start + timedelta(days=1))
     )
     busiest_hours = _hourly_series(orders_qs)
+
 
     # ── Top items ─────────────────────────────────────────────────────────────
     top_items = (
@@ -897,7 +907,7 @@ def merchant_analytics(request):
     prev_week_start = week_start - timedelta(days=7)
 
     def _week_summary(start):
-        s = orders_qs.filter(created_at__gte=day_start(start), created_at__lt=day_start(start) + timedelta(days=7)).aggregate(
+        s = all_orders_qs.filter(created_at__gte=day_start(start), created_at__lt=day_start(start) + timedelta(days=7)).aggregate(
             revenue=Sum("total_amount"), orders=Count("id")
         )
         return {"revenue": float(s["revenue"] or 0), "orders": int(s["orders"] or 0)}

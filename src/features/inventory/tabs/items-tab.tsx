@@ -1,13 +1,15 @@
 // src/features/inventory/tabs/items-tab.tsx
 import { useCallback, useEffect, useState } from "react";
-import { Search, Plus, Pencil, Archive, Loader2 } from "lucide-react";
+import { Search, Plus, Pencil, Archive, Loader2, X } from "lucide-react";
 import {
   inventoryApi,
+  menuApi,
   type InventoryCategory,
   type InventoryItem,
   type InventoryLocation,
   type InventoryUnit,
   type InventoryStatus,
+  type MenuItem,
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -61,6 +63,8 @@ function draftFields() {
   };
 }
 
+type MenuLinkDraft = { menu_item: string; menu_item_name: string; quantity_per_unit: string };
+
 function ItemFormDialog({
   open,
   onOpenChange,
@@ -79,12 +83,31 @@ function ItemFormDialog({
   onSaved: () => void;
 }) {
   const [f, setF] = useState(draftFields);
+  const [links, setLinks] = useState<MenuLinkDraft[]>([]);
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
+    if (!open || menuItems.length > 0) return;
+    menuApi
+      .myItems()
+      .then((d) => {
+        if (Array.isArray(d)) setMenuItems(d.filter((m) => m.status !== "archived"));
+      })
+      .catch(() => void 0);
+  }, [open, menuItems.length]);
+
+  useEffect(() => {
     if (!open) return;
     setErr("");
+    setLinks(
+      (item?.menu_links ?? []).map((l) => ({
+        menu_item: String(l.menu_item),
+        menu_item_name: l.menu_item_name,
+        quantity_per_unit: String(Number(l.quantity_per_unit)),
+      })),
+    );
     if (item) {
       setF({
         name: item.name,
@@ -110,6 +133,12 @@ function ItemFormDialog({
     setF((prev) => ({ ...prev, [k]: v }));
   }
 
+  function setLink(index: number, patch: Partial<MenuLinkDraft>) {
+    setLinks((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
+  }
+
+  const unitCode = units.find((u) => String(u.id) === f.base_unit)?.code ?? "";
+
   async function submit() {
     setBusy(true);
     setErr("");
@@ -126,6 +155,12 @@ function ItemFormDialog({
         par_level: f.par_level || null,
         reorder_point: f.reorder_point || null,
         critical_level: f.critical_level || null,
+        menu_links: links
+          .filter((l) => l.menu_item)
+          .map((l) => ({
+            menu_item: Number(l.menu_item),
+            quantity_per_unit: l.quantity_per_unit || "1",
+          })),
       };
       if (!item) {
         payload.opening_quantity = f.opening_quantity || null;
@@ -249,6 +284,70 @@ function ItemFormDialog({
               </Field>
             </div>
           )}
+
+          <details className="rounded-xl border border-border px-3 py-2">
+            <summary className="cursor-pointer text-sm font-semibold text-foreground">
+              Use Up When Sold{links.length > 0 && ` (${links.length})`}
+            </summary>
+            <div className="mt-3 space-y-2">
+              <p className="text-xs text-muted-foreground">
+                Dine-in orders for these menu items take stock from this item automatically.
+              </p>
+              {links.map((link, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <select
+                    aria-label="Menu item"
+                    className={`${inputCls} min-w-0 flex-1`}
+                    value={link.menu_item}
+                    onChange={(e) => setLink(i, { menu_item: e.target.value })}
+                  >
+                    <option value="">— Menu item —</option>
+                    {link.menu_item && !menuItems.some((m) => String(m.id) === link.menu_item) && (
+                      <option value={link.menu_item}>{link.menu_item_name}</option>
+                    )}
+                    {menuItems.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    step="any"
+                    min="0"
+                    aria-label="Amount used per sale"
+                    title="Amount used per sale"
+                    className={`${inputCls} w-24`}
+                    value={link.quantity_per_unit}
+                    onChange={(e) => setLink(i, { quantity_per_unit: e.target.value })}
+                  />
+                  <span className="w-10 shrink-0 text-xs text-muted-foreground">{unitCode}</span>
+                  <button
+                    type="button"
+                    title="Remove"
+                    onClick={() => setLinks((prev) => prev.filter((_, j) => j !== i))}
+                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setLinks((prev) => [
+                    ...prev,
+                    { menu_item: "", menu_item_name: "", quantity_per_unit: "1" },
+                  ])
+                }
+              >
+                <Plus className="h-4 w-4" />
+                Link a menu item
+              </Button>
+            </div>
+          </details>
 
           <details className="rounded-xl border border-border px-3 py-2">
             <summary className="cursor-pointer text-sm font-semibold text-foreground">

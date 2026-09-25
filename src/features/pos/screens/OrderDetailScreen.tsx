@@ -47,6 +47,14 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-red-100 text-red-600",
 };
 
+// Payment can still be collected unless the order is already settled or void.
+function canCollectPayment(order: PosOrder) {
+  return (
+    !["paid", "refunded"].includes(order.payment_status) &&
+    !["cancelled", "refunded"].includes(order.status)
+  );
+}
+
 export default function OrderDetailScreen({
   orderId,
   onBack,
@@ -79,11 +87,12 @@ export default function OrderDetailScreen({
     try {
       const data = await posListOrders();
       setOrders(data);
-      // If a specific orderId was requested, select it
-      if (orderId) {
-        const found = data.find((o) => o.id === orderId);
-        if (found) setSelectedOrder(found);
-      }
+      // Keep an open order in sync with the server (e.g. after a payment);
+      // otherwise select the requested order, if any.
+      setSelectedOrder((prev) => {
+        if (prev) return data.find((o) => o.uuid === prev.uuid) ?? prev;
+        return (orderId && data.find((o) => o.id === orderId)) || null;
+      });
     } catch {
       // ignore
     } finally {
@@ -257,7 +266,7 @@ export default function OrderDetailScreen({
           <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-xl bg-muted/50 p-3">
               <p className="text-[10px] uppercase text-muted-foreground">Type</p>
-              <p className="font-medium capitalize">{order.fulfillment_type}</p>
+              <p className="font-medium capitalize">{order.fulfillment_type.replace(/_/g, " ")}</p>
             </div>
             <div className="rounded-xl bg-muted/50 p-3">
               <p className="text-[10px] uppercase text-muted-foreground">Source</p>
@@ -367,7 +376,7 @@ export default function OrderDetailScreen({
             )}
 
             {/* Pay button for unpaid orders */}
-            {order.payment_status !== "paid" && order.status !== "cancelled" && (
+            {canCollectPayment(order) && (
               <button
                 onClick={() => setShowCollectPayment(true)}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700"
@@ -434,8 +443,18 @@ export default function OrderDetailScreen({
           <CollectPaymentSheet
             order={order}
             onClose={() => setShowCollectPayment(false)}
-            onPaid={() => {
+            onPaid={(update) => {
               setShowCollectPayment(false);
+              // Apply the server-reported payment state right away so the
+              // Collect Payment button disappears, then refresh everything.
+              if (update) {
+                setSelectedOrder((prev) =>
+                  prev?.uuid === order.uuid ? { ...prev, ...update } : prev,
+                );
+                setOrders((prev) =>
+                  prev.map((o) => (o.uuid === order.uuid ? { ...o, ...update } : o)),
+                );
+              }
               loadOrders();
             }}
           />
@@ -537,7 +556,7 @@ export default function OrderDetailScreen({
                       >
                         {order.status.toUpperCase()}
                       </span>
-                      {order.payment_status !== "paid" && order.status !== "cancelled" && (
+                      {canCollectPayment(order) && (
                         <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
                           {order.payment_status === "partially_paid" ? "PART PAID" : "UNPAID"}
                         </span>

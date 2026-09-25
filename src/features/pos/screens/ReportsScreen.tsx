@@ -54,8 +54,14 @@ export default function ReportsScreen() {
   }
 
   // Compute stats
-  const today = new Date().toISOString().split("T")[0];
-  const todayOrders = orders.filter((o) => o.created_at.startsWith(today));
+  const today = new Date().toLocaleDateString("en-CA");
+  const todayOrders = orders.filter((o) => {
+    try {
+      return new Date(o.created_at).toLocaleDateString("en-CA") === today;
+    } catch {
+      return o.created_at.startsWith(today);
+    }
+  });
   const completedOrders = todayOrders.filter((o) => o.status === "completed");
   const totalRevenue = completedOrders.reduce(
     (sum, o) => sum + Number(o.total_amount),

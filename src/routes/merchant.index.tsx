@@ -1,9 +1,9 @@
-﻿// C:\Users\ACER\Desktop\NTE Loyalty\zentro-glow-loyalty\src\routes\merchant.index.tsx
 import { createFileRoute } from "@tanstack/react-router";
-import { TrendingUp, Users, Coffee, Loader2, Activity, ShoppingBag } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { TrendingUp, Users, Coffee, Loader2, Activity, ShoppingBag, RefreshCw } from "lucide-react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { analyticsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { DashboardOrderChart } from "@/components/charts";
 
 export const Route = createFileRoute("/merchant/")({
   head: () => ({ meta: [{ title: "Overview · Merchant · Zentro" }] }),
@@ -18,7 +18,7 @@ interface TopItem {
 }
 
 interface OverviewStats {
-  trend: { date: string; count: number }[];
+  trend: { date: string; count: number; revenue: number }[];
   velocity_change: number;
   active_members: number;
   today: { orders: number; revenue: number };
@@ -54,6 +54,7 @@ function buildOverviewStats(data: AnalyticsResponse): OverviewStats {
   const trend = daily.slice(-12).map((d) => ({
     date: d.date,
     count: Number(d.orders ?? 0),
+    revenue: Number(d.revenue ?? 0),
   }));
 
   const todayRev = Number(data.today?.revenue ?? 0);
@@ -93,21 +94,19 @@ function Overview() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [topItems, setTopItems] = useState<TopItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
-  useEffect(() => {
-    if (!merchantProfile?.id) return;
+  const loadOverview = useCallback(
+    async (isRefresh = false) => {
+      if (!merchantProfile?.id) return;
 
-    let cancelled = false;
-
-    async function loadOverview() {
-      setLoading(true);
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
       setError("");
 
       try {
         const data = await analyticsApi.merchant(30);
-        if (cancelled) return;
-
         setStats(buildOverviewStats(data));
 
         // Top items from Django analytics
@@ -121,19 +120,18 @@ function Overview() {
           }));
         setTopItems(rankedItems);
       } catch (err: unknown) {
-        if (!cancelled)
-          setError(err instanceof Error ? err.message : "Failed to load merchant overview");
+        setError(err instanceof Error ? err.message : "Failed to load merchant overview");
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
+        setRefreshing(false);
       }
-    }
+    },
+    [merchantProfile?.id]
+  );
 
+  useEffect(() => {
     loadOverview();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [merchantProfile?.id]);
+  }, [loadOverview]);
 
   const today = stats?.today ?? {
     orders: 0,
@@ -214,12 +212,24 @@ function Overview() {
             </p>
           </div>
 
-          <div className="inline-flex w-fit items-center gap-2 rounded-full bg-mist px-4 py-2">
-            <Activity className="h-4 w-4 text-ink" />
-            <span className="text-xs font-medium text-ink">
-              {velocityChange >= 0 ? "+" : ""}
-              {velocityChange}% order velocity
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => loadOverview(true)}
+              disabled={refreshing || loading}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3.5 py-2 text-xs font-medium text-ink hover:bg-mist transition-colors disabled:opacity-50"
+              title="Refresh live metrics"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-ember" : ""}`} />
+              Refresh
+            </button>
+
+            <div className="inline-flex w-fit items-center gap-2 rounded-full bg-mist px-4 py-2">
+              <Activity className="h-4 w-4 text-ink" />
+              <span className="text-xs font-medium text-ink">
+                {velocityChange >= 0 ? "+" : ""}
+                {velocityChange}% order velocity
+              </span>
+            </div>
           </div>
         </div>
       </section>
@@ -266,42 +276,9 @@ function Overview() {
             </span>
           </div>
 
-          {velocity.length === 0 || velocity.every((item) => item.count === 0) ? (
-            <div className="mt-6 flex h-44 items-center justify-center rounded-3xl bg-mist/50 text-sm text-muted-foreground">
-              No orders in the last 12 days
-            </div>
-          ) : (
-            <div className="mt-6 flex h-44 items-end gap-2 rounded-3xl bg-mist/40 px-4 py-4">
-              {velocity.map((item, index) => {
-                const height = item.count > 0 ? Math.max((item.count / maxVelocity) * 100, 10) : 3;
-
-                const dateLabel = new Date(`${item.date}T12:00:00`).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                });
-
-                return (
-                  <div
-                    key={item.date}
-                    className="group flex flex-1 flex-col items-center justify-end gap-2"
-                    title={`${item.count} order${item.count === 1 ? "" : "s"} on ${dateLabel}`}
-                  >
-                    <div
-                      className="w-full rounded-t-xl gradient-ember transition-all duration-300 group-hover:opacity-90"
-                      style={{
-                        height: `${height}%`,
-                        opacity: 0.35 + (index / velocity.length) * 0.65,
-                      }}
-                    />
-
-                    <span className="hidden text-[10px] text-muted-foreground sm:block">
-                      {dateLabel}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          <div className="mt-4">
+            <DashboardOrderChart data={velocity} currencySymbol={sym} />
+          </div>
         </div>
 
         <div className="glass-strong rounded-3xl p-6">

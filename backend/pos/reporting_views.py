@@ -58,7 +58,50 @@ def _date_range(request, merchant):
 
     date_from = _parse_date_param(request.query_params.get("date_from"), default_from)
     date_to = _parse_date_param(request.query_params.get("date_to"), default_to)
+    if date_from and date_to and date_from > date_to:
+        date_from, date_to = date_to, date_from
     return date_from, date_to
+
+
+def _zero_fill_daily_trend(daily_rows, date_from, date_to, extra_fields=None):
+    """Zero-fill a daily trend series between date_from and date_to (inclusive)."""
+    if extra_fields is None:
+        extra_fields = []
+
+    daily_map = {r["date"]: r for r in daily_rows}
+    daily_map_str = {str(r["date"]): r for r in daily_rows}
+
+    days_count = (date_to - date_from).days + 1
+    if 0 < days_count <= 366:
+        result = []
+        for i in range(days_count):
+            d = date_from + timedelta(days=i)
+            d_str = str(d)
+            row = daily_map.get(d) or daily_map_str.get(d_str) or {}
+            entry = {
+                "date": d_str,
+                "revenue": float(row.get("revenue") or 0),
+                "orders": int(row.get("orders") or 0),
+            }
+            for field in extra_fields:
+                val = row.get(field)
+                entry[field] = float(val or 0)
+            result.append(entry)
+        return result
+    else:
+        result = []
+        for r in daily_rows:
+            entry = {
+                "date": str(r["date"]),
+                "revenue": float(r.get("revenue") or 0),
+                "orders": int(r.get("orders") or 0),
+            }
+            for field in extra_fields:
+                val = r.get(field)
+                entry[field] = float(val or 0)
+            result.append(entry)
+        return result
+
 
 
 def _build_base_qs(merchant, date_from, date_to, extra_filters=None):
@@ -222,16 +265,7 @@ def sales_report(request):
         )
         .order_by("date")
     )
-    daily_trend = [
-        {
-            "date": str(r["date"]),
-            "revenue": float(r["revenue"] or 0),
-            "orders": int(r["orders"]),
-            "tax": float(r["tax"] or 0),
-            "discount": float(r["discount"] or 0),
-        }
-        for r in daily_rows
-    ]
+    daily_trend = _zero_fill_daily_trend(daily_rows, date_from, date_to, ["tax", "discount"])
 
     # ── Tax summary ───────────────────────────────────────────────────────────
     tax_label = _get_tax_label(merchant)
@@ -517,17 +551,7 @@ def fiscal_report(request):
         )
         .order_by("date")
     )
-    daily_trend = [
-        {
-            "date": str(r["date"]),
-            "revenue": float(r["revenue"] or 0),
-            "orders": int(r["orders"]),
-            "tax": float(r["tax"] or 0),
-            "discount": float(r["discount"] or 0),
-            "subtotal": float(r["subtotal"] or 0),
-        }
-        for r in daily_rows
-    ]
+    daily_trend = _zero_fill_daily_trend(daily_rows, date_from, date_to, ["tax", "discount", "subtotal"])
 
     return Response({
         "date_from": str(date_from),
@@ -870,10 +894,7 @@ def enhanced_analytics(request):
         .annotate(revenue=Sum("total_amount"), orders=Count("id"))
         .order_by("date")
     )
-    daily_trend = [
-        {"date": str(r["date"]), "revenue": float(r["revenue"] or 0), "orders": int(r["orders"])}
-        for r in daily_rows
-    ]
+    daily_trend = _zero_fill_daily_trend(daily_rows, date_from, date_to)
 
     # ── Top items ─────────────────────────────────────────────────────────────
     top_items = list(

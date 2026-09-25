@@ -110,6 +110,7 @@ export const MOVEMENT_LABEL: Record<string, string> = {
   WASTE: "Waste",
   MANUAL_ADJUSTMENT: "Stock Correction",
   REVERSAL: "Undo",
+  SALE: "Sold",
 };
 
 export function friendlyMovementLabel(type: string): string {

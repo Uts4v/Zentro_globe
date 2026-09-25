@@ -13,6 +13,7 @@ import {
   BarChart3,
   Calendar,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import {
   DateRangeSelector,
@@ -25,6 +26,11 @@ import {
   type PaymentAnalyticsResponse,
 } from "@/lib/api/reports";
 import { useAuth } from "@/lib/auth";
+import {
+  ReportsTrendChart,
+  CategoryBreakdownChart,
+  PaymentMethodsChart,
+} from "@/components/charts";
 
 function fmt(
   value: number | string | null | undefined,
@@ -59,8 +65,11 @@ export function MerchantReportsPage() {
         .join(" + ")
     : salesData?.tax_label || "Tax";
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
     setError("");
     try {
       const [sales, payments] = await Promise.all([
@@ -79,6 +88,7 @@ export function MerchantReportsPage() {
       setError(e?.message || "Failed to load reports");
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [dateRange.dateFrom, dateRange.dateTo]);
 
@@ -154,7 +164,16 @@ export function MerchantReportsPage() {
                 {tab.label}
               </button>
             ))}
-            <div className="ml-auto flex gap-2">
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                disabled={refreshing || loading}
+                onClick={() => loadData(true)}
+                className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 disabled:opacity-50 transition-colors"
+                title="Refresh report data"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-ember" : ""}`} />
+                Refresh
+              </button>
               <button
                 disabled={exporting}
                 onClick={() => handleExport("csv", activeTab === "fiscal" ? "fiscal" : activeTab)}
@@ -254,25 +273,14 @@ export function MerchantReportsPage() {
               <section className="glass-strong rounded-3xl p-6">
                 <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Trend</p>
                 <h3 className="font-display mt-1 text-2xl text-foreground">Daily Sales</h3>
-                {salesData.daily_trend.length > 0 ? (
-                  <div className="mt-4 h-40">
-                    <MiniBarChart
-                      data={salesData.daily_trend.map((d) => ({
-                        label: d.date,
-                        value: d.revenue,
-                      }))}
-                      color="#E85D3A"
-                    />
-                  </div>
-                ) : (
-                  <div className="mt-8 flex flex-col items-center justify-center py-6 text-center">
-                    <BarChart3 className="mb-3 h-10 w-10 text-muted-foreground/40" />
-                    <p className="text-sm text-muted-foreground">No sales data for this period</p>
-                    <p className="mt-1 text-xs text-muted-foreground/60">
-                      Data will appear here once orders are placed
-                    </p>
-                  </div>
-                )}
+                <div className="mt-4">
+                  <ReportsTrendChart
+                    data={salesData.daily_trend}
+                    currencySymbol={sym}
+                    color="#E85D3A"
+                    title="Daily Sales"
+                  />
+                </div>
               </section>
 
               {/* Top Items */}
@@ -346,7 +354,13 @@ export function MerchantReportsPage() {
                 {paymentData.methods.length === 0 ? (
                   <p className="mt-5 text-sm text-muted-foreground">No payment data yet.</p>
                 ) : (
-                  <div className="mt-5 overflow-x-auto">
+                  <div className="mt-5 space-y-6">
+                    <PaymentMethodsChart
+                      methods={paymentData.methods}
+                      currencySymbol={sym}
+                      totalSales={ov?.total_sales ?? 0}
+                    />
+                    <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border">
@@ -390,10 +404,11 @@ export function MerchantReportsPage() {
                       </tbody>
                     </table>
                   </div>
-                )}
-              </section>
-            </div>
-          )}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
 
           {/* ── TAX TAB ──────────────────────────────────────────────────── */}
           {activeTab === "tax" && taxSum && (
@@ -496,24 +511,11 @@ export function MerchantReportsPage() {
                 <section className="glass-strong rounded-3xl p-6">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Categories</p>
                   <h3 className="font-display mt-1 text-2xl text-foreground">Revenue by Category</h3>
-                  <div className="mt-5 space-y-3">
-                    {salesData.categories.map((cat, i) => {
-                      const maxRev = Math.max(...salesData.categories.map((c) => c.revenue), 1);
-                      return (
-                        <div key={i}>
-                          <div className="flex items-center justify-between text-sm">
-                            <span className="text-foreground">{cat.name}</span>
-                            <span className="font-medium text-foreground">{fmt(cat.revenue, sym)}</span>
-                          </div>
-                          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-mist">
-                            <div
-                              className="h-full rounded-full bg-ink"
-                              style={{ width: `${(cat.revenue / maxRev) * 100}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="mt-4">
+                    <CategoryBreakdownChart
+                      categories={salesData.categories}
+                      currencySymbol={sym}
+                    />
                   </div>
                 </section>
               )}
@@ -660,14 +662,16 @@ function FiscalTab({
       </section>
 
       {/* Daily Trend */}
-      {data.daily_trend.length > 0 && (
+      {data.daily_trend && (
         <section className="glass-strong rounded-3xl p-6">
           <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Trend</p>
           <h3 className="font-display mt-1 text-2xl text-foreground">Daily Fiscal Trend</h3>
-          <div className="mt-4 h-40">
-            <MiniBarChart
-              data={data.daily_trend.map((d: any) => ({ label: d.date, value: d.revenue }))}
+          <div className="mt-4">
+            <ReportsTrendChart
+              data={data.daily_trend}
+              currencySymbol={sym}
               color="#E85D3A"
+              title="Daily Fiscal Trend"
             />
           </div>
         </section>
@@ -723,43 +727,4 @@ function StatRow({
   );
 }
 
-function MiniBarChart({
-  data,
-  color = "#E85D3A",
-}: {
-  data: Array<{ label: string; value: number }>;
-  color?: string;
-}) {
-  if (data.length === 0) return null;
-  const max = Math.max(...data.map((d) => d.value), 1);
-  const barW = Math.max(100 / data.length - 1, 2);
 
-  return (
-    <div className="flex h-full items-end gap-px">
-      {data.map((d, i) => {
-        const height = d.value > 0 ? Math.max((d.value / max) * 100, 5) : 2;
-        const dateLabel = new Date(`${d.label}T12:00:00`).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-        });
-        return (
-          <div
-            key={i}
-            className="group flex flex-1 flex-col items-center justify-end"
-            title={`${dateLabel}: ${d.value.toLocaleString()}`}
-          >
-            <div
-              className="w-full rounded-t transition-opacity group-hover:opacity-100"
-              style={{
-                height: `${height}%`,
-                backgroundColor: color,
-                opacity: 0.35 + (i / data.length) * 0.65,
-                minWidth: 4,
-              }}
-            />
-          </div>
-        );
-      })}
-    </div>
-  );
-}

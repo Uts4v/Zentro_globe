@@ -2,6 +2,10 @@
 import { rewardApi, customerApi, type Reward } from "@/lib/api";
 import { useStore } from "@/lib/store";
 import { MobileShell, TopBar } from "@/components/MobileShell";
+import {
+  RewardRedemptionModal,
+  type RewardRedemptionDetails,
+} from "@/components/RewardRedemptionModal";
 import { Lock } from "lucide-react";
 import { requireAuth } from "@/lib/auth-guard";
 import { useEffect, useState } from "react";
@@ -19,6 +23,7 @@ function Rewards() {
   const [loading, setLoading] = useState(true);
   const [redeeming, setRedeeming] = useState<string | null>(null);
   const [successId, setSuccessId] = useState<string | null>(null);
+  const [redemption, setRedemption] = useState<RewardRedemptionDetails | null>(null);
 
   useEffect(() => {
     if (!selectedMerchantId) {
@@ -44,7 +49,15 @@ function Rewards() {
   const handleRedeem = async (rewardId: string) => {
     setRedeeming(rewardId);
     try {
-      await rewardApi.redeem(rewardId);
+      const result = await rewardApi.redeem(rewardId);
+      const reward = rewards.find((r) => r.id === rewardId);
+      setRedemption({
+        code: result.code,
+        expiresAt: result.expires_at,
+        rewardName: reward?.name || "Reward",
+        rewardEmoji: reward?.emoji,
+        pointsSpent: result.points_spent,
+      });
       if (selectedMerchantId) {
         const wallet = await customerApi.getWallet(selectedMerchantId);
         setPoints(wallet?.points_balance ?? 0);
@@ -143,6 +156,10 @@ function Rewards() {
           );
         })}
       </div>
+
+      {redemption && (
+        <RewardRedemptionModal redemption={redemption} onClose={() => setRedemption(null)} />
+      )}
     </MobileShell>
   );
 }

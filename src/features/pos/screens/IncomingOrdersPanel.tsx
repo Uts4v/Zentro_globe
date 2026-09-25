@@ -318,8 +318,14 @@ export default function IncomingOrdersPanel() {
                           disabled={linking}
                           className="flex w-full items-center justify-between rounded-lg bg-white px-2 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-50"
                         >
-                          <span className="font-medium text-foreground">
-                            {c.full_name || c.phone || `#${c.id}`}
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-foreground">
+                              {c.full_name || c.phone || `#${c.id}`}
+                            </span>
+                            <span className="block text-[10px] text-muted-foreground">
+                              {c.loyalty_points} pts · {c.total_orders}{" "}
+                              {c.total_orders === 1 ? "previous order" : "previous orders"}
+                            </span>
                           </span>
                           {c.membership_number && (
                             <span className="rounded bg-ink/10 px-1.5 py-0.5 text-[9px] font-bold text-ink">

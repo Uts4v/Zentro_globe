@@ -33,6 +33,14 @@ export interface InventoryLocation {
   is_active: boolean;
 }
 
+/** Selling one unit of the menu item consumes `quantity_per_unit` base units (dine-in). */
+export interface InventoryMenuLink {
+  id: number;
+  menu_item: number;
+  menu_item_name: string;
+  quantity_per_unit: string;
+}
+
 export interface InventoryItem {
   id: number;
   name: string;
@@ -68,6 +76,7 @@ export interface InventoryItem {
   stock_value: string;
   avg_cost: string | null;
   balance_count: number;
+  menu_links: InventoryMenuLink[];
 }
 
 export interface Paged<T> {

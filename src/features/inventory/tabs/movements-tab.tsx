@@ -24,6 +24,7 @@ const MOVEMENT_TYPES = [
   "COUNT_RECONCILIATION",
   "WASTE",
   "MANUAL_ADJUSTMENT",
+  "SALE",
   "REVERSAL",
 ];
 
@@ -36,6 +37,7 @@ const MOVEMENT_STYLE: Record<string, string> = {
   WASTE: "bg-rose-100 text-rose-600",
   MANUAL_ADJUSTMENT: "bg-orange-100 text-orange-700",
   REVERSAL: "bg-black/10 text-muted-foreground",
+  SALE: "bg-blue-100 text-blue-700",
 };
 
 export function MovementsTab() {

@@ -5,8 +5,10 @@ Zentro Inventory & Stock Management.
 
 Core principle (V1): inventory is maintained through receiving, physical
 stock counts, reconciliation, transfers, explicitly recorded waste and
-manual adjustments. Orders (POS / QR / AI Waiter / customer app) do NOT
-automatically deduct inventory.
+manual adjustments. The one order-driven exception is opt-in: a menu item
+linked to stock via `MenuItemStockLink` consumes that stock when a dine-in
+order containing it is confirmed (see inventory/order_stock.py). Unlinked
+menu items never touch inventory.
 
 Authoritative stock mutations go through `InventoryMovementService`
 (inventory/services.py). No code outside that service may write
@@ -50,6 +52,7 @@ class MovementType(models.TextChoices):
     COUNT_RECONCILIATION = "COUNT_RECONCILIATION", "Count Reconciliation"
     RETURN_TO_SUPPLIER = "RETURN_TO_SUPPLIER", "Return to Supplier"
     REVERSAL = "REVERSAL", "Reversal"
+    SALE = "SALE", "Sale"
 
 
 class MovementSource(models.TextChoices):
@@ -62,6 +65,7 @@ class MovementSource(models.TextChoices):
     STOCK_COUNT = "STOCK_COUNT", "Stock Count"
     SUPPLIER_RETURN = "SUPPLIER_RETURN", "Supplier Return"
     REVERSAL = "REVERSAL", "Reversal"
+    ORDER = "ORDER", "Order"
 
 
 class CountStatus(models.TextChoices):
@@ -555,6 +559,54 @@ class InventoryMovement(models.Model):
 
     def __str__(self):
         return f"{self.movement_type} {self.quantity_change} {self.inventory_item.name}"
+
+
+class MenuItemStockLink(models.Model):
+    """Opt-in link: selling one unit of `menu_item` consumes stock.
+
+    A direct-sale product links to itself with quantity_per_unit=1 (one
+    bottle per bottle sold); an ingredient links with the amount used per
+    serving (e.g. 18 g of beans per latte). Menu items without links never
+    affect inventory.
+    """
+
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="menu_stock_links",
+    )
+    menu_item = models.ForeignKey(
+        "merchants.MenuItem",
+        on_delete=models.CASCADE,
+        related_name="stock_links",
+    )
+    inventory_item = models.ForeignKey(
+        InventoryItem,
+        on_delete=models.CASCADE,
+        related_name="menu_links",
+    )
+    quantity_per_unit = models.DecimalField(
+        max_digits=24, decimal_places=6, default=1,
+        help_text="Base units of the inventory item consumed per menu item sold.",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "inventory_menu_item_links"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["menu_item", "inventory_item"],
+                name="uniq_inventory_menu_item_link",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(quantity_per_unit__gt=0),
+                name="ck_inventory_menu_link_qty_pos",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.menu_item.name} → {self.quantity_per_unit} {self.inventory_item.name}"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
