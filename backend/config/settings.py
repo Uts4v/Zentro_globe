@@ -10,6 +10,7 @@ Django settings for Zentro Loyalty backend.
 from pathlib import Path
 from datetime import timedelta
 import os
+import sys
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
@@ -204,8 +205,12 @@ elif os.getenv("DB_ENGINE") == "django.db.backends.postgresql":
         }
     }
 else:
-    if not DEBUG:
-        from django.core.exceptions import ImproperlyConfigured
+    is_ci_or_build = (
+        os.getenv("CI")
+        or os.getenv("GITHUB_ACTIONS")
+        or any(cmd in sys.argv for cmd in ("makemigrations", "collectstatic", "check", "test"))
+    )
+    if not DEBUG and not is_ci_or_build:
         raise ImproperlyConfigured(
             "DATABASE_URL or PostgreSQL database configuration is required in production (DEBUG=False)."
         )
