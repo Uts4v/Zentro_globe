@@ -81,7 +81,7 @@ export default function StaffDailyReportScreen() {
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4">
-        <p className="text-sm text-red-500">{error}</p>
+        <p className="text-sm text-destructive">{error}</p>
         <button
           onClick={loadReport}
           className="flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-medium text-white hover:bg-ink/90"
@@ -106,14 +106,16 @@ export default function StaffDailyReportScreen() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
           <input
             type="date"
+            aria-label="Report date"
             value={dateFilter}
             onChange={(e) => setDateFilter(e.target.value)}
             className="rounded-xl border border-border bg-card px-3 py-2 text-sm"
           />
           <select
+            aria-label="Filter by staff"
             value={workerFilter}
             onChange={(e) => setWorkerFilter(e.target.value)}
             className="rounded-xl border border-border bg-card px-3 py-2 text-sm"
@@ -127,6 +129,7 @@ export default function StaffDailyReportScreen() {
           </select>
           <button
             onClick={loadReport}
+            aria-label="Refresh"
             className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
           >
             <RefreshCw className="h-4 w-4" />
@@ -142,25 +145,25 @@ export default function StaffDailyReportScreen() {
               label="Total Revenue"
               value={formatCurrency(data.totals.total_revenue, currencySymbol)}
               icon={DollarSign}
-              color="bg-green-100 text-green-600"
+              color="bg-success/10 text-success"
             />
             <StatCard
               label="Total Orders"
               value={String(data.totals.total_orders)}
               icon={ShoppingCart}
-              color="bg-blue-100 text-blue-600"
+              color="bg-info/10 text-info"
             />
             <StatCard
               label="Items Sold"
               value={String(data.totals.total_items_sold)}
               icon={Package}
-              color="bg-purple-100 text-purple-600"
+              color="bg-primary/10 text-primary"
             />
             <StatCard
               label="Discounts"
               value={formatCurrency(data.totals.total_discount, currencySymbol)}
               icon={ArrowDown}
-              color="bg-amber-100 text-amber-600"
+              color="bg-warning/10 text-warning"
             />
           </div>
 
@@ -182,6 +185,8 @@ export default function StaffDailyReportScreen() {
                       <th className="p-4 text-right">Revenue</th>
                       <th className="hidden p-4 text-right sm:table-cell">Cash</th>
                       <th className="hidden p-4 text-right sm:table-cell">Card</th>
+                      <th className="hidden p-4 text-right sm:table-cell">QR</th>
+                      <th className="hidden p-4 text-right sm:table-cell">Digital</th>
                       <th className="hidden p-4 text-right sm:table-cell">Credit</th>
                       <th className="hidden p-4 text-right sm:table-cell">Discount</th>
                     </tr>
@@ -212,7 +217,7 @@ export default function StaffDailyReportScreen() {
                                 <p className="font-medium text-foreground">
                                   {s.worker_name}
                                 </p>
-                                <p className="text-[10px] text-muted-foreground">
+                                <p className="text-xs text-muted-foreground">
                                   {s.payment_count} payment{s.payment_count !== 1 ? "s" : ""} ·{" "}
                                   {revPct.toFixed(1)}% of revenue
                                 </p>
@@ -228,13 +233,19 @@ export default function StaffDailyReportScreen() {
                           <td className="p-4 text-right font-bold text-foreground">
                             {formatCurrency(s.total_revenue, currencySymbol)}
                           </td>
-                          <td className="hidden p-4 text-right text-green-600 sm:table-cell">
+                          <td className="hidden p-4 text-right text-success sm:table-cell">
                             {formatCurrency(s.cash_amount, currencySymbol)}
                           </td>
-                          <td className="hidden p-4 text-right text-blue-600 sm:table-cell">
+                          <td className="hidden p-4 text-right text-info sm:table-cell">
                             {formatCurrency(s.card_amount, currencySymbol)}
                           </td>
-                          <td className="hidden p-4 text-right text-amber-600 sm:table-cell">
+                          <td className="hidden p-4 text-right text-primary sm:table-cell">
+                            {formatCurrency(s.qr_amount ?? 0, currencySymbol)}
+                          </td>
+                          <td className="hidden p-4 text-right text-warning sm:table-cell">
+                            {formatCurrency(s.digital_amount ?? 0, currencySymbol)}
+                          </td>
+                          <td className="hidden p-4 text-right text-ember sm:table-cell">
                             {formatCurrency(s.credit_amount, currencySymbol)}
                           </td>
                           <td className="hidden p-4 text-right text-muted-foreground sm:table-cell">
@@ -261,6 +272,18 @@ export default function StaffDailyReportScreen() {
                       <td className="hidden p-4 text-right sm:table-cell">
                         {formatCurrency(
                           data.staff.reduce((s, w) => s + Number(w.card_amount), 0),
+                          currencySymbol
+                        )}
+                      </td>
+                      <td className="hidden p-4 text-right sm:table-cell">
+                        {formatCurrency(
+                          data.staff.reduce((s, w) => s + Number(w.qr_amount ?? 0), 0),
+                          currencySymbol
+                        )}
+                      </td>
+                      <td className="hidden p-4 text-right sm:table-cell">
+                        {formatCurrency(
+                          data.staff.reduce((s, w) => s + Number(w.digital_amount ?? 0), 0),
                           currencySymbol
                         )}
                       </td>
@@ -293,35 +316,47 @@ export default function StaffDailyReportScreen() {
                   </div>
                   <div>
                     <p className="font-bold text-foreground">{s.worker_name}</p>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {s.order_count} orders · {s.items_sold} items
                     </p>
                   </div>
                   <div className="ml-auto text-right">
-                    <p className="text-lg font-bold text-foreground">
+                    <p className="numeric text-lg font-bold text-foreground">
                       {formatCurrency(s.total_revenue, currencySymbol)}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">revenue</p>
+                    <p className="text-xs text-muted-foreground">revenue</p>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs">
-                  <div className="rounded-lg bg-green-50 p-2 text-center">
-                    <p className="font-bold text-green-700">
+                  <div className="rounded-lg bg-success/10 p-2 text-center">
+                    <p className="numeric font-bold text-success">
                       {formatCurrency(s.cash_amount, currencySymbol)}
                     </p>
-                    <p className="text-green-600">Cash</p>
+                    <p className="text-success">Cash</p>
                   </div>
-                  <div className="rounded-lg bg-blue-50 p-2 text-center">
-                    <p className="font-bold text-blue-700">
+                  <div className="rounded-lg bg-info/10 p-2 text-center">
+                    <p className="numeric font-bold text-info">
                       {formatCurrency(s.card_amount, currencySymbol)}
                     </p>
-                    <p className="text-blue-600">Card</p>
+                    <p className="text-info">Card</p>
                   </div>
-                  <div className="rounded-lg bg-amber-50 p-2 text-center">
-                    <p className="font-bold text-amber-700">
+                  <div className="rounded-lg bg-primary/10 p-2 text-center">
+                    <p className="numeric font-bold text-primary">
+                      {formatCurrency(s.qr_amount ?? 0, currencySymbol)}
+                    </p>
+                    <p className="text-primary">QR</p>
+                  </div>
+                  <div className="rounded-lg bg-warning/10 p-2 text-center">
+                    <p className="numeric font-bold text-warning">
+                      {formatCurrency(s.digital_amount ?? 0, currencySymbol)}
+                    </p>
+                    <p className="text-warning">Digital</p>
+                  </div>
+                  <div className="rounded-lg bg-ember-soft p-2 text-center">
+                    <p className="numeric font-bold text-ember">
                       {formatCurrency(s.credit_amount, currencySymbol)}
                     </p>
-                    <p className="text-amber-600">Credit</p>
+                    <p className="text-ember">Credit</p>
                   </div>
                 </div>
               </div>
@@ -349,8 +384,8 @@ function StatCard({
       <div className={`mb-2 grid h-8 w-8 place-items-center rounded-lg ${color}`}>
         <Icon className="h-4 w-4" />
       </div>
-      <p className="text-lg font-bold text-foreground">{value}</p>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="numeric text-lg font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }

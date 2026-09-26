@@ -525,11 +525,11 @@ export function ItemsTab({ sym }: { sym: string }) {
       />
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="relative min-w-[10rem] flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <input
-            className={`${inputCls} w-64 pl-9`}
+            className={`${inputCls} w-full pl-9`}
             placeholder="Search stock..."
             value={q}
             onChange={(e) => {
@@ -539,7 +539,7 @@ export function ItemsTab({ sym }: { sym: string }) {
           />
         </div>
         <select
-          className={`${inputCls} w-40`}
+          className={`${inputCls} min-w-[10rem] flex-1`}
           value={typeFilter}
           onChange={(e) => {
             setTypeFilter(e.target.value);
@@ -554,7 +554,7 @@ export function ItemsTab({ sym }: { sym: string }) {
           ))}
         </select>
         <select
-          className={`${inputCls} w-36`}
+          className={`${inputCls} min-w-[10rem] flex-1`}
           value={statusFilter}
           onChange={(e) => {
             setStatusFilter(e.target.value);
@@ -568,7 +568,7 @@ export function ItemsTab({ sym }: { sym: string }) {
           ))}
         </select>
         <select
-          className={`${inputCls} w-44`}
+          className={`${inputCls} min-w-[10rem] flex-1`}
           value={categoryFilter}
           onChange={(e) => {
             setCategoryFilter(e.target.value);
@@ -594,7 +594,7 @@ export function ItemsTab({ sym }: { sym: string }) {
         </div>
       ) : (
         <div className="overflow-x-auto rounded-2xl border border-border bg-card">
-          <table className="w-full text-left text-sm">
+          <table className="min-w-[40rem] w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border/60 text-[11px] uppercase tracking-[0.14em] text-muted-foreground">
                 <th className="px-4 py-3">Item</th>

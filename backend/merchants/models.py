@@ -103,6 +103,10 @@ class MerchantProfile(models.Model):
         default=False,
         help_text="Allow credit sales while offline",
     )
+    payment_qr_url = models.URLField(
+        blank=True, default="",
+        help_text="Merchant's own payment QR image, shown at POS for QR payments",
+    )
     debit_accounts_enabled = models.BooleanField(
         default=False,
         help_text="Enable prepaid debit accounts (customer wallet / stored value)",

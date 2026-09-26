@@ -506,11 +506,156 @@ def pos_bootstrap(request):
         merchant=merchant, device=device, status=CashShift.STATUS_OPEN,
     ).first()
 
+<<<<<<< HEAD
     # POS settings. Reuse the single resolved payload rather than repeating a
     # hand-rolled subset: the copy that used to live here was missing
     # tax_enabled and the whole payment block, so the till showed default tenders
     # and never rendered the merchant's payment QR.
     pos_settings = _pos_settings_payload(merchant)
+=======
+    # POS settings
+    pos_settings = {
+        "pos_enabled": merchant.pos_enabled,
+        "offline_pos_enabled": merchant.offline_pos_enabled,
+        "shift_management_enabled": merchant.shift_management_enabled,
+        "discounts_enabled": merchant.discounts_enabled,
+        "credit_accounts_enabled": merchant.credit_accounts_enabled,
+        "debit_accounts_enabled": merchant.debit_accounts_enabled,
+        "receipt_printing_enabled": merchant.receipt_printing_enabled,
+        "max_worker_discount_percent": str(merchant.max_worker_discount_percent),
+        "manager_approval_threshold": str(merchant.manager_approval_threshold),
+        "offline_discounts_allowed": merchant.offline_discounts_allowed,
+        "offline_credit_allowed": merchant.offline_credit_allowed,
+        "payment_qr_url": merchant.payment_qr_url,
+        "tax_rate_percent": str(merchant.tax_rate_percent or 0),
+        "currency_code": merchant.currency_code,
+        "currency_symbol": merchant.currency_symbol,
+        "tax_components": merchant.tax_components or [],
+    }
+
+    # Tables
+    from merchants.models import MerchantTable
+    tables = MerchantTable.objects.filter(merchant=merchant, is_active=True)
+    tables_data = [
+        {"id": t.id, "name": t.name, "table_number": t.table_number, "public_token": t.public_token}
+        for t in tables
+    ]
+
+    # Recent orders for this device (last 20)
+    recent_orders = Order.objects.filter(
+        merchant=merchant,
+    ).select_related("customer__user").prefetch_related("items")[:20]
+
+    from orders.serializers import OrderSerializer
+    recent_orders_data = OrderSerializer(recent_orders, many=True, context={"request": request}).data
+
+    # Incoming orders (pending/confirmed from online sources)
+    incoming_orders = Order.objects.filter(
+        merchant=merchant,
+        source__in=["customer_app", "table_qr"],
+        status__in=["pending", "confirmed"],
+    ).select_related("customer__user").prefetch_related("items")[:20]
+    incoming_orders_data = OrderSerializer(incoming_orders, many=True, context={"request": request}).data
+
+    # Update last sync time
+    device.last_sync_at = timezone.now()
+    device.save(update_fields=["last_sync_at", "updated_at"])
+
+    return Response({
+        "merchant": {
+            "id": merchant.id,
+            "business_name": merchant.business_name,
+            "slug": merchant.slug,
+            "logo_url": merchant.logo_url,
+        },
+        "device": PosDeviceSerializer(device).data,
+        "workers": workers_data,
+        "menu": {
+            "snapshot_at": timezone.now().isoformat(),
+            "total_items": items.count(),
+            "categories": categories,
+        },
+        "tables": tables_data,
+        "active_shift": CashShiftSerializer(active_shift).data if active_shift else None,
+        "pos_settings": pos_settings,
+        "recent_orders": recent_orders_data,
+        "incoming_orders": incoming_orders_data,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsPosDevice])
+@throttle_classes([])
+def pos_bootstrap_device(request):
+    """
+    Bootstrap POS terminal using device token auth (no JWT required).
+    Used for session persistence across page refreshes.
+
+    Headers: X-Pos-Device-Id, X-Pos-Device-Token
+    """
+    device = request.pos_device
+    merchant = request.pos_merchant
+
+    # Workers
+    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True)
+    workers_data = []
+    for w in workers:
+        workers_data.append({
+            "id": str(w.id),
+            "display_name": w.display_name,
+            "role": w.role,
+            "can_apply_discount": w.can_apply_discount,
+            "can_process_refund": w.can_process_refund,
+            "can_close_shift": w.can_close_shift,
+            "can_view_reports": w.can_view_reports,
+        })
+
+    # Menu items
+    items = MenuItem.objects.filter(merchant=merchant).order_by("category", "name")
+    categories = {}
+    for item in items:
+        cat = item.category or "Uncategorized"
+        if cat not in categories:
+            categories[cat] = []
+        categories[cat].append({
+            "id": item.id,
+            "name": item.name,
+            "description": item.description,
+            "price": str(item.price),
+            "image_url": item.image_url,
+            "category": item.category,
+            "is_available": item.is_available,
+            "is_featured": item.is_featured,
+            "loyalty_reward": item.loyalty_reward,
+            "points_per_item": item.points_per_item,
+            "emoji": item.emoji,
+        })
+
+    # Active shift for this device
+    active_shift = CashShift.objects.filter(
+        merchant=merchant, device=device, status=CashShift.STATUS_OPEN,
+    ).first()
+
+    # POS settings
+    pos_settings = {
+        "pos_enabled": merchant.pos_enabled,
+        "offline_pos_enabled": merchant.offline_pos_enabled,
+        "shift_management_enabled": merchant.shift_management_enabled,
+        "discounts_enabled": merchant.discounts_enabled,
+        "credit_accounts_enabled": merchant.credit_accounts_enabled,
+        "debit_accounts_enabled": merchant.debit_accounts_enabled,
+        "receipt_printing_enabled": merchant.receipt_printing_enabled,
+        "max_worker_discount_percent": str(merchant.max_worker_discount_percent),
+        "manager_approval_threshold": str(merchant.manager_approval_threshold),
+        "offline_discounts_allowed": merchant.offline_discounts_allowed,
+        "offline_credit_allowed": merchant.offline_credit_allowed,
+        "payment_qr_url": merchant.payment_qr_url,
+        "tax_rate_percent": str(merchant.tax_rate_percent or 0),
+        "currency_code": merchant.currency_code,
+        "currency_symbol": merchant.currency_symbol,
+        "tax_components": merchant.tax_components or [],
+    }
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
     # Tables
     from merchants.models import MerchantTable
@@ -1096,7 +1241,7 @@ def close_shift(request):
         total=Sum("amount"),
         total_cash=Sum("amount", filter=Q(payment_method=PosPayment.METHOD_CASH)),
         total_card=Sum("amount", filter=Q(payment_method=PosPayment.METHOD_CARD)),
-        total_other=Sum("amount", exclude=Q(payment_method__in=[
+        total_other=Sum("amount", filter=~Q(payment_method__in=[
             PosPayment.METHOD_CASH, PosPayment.METHOD_CARD,
         ])),
         order_count=Count("order", distinct=True),
@@ -1153,16 +1298,22 @@ def shift_summary(request):
         return Response({"error": "Shift not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    totals = PosPayment.objects.filter(
+    payments = PosPayment.objects.filter(
         shift=shift, status=PosPayment.STATUS_COMPLETED,
-    ).aggregate(
+    )
+    totals = payments.aggregate(
         total=Sum("amount"),
         total_cash=Sum("amount", filter=Q(payment_method=PosPayment.METHOD_CASH)),
         total_card=Sum("amount", filter=Q(payment_method=PosPayment.METHOD_CARD)),
-        total_other=Sum("amount", exclude=Q(payment_method__in=[
+        total_other=Sum("amount", filter=~Q(payment_method__in=[
             PosPayment.METHOD_CASH, PosPayment.METHOD_CARD,
         ])),
         order_count=Count("order", distinct=True),
+    )
+    by_method = (
+        payments.order_by().values("payment_method")
+        .annotate(count=Count("id"), amount=Sum("amount"))
+        .order_by("-amount")
     )
 
     return Response({
@@ -1170,6 +1321,10 @@ def shift_summary(request):
         "total_cash_sales": str(totals["total_cash"] or 0),
         "total_card_sales": str(totals["total_card"] or 0),
         "total_other_sales": str(totals["total_other"] or 0),
+        "payment_methods": [
+            {"method": row["payment_method"], "count": row["count"], "amount": str(row["amount"] or 0)}
+            for row in by_method
+        ],
         "total_orders": totals["order_count"] or 0,
         "opening_cash": str(shift.opening_cash),
         "cash_payouts": str(shift.cash_payouts),
@@ -1869,6 +2024,7 @@ def create_payment(request):
         return Response({"error": "Device not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
+<<<<<<< HEAD
     # Every method is a *recording* method: staff confirm how the customer
     # paid and Zentro stores it. There is no card terminal, no QR scanner
     # handshake and no provider callback, so no external reference is required.
@@ -1879,6 +2035,11 @@ def create_payment(request):
     if method_error is not None:
         return Response({"error": method_error},
                         status=status.HTTP_400_BAD_REQUEST)
+=======
+    # Every method is recorded manually (the cashier confirms it was paid), so
+    # card / QR / digital payments don't need a gateway reference or device.
+    method = ser.validated_data["payment_method"]
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
     # Idempotency check
     client_mutation_id = ser.validated_data["client_mutation_id"]
@@ -2110,6 +2271,7 @@ def create_split_payment(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+<<<<<<< HEAD
     # Split tender: every leg is a manual recording, so no external reference is
     # required for any method. Each leg is checked against the merchant's
     # accepted-methods config, but a split across Cash + Card + QR stays legal.
@@ -2121,6 +2283,8 @@ def create_split_payment(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+=======
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
     created_payments = []
     for p in payments_data:
         payment = PosPayment.objects.create(
@@ -4628,6 +4792,8 @@ def staff_daily_report(request):
     cash = PosPayment.METHOD_CASH
     card = PosPayment.METHOD_CARD
     credit = PosPayment.METHOD_CREDIT
+    qr = PosPayment.METHOD_BANK_QR
+    digital = PosPayment.METHOD_MOBILE_WALLET
 
     payments_by_worker = {
         row["worker_id"]: row
@@ -4635,6 +4801,8 @@ def staff_daily_report(request):
             total_revenue=Coalesce(Sum("amount"), Decimal("0")),
             cash_amount=Coalesce(Sum("amount", filter=Q(payment_method=cash)), Decimal("0")),
             card_amount=Coalesce(Sum("amount", filter=Q(payment_method=card)), Decimal("0")),
+            qr_amount=Coalesce(Sum("amount", filter=Q(payment_method=qr)), Decimal("0")),
+            digital_amount=Coalesce(Sum("amount", filter=Q(payment_method=digital)), Decimal("0")),
             credit_amount=Coalesce(Sum("amount", filter=Q(payment_method=credit)), Decimal("0")),
             other_amount=Coalesce(
                 Sum("amount", filter=~Q(payment_method__in=[cash, card, credit])), Decimal("0")
@@ -4675,6 +4843,8 @@ def staff_daily_report(request):
             "total_revenue": str(p.get("total_revenue", 0)),
             "cash_amount": str(p.get("cash_amount", 0)),
             "card_amount": str(p.get("card_amount", 0)),
+            "qr_amount": str(p.get("qr_amount", 0)),
+            "digital_amount": str(p.get("digital_amount", 0)),
             "credit_amount": str(p.get("credit_amount", 0)),
             "other_amount": str(p.get("other_amount", 0)),
             "total_discount": str(o.get("total_discount", 0)),
@@ -4699,3 +4869,362 @@ def staff_daily_report(request):
             ),
         },
     })
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# POS INVENTORY MANAGEMENT (Dine-In Minus Stock)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def pos_inventory_products(request):
+    """
+    GET /api/pos/inventory/products/
+    Returns products available for stock deduction in POS.
+    Synchronizes menu items with inventory and returns live on-hand balances.
+    """
+    from decimal import Decimal
+    from django.db.models import Sum
+    from django.db.models.functions import Coalesce
+    from inventory.models import (
+        InventoryItem,
+        InventoryCategory,
+        InventoryBalance,
+        InventoryLocation,
+        MenuItemStockLink,
+        UnitOfMeasure,
+        AnItemType,
+    )
+    from inventory.services import seed_merchant_reference_data
+
+    merchant = _get_merchant(request)
+    if not merchant:
+        return Response({"error": "Merchant profile not found."}, status=status.HTTP_403_FORBIDDEN)
+
+    seed_merchant_reference_data(merchant)
+
+    # 1. Gather all active inventory items
+    inv_items = list(
+        InventoryItem.objects.filter(merchant=merchant, archived=False)
+        .select_related("category", "base_unit", "default_location")
+        .order_by("name")
+    )
+
+    # Map existing items by lowercase name for fast lookup
+    inv_by_name = {item.name.strip().lower(): item for item in inv_items}
+
+    # 2. Check for menu items and ensure they have linked inventory items
+    menu_items = list(MenuItem.objects.filter(merchant=merchant, is_available=True))
+    existing_links = list(MenuItemStockLink.objects.filter(merchant=merchant).select_related("inventory_item"))
+    linked_menu_item_ids = {l.menu_item_id: l.inventory_item for l in existing_links}
+
+    # Default unit, category, and location for auto-created links
+    default_unit = UnitOfMeasure.objects.filter(kind="COUNT", merchant__isnull=True, code="piece").first()
+    default_cat = (
+        InventoryCategory.objects.filter(merchant=merchant)
+        .order_by("display_order", "id")
+        .first()
+    )
+    default_loc = (
+        InventoryLocation.objects.filter(merchant=merchant, is_active=True)
+        .order_by("-is_default", "display_order", "id")
+        .first()
+    )
+
+    for mi in menu_items:
+        if mi.id not in linked_menu_item_ids:
+            mi_name_lower = mi.name.strip().lower()
+            matching_inv = inv_by_name.get(mi_name_lower)
+            if matching_inv:
+                MenuItemStockLink.objects.get_or_create(
+                    merchant=merchant,
+                    menu_item=mi,
+                    inventory_item=matching_inv,
+                    defaults={"quantity_per_unit": Decimal("1")},
+                )
+                linked_menu_item_ids[mi.id] = matching_inv
+            else:
+                # Auto-create inventory item for menu item so it is stock-tracked
+                new_inv = InventoryItem.objects.create(
+                    merchant=merchant,
+                    name=mi.name.strip(),
+                    item_type=AnItemType.DIRECT_SALE,
+                    category=default_cat,
+                    base_unit=default_unit,
+                    default_location=default_loc,
+                    description=mi.description or "",
+                    active=True,
+                )
+                MenuItemStockLink.objects.create(
+                    merchant=merchant,
+                    menu_item=mi,
+                    inventory_item=new_inv,
+                    quantity_per_unit=Decimal("1"),
+                )
+                # Create initial balance row
+                if default_loc:
+                    InventoryBalance.objects.get_or_create(
+                        merchant=merchant,
+                        inventory_item=new_inv,
+                        location=default_loc,
+                        defaults={"on_hand": Decimal("0")},
+                    )
+                inv_items.append(new_inv)
+                inv_by_name[mi_name_lower] = new_inv
+                linked_menu_item_ids[mi.id] = new_inv
+
+    # 3. Compute live balances for all inventory items
+    balances = (
+        InventoryBalance.objects.filter(merchant=merchant)
+        .values("inventory_item_id")
+        .annotate(total_on_hand=Coalesce(Sum("on_hand"), Decimal("0")))
+    )
+    balance_by_item = {b["inventory_item_id"]: b["total_on_hand"] for b in balances}
+
+    # Map inventory item to linked menu items
+    menu_ids_by_inv = {}
+    for mid, inv in linked_menu_item_ids.items():
+        menu_ids_by_inv.setdefault(inv.id, []).append(mid)
+
+    # 4. Build output
+    result = []
+    for item in inv_items:
+        on_hand = balance_by_item.get(item.id, Decimal("0"))
+        unit_code = item.base_unit.code if item.base_unit else "pcs"
+        loc_name = item.default_location.name if item.default_location else (default_loc.name if default_loc else "Storage")
+        loc_id = item.default_location_id or (default_loc.id if default_loc else None)
+
+        result.append({
+            "id": item.id,
+            "inventory_item_id": item.id,
+            "name": item.name,
+            "sku": item.sku or "",
+            "category": item.category.name if item.category else "Menu Products",
+            "unit": unit_code,
+            "available_stock": float(on_hand),
+            "location_id": loc_id,
+            "location_name": loc_name,
+            "menu_item_ids": menu_ids_by_inv.get(item.id, []),
+        })
+
+    result.sort(key=lambda x: x["name"].lower())
+    return Response(result)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+@transaction.atomic
+def pos_minus_stock(request):
+    """
+    POST /api/pos/inventory/minus-stock/
+    Manually decrease the stock quantity for a selected product in the Dine-In order flow.
+    Enforces that deduction cannot exceed available stock.
+    Guarantees idempotency and immediate balance update.
+    """
+    from decimal import Decimal, InvalidOperation
+    from inventory.models import (
+        InventoryItem,
+        InventoryBalance,
+        InventoryLocation,
+        InventoryMovement,
+        InventoryAdjustment,
+        InventoryAuditLog,
+        MenuItemStockLink,
+        MovementType,
+        MovementSource,
+    )
+    from inventory.services import InventoryMovementService
+    from inventory.order_stock import _stock_location
+
+    merchant = _get_merchant(request)
+    if not merchant:
+        return Response({"error": "Merchant profile not found."}, status=status.HTTP_403_FORBIDDEN)
+
+    # 1. Parse and validate quantity
+    raw_qty = request.data.get("quantity")
+    try:
+        quantity = Decimal(str(raw_qty))
+    except (InvalidOperation, TypeError, ValueError):
+        return Response({"error": "Invalid quantity specified."}, status=status.HTTP_400_BAD_REQUEST)
+
+    if quantity <= 0:
+        return Response({"error": "Quantity to deduct must be greater than zero."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 2. Resolve target inventory item
+    inv_id = request.data.get("inventory_item_id")
+    menu_id = request.data.get("menu_item_id")
+    item = None
+
+    if inv_id:
+        item = InventoryItem.objects.filter(merchant=merchant, id=inv_id, archived=False).first()
+    elif menu_id:
+        link = (
+            MenuItemStockLink.objects.filter(merchant=merchant, menu_item_id=menu_id)
+            .select_related("inventory_item")
+            .first()
+        )
+        if link:
+            item = link.inventory_item
+        else:
+            mi = MenuItem.objects.filter(merchant=merchant, id=menu_id).first()
+            if mi:
+                item = InventoryItem.objects.filter(merchant=merchant, name__iexact=mi.name, archived=False).first()
+
+    if not item:
+        return Response({"error": "Selected product was not found in inventory."}, status=status.HTTP_404_NOT_FOUND)
+
+    unit_code = item.base_unit.code if item.base_unit else "pcs"
+
+    # 3. Idempotency guard: prevent duplicate deductions
+    idempotency_key = (request.data.get("idempotency_key") or "").strip()
+    if idempotency_key:
+        existing_mov = (
+            InventoryMovement.objects.filter(merchant=merchant, idempotency_key=idempotency_key)
+            .select_related("location")
+            .first()
+        )
+        if existing_mov:
+            return Response({
+                "success": True,
+                "already_processed": True,
+                "inventory_item_id": item.id,
+                "item_name": item.name,
+                "deducted_quantity": str(-existing_mov.quantity_change),
+                "balance_before": str(existing_mov.balance_before),
+                "balance_after": str(existing_mov.balance_after),
+                "available_stock": float(existing_mov.balance_after),
+                "unit": unit_code,
+                "location_name": existing_mov.location.name if existing_mov.location else "",
+                "movement_id": existing_mov.id,
+            }, status=status.HTTP_200_OK)
+
+    # 4. Resolve location
+    location_id = request.data.get("location_id")
+    location = None
+    if location_id:
+        location = InventoryLocation.objects.filter(merchant=merchant, id=location_id, is_active=True).first()
+    if not location:
+        location = _stock_location(merchant, item)
+    if not location:
+        location = (
+            InventoryLocation.objects.filter(merchant=merchant, is_active=True)
+            .order_by("-is_default", "display_order", "id")
+            .first()
+        )
+    if not location:
+        return Response({"error": "No active storage location found for this store."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 5. Resolve associated order if provided
+    order = None
+    order_id = request.data.get("order_id")
+    if order_id:
+        from orders.models import Order
+        order = Order.objects.filter(merchant=merchant, id=order_id).first()
+
+    # 6. Row lock balance and verify stock constraint
+    balance, _ = InventoryBalance.objects.select_for_update().get_or_create(
+        merchant=merchant,
+        inventory_item=item,
+        location=location,
+        defaults={"on_hand": Decimal("0")},
+    )
+    on_hand = balance.on_hand
+
+    # Rule: It cannot deduct more than the available stock!
+    if quantity > on_hand:
+        return Response(
+            {
+                "error": f"Cannot deduct {quantity} {unit_code}. Available stock for '{item.name}' is only {on_hand} {unit_code}.",
+                "available_stock": float(on_hand),
+                "requested_quantity": float(quantity),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # 7. Apply deduction via authoritative InventoryMovementService
+    reason_text = request.data.get("reason", "Dine-In Manual Deduction")
+    user_note = (request.data.get("note") or "").strip()
+    full_note = (
+        f"Dine-In: {user_note}"
+        if user_note
+        else (f"Dine-In Order #{order.id}" if order else "POS Dine-In Manual Stock Deduction")
+    )
+
+    movement = InventoryMovementService.apply_change(
+        merchant=merchant,
+        location=location,
+        inventory_item=item,
+        quantity_change=-quantity,
+        movement_type=MovementType.MANUAL_ADJUSTMENT,
+        source_type=MovementSource.ORDER if order else MovementSource.ADJUSTMENT,
+        source_id=str(order.id) if order else "",
+        reason=reason_text,
+        note=full_note,
+        performed_by=request.user,
+        idempotency_key=idempotency_key or None,
+        prevent_negative=True,
+    )
+
+    # Record InventoryAdjustment for history
+    adj = InventoryAdjustment.objects.create(
+        merchant=merchant,
+        location=location,
+        inventory_item=item,
+        quantity_delta=-quantity,
+        reason=reason_text,
+        note=full_note,
+        performed_by=request.user,
+        approved=True,
+        approved_by=request.user,
+    )
+
+    # Record InventoryAuditLog
+    InventoryAuditLog.objects.create(
+        merchant=merchant,
+        user=request.user,
+        action=InventoryAuditLog.ACTION_ADJUSTMENT,
+        entity_type="adjustment",
+        entity_id=str(adj.id),
+        metadata={
+            "item_id": item.id,
+            "item_name": item.name,
+            "location_id": location.id,
+            "location_name": location.name,
+            "quantity_deducted": str(quantity),
+            "balance_before": str(movement.balance_before),
+            "balance_after": str(movement.balance_after),
+            "order_id": order.id if order else None,
+            "flow": "pos_dine_in",
+        },
+    )
+
+    # If linked to order, audit on POS audit log as well
+    if order:
+        _audit(
+            merchant,
+            PosAuditLog.ACTION_DISCOUNT_APPLY,
+            user=request.user,
+            entity_type="order",
+            entity_id=order.id,
+            metadata={
+                "action": "minus_stock",
+                "item_id": item.id,
+                "item_name": item.name,
+                "quantity": str(quantity),
+                "remaining_stock": str(movement.balance_after),
+            },
+        )
+
+    return Response({
+        "success": True,
+        "inventory_item_id": item.id,
+        "item_name": item.name,
+        "deducted_quantity": str(quantity),
+        "balance_before": str(movement.balance_before),
+        "balance_after": str(movement.balance_after),
+        "available_stock": float(movement.balance_after),
+        "unit": unit_code,
+        "location_name": location.name,
+        "movement_id": movement.id,
+    }, status=status.HTTP_200_OK)
+

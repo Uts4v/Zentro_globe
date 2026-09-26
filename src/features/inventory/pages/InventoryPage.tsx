@@ -60,6 +60,10 @@ export function InventoryPage() {
     if (t.id === "settings") return can("inventory.manage_settings");
     return true;
   });
+  const hiddenActiveTab = TABS.find(
+    (t) => t.id === tab && !visibleTabs.some((v) => v.id === t.id),
+  );
+  const renderedTabs = hiddenActiveTab ? [...visibleTabs, hiddenActiveTab] : visibleTabs;
 
   return (
     <div className="space-y-8">
@@ -67,20 +71,25 @@ export function InventoryPage() {
         <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
           Zentro Inventory
         </p>
-        <h1 className="font-display mt-1 text-5xl text-foreground">Inventory</h1>
+        <h1 className="font-display mt-1 text-3xl text-foreground sm:text-4xl">Inventory</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           What do you need to do?
         </p>
       </div>
 
       {/* Tab bar */}
-      <div className="flex flex-wrap gap-1.5 rounded-2xl border border-border bg-card p-1.5">
-        {visibleTabs.map((t) => {
+      <div
+        className="flex flex-wrap gap-1.5 rounded-2xl border border-border bg-card p-1.5"
+        role="tablist"
+      >
+        {renderedTabs.map((t) => {
           const Icon = t.icon;
           const active = t.id === tab;
           return (
             <button
               key={t.id}
+              role="tab"
+              aria-selected={active}
               onClick={() => setTab(t.id)}
               className={cn(
                 "flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",

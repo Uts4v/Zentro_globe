@@ -22,12 +22,12 @@ export default function SyncStatusBar() {
 
   return (
     <div
-      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium ${
+      className={`flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 text-xs font-medium ${
         !isOnline
-          ? "bg-amber-50 text-amber-700"
+          ? "bg-warning/10 text-warning"
           : failed > 0
-          ? "bg-red-50 text-red-700"
-          : "bg-blue-50 text-blue-700"
+          ? "bg-destructive/10 text-destructive"
+          : "bg-info/10 text-info"
       }`}
     >
       {!isOnline ? (
@@ -48,7 +48,7 @@ export default function SyncStatusBar() {
           </span>
           <button
             onClick={handleSync}
-            className="ml-auto rounded-lg bg-red-100 px-2 py-0.5 text-[10px] font-bold hover:bg-red-200"
+            className="ml-auto min-h-[36px] rounded-lg bg-destructive/15 px-3 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/25"
           >
             Retry
           </button>
@@ -59,7 +59,7 @@ export default function SyncStatusBar() {
           <span>{pending} pending sync</span>
           <button
             onClick={handleSync}
-            className="ml-auto rounded-lg bg-blue-100 px-2 py-0.5 text-[10px] font-bold hover:bg-blue-200"
+            className="ml-auto min-h-[36px] rounded-lg bg-info/15 px-3 py-1.5 text-xs font-semibold text-info hover:bg-info/25"
           >
             Sync now
           </button>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
 import { posListOrders, PosOrder } from "../api";
+import { formatCurrency } from "@/lib/currency";
 import {
   Clock,
   CheckCircle2,
@@ -10,13 +11,13 @@ import {
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700",
-  confirmed: "bg-blue-100 text-blue-700",
-  preparing: "bg-orange-100 text-orange-700",
-  ready: "bg-green-100 text-green-700",
-  served: "bg-green-100 text-green-700",
-  completed: "bg-gray-100 text-gray-600",
-  cancelled: "bg-red-100 text-red-600",
+  pending: "bg-warning/10 text-warning",
+  confirmed: "bg-info/10 text-info",
+  preparing: "bg-warning/10 text-warning",
+  ready: "bg-success/10 text-success",
+  served: "bg-success/10 text-success",
+  completed: "bg-muted text-muted-foreground",
+  cancelled: "bg-destructive/10 text-destructive",
 };
 
 export default function PosOrdersScreen() {
@@ -80,6 +81,7 @@ export default function PosOrdersScreen() {
         <input
           type="text"
           placeholder="Search by order #, customer, table..."
+          aria-label="Search orders"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-xl border border-border bg-muted/50 py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
@@ -106,13 +108,13 @@ export default function PosOrdersScreen() {
                       #{order.id}
                     </span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                        STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600"
+                      className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                        STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
                       }`}
                     >
                       {order.status.toUpperCase()}
                     </span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium capitalize text-muted-foreground">
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
                       {order.source}
                     </span>
                   </div>
@@ -125,8 +127,10 @@ export default function PosOrdersScreen() {
                       <p>Table: {order.table_name_snapshot}</p>
                     )}
                     <p>
-                      {order.items.length} item(s) — Rs{" "}
-                      {Number(order.total_amount).toFixed(2)}
+                      {order.items.length} item(s) —{" "}
+                      <span className="numeric">
+                        {formatCurrency(Number(order.total_amount))}
+                      </span>
                     </p>
                     <p>
                       Payment:{" "}
@@ -140,11 +144,11 @@ export default function PosOrdersScreen() {
                 {/* Status icon */}
                 <div className="shrink-0">
                   {order.status === "completed" ? (
-                    <CheckCircle2 className="h-5 w-5 text-green-500" />
+                    <CheckCircle2 className="h-5 w-5 text-success" />
                   ) : order.status === "cancelled" ? (
-                    <XCircle className="h-5 w-5 text-red-400" />
+                    <XCircle className="h-5 w-5 text-destructive" />
                   ) : (
-                    <Clock className="h-5 w-5 text-amber-500" />
+                    <Clock className="h-5 w-5 text-warning" />
                   )}
                 </div>
               </div>

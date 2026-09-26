@@ -51,6 +51,14 @@ export function TableQRScanner({ onClose }: TableQRScannerProps) {
   const { setActiveTable, setSelectedMerchant } = useStore();
 
   useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
     const el = document.getElementById(SCANNER_ID);
     if (!el) return;
 
@@ -122,16 +130,24 @@ export function TableQRScanner({ onClose }: TableQRScannerProps) {
   }, [resolving, navigate, setActiveTable, setSelectedMerchant]);
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4">
-      <div className="relative w-full max-w-sm rounded-2xl bg-white p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="table-qr-scanner-title"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4"
+    >
+      <div className="relative w-full max-w-sm rounded-2xl bg-card p-4">
         <button
           onClick={onClose}
-          className="absolute -right-2 -top-2 grid h-8 w-8 place-items-center rounded-full bg-white shadow-md"
+          aria-label="Close"
+          className="absolute -right-2 -top-2 grid h-9 w-9 place-items-center rounded-full bg-card shadow-md"
         >
           <X className="h-4 w-4" />
         </button>
 
-        <h3 className="mb-3 text-center text-sm font-medium text-ink">Scan Table QR</h3>
+        <h3 id="table-qr-scanner-title" className="mb-3 text-center text-sm font-medium text-ink">
+          Scan Table QR
+        </h3>
 
         <div id={SCANNER_ID} className="mx-auto overflow-hidden rounded-xl" />
 

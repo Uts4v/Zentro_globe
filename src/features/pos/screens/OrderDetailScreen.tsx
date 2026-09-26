@@ -39,17 +39,20 @@ import {
   Minus,
   X,
   Ticket,
+  PackageMinus,
 } from "lucide-react";
 import CustomerSearchModal from "./CustomerSearchModal";
+import MinusStockModal from "./MinusStockModal";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-amber-100 text-amber-700",
-  confirmed: "bg-blue-100 text-blue-700",
-  preparing: "bg-orange-100 text-orange-700",
-  ready: "bg-green-100 text-green-700",
-  served: "bg-green-100 text-green-700",
-  completed: "bg-gray-100 text-gray-600",
-  cancelled: "bg-red-100 text-red-600",
+  pending: "bg-warning/10 text-warning",
+  confirmed: "bg-info/10 text-info",
+  preparing: "bg-warning/10 text-warning",
+  ready: "bg-success/10 text-success",
+  served: "bg-success/10 text-success",
+  completed: "bg-muted text-muted-foreground",
+  cancelled: "bg-destructive/10 text-destructive",
 };
 
 // Payment can still be collected unless the order is already settled or void.
@@ -92,6 +95,12 @@ export default function OrderDetailScreen({
   const [showCollectPayment, setShowCollectPayment] = useState(false);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [showAddItems, setShowAddItems] = useState(false);
+  const [showMinusStock, setShowMinusStock] = useState(false);
+  const [selectedMinusItem, setSelectedMinusItem] = useState<{
+    name: string;
+    menu_item_id?: number | null;
+    quantity?: number;
+  } | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
@@ -183,7 +192,7 @@ export default function OrderDetailScreen({
           {
             label: "Confirm Order",
             next: "confirmed",
-            color: "bg-blue-600 text-white hover:bg-blue-700",
+            color: "bg-primary text-primary-foreground hover:bg-primary-hover",
             icon: Check,
           },
         ];
@@ -192,13 +201,13 @@ export default function OrderDetailScreen({
           {
             label: "Start Preparing",
             next: "preparing",
-            color: "bg-orange-500 text-white hover:bg-orange-600",
+            color: "bg-warning text-primary-foreground hover:opacity-90",
             icon: Play,
           },
           {
             label: "Ready",
             next: "ready",
-            color: "bg-green-600 text-white hover:bg-green-700",
+            color: "bg-primary text-primary-foreground hover:bg-primary-hover",
             icon: PackageCheck,
           },
         ];
@@ -207,7 +216,7 @@ export default function OrderDetailScreen({
           {
             label: "Mark Ready",
             next: "ready",
-            color: "bg-green-600 text-white hover:bg-green-700",
+            color: "bg-primary text-primary-foreground hover:bg-primary-hover",
             icon: PackageCheck,
           },
         ];
@@ -216,7 +225,7 @@ export default function OrderDetailScreen({
           {
             label: "Complete Order",
             next: "completed",
-            color: "bg-green-700 text-white hover:bg-green-800",
+            color: "bg-primary text-primary-foreground hover:bg-primary-hover",
             icon: CheckCircle2,
           },
         ];
@@ -263,7 +272,7 @@ export default function OrderDetailScreen({
               <div className="flex items-center gap-2">
                 <h2 className="text-xl font-bold text-foreground">Order #{order.id}</h2>
                 {order.kot_number && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2.5 py-0.5 text-[11px] font-extrabold text-ember">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2.5 py-0.5 text-xs font-extrabold text-ember">
                     <Ticket className="h-3 w-3" />
                     KOT #{String(order.kot_number).padStart(3, "0")}
                   </span>
@@ -275,7 +284,7 @@ export default function OrderDetailScreen({
             </div>
             <span
               className={`rounded-full px-3 py-1 text-xs font-bold ${
-                STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600"
+                STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
               }`}
             >
               {order.status.toUpperCase()}
@@ -285,32 +294,32 @@ export default function OrderDetailScreen({
           {/* Info grid */}
           <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
             <div className="rounded-xl bg-muted/50 p-3">
-              <p className="text-[10px] uppercase text-muted-foreground">Type</p>
+              <p className="text-xs uppercase text-muted-foreground">Type</p>
               <p className="font-medium capitalize">{order.fulfillment_type.replace(/_/g, " ")}</p>
             </div>
             <div className="rounded-xl bg-muted/50 p-3">
-              <p className="text-[10px] uppercase text-muted-foreground">Source</p>
+              <p className="text-xs uppercase text-muted-foreground">Source</p>
               <p className="font-medium capitalize">{order.source}</p>
             </div>
             {order.customer_name && (
               <div className="rounded-xl bg-muted/50 p-3">
-                <p className="text-[10px] uppercase text-muted-foreground">Customer</p>
+                <p className="text-xs uppercase text-muted-foreground">Customer</p>
                 <p className="font-medium">{order.customer_name}</p>
               </div>
             )}
             {order.table_name_snapshot && (
               <div className="rounded-xl bg-muted/50 p-3">
-                <p className="text-[10px] uppercase text-muted-foreground">Table</p>
+                <p className="text-xs uppercase text-muted-foreground">Table</p>
                 <p className="font-medium">{order.table_name_snapshot}</p>
               </div>
             )}
             <div className="rounded-xl bg-muted/50 p-3">
-              <p className="text-[10px] uppercase text-muted-foreground">Payment</p>
+              <p className="text-xs uppercase text-muted-foreground">Payment</p>
               <p className="font-medium capitalize">{order.payment_status}</p>
             </div>
             <div className="rounded-xl bg-muted/50 p-3">
-              <p className="text-[10px] uppercase text-muted-foreground">Method</p>
-              <p className="font-medium capitalize">{order.payment_method || "-"}</p>
+              <p className="text-xs uppercase text-muted-foreground">Method</p>
+              <p className="font-medium">{paymentMethodLabel(order.payment_method)}</p>
             </div>
           </div>
 
@@ -326,9 +335,29 @@ export default function OrderDetailScreen({
                       {item.quantity} x {formatCurrency(Number(item.price), currencySymbol)}
                     </p>
                   </div>
-                  <p className="text-sm font-bold text-ink">
-                    {formatCurrency(Number(item.subtotal), currencySymbol)}
-                  </p>
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm font-bold text-ink">
+                      {formatCurrency(Number(item.subtotal), currencySymbol)}
+                    </p>
+                    {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedMinusItem({
+                            name: item.name,
+                            menu_item_id: (item as any).menu_item_id ?? null,
+                            quantity: item.quantity,
+                          });
+                          setShowMinusStock(true);
+                        }}
+                        title="Minus stock for this item"
+                        className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+                      >
+                        <PackageMinus className="h-3.5 w-3.5" />
+                        <span>Minus Stock</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -341,7 +370,7 @@ export default function OrderDetailScreen({
               <span>{formatCurrency(Number(order.subtotal), currencySymbol)}</span>
             </div>
             {Number(order.discount_amount) > 0 && (
-              <div className="flex justify-between text-green-600">
+              <div className="flex justify-between text-success">
                 <span>Discount</span>
                 <span>-{formatCurrency(Number(order.discount_amount), currencySymbol)}</span>
               </div>
@@ -368,6 +397,21 @@ export default function OrderDetailScreen({
               >
                 <Plus className="h-4 w-4" />
                 Add Items to This Order
+              </button>
+            )}
+
+            {/* Minus Stock button for Dine-In orders */}
+            {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedMinusItem(null);
+                  setShowMinusStock(true);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 py-3 text-sm font-bold text-destructive transition-colors hover:bg-destructive/20 shadow-sm"
+              >
+                <PackageMinus className="h-4 w-4" />
+                Minus Stock
               </button>
             )}
 
@@ -399,7 +443,7 @@ export default function OrderDetailScreen({
             {canCollectPayment(order) && (
               <button
                 onClick={() => setShowCollectPayment(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground hover:bg-primary-hover"
               >
                 <CreditCard className="h-4 w-4" />
                 Collect Payment — {formatCurrency(Number(order.total_amount), currencySymbol)}
@@ -436,7 +480,7 @@ export default function OrderDetailScreen({
               {order.payment_status === "paid" && (
                 <button
                   onClick={() => setShowRefund(true)}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-200 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/30 py-3 text-sm font-medium text-destructive hover:bg-destructive/10"
                 >
                   <RotateCcw className="h-4 w-4" />
                   Refund
@@ -512,6 +556,28 @@ export default function OrderDetailScreen({
             onClose={() => setShowAddItems(false)}
           />
         )}
+
+        {/* Minus Stock Modal */}
+        {showMinusStock && selectedOrder && (
+          <MinusStockModal
+            open={showMinusStock}
+            onClose={() => {
+              setShowMinusStock(false);
+              setSelectedMinusItem(null);
+            }}
+            orderId={selectedOrder.id}
+            tableName={selectedOrder.table_name_snapshot}
+            initialItem={selectedMinusItem}
+            orderItems={selectedOrder.items.map((item) => ({
+              name: item.name,
+              menu_item_id: (item as any).menu_item_id ?? null,
+              quantity: item.quantity,
+            }))}
+            onStockDeducted={() => {
+              loadOrders();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -535,6 +601,7 @@ export default function OrderDetailScreen({
         <input
           type="text"
           placeholder="Search by order #, customer..."
+          aria-label="Search orders"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-xl border border-border bg-muted/50 py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
@@ -565,20 +632,20 @@ export default function OrderDetailScreen({
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-foreground">#{order.id}</span>
                       {order.kot_number && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-[10px] font-bold text-ember">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
                           <Ticket className="h-2.5 w-2.5" />
                           KOT {String(order.kot_number).padStart(3, "0")}
                         </span>
                       )}
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          STATUS_COLORS[order.status] ?? "bg-gray-100 text-gray-600"
+                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                          STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
                         }`}
                       >
                         {order.status.toUpperCase()}
                       </span>
                       {canCollectPayment(order) && (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                        <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-bold text-warning">
                           {order.payment_status === "partially_paid" ? "PART PAID" : "UNPAID"}
                         </span>
                       )}
@@ -655,6 +722,7 @@ function AddItemsModal({
     load();
   }, [order.merchant]);
 
+<<<<<<< HEAD
   /** Append a configured line, merging only into an identical configuration. */
   function pushLine(line: AddToOrderLine) {
     setCart((prev) => {
@@ -665,6 +733,15 @@ function AddItemsModal({
       return [...prev, line];
     });
   }
+=======
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
   function addToCart(item: MenuItem) {
     if (needsOptions(item)) {
@@ -738,18 +815,26 @@ function AddItemsModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-card shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-items-title"
+        className="mx-4 flex max-h-[90vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-card shadow-2xl"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <div>
-            <h3 className="text-sm font-bold text-foreground">Add items to #{order.id}</h3>
-            <p className="text-[11px] text-muted-foreground">
+            <h3 id="add-items-title" className="text-sm font-bold text-foreground">
+              Add items to #{order.id}
+            </h3>
+            <p className="numeric text-xs text-muted-foreground">
               Current total: {formatCurrency(Number(order.total_amount), currencySymbol)}
             </p>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+            aria-label="Close"
+            className="rounded-lg p-2.5 text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
@@ -762,6 +847,7 @@ function AddItemsModal({
             <input
               type="text"
               placeholder="Search menu..."
+              aria-label="Search menu"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-8 pr-3 text-xs placeholder:text-muted-foreground focus:border-ink focus:outline-none"
@@ -776,7 +862,7 @@ function AddItemsModal({
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : error && menu.length === 0 ? (
-            <p className="py-8 text-center text-xs text-red-500">{error}</p>
+            <p className="py-8 text-center text-xs text-destructive">{error}</p>
           ) : filtered.length === 0 ? (
             <p className="py-8 text-center text-xs text-muted-foreground">No items found</p>
           ) : (
@@ -791,31 +877,48 @@ function AddItemsModal({
                     <span className="text-lg">{item.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-foreground truncate">{item.name}</p>
+<<<<<<< HEAD
                       <p className="text-[11px] text-muted-foreground">
                         {needsOptions(item) ? "from " : ""}
                         {formatCurrency(fromPrice(item), currencySymbol)}
+=======
+                      <p className="numeric text-xs text-muted-foreground">
+                        {formatCurrency(Number(item.price), currencySymbol)}
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                       </p>
                     </div>
                     {inCart ? (
                       <div className="flex items-center gap-1.5">
                         <button
+<<<<<<< HEAD
                           onClick={() => changeQty(inCart.key, -1)}
                           className="grid h-6 w-6 place-items-center rounded-md bg-muted text-foreground"
+=======
+                          onClick={() => removeFromCart(item.id)}
+                          aria-label={`Remove one ${item.name}`}
+                          className="grid h-9 w-9 place-items-center rounded-md bg-muted text-foreground"
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                         >
-                          <Minus className="h-3 w-3" />
+                          <Minus className="h-4 w-4" />
                         </button>
-                        <span className="w-5 text-center text-xs font-bold">{inCart.qty}</span>
+                        <span className="w-6 text-center text-xs font-bold">{inCart.qty}</span>
                         <button
+<<<<<<< HEAD
                           onClick={() => changeQty(inCart.key, 1)}
                           className="grid h-6 w-6 place-items-center rounded-md bg-ink text-white"
+=======
+                          onClick={() => addToCart(item)}
+                          aria-label={`Add one ${item.name}`}
+                          className="grid h-9 w-9 place-items-center rounded-md bg-ink text-white"
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                         >
-                          <Plus className="h-3 w-3" />
+                          <Plus className="h-4 w-4" />
                         </button>
                       </div>
                     ) : (
                       <button
                         onClick={() => addToCart(item)}
-                        className="rounded-lg bg-ink/10 px-3 py-1 text-[10px] font-bold text-ink hover:bg-ink/20"
+                        className="min-h-[40px] rounded-lg bg-ink/10 px-3 text-xs font-bold text-ink hover:bg-ink/20"
                       >
                         {needsOptions(item) ? "Options" : "Add"}
                       </button>
@@ -860,14 +963,14 @@ function AddItemsModal({
                 <span>{formatCurrency(Number(order.total_amount) + total, currencySymbol)}</span>
               </div>
             </div>
-            {error && <p className="mb-2 text-xs text-red-500">{error}</p>}
+            {error && <p className="mb-2 text-xs text-destructive">{error}</p>}
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Add to order · {formatCurrency(total, currencySymbol)}
+              Add to order · <span className="numeric">{formatCurrency(total, currencySymbol)}</span>
             </button>
           </div>
         )}

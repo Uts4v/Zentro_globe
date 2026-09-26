@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { posProcessRefund, PosOrder } from "../api";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
 import { AlertCircle, Loader2, X, RotateCcw, DollarSign } from "lucide-react";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 
 interface RefundModalProps {
   order: PosOrder;
@@ -24,6 +25,14 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
   const orderTotal = Number(order.total_amount);
   const refundAmount = refundType === "full" ? orderTotal : parseFloat(amount) || 0;
   const canSubmit = refundAmount > 0 && refundAmount <= orderTotal && reason.trim() && !loading && currentWorker;
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   async function handleSubmit() {
     if (!canSubmit || !currentWorker) return;
@@ -47,15 +56,27 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="refund-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
       <div className="w-full max-w-md rounded-2xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
             <RotateCcw className="h-5 w-5 text-red-500" />
-            <h2 className="text-lg font-bold text-foreground">Process Refund</h2>
+            <h2 id="refund-title" className="text-lg font-bold text-foreground">
+              Process Refund
+            </h2>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-muted">
+          <button
+            aria-label="Close"
+            onClick={onClose}
+            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -65,10 +86,10 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
           <div className="rounded-xl bg-muted/50 p-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Order #{order.id}</span>
-              <span className="font-bold text-foreground">{formatCurrency(orderTotal, currencySymbol)}</span>
+              <span className="numeric font-bold text-foreground">{formatCurrency(orderTotal, currencySymbol)}</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {order.items?.length || 0} items &middot; {order.payment_method}
+              {order.items?.length || 0} items &middot; {paymentMethodLabel(order.payment_method)}
             </p>
           </div>
 
@@ -78,16 +99,20 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
             <div className="flex gap-2">
               <button
                 onClick={() => setRefundType("full")}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
-                  refundType === "full" ? "bg-red-500 text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                className={`min-h-[44px] flex-1 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                  refundType === "full"
+                    ? "bg-ink text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
                 Full Refund
               </button>
               <button
                 onClick={() => setRefundType("partial")}
-                className={`flex-1 rounded-xl py-2.5 text-sm font-medium transition-colors ${
-                  refundType === "partial" ? "bg-red-500 text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                className={`min-h-[44px] flex-1 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+                  refundType === "partial"
+                    ? "bg-ink text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
                 Partial Refund
@@ -112,7 +137,7 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
                   className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-4 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
                 />
               </div>
-              <p className="mt-1 text-[10px] text-muted-foreground">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Maximum: {formatCurrency(orderTotal, currencySymbol)}
               </p>
             </div>
@@ -126,9 +151,9 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
                 <button
                   key={method}
                   onClick={() => setRefundMethod(method)}
-                  className={`flex-1 rounded-xl py-2 text-xs font-medium capitalize transition-colors ${
+                  className={`min-h-[44px] flex-1 rounded-xl px-3 py-2.5 text-xs font-medium capitalize transition-colors ${
                     refundMethod === method
-                      ? "bg-ink text-white"
+                      ? "bg-ink text-primary-foreground"
                       : "bg-muted text-muted-foreground hover:bg-muted/80"
                   }`}
                 >
@@ -153,7 +178,9 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
           {/* Refund amount preview */}
           <div className="rounded-xl bg-red-50 p-3 text-center">
             <p className="text-xs text-red-600">Refund Amount</p>
-            <p className="text-2xl font-bold text-red-700">- {formatCurrency(refundAmount, currencySymbol)}</p>
+            <p className="numeric text-2xl font-bold text-red-700">
+              - {formatCurrency(refundAmount, currencySymbol)}
+            </p>
           </div>
 
           {/* Error */}
@@ -176,7 +203,7 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-500 py-3 text-sm font-bold text-white hover:bg-red-600 disabled:opacity-40"
+            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-destructive py-3 text-sm font-bold text-destructive-foreground hover:bg-destructive/90 disabled:opacity-40"
           >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

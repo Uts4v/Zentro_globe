@@ -11,6 +11,8 @@ import {
 } from "../api";
 import { formatCurrency, calculateTax, roundMoney } from "@/lib/currency";
 import Receipt from "../printing/Receipt";
+import PaymentQrModal from "./PaymentQrModal";
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import KOTTicket, { kotTicketFromReceipt, printKOT, KOTTicketData } from "../printing/KOTTicket";
 import {
   X,
@@ -43,11 +45,11 @@ const PAYMENT_METHODS: Array<{
   label: string;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { key: "cash", label: "Cash", icon: Banknote },
-  { key: "card", label: "Card", icon: CreditCard },
-  { key: "bank_qr", label: "Bank QR", icon: QrCode },
-  { key: "mobile_wallet", label: "E-Wallet", icon: Smartphone },
-  { key: "debit", label: "Debit", icon: Wallet },
+  { key: "cash", label: PAYMENT_METHOD_LABELS.cash, icon: Banknote },
+  { key: "card", label: PAYMENT_METHOD_LABELS.card, icon: CreditCard },
+  { key: "bank_qr", label: PAYMENT_METHOD_LABELS.bank_qr, icon: QrCode },
+  { key: "mobile_wallet", label: PAYMENT_METHOD_LABELS.mobile_wallet, icon: Smartphone },
+  { key: "debit", label: PAYMENT_METHOD_LABELS.debit, icon: Wallet },
 ];
 
 const METHOD_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
@@ -71,8 +73,12 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const [error, setError] = useState<string | null>(null);
   const [debitAccounts, setDebitAccounts] = useState<DebitAccount[]>([]);
   const [selectedDebitAccount, setSelectedDebitAccount] = useState<string>("");
+<<<<<<< HEAD
   const [reference, setReference] = useState("");
   const [qrConfirmed, setQrConfirmed] = useState(false);
+=======
+  const [showQr, setShowQr] = useState(false);
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
   const [receiptData, setReceiptData] = useState<PosReceiptData | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
@@ -89,6 +95,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     }
   }, [method]);
 
+<<<<<<< HEAD
   // Only offer tenders this merchant accepts, and never offer a QR tender
   // without an actual QR image to show the customer.
   const availableMethods = useMemo(() => {
@@ -130,6 +137,16 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     setQrConfirmed(false);
     setReference("");
   }, [method]);
+=======
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
   if (!open) return null;
 
@@ -235,6 +252,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         setLoadingReceipt(false);
       }
     } catch (err: any) {
+      setShowQr(false);
       setError(err?.message || "Payment failed. Please try again.");
     } finally {
       setSubmitting(false);
@@ -244,20 +262,28 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   // ── Dine-in order placed success ──
   if (isDineIn && orderPlaced) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="mx-4 flex w-full max-w-md flex-col rounded-3xl bg-white shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-sheet-placed-title"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      >
+        <div className="mx-4 flex w-full max-w-md flex-col rounded-3xl bg-card shadow-2xl">
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
             <div className="flex items-center gap-2">
               <ShoppingBag className="h-5 w-5 text-ink" />
-              <h3 className="text-base font-bold text-foreground">Order Placed</h3>
+              <h3 id="payment-sheet-placed-title" className="text-base font-bold text-foreground">
+                Order Placed
+              </h3>
             </div>
             <button
+              aria-label="Close"
               onClick={() => {
                 setOrderPlaced(false);
                 onClose();
                 onPaid();
               }}
-              className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+              className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
             >
               <X className="h-4 w-4" />
             </button>
@@ -321,20 +347,28 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   // ── Receipt view after payment ──
   if (receiptData || loadingReceipt) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-3xl bg-white shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-sheet-receipt-title"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      >
+        <div className="mx-4 flex max-h-[90vh] w-full max-w-2xl flex-col rounded-3xl bg-card shadow-2xl">
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
             <div className="flex items-center gap-2">
               <ReceiptIcon className="h-5 w-5 text-ink" />
-              <h3 className="text-base font-bold text-foreground">Payment Complete</h3>
+              <h3 id="payment-sheet-receipt-title" className="text-base font-bold text-foreground">
+                Payment Complete
+              </h3>
             </div>
             <button
+              aria-label="Close"
               onClick={() => {
                 setReceiptData(null);
                 onClose();
                 onPaid();
               }}
-              className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+              className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
             >
               <X className="h-4 w-4" />
             </button>
@@ -353,7 +387,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
               )}
             </div>
             {receiptData?.kot_number && (
-              <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-[11px] font-extrabold text-white">
+              <span className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1 text-xs font-extrabold text-white">
                 <Ticket className="h-3.5 w-3.5" />
                 KOT #{String(receiptData.kot_number).padStart(3, "0")}
               </span>
@@ -408,15 +442,23 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   // ── Dine-in: order confirmation (no payment) ──
   if (isDineIn) {
     return (
-      <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="payment-sheet-dinein-title"
+        className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      >
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-        <div className="relative w-full max-w-lg rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+        <div className="relative w-full max-w-lg rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
-            <h3 className="text-base font-bold text-foreground">Confirm Dine-In Order</h3>
+            <h3 id="payment-sheet-dinein-title" className="text-base font-bold text-foreground">
+              Confirm Dine-In Order
+            </h3>
             <button
+              aria-label="Close"
               onClick={onClose}
-              className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+              className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
             >
               <X className="h-4 w-4" />
             </button>
@@ -424,7 +466,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
           <div className="border-b border-border px-6 py-4 text-center">
             <p className="text-xs text-muted-foreground">Order total</p>
-            <p className="mt-1 text-3xl font-bold text-ink">
+            <p className="numeric mt-1 text-3xl font-bold text-ink">
               {formatCurrency(total, currencySymbol)}
             </p>
             {selectedTableId && (
@@ -468,15 +510,23 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
   // ── Takeaway / Delivery: payment form ──
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="payment-sheet-title"
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+    >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-lg rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+      <div className="relative w-full max-w-lg rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h3 className="text-base font-bold text-foreground">Payment</h3>
+          <h3 id="payment-sheet-title" className="text-base font-bold text-foreground">
+            Payment
+          </h3>
           <button
+            aria-label="Close"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
@@ -484,20 +534,33 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
         <div className="border-b border-border px-6 py-4 text-center">
           <p className="text-xs text-muted-foreground">Amount to pay</p>
-          <p className="mt-1 text-3xl font-bold text-ink">
+          <p className="numeric mt-1 text-3xl font-bold text-ink">
             {formatCurrency(total, currencySymbol)}
           </p>
         </div>
 
+<<<<<<< HEAD
         <div className="grid grid-cols-5 gap-2 px-6 py-4">
           {availableMethods.map((pm) => {
+=======
+        <div className="grid grid-cols-3 gap-2 px-6 py-4 sm:grid-cols-5">
+          {PAYMENT_METHODS.map((pm) => {
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
             const Icon = pm.icon;
             const active = method === pm.key;
             return (
               <button
                 key={pm.key}
+<<<<<<< HEAD
                 onClick={() => setMethod(pm.key as PaymentMethod)}
                 className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-[11px] font-medium transition-colors ${
+=======
+                onClick={() => {
+                  setMethod(pm.key);
+                  if (pm.key === "bank_qr") setShowQr(true);
+                }}
+                className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-xs font-medium transition-colors ${
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                   active ? "bg-ink text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
@@ -562,11 +625,11 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
               className="w-full rounded-xl border border-border bg-muted/50 px-4 py-3 text-lg font-bold focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
             />
             <div className="mt-2 flex gap-2">
-              {[total, Math.ceil(total), 10, 20, 50, 100].map((amt) => (
+              {Array.from(new Set([total, Math.ceil(total), 10, 20, 50, 100])).map((amt, i) => (
                 <button
-                  key={amt}
+                  key={`${amt}-${i}`}
                   onClick={() => setCashReceived(amt.toFixed(2))}
-                  className="flex-1 rounded-lg bg-muted py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80"
+                  className="min-h-[44px] flex-1 rounded-lg bg-muted px-1 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/80"
                 >
                   {amt === total ? "Exact" : formatCurrency(amt, currencySymbol)}
                 </button>
@@ -664,6 +727,24 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           </div>
         )}
 
+        {method === "bank_qr" && (
+          <div className="px-6 pb-4">
+            <button
+              onClick={() => setShowQr(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              <QrCode className="h-4 w-4" />
+              Show QR code to customer
+            </button>
+          </div>
+        )}
+
+        {(method === "card" || method === "mobile_wallet") && (
+          <p className="px-6 pb-4 text-center text-xs text-muted-foreground">
+            Confirm once the customer has paid. It's recorded as {PAYMENT_METHOD_LABELS[method]}.
+          </p>
+        )}
+
         {error && (
           <div className="mx-6 mb-2 rounded-xl bg-red-50 p-3 text-xs text-red-600">{error}</div>
         )}
@@ -688,6 +769,15 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           </button>
         </div>
       </div>
+
+      {showQr && (
+        <PaymentQrModal
+          amount={total}
+          onClose={() => setShowQr(false)}
+          onConfirm={handleSubmit}
+          confirming={submitting}
+        />
+      )}
     </div>
   );
 }

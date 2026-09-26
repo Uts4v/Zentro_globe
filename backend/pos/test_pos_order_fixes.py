@@ -92,7 +92,9 @@ class PosFixtureMixin:
         }, format="json")
 
 
-class DineInStockDeductionTests(PosFixtureMixin, TestCase):
+class StockFixtureMixin(PosFixtureMixin):
+    """10 Coke bottles at the Bar, linked 1:1 to the Coke menu item."""
+
     def setUp(self):
         super().setUp()
         seed_merchant_reference_data(self.merchant)
@@ -124,6 +126,8 @@ class DineInStockDeductionTests(PosFixtureMixin, TestCase):
             inventory_item=self.stock, movement_type=MovementType.SALE,
         )
 
+
+class DineInStockDeductionTests(StockFixtureMixin, TestCase):
     def test_dine_in_order_is_stored_as_dine_in_and_deducts_stock(self):
         resp = self.create_pos_order([(self.coke, 3), (self.tea, 1)])
         self.assertEqual(resp.status_code, 201, resp.data)
@@ -238,6 +242,112 @@ class DineInStockDeductionTests(PosFixtureMixin, TestCase):
                 self.assertEqual(resp.status_code, 400)
         # The original link is untouched by the rejected requests.
         self.assertTrue(MenuItemStockLink.objects.filter(menu_item=self.coke).exists())
+
+
+class DineInLifecycleTests(StockFixtureMixin, TestCase):
+    """Walk a dine-in order through every step the POS performs on it."""
+
+    def setUp(self):
+        super().setUp()
+        from merchants.models import MerchantTable
+        self.table = MerchantTable.objects.create(
+            merchant=self.merchant, name="Table 4", table_number=4,
+        )
+
+    def place_dine_in_order(self, mutation_id):
+        # Exactly what PaymentSheet.handlePlaceOrder sends for a dine-in cart.
+        return self.client.post("/api/pos/order/create/", {
+            "merchant_id": self.merchant.id,
+            "items": [
+                {"menu_item_id": self.coke.id, "quantity": 3},
+                {"menu_item_id": self.tea.id, "quantity": 1},
+            ],
+            "notes": "",
+            "fulfillment_type": "dine-in",
+            "table_id": self.table.id,
+            "shift_id": str(self.shift.id),
+            "worker_id": str(self.worker.id),
+            "device_id": str(self.device.id),
+            "client_mutation_id": mutation_id,
+        }, format="json")
+
+    def refresh_pos(self, order_uuid):
+        # What a POS page refresh / screen reload fetches.
+        self.assertEqual(self.client.post(
+            "/api/pos/auth/bootstrap/", {"device_id": str(self.device.id)}, format="json",
+        ).status_code, 200)
+        self.assertEqual(self.client.get("/api/pos/orders/").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/pos/receipt/{order_uuid}/").status_code, 200)
+
+    def assert_deducted_once(self, order_id):
+        self.assertEqual(self.on_hand(), Decimal("7"))
+        sales = self.sales().filter(source_id=str(order_id))
+        self.assertEqual(sales.count(), 1)
+        self.assertEqual(sales.get().quantity_change, Decimal("-3"))
+
+    def test_full_dine_in_flow_deducts_exactly_once(self):
+        mutation_id = str(uuid.uuid4())
+        placed = self.place_dine_in_order(mutation_id)
+        self.assertEqual(placed.status_code, 201, placed.data)
+        order_id, order_uuid = placed.data["id"], placed.data["uuid"]
+        self.assertEqual(placed.data["fulfillment_type"], Order.FULFILLMENT_DINE_IN)
+        self.assert_deducted_once(order_id)
+
+        self.refresh_pos(order_uuid)
+        self.assert_deducted_once(order_id)
+
+        # A network retry of the same submission returns the same order.
+        retry = self.place_dine_in_order(mutation_id)
+        self.assertEqual(retry.data["id"], order_id)
+        self.assert_deducted_once(order_id)
+
+        for new_status in ("preparing", "ready", "completed"):
+            resp = self.client.post("/api/pos/order/status/", {
+                "order_id": order_uuid, "status": new_status,
+                "worker_id": str(self.worker.id), "device_id": str(self.device.id),
+            }, format="json")
+            self.assertEqual(resp.status_code, 200, resp.data)
+            self.assert_deducted_once(order_id)
+            self.refresh_pos(order_uuid)
+            self.assert_deducted_once(order_id)
+
+        paid = self.pay(order_uuid, placed.data["total_amount"])
+        self.assertEqual(paid.status_code, 201, paid.data)
+        self.refresh_pos(order_uuid)
+        self.assert_deducted_once(order_id)
+
+    def test_kds_actions_never_deduct_and_kds_cancel_restores_once(self):
+        from orders.models import PreparationArea
+        area = PreparationArea.objects.create(merchant=self.merchant, name="Bar", is_default=True)
+        self.merchant.preparation_routing_enabled = True
+        self.merchant.save(update_fields=["preparation_routing_enabled"])
+        self.worker.role = ShiftWorker.ROLE_MANAGER
+        self.worker.save(update_fields=["role"])
+
+        placed = self.place_dine_in_order(str(uuid.uuid4()))
+        order_id = placed.data["id"]
+        self.assert_deducted_once(order_id)
+
+        def kds(action):
+            return self.client.post(
+                f"/api/orders/preparation-areas/{area.id}/action/{action}/",
+                {"order_id": order_id, "worker_id": str(self.worker.id)}, format="json",
+            )
+
+        self.assertEqual(kds("start").status_code, 200)
+        self.assert_deducted_once(order_id)
+
+        # The kitchen cancels the items: nothing was made, stock comes back.
+        self.assertEqual(kds("cancel").status_code, 200)
+        self.assertEqual(self.on_hand(), Decimal("10"))
+        # Cancelling again (nothing left to cancel) or cancelling the whole
+        # order afterwards must not restore twice.
+        self.assertEqual(kds("cancel").status_code, 400)
+        resp = self.client.post("/api/pos/order/status/", {
+            "order_id": placed.data["uuid"], "status": "cancelled",
+        }, format="json")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(self.on_hand(), Decimal("10"))
 
 
 class CustomerLoyaltyInfoTests(PosFixtureMixin, TestCase):

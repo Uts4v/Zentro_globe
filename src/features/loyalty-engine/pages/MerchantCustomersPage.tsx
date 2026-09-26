@@ -6,10 +6,10 @@ import { formatCurrency } from "@/lib/currency";
 import { useAuth } from "@/lib/auth";
 
 const TIER_STYLES: Record<string, string> = {
-  bronze: "bg-orange-100 text-orange-700",
-  silver: "bg-gray-100 text-gray-700",
-  gold: "bg-yellow-100 text-yellow-700",
-  platinum: "bg-purple-100 text-purple-700",
+  bronze: "bg-warning/15 text-warning",
+  silver: "bg-muted text-muted-foreground",
+  gold: "bg-butter-soft text-ink",
+  platinum: "bg-info/15 text-info",
 };
 
 function formatDate(iso: string | null): string {
@@ -65,7 +65,9 @@ export function MerchantCustomersPage() {
         <div className="flex items-center gap-3">
           <Users className="h-5 w-5 text-ember" />
           <div>
-            <h1 className="text-xl font-bold text-foreground">Customers</h1>
+            <h1 className="font-display text-3xl font-bold text-foreground sm:text-4xl">
+              Customers
+            </h1>
             <p className="text-xs text-muted-foreground">
               Everyone linked to your business
             </p>
@@ -76,30 +78,30 @@ export function MerchantCustomersPage() {
       {/* Summary cards */}
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
             Total Customers
           </p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{totals.total}</p>
+          <p className="numeric mt-1 text-2xl font-bold text-foreground">{totals.total}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
             Active Members
           </p>
-          <p className="mt-1 text-2xl font-bold text-foreground">{totals.active}</p>
+          <p className="numeric mt-1 text-2xl font-bold text-foreground">{totals.active}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
             Points Issued
           </p>
-          <p className="mt-1 text-2xl font-bold text-foreground">
+          <p className="numeric mt-1 text-2xl font-bold text-foreground">
             {totals.points.toLocaleString()}
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">
             Total Spend
           </p>
-          <p className="mt-1 text-2xl font-bold text-foreground">
+          <p className="numeric mt-1 text-2xl font-bold text-foreground">
             {formatCurrency(totals.spend, currencySymbol, 0)}
           </p>
         </div>
@@ -113,6 +115,7 @@ export function MerchantCustomersPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name, phone, email, or membership number..."
+          aria-label="Search customers"
           className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-4 text-sm focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember"
         />
       </div>
@@ -122,7 +125,7 @@ export function MerchantCustomersPage() {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+        <div className="rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
           {error}
         </div>
       ) : filtered.length === 0 ? (
@@ -133,14 +136,14 @@ export function MerchantCustomersPage() {
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card">
-          <div className="hidden grid-cols-12 gap-2 border-b border-border bg-muted/40 px-5 py-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground md:grid">
-            <span className="col-span-3">Customer</span>
-            <span className="col-span-2">Membership</span>
-            <span className="col-span-2">Points</span>
-            <span className="col-span-1">Orders</span>
-            <span className="col-span-2">Spent</span>
-            <span className="col-span-1">Joined</span>
-            <span className="col-span-1">Status</span>
+          <div className="hidden grid-cols-12 gap-2 border-b border-border bg-muted/40 px-5 py-3 text-xs font-bold uppercase tracking-widest text-muted-foreground md:grid">
+            <span className="md:col-span-3">Customer</span>
+            <span className="md:col-span-2">Membership</span>
+            <span className="md:col-span-2">Points</span>
+            <span className="md:col-span-1">Orders</span>
+            <span className="md:col-span-2">Spent</span>
+            <span className="md:col-span-1">Joined</span>
+            <span className="md:col-span-1">Status</span>
           </div>
           <ul className="divide-y divide-border">
             {filtered.map((c) => (
@@ -148,7 +151,7 @@ export function MerchantCustomersPage() {
                 key={c.membership_id}
                 className="grid grid-cols-1 gap-2 px-5 py-4 md:grid-cols-12 md:items-center md:gap-2"
               >
-                <div className="col-span-3">
+                <div className="md:col-span-3">
                   <div className="flex items-center gap-2">
                     <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink/10 text-xs font-bold text-ink">
                       {(c.customer_name || "?").charAt(0).toUpperCase()}
@@ -173,14 +176,14 @@ export function MerchantCustomersPage() {
                     </div>
                   </div>
                 </div>
-                <div className="col-span-2">
+                <div className="md:col-span-2">
                   <div className="flex items-center gap-2">
-                    <span className="rounded bg-ink/10 px-2 py-0.5 font-mono text-[11px] font-bold text-ink">
+                    <span className="rounded bg-ink/10 px-2 py-0.5 font-mono text-xs font-bold text-ink">
                       {c.membership_number || "—"}
                     </span>
                     {c.tier && (
                       <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${
+                        className={`rounded-full px-2 py-0.5 text-xs font-bold capitalize ${
                           TIER_STYLES[c.tier] || "bg-mist text-muted-foreground"
                         }`}
                       >
@@ -189,26 +192,26 @@ export function MerchantCustomersPage() {
                     )}
                   </div>
                 </div>
-                <div className="col-span-2">
-                  <span className="flex items-center gap-1 text-sm font-bold text-foreground">
-                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                <div className="md:col-span-2">
+                  <span className="numeric flex items-center gap-1 text-sm font-bold text-foreground">
+                    <Star className="h-3.5 w-3.5 fill-warning text-warning" />
                     {c.points_balance.toLocaleString()}
                   </span>
                 </div>
-                <div className="col-span-1 text-sm font-medium text-foreground">
+                <div className="numeric md:col-span-1 text-sm font-medium text-foreground">
                   {(c.order_count ?? 0).toLocaleString()}
                 </div>
-                <div className="col-span-2 text-sm font-semibold text-foreground">
+                <div className="numeric md:col-span-2 text-sm font-semibold text-foreground">
                   {formatCurrency(c.total_spent ?? 0, currencySymbol, 0)}
                 </div>
-                <div className="col-span-1 text-xs text-muted-foreground">
+                <div className="md:col-span-1 text-xs text-muted-foreground">
                   {formatDate(c.joined_at)}
                 </div>
-                <div className="col-span-1">
+                <div className="md:col-span-1">
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${
+                    className={`rounded-full px-2 py-0.5 text-xs font-bold capitalize ${
                       c.status === "active"
-                        ? "bg-emerald-100 text-emerald-700"
+                        ? "bg-success/15 text-success"
                         : "bg-mist text-muted-foreground"
                     }`}
                   >

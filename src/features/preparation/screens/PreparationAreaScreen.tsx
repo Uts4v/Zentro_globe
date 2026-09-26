@@ -28,9 +28,9 @@ function formatElapsed(seconds: number): string {
 }
 
 function getElapsedClass(seconds: number): string {
-  if (seconds > 600) return "text-red-600 font-bold"; // >10 min
-  if (seconds > 300) return "text-orange-500 font-semibold"; // >5 min
-  return "text-gray-500";
+  if (seconds > 600) return "text-destructive font-bold"; // >10 min
+  if (seconds > 300) return "text-destructive font-semibold"; // >5 min
+  return "text-muted-foreground";
 }
 
 function formatShiftTime(iso: string): string {
@@ -58,8 +58,8 @@ function OrderCard({
 
   return (
     <div
-      className={`bg-white rounded-lg shadow-sm p-4 ${statusColor[order.area_status] ?? ""} ${
-        order.area_status === "ready" ? "bg-green-50" : ""
+      className={`bg-card rounded-2xl border border-border p-4 ${statusColor[order.area_status] ?? ""} ${
+        order.area_status === "ready" ? "bg-success/10" : ""
       }`}
     >
       {/* Header */}
@@ -68,14 +68,16 @@ function OrderCard({
           <div className="numeric text-2xl font-bold tracking-tight">
             Order {order.order_number}
           </div>
-          <div className="mt-0.5 text-base font-semibold text-gray-700">
+          <div className="mt-0.5 text-base font-semibold text-foreground">
             {order.table_name
               ? order.table_name
               : order.fulfillment_type === "pickup"
                 ? "Pickup"
                 : "Dine-in"}
             {order.customer_name && (
-              <span className="ml-2 font-medium text-gray-400">· {order.customer_name}</span>
+              <span className="ml-2 font-medium text-muted-foreground">
+                · {order.customer_name}
+              </span>
             )}
           </div>
         </div>
@@ -84,7 +86,7 @@ function OrderCard({
             {formatElapsed(order.elapsed_seconds)}
           </div>
           {order.payment_status !== "paid" && order.payment_status !== "unpaid" && (
-            <div className="text-[13px] font-semibold capitalize text-orange-500">
+            <div className="text-[13px] font-semibold capitalize text-destructive">
               {order.payment_status}
             </div>
           )}
@@ -93,6 +95,7 @@ function OrderCard({
 
       {/* Items */}
       <div className="space-y-1 mb-3">
+<<<<<<< HEAD
         {order.items.map((item) => {
           const modifiers = item.modifiers ?? [];
           const instructions = item.special_instructions || item.notes;
@@ -148,6 +151,38 @@ function OrderCard({
                     </li>
                   ))}
                 </ul>
+=======
+        {order.items.map((item) => (
+          <div
+            key={item.id}
+            className={`flex items-center justify-between py-1 ${
+              item.preparation_status === "ready"
+                ? "line-through text-muted-foreground"
+                : item.preparation_status === "preparing"
+                  ? "text-blue-700"
+                  : ""
+            }`}
+          >
+            <span className="text-lg">
+              <span className="font-bold">{item.quantity}×</span>{" "}
+              <span className="font-semibold">{item.name}</span>
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {item.preparation_status === "preparing" ? (
+                item.started_by ? (
+                  <span className="text-blue-500">Prep: {item.started_by}</span>
+                ) : (
+                  "Prep..."
+                )
+              ) : item.preparation_status === "ready" ? (
+                item.ready_by ? (
+                  <span className="text-green-600">✓ {item.ready_by}</span>
+                ) : (
+                  "✓"
+                )
+              ) : (
+                ""
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
               )}
 
               {instructions && (
@@ -162,7 +197,7 @@ function OrderCard({
 
       {/* Notes */}
       {order.notes && (
-        <div className="text-xs text-gray-500 italic mb-3 bg-yellow-50 p-2 rounded">
+        <div className="text-xs text-muted-foreground italic mb-3 bg-warning/10 p-2 rounded">
           {order.notes}
         </div>
       )}
@@ -181,7 +216,8 @@ function OrderCard({
             <button
               onClick={() => onAction("cancel", order.id)}
               disabled={isPending}
-              className="px-3 py-2 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50"
+              aria-label="Cancel item"
+              className="flex h-10 w-10 items-center justify-center border border-destructive/40 text-destructive rounded-lg text-sm hover:bg-destructive/10 disabled:opacity-50"
             >
               ✕
             </button>
@@ -199,14 +235,15 @@ function OrderCard({
             <button
               onClick={() => onAction("cancel", order.id)}
               disabled={isPending}
-              className="px-3 py-2 border border-red-300 text-red-600 rounded-lg text-sm hover:bg-red-50 disabled:opacity-50"
+              aria-label="Cancel item"
+              className="flex h-10 w-10 items-center justify-center border border-destructive/40 text-destructive rounded-lg text-sm hover:bg-destructive/10 disabled:opacity-50"
             >
               ✕
             </button>
           </>
         )}
         {order.area_status === "ready" && (
-          <div className="flex-1 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium text-center">
+          <div className="flex-1 h-10 flex items-center justify-center bg-success/15 text-success rounded-lg text-sm font-medium text-center">
             Ready ✓
           </div>
         )}
@@ -317,13 +354,13 @@ export default function PreparationAreaScreen({ areaId }: Props) {
   // KDS staff must clock in before acting
   if (!activeShift && worker) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-100 px-4">
-        <div className="w-full max-w-sm bg-white rounded-2xl border p-6 text-center">
+      <div className="flex min-h-screen items-center justify-center bg-muted px-4">
+        <div className="w-full max-w-sm bg-card rounded-2xl border border-border p-6 text-center">
           <div className="text-4xl mb-3">🕐</div>
-          <h2 className="text-lg font-bold text-gray-900">Open your shift</h2>
-          <p className="mt-2 text-sm text-gray-500">
+          <h2 className="text-lg font-bold text-foreground">Open your shift</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
             {worker.display_name}, you&apos;re about to cover{" "}
-            <span className="font-semibold text-gray-700">{areaName}</span>. Multiple staff can be
+            <span className="font-semibold text-foreground">{areaName}</span>. Multiple staff can be
             on shift at the same time — Ramesh on Bar, Sita on Kitchen, etc.
           </p>
           <button
@@ -333,7 +370,7 @@ export default function PreparationAreaScreen({ areaId }: Props) {
           >
             {openShiftMutation.isPending ? "Opening..." : "Open Shift"}
           </button>
-          <p className="mt-3 text-xs text-gray-400">
+          <p className="mt-3 text-xs text-muted-foreground">
             Opening a staff shift does not open a cash drawer.
           </p>
         </div>
@@ -342,51 +379,53 @@ export default function PreparationAreaScreen({ areaId }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-muted">
       {/* Header */}
-      <div className="bg-white border-b px-4 py-3 sticky top-0 z-10">
+      <div className="bg-card border-b border-border px-4 py-3 sticky top-0 z-10">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold uppercase tracking-wide">{areaName}</h1>
-            <div className="text-sm text-gray-500">
+            <div className="numeric text-sm text-muted-foreground">
               {activeCount} active order{activeCount !== 1 ? "s" : ""}
               {worker && <span className="ml-2">· {worker.display_name}</span>}
             </div>
           </div>
           <div className="flex items-center gap-2">
             {activeShift && (
-              <div className="flex items-center gap-2 rounded-lg bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700">
+              <div className="flex items-center gap-2 rounded-lg bg-success/10 px-2.5 py-1 text-xs font-medium text-success">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 Shift since {formatShiftTime(activeShift.opened_at)}
                 <button
                   onClick={handleCloseShift}
                   disabled={closeShiftMutation.isPending}
-                  className="ml-1 text-green-600 underline hover:text-green-800 disabled:opacity-50"
+                  className="ml-1 text-success underline hover:opacity-80 disabled:opacity-50"
                 >
                   Close
                 </button>
               </div>
             )}
             {!activeShift && <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />}
-            <span className="text-xs text-gray-400">{activeShift ? "Online" : "No shift"}</span>
+            <span className="text-xs text-muted-foreground">
+              {activeShift ? "Online" : "No shift"}
+            </span>
           </div>
         </div>
 
         {/* Tab Bar */}
-        <div className="flex gap-1 mt-3">
+        <div className="flex items-center gap-1 mt-3">
           {(["active", "ready", "all"] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => setViewStatus(tab)}
               className={`px-3 py-1.5 rounded-full text-sm font-medium ${
                 viewStatus === tab
-                  ? "bg-gray-900 text-white"
-                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-foreground hover:bg-secondary"
               }`}
             >
               {tab === "active" ? "Active" : tab === "ready" ? "Ready" : "All"}
               {tab === "active" && activeCount > 0 && (
-                <span className="ml-1 bg-white text-gray-900 text-xs px-1.5 rounded-full">
+                <span className="numeric ml-1 bg-card text-foreground text-xs px-1.5 rounded-full">
                   {activeCount}
                 </span>
               )}
@@ -394,7 +433,8 @@ export default function PreparationAreaScreen({ areaId }: Props) {
           ))}
           <button
             onClick={() => refetch()}
-            className="px-3 py-1.5 rounded-full text-sm text-gray-500 hover:bg-gray-100"
+            aria-label="Refresh list"
+            className="flex h-10 min-w-10 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
           >
             ↻
           </button>
@@ -404,12 +444,12 @@ export default function PreparationAreaScreen({ areaId }: Props) {
       {/* Content */}
       <div className="p-4">
         {isLoading && orders.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">Loading orders...</div>
+          <div className="text-center py-12 text-muted-foreground">Loading orders...</div>
         ) : orders.length === 0 ? (
           <div className="text-center py-12">
             <div className="text-4xl mb-3">✨</div>
-            <div className="text-lg font-medium text-gray-500">{areaName} is clear</div>
-            <div className="text-sm text-gray-400 mt-1">
+            <div className="text-lg font-medium text-foreground">{areaName} is clear</div>
+            <div className="text-sm text-muted-foreground mt-1">
               New orders will appear here automatically.
             </div>
           </div>

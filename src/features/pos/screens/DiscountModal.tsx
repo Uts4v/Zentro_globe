@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
 import {
@@ -44,6 +44,15 @@ export default function DiscountModal({
   const [managerPin, setManagerPin] = useState("");
   const [managerError, setManagerError] = useState<string | null>(null);
   const [verifyingManager, setVerifyingManager] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -122,14 +131,19 @@ export default function DiscountModal({
   // ── Manager PIN verification overlay ──
   if (needsApproval) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-        <div className="mx-4 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="discount-manager-title"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      >
+        <div className="mx-4 w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
           <div className="mb-4 flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-full bg-amber-100">
               <Lock className="h-5 w-5 text-amber-600" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-foreground">
+              <h3 id="discount-manager-title" className="text-base font-bold text-foreground">
                 Manager Approval Required
               </h3>
               <p className="text-xs text-muted-foreground">
@@ -216,16 +230,22 @@ export default function DiscountModal({
 
   // ── Main discount form ──
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="mx-4 w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="discount-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    >
+      <div className="mx-4 w-full max-w-sm rounded-3xl bg-card p-6 shadow-2xl">
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
-          <h3 className="text-base font-bold text-foreground">
+          <h3 id="discount-title" className="text-base font-bold text-foreground">
             Apply Discount
           </h3>
           <button
+            aria-label="Close"
             onClick={onClose}
-            className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
@@ -278,7 +298,7 @@ export default function DiscountModal({
             />
           </div>
           {type === "percentage" && maxDiscount > 0 && (
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               Your limit: {maxDiscount}%
             </p>
           )}

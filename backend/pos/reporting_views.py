@@ -127,6 +127,14 @@ def _is_online_method(method):
     return method in ("card", "bank_qr", "mobile_wallet")
 
 
+_METHOD_LABELS = dict(PosPayment.METHOD_CHOICES)
+
+
+def _method_label(method):
+    """Human label for a stored payment method, e.g. bank_qr -> "QR Payment"."""
+    return _METHOD_LABELS.get(method, method.replace("_", " ").title())
+
+
 def _get_tax_label(merchant):
     """Return the display label for the merchant's tax configuration."""
     if not merchant.tax_components:
@@ -1058,7 +1066,7 @@ def export_csv(request):
 
         writer.writerow(["Payment Method", "Transactions", "Amount"])
         for pm in active_qs.exclude(payment_method="").values("payment_method").annotate(c=Count("id"), t=Sum("total_amount")):
-            writer.writerow([pm["payment_method"], pm["c"], f"{float(pm['t'] or 0):.2f}"])
+            writer.writerow([_method_label(pm["payment_method"]), pm["c"], f"{float(pm['t'] or 0):.2f}"])
 
     elif report_type == "items":
         writer.writerow(["Item Sales Report", f"{merchant.business_name}"])
@@ -1083,7 +1091,7 @@ def export_csv(request):
         total = float(active_qs.aggregate(t=Sum("total_amount"))["t"] or 0) or 1
         for pm in active_qs.exclude(payment_method="").values("payment_method").annotate(c=Count("id"), t=Sum("total_amount")).order_by("-t"):
             amt = float(pm["t"] or 0)
-            writer.writerow([pm["payment_method"], pm["c"], f"{amt:.2f}", f"{amt/total*100:.1f}%"])
+            writer.writerow([_method_label(pm["payment_method"]), pm["c"], f"{amt:.2f}", f"{amt/total*100:.1f}%"])
 
     else:  # sales
         writer.writerow(["Sales Report", f"{merchant.business_name}"])
@@ -1204,7 +1212,7 @@ th {{ background: #f7f7f7; font-weight: 600; text-transform: uppercase; font-siz
     for pm in active_qs.exclude(payment_method="").values("payment_method").annotate(c=Count("id"), t=Sum("total_amount")).order_by("-t"):
         amt = float(pm["t"] or 0)
         pct = (amt / total * 100) if total > 0 else 0
-        html_parts.append(f"<tr><td>{pm['payment_method'].replace('_', ' ').title()}</td><td>{pm['c']}</td><td>{sym} {amt:,.2f}</td><td>{pct:.1f}%</td></tr>")
+        html_parts.append(f"<tr><td>{_method_label(pm['payment_method'])}</td><td>{pm['c']}</td><td>{sym} {amt:,.2f}</td><td>{pct:.1f}%</td></tr>")
     html_parts.append("</table>")
 
     # Tax summary

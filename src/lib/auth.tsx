@@ -65,6 +65,7 @@ export type MerchantProfile = {
   manager_approval_threshold?: number;
   offline_discounts_allowed?: boolean;
   offline_credit_allowed?: boolean;
+<<<<<<< HEAD
   /** False until the merchant first configures their tender list. */
   payment_methods_configured?: boolean;
   accepted_payment_methods?: string[];
@@ -75,6 +76,10 @@ export type MerchantProfile = {
   payment_qr_name?: string | null;
   payment_qr_instructions?: string | null;
   payment_qr_account_name?: string | null;
+=======
+  /** Merchant's own payment QR image, shown at POS for QR payments. */
+  payment_qr_url?: string;
+>>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 };
 
 export type AuthUser = {

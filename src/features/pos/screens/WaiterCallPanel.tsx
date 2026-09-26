@@ -55,7 +55,7 @@ export default function WaiterCallPanel() {
         >
           <div className="relative">
             <Volume2 className="h-5 w-5 text-amber-600" />
-            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-xs font-bold text-destructive-foreground">
               {notifications.length}
             </span>
           </div>
@@ -69,7 +69,8 @@ export default function WaiterCallPanel() {
         <button
           onClick={fetchWaiterCalls}
           disabled={loading}
-          className="rounded-lg p-1.5 text-muted-foreground hover:bg-amber-100"
+          aria-label="Refresh waiter calls"
+          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:bg-amber-100"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </button>
@@ -80,12 +81,12 @@ export default function WaiterCallPanel() {
           {notifications.map((notification) => (
             <div
               key={notification.id}
-              className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-white p-3 shadow-sm"
+              className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-card p-3 shadow-sm"
             >
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-foreground">{notification.title}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{notification.message}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">
+                <p className="mt-1 text-xs text-muted-foreground">
                   {notification.created_at
                     ? new Date(notification.created_at).toLocaleString()
                     : ""}
@@ -94,7 +95,7 @@ export default function WaiterCallPanel() {
               <button
                 onClick={() => handleClear(notification)}
                 disabled={clearingId === notification.id}
-                className="flex shrink-0 items-center gap-1 rounded-lg bg-green-600 px-3 py-2 text-xs font-bold text-white hover:bg-green-700 disabled:opacity-50"
+                className="flex shrink-0 items-center gap-1 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
               >
                 <Check className="h-3.5 w-3.5" />
                 Clear

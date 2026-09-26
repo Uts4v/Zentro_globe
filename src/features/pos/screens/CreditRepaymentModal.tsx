@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
 import { posCreditRepayment, CreditAccount } from "../api";
 import { Loader2, X, CheckCircle, Minus } from "lucide-react";
+import { paymentMethodLabel } from "@/lib/payment-methods";
 
 interface Props {
   open: boolean;
@@ -27,6 +28,15 @@ export default function CreditRepaymentModal({
   const [success, setSuccess] = useState(false);
   const [newBalance, setNewBalance] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -68,13 +78,20 @@ export default function CreditRepaymentModal({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="credit-repayment-title"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    >
       <div className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl">
         {success ? (
           <div className="flex flex-col items-center py-4">
             <CheckCircle className="mb-3 h-12 w-12 text-green-500" />
-            <p className="text-lg font-bold text-foreground">Payment Recorded</p>
-            <p className="text-sm text-muted-foreground">
+            <p id="credit-repayment-title" className="text-lg font-bold text-foreground">
+              Payment Recorded
+            </p>
+            <p className="numeric text-sm text-muted-foreground">
               Remaining balance: {formatCurrency(newBalance || 0, currencySymbol)}
             </p>
           </div>
@@ -83,9 +100,15 @@ export default function CreditRepaymentModal({
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Minus className="h-5 w-5 text-green-500" />
-                <h2 className="text-lg font-bold text-foreground">Record Payment</h2>
+                <h2 id="credit-repayment-title" className="text-lg font-bold text-foreground">
+                  Record Payment
+                </h2>
               </div>
-              <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+              <button
+                aria-label="Close"
+                onClick={onClose}
+                className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -93,7 +116,7 @@ export default function CreditRepaymentModal({
             <div className="mb-4 rounded-xl bg-muted/50 p-3">
               <p className="text-xs text-muted-foreground">Account</p>
               <p className="text-sm font-bold text-foreground">{account.contact_name}</p>
-              <p className="text-xs text-red-600">
+              <p className="numeric text-xs text-red-600">
                 Amount owed: {formatCurrency(owed, currencySymbol)}
               </p>
             </div>
@@ -125,13 +148,13 @@ export default function CreditRepaymentModal({
                   <button
                     key={m}
                     onClick={() => setPaymentMethod(m)}
-                    className={`flex-1 rounded-xl px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                    className={`min-h-[44px] flex-1 rounded-xl px-3 py-2.5 text-xs font-medium capitalize transition-colors ${
                       paymentMethod === m
-                        ? "bg-ink text-white"
+                        ? "bg-ink text-primary-foreground"
                         : "bg-muted text-muted-foreground hover:bg-muted/80"
                     }`}
                   >
-                    {m.replace("_", " ")}
+                    {paymentMethodLabel(m)}
                   </button>
                 ))}
               </div>
@@ -159,7 +182,7 @@ export default function CreditRepaymentModal({
             <button
               onClick={handleSubmit}
               disabled={loading || !amount}
-              className="w-full rounded-xl bg-green-600 py-3 text-sm font-bold text-white hover:bg-green-700 disabled:opacity-50"
+              className="w-full rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
               {loading ? (
                 <Loader2 className="mx-auto h-4 w-4 animate-spin" />

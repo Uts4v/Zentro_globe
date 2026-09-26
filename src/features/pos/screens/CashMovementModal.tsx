@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
 import { posCreateCashMovement } from "../api";
@@ -35,6 +35,15 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!open) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   async function handleSubmit() {
@@ -64,13 +73,19 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
   const amt = parseFloat(amount) || 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" onClick={onClose}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cash-movement-title"
+      className="fixed inset-0 z-50 flex items-end justify-center sm:items-center"
+      onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-md rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h3 className="text-base font-bold text-foreground">Record Cash Movement</h3>
-          <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-muted-foreground hover:bg-muted">
+          <h3 id="cash-movement-title" className="text-base font-bold text-foreground">Record Cash Movement</h3>
+          <button aria-label="Close" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -84,7 +99,7 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
               <button
                 key={mt.key}
                 onClick={() => setType(mt.key)}
-                className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-[11px] font-medium transition-colors ${
+                className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-xs font-medium transition-colors ${
                   active ? "bg-ink text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
@@ -116,7 +131,7 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
             <button
               key={amt}
               onClick={() => setAmount(String(amt))}
-              className="flex-1 rounded-lg bg-muted py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/80"
+              className="min-h-[44px] flex-1 rounded-lg bg-muted px-1 py-2.5 text-xs font-medium text-muted-foreground hover:bg-muted/80"
             >
               {formatCurrency(amt, currencySymbol)}
             </button>

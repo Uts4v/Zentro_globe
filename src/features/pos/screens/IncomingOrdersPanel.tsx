@@ -167,7 +167,7 @@ export default function IncomingOrdersPanel() {
         >
           <div className="relative">
             <Bell className="h-5 w-5 text-amber-600" />
-            <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white">
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-destructive px-1 text-xs font-bold text-destructive-foreground">
               {incomingOrders.length}
             </span>
           </div>
@@ -179,7 +179,8 @@ export default function IncomingOrdersPanel() {
         <button
           onClick={fetchOrders}
           disabled={loading}
-          className="rounded-lg p-1.5 text-muted-foreground hover:bg-amber-100"
+          aria-label="Refresh incoming orders"
+          className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:bg-amber-100"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </button>
@@ -197,7 +198,7 @@ export default function IncomingOrdersPanel() {
           return (
             <div
               key={order.id}
-              className="rounded-xl border border-amber-200 bg-white p-3 shadow-sm"
+              className="rounded-xl border border-amber-200 bg-card p-3 shadow-sm"
             >
               {/* Order summary row */}
               <div className="flex items-start justify-between gap-2">
@@ -205,11 +206,11 @@ export default function IncomingOrdersPanel() {
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-foreground">#{order.id}</span>
                     <span
-                      className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${STATUS_COLORS[order.status] || "bg-gray-100 text-gray-700"}`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_COLORS[order.status] || "bg-muted text-muted-foreground"}`}
                     >
                       {order.status}
                     </span>
-                    <span className="rounded-full bg-ink/10 px-2 py-0.5 text-[10px] font-bold text-ink">
+                    <span className="rounded-full bg-ink/10 px-2 py-0.5 text-xs font-bold text-ink">
                       {SOURCE_LABELS[order.source] || order.source}
                     </span>
                   </div>
@@ -240,7 +241,7 @@ export default function IncomingOrdersPanel() {
                     )}
                   </div>
                 </div>
-                <span className="text-sm font-bold text-foreground whitespace-nowrap">
+                <span className="numeric text-sm font-bold text-foreground whitespace-nowrap">
                   {formatCurrency(Number(order.total_amount), currencySymbol)}
                 </span>
               </div>
@@ -259,7 +260,7 @@ export default function IncomingOrdersPanel() {
               {/* Expand/collapse */}
               <button
                 onClick={() => setExpandedId(isExpanded ? null : order.id)}
-                className="mt-2 flex items-center gap-1 text-[11px] font-medium text-ink hover:underline"
+                className="mt-2 flex items-center gap-1 text-xs font-medium text-ink hover:underline"
               >
                 {isExpanded ? "Less" : "Details"}
                 <ChevronRight
@@ -279,7 +280,7 @@ export default function IncomingOrdersPanel() {
                     </div>
                   ))}
                   {order.notes && (
-                    <p className="mt-1 rounded-lg bg-muted px-2 py-1 text-[11px] italic text-muted-foreground">
+                    <p className="mt-1 rounded-lg bg-muted px-2 py-1 text-xs italic text-muted-foreground">
                       "{order.notes}"
                     </p>
                   )}
@@ -304,7 +305,7 @@ export default function IncomingOrdersPanel() {
                     <button
                       onClick={searchCustomer}
                       disabled={custSearching || custSearch.length < 2}
-                      className="rounded-lg bg-ink px-2 py-1.5 text-[10px] font-bold text-white hover:opacity-90 disabled:opacity-40"
+                      className="rounded-lg bg-ink px-2 py-1.5 text-xs font-bold text-white hover:opacity-90 disabled:opacity-40"
                     >
                       {custSearching ? <Loader2 className="h-3 w-3 animate-spin" /> : "Search"}
                     </button>
@@ -316,19 +317,19 @@ export default function IncomingOrdersPanel() {
                           key={c.id}
                           onClick={() => handleLinkCustomer(order.uuid, c.id.toString())}
                           disabled={linking}
-                          className="flex w-full items-center justify-between rounded-lg bg-white px-2 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-50"
+                          className="flex w-full items-center justify-between rounded-lg bg-card px-2 py-1.5 text-left text-xs hover:bg-muted disabled:opacity-50"
                         >
                           <span className="min-w-0">
                             <span className="block truncate font-medium text-foreground">
                               {c.full_name || c.phone || `#${c.id}`}
                             </span>
-                            <span className="block text-[10px] text-muted-foreground">
+                            <span className="block text-xs text-muted-foreground">
                               {c.loyalty_points} pts · {c.total_orders}{" "}
                               {c.total_orders === 1 ? "previous order" : "previous orders"}
                             </span>
                           </span>
                           {c.membership_number && (
-                            <span className="rounded bg-ink/10 px-1.5 py-0.5 text-[9px] font-bold text-ink">
+                            <span className="rounded bg-ink/10 px-1.5 py-0.5 text-xs font-bold text-ink">
                               {c.membership_number}
                             </span>
                           )}
@@ -337,7 +338,7 @@ export default function IncomingOrdersPanel() {
                     </div>
                   )}
                   {custSearch.length >= 2 && custResults.length === 0 && !custSearching && (
-                    <p className="text-[10px] text-muted-foreground text-center">
+                    <p className="text-center text-xs text-muted-foreground">
                       No customers found
                     </p>
                   )}
@@ -347,7 +348,7 @@ export default function IncomingOrdersPanel() {
                       setCustSearch("");
                       setCustResults([]);
                     }}
-                    className="w-full text-[10px] text-muted-foreground hover:underline"
+                    className="w-full text-xs text-muted-foreground hover:underline"
                   >
                     Cancel
                   </button>
@@ -375,7 +376,7 @@ export default function IncomingOrdersPanel() {
                   </button>
                   <button
                     onClick={() => handleAccept(order)}
-                    className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-green-600 py-2 text-xs font-bold text-white hover:bg-green-700"
+                    className="flex flex-1 items-center justify-center gap-1 rounded-lg bg-primary py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90"
                   >
                     <Check className="h-3.5 w-3.5" />
                     Accept
