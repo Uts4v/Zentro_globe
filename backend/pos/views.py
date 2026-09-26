@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
 from merchants.models import MerchantProfile, MenuItem
+from merchants.serializers import MenuOptionGroupSerializer
 from orders.models import Order, OrderItem, OrderItemOption
 from accounts.models import CustomerProfile, User
 from notifications.services import send_notification
@@ -54,6 +55,20 @@ from .permissions import (
 
 logger = logging.getLogger(__name__)
 
+# Money is always serialised with 2 decimal places.
+MONEY = Decimal("0.01")
+
+
+def _report_money(value):
+    """
+    Format a report total as a 2dp decimal string.
+
+    SQLite's SUM drops trailing zeros, so the same figure can arrive as "4500"
+    or "4500.00" depending on whether a row happened to round. Reports must be
+    byte-stable so a client can diff or re-total them.
+    """
+    return str((Decimal(value) if value is not None else Decimal("0")).quantize(MONEY))
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +77,158 @@ def _get_merchant(request):
         return request.user.merchant_profile
     except (AttributeError, MerchantProfile.DoesNotExist):
         return None
+
+
+def _reject_disabled_payment_method(merchant, method):
+    """
+    Return a human-readable error when `method` is not one this merchant
+    accepts, otherwise None.
+
+    QR has an extra rule: a merchant can only take a QR payment if they have
+    enabled QR *and* uploaded a QR image, because staff have nothing to show
+    the customer otherwise. This keeps "QR enabled but no image" from silently
+    becoming an un-collectable tender.
+    """
+    if not method or method == PosPayment.METHOD_SPLIT:
+        # `split` is never chosen directly; it is a marker for multi-tender.
+        return None
+
+    if method not in merchant.accepted_payment_method_keys():
+        label = merchant.payment_method_label(method)
+        return f"{label} is not enabled for this merchant."
+
+    if method == PosPayment.METHOD_BANK_QR and not merchant.can_accept_qr_payment():
+        return (
+            "QR payment is not set up yet. Add and enable a payment QR in "
+            "Settings → Payments first."
+        )
+    return None
+
+
+def _payment_qr_payload(merchant):
+    """
+    Serialise the merchant's payment QR for POS / customer responses.
+
+    The image is uploaded through the existing `POST /api/media/upload/`
+    endpoint, which sniffs the file with Pillow, re-encodes it and stores it
+    under a server-generated name, so `payment_qr_url` is always an absolute
+    URL to a re-encoded raster image. No HTML is ever accepted or rendered.
+    """
+    if not merchant.payment_qr_enabled or not merchant.payment_qr_url:
+        return None
+    return {
+        "url": merchant.payment_qr_url,
+        "name": merchant.payment_qr_name
+        or merchant.payment_method_label(PosPayment.METHOD_BANK_QR),
+        "instructions": merchant.payment_qr_instructions
+        or "Scan the QR with your payment app, then show confirmation to staff.",
+        "account_name": merchant.payment_qr_account_name,
+    }
+
+
+# Methods where a transaction reference is genuinely useful. This is a UI hint
+# only — nothing is ever *required*, because Zentro records rather than
+# processes the payment.
+_PAYMENT_REFERENCE_HINT = {
+    PosPayment.METHOD_CARD,
+    PosPayment.METHOD_BANK_QR,
+    PosPayment.METHOD_MOBILE_WALLET,
+    PosPayment.METHOD_OTHER,
+}
+
+
+def _payment_methods_for_client(merchant):
+    """
+    Build the display list of payment methods for Collect Payment.
+
+    Each entry is {key, label, requires_reference, is_qr}. Only methods the
+    merchant accepts are returned, and QR is dropped unless a QR image is
+    actually configured — staff must never be offered a QR tender with nothing
+    to show the customer.
+    """
+    keys = merchant.accepted_payment_method_keys()
+    out = []
+    for key in keys:
+        if key == PosPayment.METHOD_BANK_QR and not merchant.can_accept_qr_payment():
+            continue
+        out.append({
+            "key": key,
+            "label": merchant.payment_method_label(key),
+            "requires_reference": key in _PAYMENT_REFERENCE_HINT,
+            "is_qr": key == PosPayment.METHOD_BANK_QR,
+        })
+    return out
+
+
+def _pos_settings_payload(merchant):
+    """Serialised POS settings plus the resolved payment-recording config."""
+    data = PosSettingsSerializer(merchant).data
+    data = dict(data)
+    data["accepted_payment_methods"] = merchant.accepted_payment_method_keys()
+    data["payment_methods"] = _payment_methods_for_client(merchant)
+    data["payment_qr"] = _payment_qr_payload(merchant)
+    return data
+
+
+def _payment_method_breakdown(merchant, payments_qs):
+    """
+    Per-method payment totals for reports.
+
+    Every recordable method is present in the result, zero-filled, so the UI
+    can render a stable "Cash / Card / QR / Bank Transfer / Other" table
+    instead of a list whose rows appear and disappear with the day's takings.
+    Methods are never merged: Card, QR, Bank Transfer and Mobile Wallet each
+    keep their own bucket even though staff confirm them all by hand, because
+    they share a confirmation flow, not a value.
+
+    Amounts are returned as decimal strings — never floats — so a report total
+    can be compared exactly against the payment records behind it.
+    """
+    totals = {
+        row["payment_method"]: row
+        for row in payments_qs.values("payment_method").annotate(
+            count=Count("id", distinct=True),
+            amount=Sum("amount"),
+            change=Sum("change_amount"),
+        )
+    }
+
+    def _money(value):
+        return _report_money(value)
+
+    breakdown = []
+    for key, label in PosPayment.METHOD_CHOICES:
+        # `split` is a marker for multi-tender orders, not a tender of its own:
+        # the individual legs are already recorded under their real methods.
+        if key == PosPayment.METHOD_SPLIT:
+            continue
+        row = totals.get(key)
+        if row is None and not merchant.payment_methods_configured \
+                and key not in merchant.accepted_payment_method_keys():
+            # Merchant never configured methods and does not offer this one;
+            # keep the response lean without hiding a method that took money.
+            continue
+        breakdown.append({
+            "method": key,
+            "label": merchant.payment_method_label(key),
+            "count": int(row["count"]) if row else 0,
+            "amount": _money(row["amount"] if row else None),
+            "change": _money(row["change"] if row else None),
+        })
+
+    # Surface any method that received money but is no longer in METHOD_CHOICES
+    # (e.g. a provider key added by a later release) so totals stay complete.
+    known = {b["method"] for b in breakdown}
+    for key, row in totals.items():
+        if key and key not in known:
+            breakdown.append({
+                "method": key,
+                "label": merchant.payment_method_label(key),
+                "count": int(row["count"] or 0),
+                "amount": _money(row["amount"]),
+                "change": _money(row["change"]),
+            })
+    return breakdown
 
 
 def _require_pos(merchant):
@@ -331,172 +498,19 @@ def pos_bootstrap(request):
             "can_view_reports": w.can_view_reports,
         })
 
-    # Menu items
-    items = MenuItem.objects.filter(merchant=merchant).order_by("category", "name")
-    categories = {}
-    for item in items:
-        cat = item.category or "Uncategorized"
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append({
-            "id": item.id,
-            "name": item.name,
-            "description": item.description,
-            "price": str(item.price),
-            "image_url": item.image_url,
-            "category": item.category,
-            "is_available": item.is_available,
-            "is_featured": item.is_featured,
-            "loyalty_reward": item.loyalty_reward,
-            "points_per_item": item.points_per_item,
-            "emoji": item.emoji,
-        })
+    # Menu items (carries variant/modifier groups so the grid can open a picker)
+    categories = _pos_menu_categories(merchant)
 
     # Active shift for this device
     active_shift = CashShift.objects.filter(
         merchant=merchant, device=device, status=CashShift.STATUS_OPEN,
     ).first()
 
-    # POS settings
-    pos_settings = {
-        "pos_enabled": merchant.pos_enabled,
-        "offline_pos_enabled": merchant.offline_pos_enabled,
-        "shift_management_enabled": merchant.shift_management_enabled,
-        "discounts_enabled": merchant.discounts_enabled,
-        "credit_accounts_enabled": merchant.credit_accounts_enabled,
-        "debit_accounts_enabled": merchant.debit_accounts_enabled,
-        "receipt_printing_enabled": merchant.receipt_printing_enabled,
-        "max_worker_discount_percent": str(merchant.max_worker_discount_percent),
-        "manager_approval_threshold": str(merchant.manager_approval_threshold),
-        "offline_discounts_allowed": merchant.offline_discounts_allowed,
-        "offline_credit_allowed": merchant.offline_credit_allowed,
-        "tax_rate_percent": str(merchant.tax_rate_percent or 0),
-        "currency_code": merchant.currency_code,
-        "currency_symbol": merchant.currency_symbol,
-        "tax_components": merchant.tax_components or [],
-    }
-
-    # Tables
-    from merchants.models import MerchantTable
-    tables = MerchantTable.objects.filter(merchant=merchant, is_active=True)
-    tables_data = [
-        {"id": t.id, "name": t.name, "table_number": t.table_number, "public_token": t.public_token}
-        for t in tables
-    ]
-
-    # Recent orders for this device (last 20)
-    recent_orders = Order.objects.filter(
-        merchant=merchant,
-    ).select_related("customer__user").prefetch_related("items")[:20]
-
-    from orders.serializers import OrderSerializer
-    recent_orders_data = OrderSerializer(recent_orders, many=True, context={"request": request}).data
-
-    # Incoming orders (pending/confirmed from online sources)
-    incoming_orders = Order.objects.filter(
-        merchant=merchant,
-        source__in=["customer_app", "table_qr"],
-        status__in=["pending", "confirmed"],
-    ).select_related("customer__user").prefetch_related("items")[:20]
-    incoming_orders_data = OrderSerializer(incoming_orders, many=True, context={"request": request}).data
-
-    # Update last sync time
-    device.last_sync_at = timezone.now()
-    device.save(update_fields=["last_sync_at", "updated_at"])
-
-    return Response({
-        "merchant": {
-            "id": merchant.id,
-            "business_name": merchant.business_name,
-            "slug": merchant.slug,
-            "logo_url": merchant.logo_url,
-        },
-        "device": PosDeviceSerializer(device).data,
-        "workers": workers_data,
-        "menu": {
-            "snapshot_at": timezone.now().isoformat(),
-            "total_items": items.count(),
-            "categories": categories,
-        },
-        "tables": tables_data,
-        "active_shift": CashShiftSerializer(active_shift).data if active_shift else None,
-        "pos_settings": pos_settings,
-        "recent_orders": recent_orders_data,
-        "incoming_orders": incoming_orders_data,
-    })
-
-
-@api_view(["GET"])
-@permission_classes([IsPosDevice])
-@throttle_classes([])
-def pos_bootstrap_device(request):
-    """
-    Bootstrap POS terminal using device token auth (no JWT required).
-    Used for session persistence across page refreshes.
-
-    Headers: X-Pos-Device-Id, X-Pos-Device-Token
-    """
-    device = request.pos_device
-    merchant = request.pos_merchant
-
-    # Workers
-    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True)
-    workers_data = []
-    for w in workers:
-        workers_data.append({
-            "id": str(w.id),
-            "display_name": w.display_name,
-            "role": w.role,
-            "can_apply_discount": w.can_apply_discount,
-            "can_process_refund": w.can_process_refund,
-            "can_close_shift": w.can_close_shift,
-            "can_view_reports": w.can_view_reports,
-        })
-
-    # Menu items
-    items = MenuItem.objects.filter(merchant=merchant).order_by("category", "name")
-    categories = {}
-    for item in items:
-        cat = item.category or "Uncategorized"
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append({
-            "id": item.id,
-            "name": item.name,
-            "description": item.description,
-            "price": str(item.price),
-            "image_url": item.image_url,
-            "category": item.category,
-            "is_available": item.is_available,
-            "is_featured": item.is_featured,
-            "loyalty_reward": item.loyalty_reward,
-            "points_per_item": item.points_per_item,
-            "emoji": item.emoji,
-        })
-
-    # Active shift for this device
-    active_shift = CashShift.objects.filter(
-        merchant=merchant, device=device, status=CashShift.STATUS_OPEN,
-    ).first()
-
-    # POS settings
-    pos_settings = {
-        "pos_enabled": merchant.pos_enabled,
-        "offline_pos_enabled": merchant.offline_pos_enabled,
-        "shift_management_enabled": merchant.shift_management_enabled,
-        "discounts_enabled": merchant.discounts_enabled,
-        "credit_accounts_enabled": merchant.credit_accounts_enabled,
-        "debit_accounts_enabled": merchant.debit_accounts_enabled,
-        "receipt_printing_enabled": merchant.receipt_printing_enabled,
-        "max_worker_discount_percent": str(merchant.max_worker_discount_percent),
-        "manager_approval_threshold": str(merchant.manager_approval_threshold),
-        "offline_discounts_allowed": merchant.offline_discounts_allowed,
-        "offline_credit_allowed": merchant.offline_credit_allowed,
-        "tax_rate_percent": str(merchant.tax_rate_percent or 0),
-        "currency_code": merchant.currency_code,
-        "currency_symbol": merchant.currency_symbol,
-        "tax_components": merchant.tax_components or [],
-    }
+    # POS settings. Reuse the single resolved payload rather than repeating a
+    # hand-rolled subset: the copy that used to live here was missing
+    # tax_enabled and the whole payment block, so the till showed default tenders
+    # and never rendered the merchant's payment QR.
+    pos_settings = _pos_settings_payload(merchant)
 
     # Tables
     from merchants.models import MerchantTable
@@ -536,7 +550,104 @@ def pos_bootstrap_device(request):
         "workers": workers_data,
         "menu": {
             "snapshot_at": timezone.now().isoformat(),
-            "total_items": items.count(),
+            "total_items": sum(len(v) for v in categories.values()),
+            "categories": categories,
+        },
+        "device": PosDeviceSerializer(device).data,
+        "workers": workers_data,
+        "menu": {
+            "snapshot_at": timezone.now().isoformat(),
+            "total_items": sum(len(v) for v in categories.values()),
+            "categories": categories,
+        },
+        "tables": tables_data,
+        "active_shift": CashShiftSerializer(active_shift).data if active_shift else None,
+        "pos_settings": pos_settings,
+        "recent_orders": recent_orders_data,
+        "incoming_orders": incoming_orders_data,
+    })
+
+
+@api_view(["GET"])
+@permission_classes([IsPosDevice])
+@throttle_classes([])
+def pos_bootstrap_device(request):
+    """
+    Bootstrap POS terminal using device token auth (no JWT required).
+    Used for session persistence across page refreshes.
+
+    Headers: X-Pos-Device-Id, X-Pos-Device-Token
+    """
+    device = request.pos_device
+    merchant = request.pos_merchant
+
+    # Workers
+    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True)
+    workers_data = []
+    for w in workers:
+        workers_data.append({
+            "id": str(w.id),
+            "display_name": w.display_name,
+            "role": w.role,
+            "can_apply_discount": w.can_apply_discount,
+            "can_process_refund": w.can_process_refund,
+            "can_close_shift": w.can_close_shift,
+            "can_view_reports": w.can_view_reports,
+        })
+
+    # Menu items (carries variant/modifier groups so the grid can open a picker)
+    categories = _pos_menu_categories(merchant)
+
+    # Active shift for this device
+    active_shift = CashShift.objects.filter(
+        merchant=merchant, device=device, status=CashShift.STATUS_OPEN,
+    ).first()
+
+    # POS settings. Reuse the single resolved payload rather than repeating a
+    # hand-rolled subset: the copy that used to live here was missing
+    # tax_enabled and the whole payment block, so the till showed default tenders
+    # and never rendered the merchant's payment QR.
+    pos_settings = _pos_settings_payload(merchant)
+
+    # Tables
+    from merchants.models import MerchantTable
+    tables = MerchantTable.objects.filter(merchant=merchant, is_active=True)
+    tables_data = [
+        {"id": t.id, "name": t.name, "table_number": t.table_number, "public_token": t.public_token}
+        for t in tables
+    ]
+
+    # Recent orders (last 20)
+    recent_orders = Order.objects.filter(
+        merchant=merchant,
+    ).select_related("customer__user").prefetch_related("items")[:20]
+
+    from orders.serializers import OrderSerializer
+    recent_orders_data = OrderSerializer(recent_orders, many=True, context={"request": request}).data
+
+    # Incoming orders (pending/confirmed from online sources)
+    incoming_orders = Order.objects.filter(
+        merchant=merchant,
+        source__in=["customer_app", "table_qr"],
+        status__in=["pending", "confirmed"],
+    ).select_related("customer__user").prefetch_related("items")[:20]
+    incoming_orders_data = OrderSerializer(incoming_orders, many=True, context={"request": request}).data
+
+    device.last_sync_at = timezone.now()
+    device.save(update_fields=["last_sync_at", "updated_at"])
+
+    return Response({
+        "merchant": {
+            "id": merchant.id,
+            "business_name": merchant.business_name,
+            "slug": merchant.slug,
+            "logo_url": merchant.logo_url,
+        },
+        "device": PosDeviceSerializer(device).data,
+        "workers": workers_data,
+        "menu": {
+            "snapshot_at": timezone.now().isoformat(),
+            "total_items": sum(len(v) for v in categories.values()),
             "categories": categories,
         },
         "tables": tables_data,
@@ -1758,14 +1869,16 @@ def create_payment(request):
         return Response({"error": "Device not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    # Block digital payments for offline-synced payments without external reference
+    # Every method is a *recording* method: staff confirm how the customer
+    # paid and Zentro stores it. There is no card terminal, no QR scanner
+    # handshake and no provider callback, so no external reference is required.
+    # The merchant's accepted-methods config is still enforced so a method the
+    # merchant switched off cannot be recorded.
     method = ser.validated_data["payment_method"]
-    if method in (PosPayment.METHOD_CARD, PosPayment.METHOD_BANK_QR, PosPayment.METHOD_MOBILE_WALLET):
-        if not ser.validated_data.get("external_reference"):
-            return Response(
-                {"error": "Digital payments require an external reference from the payment gateway."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+    method_error = _reject_disabled_payment_method(merchant, method)
+    if method_error is not None:
+        return Response({"error": method_error},
+                        status=status.HTTP_400_BAD_REQUEST)
 
     # Idempotency check
     client_mutation_id = ser.validated_data["client_mutation_id"]
@@ -1997,14 +2110,16 @@ def create_split_payment(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Block digital payments without external reference
+    # Split tender: every leg is a manual recording, so no external reference is
+    # required for any method. Each leg is checked against the merchant's
+    # accepted-methods config, but a split across Cash + Card + QR stays legal.
     for p in payments_data:
-        if p["payment_method"] in (PosPayment.METHOD_CARD, PosPayment.METHOD_BANK_QR, PosPayment.METHOD_MOBILE_WALLET):
-            if not p.get("external_reference"):
-                return Response(
-                    {"error": f"Digital payment ({p['payment_method']}) requires an external reference."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+        method_error = _reject_disabled_payment_method(merchant, p["payment_method"])
+        if method_error is not None:
+            return Response(
+                {"error": method_error},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     created_payments = []
     for p in payments_data:
@@ -2680,7 +2795,7 @@ def pos_settings(request):
         return Response({"error": "Merchant not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    return Response(PosSettingsSerializer(merchant).data)
+    return Response(_pos_settings_payload(merchant))
 
 
 @api_view(["PATCH"])
@@ -2713,36 +2828,60 @@ def update_pos_settings(request):
             validated_components.append({"name": name, "rate": rate})
         merchant.tax_components = validated_components
 
+    # Computed fields — never writable straight from the request body.
+    data.pop("payment_methods", None)
+    data.pop("payment_qr", None)
+
+    # Accepted payment methods: filtered to real, selectable keys so a stale or
+    # hostile body cannot inject an unknown method into the tender.
+    accepted = data.pop("accepted_payment_methods", None)
+    if accepted is not None:
+        selectable = {k for k, _ in PosPayment.METHOD_CHOICES
+                      if k != PosPayment.METHOD_SPLIT}
+        cleaned, seen = [], set()
+        for key in accepted:
+            key = str(key).strip().lower()
+            if key in selectable and key not in seen:
+                seen.add(key)
+                cleaned.append(key)
+        merchant.accepted_payment_methods = cleaned
+        merchant.payment_methods_configured = True
+        if PosPayment.METHOD_BANK_QR in seen and not merchant.payment_qr_url:
+            return Response({
+                "error": "Add a payment QR image before enabling QR payment.",
+                "accepted_payment_methods": [],
+            }, status=status.HTTP_400_BAD_REQUEST)
+
     for attr, val in data.items():
         setattr(merchant, attr, val)
     merchant.save()
 
-    return Response(PosSettingsSerializer(merchant).data)
+    return Response(_pos_settings_payload(merchant))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MENU SNAPSHOT (for offline bootstrap)
 # ══════════════════════════════════════════════════════════════════════════════
 
-@api_view(["GET"])
-@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
-def menu_snapshot(request):
-    merchant = _get_merchant(request)
-    if not _require_pos(merchant):
-        return Response(
-            {"error": "POS is not enabled."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+def _pos_menu_categories(merchant):
+    """
+    Group the merchant's menu by category, with variant/modifier groups attached.
 
-    items = MenuItem.objects.filter(merchant=merchant).order_by("category", "name")
-
-    # Group by category
+    The POS grid renders straight from this payload, so an item whose groups
+    went missing here could only ever be added as a bare line: the cashier gets
+    no picker and the order is rejected with "choose one option for Big cup".
+    `prefetch_related` makes this 2 extra queries for the whole menu rather than
+    two per item, which matters because bootstrap runs on every till sign-in.
+    """
+    items = (
+        MenuItem.objects.filter(merchant=merchant)
+        .prefetch_related("option_groups__options")
+        .order_by("category", "name")
+    )
     categories = {}
     for item in items:
         cat = item.category or "Uncategorized"
-        if cat not in categories:
-            categories[cat] = []
-        categories[cat].append({
+        entry = {
             "id": item.id,
             "name": item.name,
             "description": item.description,
@@ -2755,13 +2894,33 @@ def menu_snapshot(request):
             "points_per_item": item.points_per_item,
             "emoji": item.emoji,
             "updated_at": item.updated_at.isoformat() if item.updated_at else None,
-        })
+            "groups": [
+                MenuOptionGroupSerializer(group, read_only=True).data
+                for group in item.option_groups.all()
+                if group.is_active
+            ],
+        }
+        categories.setdefault(cat, []).append(entry)
+    return categories
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def menu_snapshot(request):
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response(
+            {"error": "POS is not enabled."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    categories = _pos_menu_categories(merchant)
 
     return Response({
         "merchant_id": merchant.id,
         "merchant_name": merchant.business_name,
         "snapshot_at": timezone.now().isoformat(),
-        "total_items": items.count(),
+        "total_items": sum(len(v) for v in categories.values()),
         "categories": categories,
     })
 
@@ -3032,16 +3191,7 @@ def z_report(request):
     )
 
     # ── Payment method breakdown (per method: count + amount) ──
-    method_breakdown = (
-        payments
-        .values("payment_method")
-        .annotate(
-            count=Count("id", distinct=True),
-            amount=Sum("amount"),
-            change=Sum("change_amount"),
-        )
-        .order_by("-amount")
-    )
+    method_breakdown = _payment_method_breakdown(merchant, payments)
 
     # ── Status breakdown ──
     order_status_breakdown = (
@@ -3212,14 +3362,15 @@ def z_report(request):
         "total_service_charge": str(order_stats["total_service_charge"] or 0),
 
         # Payment breakdown
-        "total_payments": str(payment_totals["total"] or 0),
-        "total_change_given": str(payment_totals["total_change"] or 0),
+        "total_payments": _report_money(payment_totals["total"]),
+        "total_change_given": _report_money(payment_totals["total_change"]),
         "payment_methods": [
             {
-                "method": m["payment_method"],
+                "method": m["method"],
+                "label": m["label"],
                 "count": m["count"],
-                "amount": str(m["amount"] or 0),
-                "change": str(m["change"] or 0),
+                "amount": m["amount"],
+                "change": m["change"],
             }
             for m in method_breakdown
         ],

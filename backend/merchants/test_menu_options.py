@@ -108,6 +108,25 @@ class OptionGroupPricingTests(TestCase):
         with self.assertRaises(LineValidationError):
             validate_and_price_line(self.item, 1, [self._pair(self.extras, self.cheese)])
 
+    def test_empty_group_does_not_block_an_otherwise_valid_order(self):
+        MenuOptionGroup.objects.create(
+            merchant=self.merchant,
+            menu_item=self.item,
+            name="Unfinished size group",
+            kind="variant",
+            required=False,
+            min_select=1,
+            max_select=1,
+        )
+
+        line = validate_and_price_line(
+            self.item,
+            1,
+            [self._pair(self.size_group, self.small)],
+        )
+
+        self.assertEqual(line.unit_price, Decimal("200.00"))
+
     def test_variant_with_multiple_selections_rejected(self):
         with self.assertRaises(LineValidationError):
             validate_and_price_line(
@@ -147,6 +166,33 @@ class OptionGroupPricingTests(TestCase):
             self.item, 3, [self._pair(self.size_group, self.small)], loyalty_eligible=False
         )
         self.assertEqual(line.points, 0)
+
+    def test_option_create_uses_parent_group_and_kind_specific_prices(self):
+        client = APIClient()
+        client.force_authenticate(self.merchant.user)
+        url = (
+            f"/api/merchants/menu-items/{self.item.id}/"
+            f"option-groups/{self.size_group.id}/options/"
+        )
+
+        variant_response = client.post(
+            url,
+            {"name": "Big", "price": "120.00"},
+            format="json",
+        )
+        self.assertEqual(variant_response.status_code, 201, variant_response.data)
+        self.assertEqual(variant_response.data["group"], self.size_group.id)
+        self.assertEqual(variant_response.data["price_delta"], "0.00")
+
+        addon_response = client.post(
+            f"/api/merchants/menu-items/{self.item.id}/"
+            f"option-groups/{self.extras.id}/options/",
+            {"name": "Extra cheese", "price_delta": "40.00"},
+            format="json",
+        )
+        self.assertEqual(addon_response.status_code, 201, addon_response.data)
+        self.assertEqual(addon_response.data["group"], self.extras.id)
+        self.assertEqual(addon_response.data["price"], None)
 
 
 class OptionOrderFlowTests(TestCase):

@@ -413,7 +413,7 @@ def preparation_area_orders(request, area_id):
                     "items",
                     queryset=active_items.select_related(
                         "menu_item", "preparation_started_by", "preparation_ready_by"
-                    ),
+                    ).prefetch_related("options"),
                     to_attr="area_items",
                 )
             )
@@ -434,17 +434,50 @@ def preparation_area_orders(request, area_id):
                 preparation_status=OrderItem.CANCELLED
             ).select_related(
                 "menu_item", "preparation_started_by", "preparation_ready_by"
-            )
+            ).prefetch_related("options")
 
         item_data = []
         for item in area_items:
+            # Options are the immutable snapshot taken when the order was
+            # placed, so a ticket still shows "Large / + Extra Cheese" after
+            # the merchant renames or reprices the live menu.
+            item_options = list(item.options.all())
+            variant = next(
+                (o for o in item_options if o.kind == "variant"), None
+            )
+            modifiers = [
+                {
+                    "group_name": o.group_name,
+                    "option_name": o.option_name,
+                    "price_effect": str(o.price_effect),
+                }
+                for o in item_options
+                if o.kind != "variant"
+            ]
+            instructions = (item.special_instructions or "").strip()
+
             item_data.append({
                 "id": item.id,
                 "name": item.name,
                 "quantity": item.quantity,
                 "price": str(item.price),
                 "subtotal": str(item.subtotal),
-                "notes": "",  # OrderItem doesn't have notes; order-level notes shown separately
+                # Structured selections — the KDS renders these as separate
+                # lines, never as a JSON blob.
+                "variant": (
+                    {
+                        "group_name": variant.group_name,
+                        "option_name": variant.option_name,
+                        "price_effect": str(variant.price_effect),
+                    }
+                    if variant else None
+                ),
+                "variant_name": variant.option_name if variant else None,
+                "modifiers": modifiers,
+                "special_instructions": instructions,
+                # `notes` kept for older KDS clients; it is now the real
+                # per-line instruction rather than a hardcoded empty string.
+                "notes": instructions,
                 "preparation_status": item.preparation_status,
                 "preparation_started_at": (
                     item.preparation_started_at.isoformat()

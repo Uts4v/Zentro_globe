@@ -247,6 +247,7 @@ def sales_report(request):
         amt = float(pm["total"] or 0)
         payment_breakdown.append({
             "method": pm["payment_method"],
+            "label": merchant.payment_method_label(pm["payment_method"]),
             "count": int(pm["count"]),
             "amount": amt,
             "percentage": round((amt / total_sales * 100), 1) if total_sales > 0 else 0,
@@ -698,7 +699,12 @@ def item_analytics(request):
         )
 
         payment_breakdown = [
-            {"method": pm["payment_method"], "count": int(pm["count"]), "amount": float(pm["total"] or 0)}
+            {
+                "method": pm["payment_method"],
+                "label": merchant.payment_method_label(pm["payment_method"]),
+                "count": int(pm["count"]),
+                "amount": float(pm["total"] or 0),
+            }
             for pm in pm_rows
         ]
 

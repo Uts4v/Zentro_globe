@@ -104,7 +104,14 @@ def _priced_items(menu_items_by_id, request_items, *, loyalty_eligible=True):
 
 
 def _bulk_create_items_with_options(order, order_items_data, option_rows):
-    """Create OrderItem rows (after preparation routing) and snapshot options."""
+    """
+    Create OrderItem rows (after preparation routing) and snapshot options.
+
+    One OrderItem per submitted cart line. Identical lines are NOT merged here:
+    the customer cart already merges by (item, selections, instructions) before
+    sending, and reports/KDS treat each submitted line as its own unit. Merging
+    server-side would silently rewrite what a client explicitly asked to record.
+    """
     items = OrderItem.objects.bulk_create(
         [OrderItem(order=order, **item) for item in order_items_data],
         batch_size=200,
@@ -155,7 +162,7 @@ def _order_qs():
         "processed_by_worker",
         "pos_device",
         "cash_shift",
-    ).prefetch_related("items__menu_item")
+    ).prefetch_related("items__menu_item", "items__options")
 
 
 def _notify_safe(**kwargs):
@@ -962,7 +969,7 @@ def order_detail(request, pk):
     try:
         order = (
             Order.objects
-            .prefetch_related("items__menu_item")
+            .prefetch_related("items__menu_item", "items__options")
             .select_related("customer__user", "merchant")
             .get(pk=pk)
         )
@@ -1200,7 +1207,12 @@ def cancel_order(request, pk):
 @permission_classes([IsAuthenticated])
 @transaction.atomic
 def add_items_to_order(request, pk):
-    """Append items to an existing order (same bill). Only for pending/confirmed orders."""
+    """Append items to an existing order (same bill).
+
+    Allowed while the order is pending/confirmed/preparing *and* uncollected, so
+    a dine-in ticket can be built up across courses. Refused once a payment
+    exists -- use the refund flow instead of reopening a settled bill.
+    """
     try:
         order = Order.objects.select_for_update(of=("self",)).select_related(
             "customer__user", "merchant"
@@ -1228,6 +1240,24 @@ def add_items_to_order(request, pk):
     if order.status not in (Order.STATUS_PENDING, Order.STATUS_CONFIRMED, Order.STATUS_PREPARING):
         return Response(
             {"error": "Items can only be added to pending, confirmed, or preparing orders."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # A status check alone is not enough. Dine-in orders sit in `confirmed` or
+    # `preparing` precisely so staff can keep adding items before the bill is
+    # settled -- but once any money has been taken the total is already
+    # collected, so appending lines would silently under-charge (and desync the
+    # recorded tender from the bill). Refunds must go through the refund flow,
+    # which is auditable; silently re-opening a paid order is not.
+    if order.payment_status in ("paid", "partially_paid", "refunded"):
+        return Response(
+            {
+                "error": (
+                    "This order has already been paid and can no longer be "
+                    "changed. Issue a refund or create a new order instead."
+                ),
+                "payment_status": order.payment_status,
+            },
             status=status.HTTP_400_BAD_REQUEST,
         )
 

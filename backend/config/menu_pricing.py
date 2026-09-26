@@ -1,9 +1,9 @@
-"""
+﻿"""
 config/menu_pricing.py
 
 Single shared source of truth for pricing and validating an order line against
 the live menu. The backend is the price authority (spec 75 / C-1): client-sent
-totals are never trusted — every order-creation path recomputes unit prices,
+totals are never trusted â€” every order-creation path recomputes unit prices,
 applies variant/modifier pricing, enforces required groups and selection
 bounds, and rejects unavailable / cross-merchant options.
 
@@ -107,6 +107,29 @@ class LineValidationError(ValueError):
         self.code = code
 
 
+def _selection_bounds_message(group, count):
+    """
+    Human-readable selection error.
+
+    Staff and customers both read this verbatim, so it must read as an
+    instruction ("Choose one option for X"), never as a validation code
+    ("max_selection exceeded").
+    """
+    low, high = group.min_select, group.max_select
+    noun = "option" if high == 1 else "options"
+    if low == high:
+        if low == 1:
+            return f"Choose one option for {group.name}."
+        return f"Choose {low} options for {group.name}."
+    if count < low:
+        if low == 1:
+            return f"Choose one option for {group.name}."
+        return f"Choose at least {low} options for {group.name}."
+    if high == 1:
+        return f"Choose only one {noun} for {group.name}."
+    return f"You can choose up to {high} {noun} for {group.name}."
+
+
 @dataclass
 class PricedOption:
     """A single snapshot entry for an order line (variant or modifier)."""
@@ -153,7 +176,13 @@ def _validate_selections(menu_item, selection_pairs):
     if not selection_pairs:
         selection_pairs = []
 
-    groups_by_id = {g.id: g for g in menu_item.option_groups.filter(is_active=True)}
+    groups = list(
+        menu_item.option_groups.filter(is_active=True).prefetch_related("options")
+    )
+    groups_by_id = {group.id: group for group in groups}
+    groups_with_options = {
+        group.id for group in groups if group.options.all()
+    }
     options_by_pair = {}
     used_ids = set()
 
@@ -161,7 +190,8 @@ def _validate_selections(menu_item, selection_pairs):
         group = groups_by_id.get(group_id)
         if group is None:
             raise LineValidationError(
-                f"Option group {group_id} is not available for {menu_item.name}.",
+                "One of your selections is no longer available. Please review "
+                "your choices and try again.",
                 code="invalid_group",
             )
         # Guard against duplicate selections of the same option across groups.
@@ -188,19 +218,20 @@ def _validate_selections(menu_item, selection_pairs):
     )
 
     option_by_id = {opt.id: opt for opt in option_rows}
-    choices = {g.id: [] for g in menu_item.option_groups.filter(is_active=True)}
+    choices = {group.id: [] for group in groups}
 
     for (group_id, option_id) in used_ids:
         option = option_by_id.get(option_id)
         if option is None:
             group = groups_by_id.get(group_id)
+            name = group.name if group else "one of your choices"
             raise LineValidationError(
-                f"'{option_id}' is not selectable for '{group.name if group else 'unknown group'}'.",
+                f"{name} is sold out or no longer available. Please review your choices.",
                 code="invalid_option",
             )
         if option.group.id != group_id:
             raise LineValidationError(
-                "Selected option does not belong to the requested group.",
+                "One of your selections does not belong to that choice group.",
                 code="invalid_option",
             )
         choices[group_id].append(option)
@@ -215,25 +246,32 @@ def _validate_selections(menu_item, selection_pairs):
         groups_by_id.items(),
         key=lambda kv: (_kind_rank(kv[1].kind), kv[1].display_order, kv[1].id),
     ):
+        if group_id not in groups_with_options:
+            continue
         selected = choices[group_id]
-        if group.required and not selected:
+        count = len(selected)
+        # `min_select` is a floor, not a hint: a group configured min=1 is
+        # mandatory even when `required=False` (e.g. a required "sugar level"
+        # group where the merchant never ticked the Required box). Previously
+        # this was only checked when something *was* selected, so an empty
+        # selection silently bypassed the floor.
+        if count < group.min_select or count > group.max_select:
+            if group.required and count == 0:
+                raise LineValidationError(
+                    f"Choose one option for {group.name}.",
+                    code="required_group_missing",
+                )
             raise LineValidationError(
-                f"Please choose an option for '{group.name}'.",
-                code="required_group_missing",
+                _selection_bounds_message(group, count),
+                code="selection_bounds",
             )
-        if selected and (len(selected) < group.min_select or len(selected) > group.max_select):
-            if group.min_select == group.max_select:
-                msg = f"Please select exactly {group.min_select} for '{group.name}'."
-            elif group.max_select > 1:
-                msg = f"Please select between {group.min_select} and {group.max_select} for '{group.name}'."
-            else:
-                msg = f"Please select at most {group.max_select} for '{group.name}'."
-            raise LineValidationError(msg, code="selection_bounds")
 
         if group.kind == "variant":
-            if len(selected) > 1:
+            # A variant group is single-select (DB-enforced), so anything beyond
+            # one here means the data was written before that constraint.
+            if count > 1:
                 raise LineValidationError(
-                    f"Choose only one option for '{group.name}'.",
+                    f"Choose only one option for {group.name}.",
                     code="selection_bounds",
                 )
             variant_opts.extend(selected)
@@ -269,7 +307,7 @@ def validate_and_price_line(
 
     if menu_item.status != MenuItem.STATUS_ACTIVE:
         raise LineValidationError(
-            f"{menu_item.name} is no longer active.", code="item_unavailable"
+            f"{menu_item.name} is no longer available.", code="item_unavailable"
         )
     if not menu_item.is_available:
         raise LineValidationError(
@@ -283,8 +321,14 @@ def validate_and_price_line(
     has_absolute_variant = False
     priced_options = []
 
-    # Variant option with an absolute price REPLACES the base price; otherwise
+    # A variant option with an absolute price REPLACES the base price; otherwise
     # the base price stands. Modifier deltas are added on top.
+    #
+    # A product may legitimately carry more than one priced variant group
+    # (Size=Large 850 + Temperature=Hot 850 would be ambiguous). Selection order
+    # above already sorts by group display_order, so the *last* priced variant
+    # group wins deterministically. Merchants are advised in the product editor
+    # to leave secondary variant groups unpriced when they want a price effect.
     for opt in variant_opts:
         opt_price = Decimal(opt.price) if opt.price is not None else None
         if opt_price is not None:
@@ -295,6 +339,7 @@ def validate_and_price_line(
             option_name=opt.name,
             kind=opt.group.kind,
             price_effect=opt_price if opt_price is not None else Decimal("0"),
+
         ))
 
     # Item-level discount applies to the base price only. A variant that carries
@@ -315,6 +360,7 @@ def validate_and_price_line(
             option_name=opt.name,
             kind=opt.group.kind,
             price_effect=delta,
+
         ))
 
     unit_price = _money(unit_price)

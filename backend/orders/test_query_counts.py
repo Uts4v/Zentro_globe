@@ -33,7 +33,7 @@ def _order_qs():
         "processed_by_worker",
         "pos_device",
         "cash_shift",
-    ).prefetch_related("items__menu_item")
+    ).prefetch_related("items__menu_item", "items__options")
 
 
 class OrderListQueryCountTests(TestCase):

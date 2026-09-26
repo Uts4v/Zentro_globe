@@ -175,6 +175,64 @@ class MerchantProfile(models.Model):
         help_text="Number of pages rendered as images from the uploaded PDF menu",
     )
 
+    # ── Payment recording settings ──────────────────────────────────────────────
+    # Zentro *records* how a customer paid; it does not process the card or
+    # wallet transaction. Every method (Cash, Card, QR, Bank Transfer, Mobile
+    # Wallet, Other) is confirmed manually by staff with no external terminal.
+    # `accepted_payment_methods` is an ordered list of PosPayment.METHOD_*
+    # values; `payment_methods_configured` distinguishes "merchant never
+    # touched this setting" (all methods offered) from an explicit selection.
+    payment_methods_configured = models.BooleanField(
+        default=False,
+        help_text="True once the merchant has saved an explicit accepted-methods list",
+    )
+    accepted_payment_methods = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Ordered list of payment method keys this merchant accepts, e.g. "
+            '["cash", "card", "bank_qr", "other"]. Empty means "not configured".'
+        ),
+    )
+    payment_method_labels = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            'Optional per-method display overrides, e.g. '
+            '{"bank_qr": "Fonepay QR", "mobile_wallet": "eSewa"}.'
+        ),
+    )
+
+    # Merchant-specific payment QR shown at POS / on the customer menu when the
+    # QR method is selected. Single QR per merchant, image-only, no HTML.
+    payment_qr_enabled = models.BooleanField(
+        default=False,
+        help_text="Show this merchant's payment QR when a QR payment is selected",
+    )
+    payment_qr_url = models.URLField(
+        blank=True,
+        default="",
+        help_text="Merchant's own payment QR image, shown at POS for QR payments",
+    )
+    payment_qr_name = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        help_text='Display name for the QR, e.g. "Fonepay QR" or "eSewa"',
+    )
+    payment_qr_instructions = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text='Short customer-facing hint, e.g. "Scan the QR and show confirmation to staff."',
+    )
+    payment_qr_account_name = models.CharField(
+        max_length=120,
+        blank=True,
+        default="",
+        help_text="Account or display name printed under the QR",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -195,6 +253,47 @@ class MerchantProfile(models.Model):
     def regenerate_pdf_menu_token(self):
         self.pdf_menu_token = self._unique_pdf_menu_token()
         self.save(update_fields=["pdf_menu_token", "updated_at"])
+
+    # ── Payment method helpers ───────────────────────────────────────────────
+    def accepted_payment_method_keys(self):
+        """
+        Return the ordered list of payment method keys this merchant accepts.
+
+        Falls back to every method Zentro can record when the merchant has never
+        saved the setting, so existing merchants keep working untouched.
+        `split` is never offered: it is resolved automatically when a tender is
+        split across methods rather than chosen by staff.
+        """
+        from pos.models import PosPayment
+
+        selectable = [k for k, _ in PosPayment.METHOD_CHOICES if k != PosPayment.METHOD_SPLIT]
+        if not self.payment_methods_configured:
+            return selectable
+
+        stored = self.accepted_payment_methods
+        if not isinstance(stored, (list, tuple)):
+            return selectable
+        chosen = [k for k in stored if k in selectable]
+        # Preserve METHOD_CHOICES order so the UI never reorders itself based on
+        # however the merchant ticked the boxes.
+        return [k for k in selectable if k in set(chosen)]
+
+    def accepts_payment_method(self, method):
+        return method in self.accepted_payment_method_keys()
+
+    def payment_method_label(self, method):
+        """Display label for `method`, honouring any merchant override."""
+        from pos.models import PosPayment
+
+        overrides = self.payment_method_labels if isinstance(self.payment_method_labels, dict) else {}
+        custom = (overrides.get(method) or "").strip()
+        if custom:
+            return custom
+        return dict(PosPayment.METHOD_CHOICES).get(method, method)
+
+    def can_accept_qr_payment(self):
+        """QR is only offered when enabled *and* an actual QR image is set."""
+        return bool(self.payment_qr_enabled and self.payment_qr_url)
 
     def __str__(self):
         return self.business_name
@@ -278,7 +377,53 @@ class MenuOptionGroup(models.Model):
                 condition=models.Q(min_select__gte=0) & models.Q(max_select__gte=1),
                 name="menu_option_group_selection_bounds",
             ),
+            # A required group can never have min_select == 0: "required"
+            # must mean the customer cannot skip it.
+            models.CheckConstraint(
+                condition=~models.Q(required=True, min_select=0),
+                name="menu_option_group_required_has_min",
+            ),
+            # A group that allows picking at least two options cannot be a
+            # single-select variant group (variant groups are max_select=1).
+            models.CheckConstraint(
+                condition=~models.Q(kind="variant", max_select__gt=1),
+                name="menu_option_group_variant_single_select",
+            ),
+            # Selection counts must never require more picks than the group
+            # permits, otherwise no valid selection could ever exist.
+            models.CheckConstraint(
+                condition=models.Q(min_select__lte=models.F("max_select")),
+                name="menu_option_group_min_le_max",
+            ),
         ]
+
+    def save(self, *args, **kwargs):
+        """
+        Normalise the selection bounds so callers never have to remember them.
+
+        The CheckConstraints above are a backstop for raw SQL, but the merchant
+        product editor and the public API both legitimately create groups with
+        just `required=True` and nothing else, so the invariant is enforced here
+        rather than pushed onto every call site:
+
+          * "required" means at least one pick, so min_select floors at 1.
+          * min_select can never exceed max_select, or the group could never
+            be satisfied and the product would become unorderable.
+          * variant groups are single-select by definition.
+        """
+        if self.required and (self.min_select or 0) < 1:
+            self.min_select = 1
+
+        if self.max_select is None or self.max_select < 1:
+            self.max_select = 1
+
+        if self.kind == self.KIND_VARIANT and self.max_select > 1:
+            self.max_select = 1
+
+        if (self.min_select or 0) > self.max_select:
+            self.min_select = self.max_select
+
+        super().save(*args, **kwargs)
 
     def __str__(self):
         kind_label = "Variant" if self.kind == self.KIND_VARIANT else "Modifier"
@@ -318,6 +463,18 @@ class MenuOption(models.Model):
     class Meta:
         db_table = "menu_options"
         ordering = ["display_order", "id"]
+        constraints = [
+            # Modifier add-ons can only ever *raise* the price, never lower it.
+            models.CheckConstraint(
+                condition=models.Q(price_delta__gte=0),
+                name="menu_option_price_delta_non_negative",
+            ),
+            # A variant price, when set, must not be negative.
+            models.CheckConstraint(
+                condition=models.Q(price__isnull=True) | models.Q(price__gte=0),
+                name="menu_option_price_non_negative",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name} ({self.group.name})"
