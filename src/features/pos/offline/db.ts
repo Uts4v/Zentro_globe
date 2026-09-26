@@ -117,7 +117,7 @@ async function getAll<T>(storeName: string): Promise<T[]> {
   });
 }
 
-async function getById<T>(storeName: string, id: string): Promise<T | undefined> {
+async function getById<T>(storeName: string, id: IDBValidKey): Promise<T | undefined> {
   const db = await openDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(storeName, "readonly");
@@ -253,7 +253,7 @@ export const menuCache = {
   save: (merchantId: number, data: any) =>
     put("menu_cache", { merchant_id: merchantId, data, cached_at: new Date().toISOString() }),
   get: async (merchantId: number) => {
-    const item = await getById<any>("menu_cache", String(merchantId));
+    const item = await getById<any>("menu_cache", merchantId);
     return item?.data ?? null;
   },
 };

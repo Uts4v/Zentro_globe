@@ -1630,6 +1630,7 @@ def create_pos_order(request):
                 table_number_snapshot=table_number_snap,
                 cash_shift=shift,
                 kot_number=kot_number,
+                client_mutation_id=client_mutation_id if client_mutation_id else None,
             )
 
             # Apply preparation routing
@@ -1847,6 +1848,15 @@ def create_payment(request):
         .filter(Q(uuid=target_order_id) | Q(client_mutation_id=target_order_id))
         .first()
     )
+    if not order:
+        mutation = ProcessedClientMutation.objects.filter(
+            merchant=merchant,
+            client_mutation_id=target_order_id,
+            entity_type="order",
+        ).first()
+        if mutation and mutation.server_object_id:
+            order = Order.objects.select_for_update().filter(id=mutation.server_object_id, merchant=merchant).first()
+
     if not order:
         return Response({"error": "Order not found."},
                         status=status.HTTP_404_NOT_FOUND)

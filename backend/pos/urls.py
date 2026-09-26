@@ -45,6 +45,7 @@ urlpatterns = [
 
     # POS orders
     path("order/create/", views.create_pos_order, name="pos-order-create"),
+    path("orders/create/", views.create_pos_order, name="pos-orders-create-alias"),
     path("order/status/", views.update_order_status_uuid, name="pos-order-status"),
     path("orders/", views.pos_orders, name="pos-orders"),
 
@@ -53,6 +54,7 @@ urlpatterns = [
 
     # Payments
     path("payment/create/", views.create_payment, name="pos-payment-create"),
+    path("payments/create/", views.create_payment, name="pos-payments-create-alias"),
     path("payment/split/", views.create_split_payment, name="pos-split-payment"),
     path("payments/", views.list_payments, name="pos-payments"),
 

@@ -36,10 +36,27 @@ export default function PosOrderScreen() {
           return;
         }
 
+        const cachedBootstrap = localStorage.getItem("pos_bootstrap_cache");
+        if (!navigator.onLine && cachedBootstrap) {
+          try {
+            bootstrap(JSON.parse(cachedBootstrap));
+            setLoading(false);
+            return;
+          } catch {}
+        }
+
         const resp = await posBootstrap(deviceId);
         bootstrap(resp);
         setLoading(false);
       } catch (err: any) {
+        const cachedBootstrap = localStorage.getItem("pos_bootstrap_cache");
+        if (cachedBootstrap) {
+          try {
+            bootstrap(JSON.parse(cachedBootstrap));
+            setLoading(false);
+            return;
+          } catch {}
+        }
         setError(err?.message || "Failed to initialize POS");
         setLoading(false);
       }

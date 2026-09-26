@@ -410,14 +410,11 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
         await enqueueMutation(
           "order",
-          "/pos/orders/create/",
+          "/pos/order/create/",
           "POST",
           {
             merchant_id: merchant.id,
-            items: cart.map((item) => ({
-              menu_item_id: item.menu_item_id,
-              quantity: item.quantity,
-            })),
+            items: cartToOrderItems(cart),
             notes: cartNotes,
             fulfillment_type: fulfillmentType,
             customer_id: selectedCustomerId ?? undefined,
@@ -447,7 +444,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
         await enqueueMutation(
           "payment",
-          "/pos/payments/create/",
+          "/pos/payment/create/",
           "POST",
           {
             order_id: offlineOrderId,

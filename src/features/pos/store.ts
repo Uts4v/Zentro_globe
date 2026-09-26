@@ -252,6 +252,12 @@ export const usePosStore = create<PosState>((set) => ({
       localStorage.removeItem("pos_active_shift");
     }
 
+    try {
+      localStorage.setItem("pos_bootstrap_cache", JSON.stringify(resp));
+    } catch {
+      // quota or private browsing
+    }
+
     set({
       merchant: resp.merchant,
       device: resp.device,

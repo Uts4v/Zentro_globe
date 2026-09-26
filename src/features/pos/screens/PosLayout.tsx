@@ -116,21 +116,46 @@ export default function PosLayout() {
         const deviceId = localStorage.getItem("pos_device_id");
         const deviceToken = localStorage.getItem("pos_device_token");
 
+        // Offline check: load cached snapshot immediately if offline
+        const cachedBootstrap = localStorage.getItem("pos_bootstrap_cache");
+        if (!navigator.onLine && cachedBootstrap) {
+          try {
+            bootstrap(JSON.parse(cachedBootstrap));
+            setInitializing(false);
+            return;
+          } catch {}
+        }
+
         if (deviceId && deviceToken) {
           try {
             const resp = await posDeviceBootstrap(deviceId, deviceToken);
             bootstrap(resp);
             setInitializing(false);
             return;
-          } catch {
+          } catch (err: any) {
+            // If network request failed or we are offline, restore from cache without clearing device
+            if (cachedBootstrap && (!navigator.onLine || !err?.response)) {
+              try {
+                bootstrap(JSON.parse(cachedBootstrap));
+                setInitializing(false);
+                return;
+              } catch {}
+            }
             // Device token may be stale — try JWT-based bootstrap as fallback
             try {
               const resp = await posBootstrap(deviceId);
               bootstrap(resp);
               setInitializing(false);
               return;
-            } catch {
-              // Both failed — clear device and re-authorize
+            } catch (jwtErr: any) {
+              if (cachedBootstrap && (!navigator.onLine || !jwtErr?.response)) {
+                try {
+                  bootstrap(JSON.parse(cachedBootstrap));
+                  setInitializing(false);
+                  return;
+                } catch {}
+              }
+              // Both failed with server responses — clear device and re-authorize
               localStorage.removeItem("pos_device_id");
               localStorage.removeItem("pos_device_token");
             }
