@@ -22,6 +22,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useMutation } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
+import { COUNTRY_CODES, DEFAULT_DIAL_CODE } from "@/lib/country-codes";
 
 export const Route = createFileRoute("/merchant/onboarding")({
   component: MerchantOnboardingPage,
@@ -42,9 +44,21 @@ const onboardingSchema = z.object({
 
 type OnboardingFormValues = z.infer<typeof onboardingSchema>;
 
+function splitPhone(phone?: string | null): { dial: string; local: string } {
+  const normalized = (phone ?? "").trim();
+  if (!normalized) return { dial: DEFAULT_DIAL_CODE, local: "" };
+  const match = COUNTRY_CODES.find((c) =>
+    normalized.startsWith(`+${c.dial.replace("+", "")}`),
+  );
+  if (!match) return { dial: DEFAULT_DIAL_CODE, local: normalized };
+  return { dial: match.dial, local: normalized.slice(match.dial.length).replace(/^[\s-]+/, "") };
+}
+
 function MerchantOnboardingPage() {
   const { merchantProfile, refreshMerchantProfile } = useAuth();
   const navigate = useNavigate();
+  const initialPhone = splitPhone(merchantProfile?.phone);
+  const [dialCode, setDialCode] = useState(initialPhone.dial);
 
   const form = useForm<OnboardingFormValues>({
     resolver: zodResolver(onboardingSchema),
@@ -52,7 +66,7 @@ function MerchantOnboardingPage() {
       business_name: merchantProfile?.business_name ?? "",
       slug: merchantProfile?.slug ?? "",
       address: merchantProfile?.address ?? "",
-      phone: merchantProfile?.phone ?? "",
+      phone: initialPhone.local,
       description: merchantProfile?.description ?? "",
     },
   });
@@ -83,7 +97,7 @@ function MerchantOnboardingPage() {
   });
 
   const onSubmit = (values: OnboardingFormValues) => {
-    updateProfileMutation.mutate(values);
+    updateProfileMutation.mutate({ ...values, phone: `${dialCode}${values.phone}` });
   };
 
   return (
@@ -159,7 +173,24 @@ function MerchantOnboardingPage() {
                   <FormItem>
                     <FormLabel>Public Phone Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your business contact number" {...field} />
+                      <div className="flex items-center gap-2">
+                        <div className="relative shrink-0">
+                          <select
+                            value={dialCode}
+                            onChange={(e) => setDialCode(e.target.value)}
+                            aria-label="Country code"
+                            className="h-9 cursor-pointer appearance-none rounded-md border border-input bg-transparent pl-3 pr-7 text-base text-foreground outline-none transition-colors focus-visible:ring-1 focus-visible:ring-ring md:text-sm"
+                          >
+                            {COUNTRY_CODES.map((c) => (
+                              <option key={c.code} value={c.dial}>
+                                {c.flag} {c.name} ({c.dial})
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                        </div>
+                        <Input placeholder="Your business contact number" {...field} />
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

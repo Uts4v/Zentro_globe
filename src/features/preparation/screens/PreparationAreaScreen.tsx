@@ -95,40 +95,71 @@ function OrderCard({
 
       {/* Items */}
       <div className="space-y-1 mb-3">
-        {order.items.map((item) => (
-          <div
-            key={item.id}
-            className={`flex items-center justify-between py-1 ${
-              item.preparation_status === "ready"
-                ? "line-through text-muted-foreground"
-                : item.preparation_status === "preparing"
-                  ? "text-blue-700"
-                  : ""
-            }`}
-          >
-            <span className="text-lg">
-              <span className="font-bold">{item.quantity}×</span>{" "}
-              <span className="font-semibold">{item.name}</span>
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {item.preparation_status === "preparing" ? (
-                item.started_by ? (
-                  <span className="text-blue-500">Prep: {item.started_by}</span>
-                ) : (
-                  "Prep..."
-                )
-              ) : item.preparation_status === "ready" ? (
-                item.ready_by ? (
-                  <span className="text-green-600">✓ {item.ready_by}</span>
-                ) : (
-                  "✓"
-                )
-              ) : (
-                ""
+        {order.items.map((item) => {
+          const modifiers = item.modifiers ?? [];
+          const instructions = item.special_instructions || item.notes;
+          return (
+            <div
+              key={item.id}
+              className={`py-1 ${
+                item.preparation_status === "ready"
+                  ? "line-through text-gray-400"
+                  : item.preparation_status === "preparing"
+                    ? "text-blue-700"
+                    : ""
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-lg">
+                  <span className="font-bold">{item.quantity}×</span>{" "}
+                  <span className="font-semibold">{item.name}</span>
+                  {item.variant_name && (
+                    <span className="ml-1 font-medium text-gray-500">
+                      ({item.variant_name})
+                    </span>
+                  )}
+                </span>
+                <span className="text-xs text-gray-400">
+                  {item.preparation_status === "preparing" ? (
+                    item.started_by ? (
+                      <span className="text-blue-500">Prep: {item.started_by}</span>
+                    ) : (
+                      "Prep..."
+                    )
+                  ) : item.preparation_status === "ready" ? (
+                    item.ready_by ? (
+                      <span className="text-green-600">✓ {item.ready_by}</span>
+                    ) : (
+                      "✓"
+                    )
+                  ) : (
+                    ""
+                  )}
+                </span>
+              </div>
+
+              {/* Add-ons: the kitchen needs these, the price does not. */}
+              {modifiers.length > 0 && (
+                <ul className="ml-6 mt-0.5 space-y-0.5">
+                  {modifiers.map((mod, idx) => (
+                    <li key={`${item.id}-mod-${idx}`} className="text-sm text-gray-600">
+                      + {mod.option_name}
+                      {mod.group_name ? (
+                        <span className="text-gray-400"> ({mod.group_name})</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
               )}
-            </span>
-          </div>
-        ))}
+
+              {instructions && (
+                <p className="ml-6 mt-0.5 text-sm font-medium italic text-amber-700">
+                  {instructions}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Notes */}
@@ -221,7 +252,7 @@ export default function PreparationAreaScreen({ areaId }: Props) {
 
   // WebSocket connection
   useEffect(() => {
-    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) || "ws://127.0.0.1:8001";
+    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) || "ws://127.0.0.1:8000";
     const merchant = usePosStore.getState().merchant;
     if (!merchant) return;
 

@@ -34,6 +34,27 @@ export interface MerchantDiscoveryItem {
   distance_km: number | null;
 }
 
+/**
+ * The subset of a menu item that option/modifier selection actually needs.
+ *
+ * The customer catalog, the POS menu snapshot and the table-QR screen all
+ * describe products with slightly different field sets, so screens that only
+ * render a product and its options should depend on this rather than on the
+ * full admin-shaped `MenuItem`.
+ */
+export type MenuItemSelectable = Pick<
+  MenuItem,
+  "name" | "price" | "description" | "image_url" | "category" | "emoji"
+> & {
+  id: string | number;
+  is_available?: boolean;
+  status?: MenuItem["status"];
+  short_description?: string | null;
+  dietary_tags?: string[];
+  discount_price?: string | null;
+  groups?: MenuOptionGroup[];
+};
+
 export interface MenuItem {
   id: string;
   merchant_id: string;
@@ -94,7 +115,8 @@ export interface MenuOption {
 /** Variant (single-select) or modifier (multi-select extras) group on an item. */
 export interface MenuOptionGroup {
   id: string;
-  merchant_id: string;
+  /** Server-assigned; absent from the public catalog and POS snapshots. */
+  merchant_id?: string;
   menu_item?: string | null;
   name: string;
   kind: "variant" | "modifier";
@@ -173,6 +195,14 @@ export interface OrderItem {
   preparation_status?: string;
   special_instructions?: string;
   options?: OrderItemOption[];
+  /** Snapshot of the chosen variant, e.g. "Large". */
+  variant_name?: string | null;
+  /** Flat list of chosen modifiers (variants excluded). */
+  modifier_summary?: {
+    group_name: string;
+    option_name: string;
+    price_effect: string;
+  }[];
 }
 
 export interface Order {
@@ -198,7 +228,7 @@ export interface Order {
   updated_at: string;
   order_items: OrderItem[];
   profiles?: { full_name: string | null };
-  merchant_profiles?: { business_name: string };
+  merchant_profiles?: { business_name: string; currency_symbol?: string };
   items?: OrderItem[];
   customer_name?: string;
   merchant_name?: string;
@@ -319,8 +349,16 @@ export interface MerchantProfile {
   manager_approval_threshold?: number;
   offline_discounts_allowed?: boolean;
   offline_credit_allowed?: boolean;
-  /** Merchant's own payment QR image, shown at POS for QR payments. */
-  payment_qr_url?: string;
+  /** False until the merchant first configures their tender list. */
+  payment_methods_configured?: boolean;
+  accepted_payment_methods?: string[];
+  /** Custom tender names, keyed by method key. */
+  payment_method_labels?: Record<string, string>;
+  payment_qr_enabled?: boolean;
+  payment_qr_url?: string | null;
+  payment_qr_name?: string | null;
+  payment_qr_instructions?: string | null;
+  payment_qr_account_name?: string | null;
 }
 
 export interface MerchantTable {

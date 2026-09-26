@@ -1,4 +1,6 @@
 import { create } from "zustand";
+import { cartKey } from "@/lib/menu-utils";
+import type { MenuSelection } from "@/lib/api/types";
 import {
   PosBootstrapResponse,
   PosDevice,
@@ -10,13 +12,40 @@ import {
   PosMenuSnapshot,
 } from "./api";
 
+/**
+ * One POS cart line. `key` identifies menu item + selections + instructions so
+ * that "Small Latte" and "Large Latte" stay two lines instead of collapsing
+ * into one when the cashier taps the same product twice.
+ */
 type PosOrderItem = {
+  key: string;
   menu_item_id: number;
   name: string;
   price: number;
   quantity: number;
   subtotal: number;
+  selections: MenuSelection[];
+  special_instructions: string;
 };
+
+/** What callers hand to `addItemToCart`; `key` is derived when omitted. */
+export type PosOrderItemInput = Omit<PosOrderItem, "key"> & { key?: string };
+
+/**
+ * Build the order payload items for a POS cart.
+ *
+ * Selections and instructions must travel with every line: the server prices
+ * from the submitted selections, so a line sent without them would either be
+ * rejected (required group) or priced as the unconfigured base variant.
+ */
+export function cartToOrderItems(cart: PosOrderItem[]) {
+  return cart.map((item) => ({
+    menu_item_id: item.menu_item_id,
+    quantity: item.quantity,
+    selections: item.selections,
+    special_instructions: item.special_instructions,
+  }));
+}
 
 interface PosState {
   merchant: { id: number; business_name: string; slug: string; logo_url: string } | null;
@@ -47,7 +76,8 @@ interface PosState {
   setCurrentWorker: (w: ShiftWorker | null) => void;
   setIncomingOrders: (orders: PosOrder[]) => void;
 
-  addItemToCart: (item: PosOrderItem) => void;
+  addItemToCart: (item: PosOrderItemInput) => void;
+  updateCartItem: (currentKey: string, item: PosOrderItemInput) => void;
   removeItemFromCart: (idx: number) => void;
   updateCartItemQty: (idx: number, qty: number) => void;
   clearCart: () => void;
@@ -111,20 +141,59 @@ export const usePosStore = create<PosState>((set) => ({
 
   addItemToCart: (item) =>
     set((state) => {
-      const idx = state.cart.findIndex(
-        (c) => c.menu_item_id === item.menu_item_id
-      );
+      // Match on the full line identity, not just the product: the same drink
+      // in a different size or with different add-ons is a different line.
+      const key =
+        item.key ??
+        cartKey(String(item.menu_item_id), item.selections ?? [], item.special_instructions ?? "");
+      const line: PosOrderItem = {
+        ...item,
+        key,
+        selections: item.selections ?? [],
+        special_instructions: item.special_instructions ?? "",
+      };
+      const idx = state.cart.findIndex((c) => c.key === key);
       if (idx >= 0) {
         const updated = [...state.cart];
-        updated[idx] = {
+        const merged = {
           ...updated[idx],
-          quantity: updated[idx].quantity + item.quantity,
-          subtotal:
-            (updated[idx].quantity + item.quantity) * updated[idx].price,
+          quantity: updated[idx].quantity + line.quantity,
+          subtotal: (updated[idx].quantity + line.quantity) * updated[idx].price,
         };
+        updated[idx] = merged;
         return { cart: updated };
       }
-      return { cart: [...state.cart, item] };
+      return { cart: [...state.cart, line] };
+    }),
+
+  updateCartItem: (currentKey, item) =>
+    set((state) => {
+      const currentIndex = state.cart.findIndex((line) => line.key === currentKey);
+      if (currentIndex < 0) return {};
+
+      const key =
+        item.key ??
+        cartKey(String(item.menu_item_id), item.selections ?? [], item.special_instructions ?? "");
+      const line: PosOrderItem = {
+        ...item,
+        key,
+        selections: item.selections ?? [],
+        special_instructions: item.special_instructions ?? "",
+      };
+      const updated = state.cart.filter((_, index) => index !== currentIndex);
+      const duplicateIndex = updated.findIndex((existing) => existing.key === key);
+
+      if (duplicateIndex >= 0) {
+        const quantity = updated[duplicateIndex].quantity + line.quantity;
+        updated[duplicateIndex] = {
+          ...line,
+          quantity,
+          subtotal: quantity * line.price,
+        };
+      } else {
+        updated.splice(currentIndex, 0, line);
+      }
+      return { cart: updated };
     }),
 
   removeItemFromCart: (idx) =>
@@ -143,7 +212,8 @@ export const usePosStore = create<PosState>((set) => ({
       return { cart: updated };
     }),
 
-  clearCart: () => set({ cart: [], cartNotes: "", selectedTableId: null, selectedCustomerId: null }),
+  clearCart: () =>
+    set({ cart: [], cartNotes: "", selectedTableId: null, selectedCustomerId: null }),
   setCartNotes: (n) => set({ cartNotes: n }),
   setFulfillmentType: (t) => set({ fulfillmentType: t }),
   setSelectedTable: (id) => set({ selectedTableId: id }),

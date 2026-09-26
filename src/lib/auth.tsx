@@ -65,8 +65,16 @@ export type MerchantProfile = {
   manager_approval_threshold?: number;
   offline_discounts_allowed?: boolean;
   offline_credit_allowed?: boolean;
-  /** Merchant's own payment QR image, shown at POS for QR payments. */
-  payment_qr_url?: string;
+  /** False until the merchant first configures their tender list. */
+  payment_methods_configured?: boolean;
+  accepted_payment_methods?: string[];
+  /** Custom tender names, keyed by method key. */
+  payment_method_labels?: Record<string, string>;
+  payment_qr_enabled?: boolean;
+  payment_qr_url?: string | null;
+  payment_qr_name?: string | null;
+  payment_qr_instructions?: string | null;
+  payment_qr_account_name?: string | null;
 };
 
 export type AuthUser = {

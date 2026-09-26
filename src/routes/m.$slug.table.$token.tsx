@@ -29,8 +29,14 @@ import {
 import { tableApi, menuApi, orderApi, type TableResolution } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
-import { useStore, cartTotal, type MenuItem } from "@/lib/store";
+import { useStore, cartTotals, type CartItem } from "@/lib/store";
 import { safeUuid } from "@/lib/utils";
+import { formatCurrency } from "@/lib/currency";
+import { fromPrice, baseDiscount, lineSelectionsText } from "@/lib/menu-utils";
+import type { MenuItem, MenuCatalog } from "@/lib/api/types";
+import ProductDetailSheet, {
+  type ProductDraft,
+} from "@/features/catalog/components/ProductDetailSheet";
 
 export const Route = createFileRoute("/m/$slug/table/$token")({
   head: () => ({ meta: [{ title: "Order · Zentro" }] }),
@@ -39,21 +45,31 @@ export const Route = createFileRoute("/m/$slug/table/$token")({
 
 function MenuItemCard({
   item,
-  qty,
-  onAdd,
-  onRemove,
+  currencySymbol,
+  inCart,
+  onTap,
 }: {
   item: MenuItem;
-  qty: number;
-  onAdd: () => void;
-  onRemove: () => void;
+  currencySymbol: string;
+  inCart: number;
+  onTap: () => void;
 }) {
   const [imgError, setImgError] = useState(false);
   const hasImage = !!item.image_url && !imgError;
-  const price = Number(item.price);
+  const price = fromPrice(item);
+  const discount = baseDiscount(item);
+  // A priced variant group means the card can only show a "from" price; the
+  // real price depends on the tap, so the card must open the detail sheet.
+  const hasOptions = (item.groups ?? []).some((g) => g.is_active !== false);
+  const soldOut = !item.is_available || item.status === "archived";
 
   return (
-    <article className="glass group relative flex flex-col rounded-3xl overflow-hidden">
+    <article
+      onClick={soldOut ? undefined : onTap}
+      className={`glass group relative flex flex-col overflow-hidden rounded-3xl ${
+        soldOut ? "opacity-50" : "cursor-pointer active:scale-[0.98]"
+      }`}
+    >
       {hasImage ? (
         <img
           src={item.image_url ?? undefined}
@@ -70,34 +86,35 @@ function MenuItemCard({
       <div className="flex flex-1 flex-col p-4">
         <h3 className="text-sm font-semibold text-foreground">{item.name}</h3>
         <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{item.description}</p>
-        <div className="mt-3 flex items-center justify-between">
-          <span className="font-display text-xl text-foreground">NPR {price.toLocaleString()}</span>
-          {qty === 0 ? (
-            <button
-              onClick={onAdd}
-              className="grid h-9 w-9 place-items-center rounded-full bg-ink text-primary-foreground transition-transform active:scale-90"
-              aria-label={`Add ${item.name}`}
-            >
-              <Plus className="h-4 w-4" strokeWidth={2.4} />
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={onRemove}
-                className="grid h-8 w-8 place-items-center rounded-full bg-muted text-foreground transition-transform active:scale-90"
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </button>
-              <span className="min-w-[20px] text-center text-sm font-semibold text-foreground">
-                {qty}
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <span className="flex min-w-0 flex-col">
+            <span className="font-display text-xl text-foreground">
+              {hasOptions && <span className="mr-1 text-[10px] font-sans text-muted-foreground">from</span>}
+              {formatCurrency(price, currencySymbol, 0)}
+            </span>
+            {discount && (
+              <span className="text-[11px] text-muted-foreground line-through">
+                {formatCurrency(discount.original, currencySymbol, 0)}
               </span>
-              <button
-                onClick={onAdd}
-                className="grid h-8 w-8 place-items-center rounded-full bg-ink text-primary-foreground transition-transform active:scale-90"
-              >
-                <Plus className="h-3.5 w-3.5" strokeWidth={2.4} />
-              </button>
-            </div>
+            )}
+          </span>
+          {soldOut ? (
+            <span className="shrink-0 rounded-full bg-black/60 px-2 py-0.5 text-[9px] font-bold text-white">
+              Sold out
+            </span>
+          ) : (
+            <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-ink text-primary-foreground">
+              {hasOptions ? (
+                <Sparkles className="h-4 w-4" strokeWidth={2.2} />
+              ) : (
+                <Plus className="h-4 w-4" strokeWidth={2.4} />
+              )}
+              {inCart > 0 && (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-[20px] place-items-center rounded-full bg-ember px-1 text-[10px] font-bold text-white">
+                  {inCart}
+                </span>
+              )}
+            </span>
           )}
         </div>
       </div>
@@ -114,8 +131,10 @@ function TableQRScanPage() {
   const { resolved: themeResolved, setTheme } = useTheme();
   const {
     cart,
-    add,
-    remove,
+    addLine,
+    replaceLine,
+    setQty,
+    removeLine,
     setActiveTable,
     setSelectedMerchant,
     setGuestSession,
@@ -128,10 +147,14 @@ function TableQRScanPage() {
   const [resolution, setResolution] = useState<TableResolution | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<MenuCatalog | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [menuLoading, setMenuLoading] = useState(true);
+  const [menuError, setMenuError] = useState<string | null>(null);
   const [cat, setCat] = useState("All");
   const [search, setSearch] = useState("");
+  const [activeItem, setActiveItem] = useState<MenuItem | null>(null);
+  const [editing, setEditing] = useState<CartItem | null>(null);
   const [showCheckout, setShowCheckout] = useState(false);
   const [guestName, setLocalGuestName] = useState(guestSession?.guestName || "");
   const [notes, setNotes] = useState("");
@@ -139,6 +162,8 @@ function TableQRScanPage() {
   const [orderSuccess, setOrderSuccess] = useState<{ orderId: string } | null>(null);
   const [waiterStatus, setWaiterStatus] = useState<"idle" | "sending" | "sent">("idle");
   const [waiterCooldown, setWaiterCooldown] = useState(0);
+
+  const currencySymbol = catalog?.merchant?.currency_symbol || "Rs";
 
   // Resolve table token
   useEffect(() => {
@@ -203,31 +228,25 @@ function TableQRScanPage() {
     guestSession,
   ]);
 
-  // Load menu once resolution is ready
+  // Load menu once resolution is ready.
+  // `catalog` (not `forMerchant`) is required: it is the only public payload
+  // that carries each item's variant/modifier groups.
   useEffect(() => {
     if (!resolution) return;
     let cancelled = false;
     setMenuLoading(true);
 
     menuApi
-      .forMerchant(String(resolution.merchant.id))
-      .then((items) => {
-        if (!cancelled)
-          setMenuItems(
-            items.map((i) => ({
-              id: String(i.id),
-              name: i.name,
-              description: i.description ?? "",
-              price: Number(i.price),
-              category: i.category ?? "",
-              emoji: i.emoji ?? "☕",
-              points_per_item: i.points_per_item ?? 0,
-              is_available: i.is_available,
-              image_url: i.image_url,
-            })),
-          );
+      .catalog(String(resolution.merchant.id))
+      .then((c) => {
+        if (cancelled) return;
+        setCatalog(c);
+        setMenuItems(c.items ?? []);
+        setMenuError(null);
       })
-      .catch(() => {})
+      .catch(() => {
+        if (!cancelled) setMenuError("Couldn't load this menu. Please try again.");
+      })
       .finally(() => {
         if (!cancelled) setMenuLoading(false);
       });
@@ -254,7 +273,60 @@ function TableQRScanPage() {
   }, [menuItems, cat, search]);
 
   const cartCount = cart.reduce((s, c) => s + c.qty, 0);
-  const total = cartTotal(cart, menuItems);
+  // Option-aware: every cart line already stores its priced unit price.
+  const total = cartTotals(cart);
+
+  const itemById = useMemo(() => {
+    const m = new Map<string, MenuItem>();
+    for (const i of menuItems) m.set(String(i.id), i);
+    return m;
+  }, [menuItems]);
+
+  /** Total qty of an item across every distinct configuration in the cart. */
+  function qtyInCart(itemId: string) {
+    return cart
+      .filter((c) => String(c.itemId) === String(itemId))
+      .reduce((s, c) => s + c.qty, 0);
+  }
+
+  function handleCardTap(item: MenuItem) {
+    const hasOptions = (item.groups ?? []).some((g) => g.is_active !== false);
+    if (!hasOptions) {
+      // Simple item: one tap adds it, reusing the identical cart line.
+      addLine({ itemId: String(item.id), qty: 1, unitPrice: fromPrice(item) });
+      return;
+    }
+    setEditing(null);
+    setActiveItem(item);
+  }
+
+  function handleSheetAdd(draft: ProductDraft) {
+    if (editing) {
+      replaceLine(editing.key, {
+        itemId: draft.itemId,
+        qty: draft.qty,
+        selections: draft.selections,
+        specialInstructions: draft.specialInstructions,
+        unitPrice: draft.unitPrice,
+      });
+      setEditing(null);
+      return;
+    }
+    addLine({
+      itemId: draft.itemId,
+      qty: draft.qty,
+      selections: draft.selections,
+      specialInstructions: draft.specialInstructions,
+      unitPrice: draft.unitPrice,
+    });
+  }
+
+  function handleEditLine(line: CartItem) {
+    const item = itemById.get(String(line.itemId));
+    if (!item) return;
+    setEditing(line);
+    setActiveItem(item);
+  }
 
   async function handlePlaceOrder() {
     if (placing || cart.length === 0 || !activeTable) return;
@@ -425,23 +497,71 @@ function TableQRScanPage() {
 
         <div className="mt-5 space-y-2 rounded-2xl bg-muted/30 p-4">
           {cart.map((c) => {
-            const item = menuItems.find((m) => m.id === c.itemId);
+            const item = itemById.get(String(c.itemId));
             if (!item) return null;
+            const opts = lineSelectionsText(item, c.selections);
+            const lineTotal = ((c.unitPrice || 0) * c.qty).toFixed(2);
             return (
-              <div key={c.itemId} className="flex justify-between text-sm">
-                <span className="text-foreground">
-                  {c.qty}× {item.name}
-                </span>
-                <span className="font-medium text-foreground">
-                  NPR {(item.price * c.qty).toFixed(2)}
-                </span>
+              <div key={c.key} className="rounded-xl bg-background/60 p-2.5">
+                <div className="flex items-start justify-between gap-2 text-sm">
+                  <span className="min-w-0 text-foreground">
+                    {c.qty}× {item.name}
+                    {opts && (
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground">{opts}</span>
+                    )}
+                    {c.specialInstructions && (
+                      <span className="mt-0.5 block text-[11px] italic text-muted-foreground">
+                        “{c.specialInstructions}”
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 font-medium text-foreground">
+                    {currencySymbol} {lineTotal}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setQty(c.key, c.qty - 1)}
+                      disabled={c.qty <= 1}
+                      className="grid h-7 w-7 place-items-center rounded-full bg-muted text-foreground disabled:opacity-40"
+                      aria-label="Decrease quantity"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="min-w-[20px] text-center text-sm font-semibold text-foreground">
+                      {c.qty}
+                    </span>
+                    <button
+                      onClick={() => setQty(c.key, c.qty + 1)}
+                      className="grid h-7 w-7 place-items-center rounded-full bg-ink text-primary-foreground"
+                      aria-label="Increase quantity"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleEditLine(c)}
+                      className="ml-1 text-[11px] font-medium text-ember underline underline-offset-2"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <button
+                    onClick={() => removeLine(c.key)}
+                    className="text-[11px] font-medium text-muted-foreground underline underline-offset-2"
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             );
           })}
           <div className="border-t border-border pt-2 mt-2">
             <div className="flex justify-between text-base font-bold">
               <span className="text-foreground">Total</span>
-              <span className="text-foreground">NPR {total.toFixed(2)}</span>
+              <span className="text-foreground">
+                {currencySymbol} {total.toFixed(2)}
+              </span>
             </div>
           </div>
         </div>
@@ -456,7 +576,7 @@ function TableQRScanPage() {
           ) : (
             <>
               <SendHorizontal className="h-5 w-5" />
-              Place Order — NPR {total.toFixed(2)}
+              Place Order — {formatCurrency(total, currencySymbol)}
             </>
           )}
         </button>
@@ -542,7 +662,9 @@ function TableQRScanPage() {
               {cartCount > 0 && (
                 <>
                   <span>{cartCount}</span>
-                  <span className="text-xs opacity-70">· NPR {total.toFixed(0)}</span>
+                  <span className="text-xs opacity-70">
+                    · {formatCurrency(total, currencySymbol, 0)}
+                  </span>
                 </>
               )}
             </button>
@@ -629,6 +751,11 @@ function TableQRScanPage() {
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
+        ) : menuError ? (
+          <div className="py-20 text-center">
+            <p className="mb-2 text-4xl">📡</p>
+            <p className="text-sm text-muted-foreground">{menuError}</p>
+          </div>
         ) : filteredItems.length === 0 ? (
           <div className="py-20 text-center">
             <p className="text-4xl mb-2">🍽</p>
@@ -636,18 +763,15 @@ function TableQRScanPage() {
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-3">
-            {filteredItems.map((item) => {
-              const cartEntry = cart.find((c) => c.itemId === item.id);
-              return (
-                <MenuItemCard
-                  key={item.id}
-                  item={item}
-                  qty={cartEntry?.qty ?? 0}
-                  onAdd={() => add(item.id)}
-                  onRemove={() => remove(item.id)}
-                />
-              );
-            })}
+            {filteredItems.map((item) => (
+              <MenuItemCard
+                key={item.id}
+                item={item}
+                currencySymbol={currencySymbol}
+                inCart={qtyInCart(item.id)}
+                onTap={() => handleCardTap(item)}
+              />
+            ))}
           </div>
         )}
       </div>
@@ -662,10 +786,30 @@ function TableQRScanPage() {
             <span className="flex items-center gap-2 text-sm font-medium">
               <ShoppingBag className="h-4 w-4" /> {cartCount} {cartCount === 1 ? "item" : "items"}
             </span>
-            <span className="font-display text-lg">NPR {total.toLocaleString()} →</span>
+            <span className="font-display text-lg">
+              {formatCurrency(total, currencySymbol, 0)} →
+            </span>
           </button>
         </div>
       )}
+
+      {/* Variant / modifier selection. Rendered last so it stacks above the
+          sticky header and floating cart bar. */}
+      <ProductDetailSheet
+        open={!!activeItem}
+        item={activeItem}
+        currencySymbol={currencySymbol}
+        onClose={() => {
+          setActiveItem(null);
+          setEditing(null);
+        }}
+        onAdd={handleSheetAdd}
+        submitLabel={editing ? "Update item" : "Add to order"}
+        initialQty={editing?.qty}
+        initialSelections={editing?.selections}
+        initialInstructions={editing?.specialInstructions}
+        resetKey={editing?.key}
+      />
     </div>
   );
 }

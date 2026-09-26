@@ -24,6 +24,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
 import { getWsToken } from "@/lib/ws";
 import { registerPushSubscription } from "@/lib/push";
+import { DJANGO_BASE } from "@/lib/django-api-base";
 
 // Routes that never require auth
 const PUBLIC_ROUTES = ["/auth", "/auth/merchant", "/auth/forgot-password", "/auth/reset-password"];
@@ -190,12 +191,10 @@ function GlobalNotificationToasts() {
         // Not authenticated or backend unreachable — retry on next mount.
         return undefined;
       }
-      const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const apiHost =
-        (import.meta.env.VITE_DJANGO_API_BASE_URL as string | undefined)
-          ?.replace(/^https?:\/\//, "")
-          ?.replace(/\/api\/?$/, "") || window.location.host;
-      const wsUrl = `${wsProto}//${apiHost}/ws/notifications/?token=${token}`;
+      const apiBase = new URL(DJANGO_BASE, window.location.href);
+      const wsUrl = new URL("/ws/notifications/", apiBase);
+      wsUrl.protocol = apiBase.protocol === "https:" ? "wss:" : "ws:";
+      wsUrl.searchParams.set("token", token);
       const ws = new WebSocket(wsUrl);
 
       ws.onopen = () => {};

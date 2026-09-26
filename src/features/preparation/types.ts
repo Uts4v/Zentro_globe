@@ -13,12 +13,26 @@ export interface PreparationArea {
   updated_at: string;
 }
 
+export interface PreparationItemOption {
+  group_name: string;
+  option_name: string;
+  price_effect: string;
+}
+
 export interface PreparationOrderItem {
   id: number;
   name: string;
   quantity: number;
   price: string;
   subtotal: string;
+  /** First variant option only, flattened for compact display. */
+  variant_name: string | null;
+  variant: PreparationItemOption | null;
+  /** Paid add-ons and non-priced selections, in snapshot order. */
+  modifiers: PreparationItemOption[];
+  /** The guest's own note for this line ("no ice", "extra hot"). */
+  special_instructions: string;
+  /** Legacy alias of `special_instructions`, kept for older clients. */
   notes: string;
   preparation_status: PreparationStatus;
   preparation_started_at: string | null;

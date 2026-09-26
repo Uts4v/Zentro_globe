@@ -53,6 +53,8 @@ class MenuCategorySerializer(serializers.ModelSerializer):
 
 
 class MenuOptionSerializer(serializers.ModelSerializer):
+    group = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = MenuOption
         fields = [
@@ -329,6 +331,11 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "currency_code", "currency_symbol",
             "ai_enabled", "ai_insights_enabled", "ai_insights_time", "timezone",
             "pdf_menu_url", "pdf_menu_token",
+            # Payment recording config (merchant-scoped, owner-only reads)
+            "payment_methods_configured", "accepted_payment_methods",
+            "payment_method_labels",
+            "payment_qr_enabled", "payment_qr_url", "payment_qr_name",
+            "payment_qr_instructions", "payment_qr_account_name",
             "menu_items", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "is_approved", "qr_code", "pdf_menu_token", "created_at", "updated_at"]
@@ -344,7 +351,76 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"location": "latitude and longitude must both be set or both be cleared."}
             )
+        self._validate_payment_settings(attrs)
         return attrs
+
+    def _validate_payment_settings(self, attrs):
+        """
+        Reject an enabled QR method with no QR image, and drop method keys that
+        are not real, selectable methods.
+
+        Runs on update against the *resulting* state (instance + attrs) so it
+        catches both "enable QR now, no image yet" and "remove the image but
+        leave QR enabled".
+        """
+        from pos.models import PosPayment
+
+        selectable = {k for k, _ in PosPayment.METHOD_CHOICES
+                      if k != PosPayment.METHOD_SPLIT}
+
+        if "accepted_payment_methods" in attrs:
+            cleaned, seen = [], set()
+            for key in attrs["accepted_payment_methods"] or []:
+                key = str(key).strip().lower()
+                if key in selectable and key not in seen:
+                    seen.add(key)
+                    cleaned.append(key)
+            attrs["accepted_payment_methods"] = cleaned
+
+        qr_url = attrs.get("payment_qr_url", self.instance.payment_qr_url if self.instance else "")
+        qr_enabled = attrs.get(
+            "payment_qr_enabled", self.instance.payment_qr_enabled if self.instance else False
+        )
+        if PosPayment.METHOD_BANK_QR in (attrs.get("accepted_payment_methods") or []) \
+                and not qr_url:
+            raise serializers.ValidationError({
+                "accepted_payment_methods": "Add a payment QR image before enabling QR payment."
+            })
+        if qr_enabled and not qr_url:
+            raise serializers.ValidationError({
+                "payment_qr_enabled": "Upload a payment QR image before enabling QR payment."
+            })
+
+    def validate_payment_qr_url(self, value):
+        """
+        Only accept an http(s) image URL.
+
+        The QR is rendered inside the POS sheet and the customer menu, so a
+        `javascript:` or `data:` URL here would be stored verbatim and later
+        handed to an <img src>. Restricting the scheme keeps stored QR
+        references to the same re-encoded rasters that
+        `POST /api/media/upload/` produces.
+        """
+        value = (value or "").strip()
+        if not value:
+            return ""
+        lowered = value.lower()
+        if not (lowered.startswith("http://") or lowered.startswith("https://")):
+            raise serializers.ValidationError("Payment QR must be an http(s) image URL.")
+        return value
+
+    def validate_payment_method_labels(self, value):
+        if value in (None, ""):
+            return {}
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Payment method labels must be an object.")
+        cleaned = {}
+        for key, label in value.items():
+            key = str(key).strip().lower()
+            label = str(label or "").strip()[:60]
+            if key and label:
+                cleaned[key] = label
+        return cleaned
 
     def validate_slug(self, value):
         value = value.lower().strip()

@@ -425,6 +425,22 @@ class PosSettingsSerializer(serializers.Serializer):
         child=serializers.DictField(), required=False,
         help_text='[{"name":"VAT","rate":13}] or [{"name":"CGST","rate":9},{"name":"SGST","rate":9}]',
     )
+    # ── Payment recording config ────────────────────────────────────────────
+    # The POS reads these to build the Collect Payment sheet: which methods to
+    # offer, what to call them, and which merchant QR to display.
+    accepted_payment_methods = serializers.ListField(
+        child=serializers.CharField(), required=False,
+        help_text='Payment method keys this merchant accepts, e.g. ["cash","card"]',
+    )
+    payment_methods = serializers.ListField(
+        child=serializers.DictField(), required=False,
+        help_text='[{key,label,requires_reference}] resolved for display',
+    )
+    payment_method_labels = serializers.DictField(
+        required=False,
+        help_text='Display overrides, e.g. {"bank_qr": "Fonepay QR"}.',
+    )
+    payment_qr = serializers.DictField(required=False, allow_null=True)
 
 
 # ── Cash Movements ────────────────────────────────────────────────────────────

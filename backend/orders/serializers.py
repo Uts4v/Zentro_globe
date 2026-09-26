@@ -1,13 +1,102 @@
 # orders/serializers.py
 from rest_framework import serializers
-from .models import Order, OrderItem
+from .models import Order, OrderItem, OrderItemOption
+
+
+class OrderItemOptionSerializer(serializers.ModelSerializer):
+    """
+    One snapshotted variant/modifier selection on an order line.
+
+    These rows are immutable history: they keep the name and price that were
+    charged even after the merchant renames the group or reprices the option,
+    so old receipts and KDS tickets must never resolve back to the live menu.
+    """
+
+    class Meta:
+        model = OrderItemOption
+        fields = [
+            "id", "group_name", "option_name", "kind",
+            "price_effect", "display_order",
+        ]
+        read_only_fields = fields
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
+    """
+    An order line plus its configuration snapshot.
+
+    `special_instructions` and `options` are nullable/absent for historical rows
+    created before those fields existed, which is why both are exposed with
+    safe defaults rather than assumed present.
+    """
+
+    options = OrderItemOptionSerializer(many=True, read_only=True)
+    variant_name = serializers.SerializerMethodField()
+    modifier_summary = serializers.SerializerMethodField()
+
     class Meta:
         model = OrderItem
-        fields = ["id", "menu_item", "name", "price", "quantity", "subtotal"]
+        fields = [
+            "id", "menu_item", "name", "price", "quantity", "subtotal",
+            "special_instructions", "options",
+            "variant_name", "modifier_summary",
+        ]
         read_only_fields = ["id"]
+
+    def _kind(self, opt):
+        return getattr(opt, "kind", "modifier")
+
+    def _snapshot_options(self, obj):
+        """
+        The line's snapshotted options as a list.
+
+        `options` is a reverse manager, so it is only iterable via `.all()`.
+        Views that serialise orders should prefetch `items__options`; this still
+        works (with one query) when they do not.
+
+        The result is memoised per instance because `variant_name` and
+        `modifier_summary` both need it and would otherwise each trigger the
+        same query.
+        """
+        cached = getattr(obj, "_serialized_options_cache", None)
+        if cached is not None:
+            return cached
+
+        manager = getattr(obj, "options", None)
+        if manager is None:
+            resolved = []
+        elif isinstance(manager, (list, tuple)):
+            resolved = list(manager)
+        else:
+            resolved = list(manager.all())
+
+        # Only cache when a real prefetch happened; a cached empty list on an
+        # un-prefetched instance would be indistinguishable from "no options".
+        if hasattr(manager, "_prefetched_objects_cache"):
+            obj._serialized_options_cache = resolved
+        return resolved
+
+    def get_variant_name(self, obj):
+        """Name of the chosen variant, or None for an unconfigured product."""
+        for opt in self._snapshot_options(obj):
+            if self._kind(opt) == "variant":
+                return opt.option_name
+        return None
+
+    def get_modifier_summary(self, obj):
+        """
+        Flat list of chosen modifiers, for compact rendering in carts,
+        receipts and KDS tiles without re-walking the nested structure.
+        """
+        return [
+            {
+                "group_name": opt.group_name,
+                "option_name": opt.option_name,
+                "price_effect": str(opt.price_effect),
+            }
+            for opt in self._snapshot_options(obj)
+            if self._kind(opt) != "variant"
+        ]
 
 
 class OrderSerializer(serializers.ModelSerializer):

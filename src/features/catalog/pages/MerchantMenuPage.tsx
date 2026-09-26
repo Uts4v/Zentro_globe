@@ -1023,6 +1023,7 @@ export function MerchantMenuPage() {
         <OptionGroupsEditor
           itemId={optionItem.id}
           itemName={optionItem.name}
+          currencySymbol={currencySymbol}
           onClose={() => setOptionItem(null)}
           onChanged={() => loadAll()}
         />
