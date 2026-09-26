@@ -3,8 +3,33 @@
  * Stores orders, payments, and sync queue items.
  */
 
+import type { PosReceiptData } from "../api";
+
 const DB_NAME = "zentro-pos";
 const DB_VERSION = 1;
+
+/**
+ * Kitchen ticket rendered on the client for an offline order.
+ * Declared structurally to keep this module free of UI imports.
+ */
+export interface OfflineKOTItem {
+  name: string;
+  quantity: number;
+  special_instructions?: string;
+  options?: Array<{ group_name: string; option_name: string }>;
+}
+
+export interface OfflineKOT {
+  merchantName: string;
+  orderNumber: string;
+  createdAt: string | null;
+  fulfillmentType: string;
+  tableName?: string | null;
+  tableNumber?: number | null;
+  workerName?: string | null;
+  notes?: string;
+  items: OfflineKOTItem[];
+}
 
 export interface OfflineOrder {
   id: string; // client-generated UUID
@@ -27,6 +52,18 @@ export interface OfflineOrder {
   total: number;
   status: "pending_sync" | "syncing" | "synced" | "failed";
   server_order_id?: number;
+  /**
+   * Ticket printed for the kitchen at capture time. Kept so it can be
+   * reprinted after the sheet closes — nothing else retains the modifier and
+   * instruction detail an offline order needs.
+   */
+  kot?: OfflineKOT;
+  /**
+   * The bill as captured on this device. The server only has the order once it
+   * syncs, so this is the only way to show or print a paper bill for an order
+   * taken while offline. Omitted for order-only captures, which are unpaid.
+   */
+  bill?: PosReceiptData;
   created_at: string;
 }
 

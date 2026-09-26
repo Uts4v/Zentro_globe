@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { PosReceiptData } from "../api";
 import { formatCurrency } from "@/lib/currency";
 import { paymentMethodLabel } from "@/lib/payment-methods";
+import { tableLabel } from "./table-label";
 
 function formatDate(iso: string | null) {
   if (!iso) return "-";
@@ -83,6 +84,7 @@ export default function Receipt({
   };
 
   const merchantName = data.merchant?.name || "ZENTRO";
+  const receiptTable = tableLabel(data.table?.name, data.table?.number);
 
   return (
     <div className="relative">
@@ -140,12 +142,10 @@ export default function Receipt({
             <span>Type</span>
             <span className="capitalize">{data.fulfillment_type}</span>
           </div>
-          {data.table && (
+          {receiptTable && (
             <div className="receipt-line">
               <span>Table</span>
-              <span>
-                {data.table.name || `#${data.table.number}`}
-              </span>
+              <span>{receiptTable}</span>
             </div>
           )}
           {data.customer_name && (

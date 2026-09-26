@@ -5,6 +5,7 @@ import WorkerPinPad from "./WorkerPinPad";
 import ShiftOpenScreen from "./ShiftOpenScreen";
 import ShiftCloseScreen from "./ShiftCloseScreen";
 import SyncStatusBar from "./SyncStatusBar";
+import PendingOfflineKOTs from "./PendingOfflineKOTs";
 import NotificationBell from "./NotificationBell";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { useBackgroundSync } from "../offline/hooks";
@@ -358,6 +359,9 @@ export default function PosLayout() {
           </div>
           <div className="px-1">
             <SyncStatusBar />
+          </div>
+          <div className="px-1">
+            <PendingOfflineKOTs />
           </div>
           {/* Close / Open shift */}
           {activeShift ? (

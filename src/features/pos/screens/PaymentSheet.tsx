@@ -14,7 +14,9 @@ import Receipt from "../printing/Receipt";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import KOTTicket, { kotTicketFromReceipt, printKOT, KOTTicketData } from "../printing/KOTTicket";
 import { enqueueMutation } from "../offline/sync";
+import { useOnlineStatus } from "../offline/hooks";
 import { offlineOrders, offlinePayments } from "../offline/db";
+import type { MenuOptionGroup, MenuSelection } from "@/lib/api/types";
 import {
   X,
   Banknote,
@@ -53,6 +55,93 @@ const PAYMENT_METHODS: Array<{
   { key: "debit", label: PAYMENT_METHOD_LABELS.debit, icon: Wallet },
 ];
 
+/**
+ * Tenders that can be recorded without a server round-trip.
+ *
+ * Card is excluded because it needs a real terminal/authorisation. Debit is
+ * excluded because a prepaid balance cannot be validated offline, so allowing
+ * it risks overdrawing the wallet. QR and mobile wallet are excluded from
+ * neither: the backend treats them as *recording* methods (no terminal, no
+ * provider callback — see backend/pos/views.py create_payment), so staff
+ * confirming the customer scanned is sufficient evidence.
+ */
+const OFFLINE_CAPABLE_METHODS: PaymentMethod[] = ["cash", "bank_qr", "mobile_wallet"];
+
+function isOfflineCapableMethod(key: string): boolean {
+  return (OFFLINE_CAPABLE_METHODS as string[]).includes(key);
+}
+
+/**
+ * Resolve a cart line's `selections` (ids only) into printable modifier names
+ * using the offline menu snapshot, so an offline KOT still tells the kitchen
+ * which size/toppings were chosen.
+ */
+function resolveOptionLabels(
+  groups: MenuOptionGroup[] | undefined,
+  selections: MenuSelection[] | undefined,
+): Array<{ group_name: string; option_name: string; kind: string }> {
+  if (!groups?.length || !selections?.length) return [];
+  const out: Array<{ group_name: string; option_name: string; kind: string }> = [];
+  for (const selection of selections) {
+    const group = groups.find((g) => String(g.id) === String(selection.group_id));
+    const option = group?.options.find((o) => String(o.id) === String(selection.option_id));
+    if (group && option) {
+      out.push({ group_name: group.name, option_name: option.name, kind: group.kind });
+    }
+  }
+  return out;
+}
+
+/** Minimal shapes needed to print a ticket, so this file needs no `any`. */
+type TicketMerchant = { business_name?: string; name?: string } | null;
+type TicketWorker = { display_name?: string; name?: string } | null;
+type TicketLine = {
+  name: string;
+  quantity: number;
+  menu_item_id: number;
+  special_instructions?: string;
+  selections?: MenuSelection[];
+};
+
+/**
+ * Build a printable KOT on the client for an order captured offline.
+ *
+ * The kitchen display is server-driven and therefore empty while offline, so
+ * the printed ticket is the only route to the kitchen. `kotNumber` stays null
+ * because the server assigns the real KOT number at sync time — the local
+ * `OFF-XXXXXX` order reference is the same value as the order's
+ * `client_mutation_id`, so the two reconcile once the order syncs.
+ */
+function makeOfflineKOT(
+  orderRef: string,
+  merchant: TicketMerchant,
+  worker: TicketWorker,
+  cart: TicketLine[],
+  fulfillmentType: string,
+  table: { name: string; table_number: number } | null,
+  groupsByItemId: Map<number, MenuOptionGroup[]>,
+  cartNotes?: string,
+): KOTTicketData {
+  return {
+    merchantName: merchant?.business_name || merchant?.name || "ZENTRO",
+    kotNumber: null,
+    orderNumber: orderRef,
+    createdAt: new Date().toISOString(),
+    fulfillmentType,
+    tableName: table?.name ?? null,
+    tableNumber: table?.table_number ?? null,
+    customerName: null,
+    workerName: worker?.display_name || worker?.name || "Staff",
+    notes: cartNotes || "",
+    items: cart.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      special_instructions: item.special_instructions || "",
+      options: resolveOptionLabels(groupsByItemId.get(item.menu_item_id), item.selections),
+    })),
+  };
+}
+
 function makeOfflineReceiptData(
   orderId: string,
   merchant: any,
@@ -65,10 +154,15 @@ function makeOfflineReceiptData(
   cashAmount: number,
   change: number,
   fulfillmentType: string,
+  groupsByItemId: Map<number, MenuOptionGroup[]>,
+  externalReference: string,
   cartNotes?: string,
+  table?: { name: string; table_number: number } | null,
 ): PosReceiptData {
   return {
-    type: "receipt",
+    // A bill, not a receipt: this is the paper copy handed to the customer
+    // while the order has no server record to reprint from.
+    type: "bill",
     order_id: 0,
     order_uuid: orderId,
     order_number: `OFF-${orderId.slice(0, 6).toUpperCase()}`,
@@ -79,25 +173,22 @@ function makeOfflineReceiptData(
     client_created_at: new Date().toISOString(),
     merchant: {
       id: Number(merchant?.id) || 0,
-      name: merchant?.name || "",
+      name: merchant?.business_name || merchant?.name || "",
       address: merchant?.address || "",
       phone: merchant?.phone || "",
       logo_url: merchant?.logo_url || "",
     },
-    table: null,
+    table: table ? { name: table.name, number: table.table_number } : null,
     fulfillment_type: fulfillmentType,
     customer_name: null,
-    worker_name: worker?.name || "Staff",
+    worker_name: worker?.display_name || worker?.name || "Staff",
     items: cart.map((item) => ({
       name: item.name,
       price: String(item.price),
       quantity: item.quantity,
       subtotal: String(item.subtotal),
-      options: (item.selectedOptions || []).map((o: any) => ({
-        group_name: o.group_name || "",
-        option_name: o.name || "",
-        kind: o.kind || "",
-      })),
+      special_instructions: item.special_instructions || "",
+      options: resolveOptionLabels(groupsByItemId.get(item.menu_item_id), item.selections),
     })),
     subtotal: String(roundMoney(subtotal)),
     notes: cartNotes,
@@ -112,7 +203,7 @@ function makeOfflineReceiptData(
         method,
         amount: String(roundMoney(total)),
         status: "completed",
-        external_reference: "",
+        external_reference: externalReference,
         change_amount: String(roundMoney(change)),
         created_at: new Date().toISOString(),
       },
@@ -139,6 +230,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const activeShift = usePosStore((s) => s.activeShift);
   const selectedCustomerId = usePosStore((s) => s.selectedCustomerId);
   const selectedTableId = usePosStore((s) => s.selectedTableId);
+  const tables = usePosStore((s) => s.tables);
   const clearCart = usePosStore((s) => s.clearCart);
 
   const [method, setMethod] = useState<PaymentMethod>("cash");
@@ -157,37 +249,53 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
   const [orderMutationId, setOrderMutationId] = useState<string>(() => safeUuid());
   const posSettings = usePosStore((s) => s.posSettings);
+  const menu = usePosStore((s) => s.menu);
+  const isOnline = useOnlineStatus();
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
+  /** menu_item_id → option groups, for printing modifiers on offline KOTs. */
+  const groupsByItemId = useMemo(() => {
+    const map = new Map<number, MenuOptionGroup[]>();
+    for (const items of Object.values(menu?.categories ?? {})) {
+      for (const item of items ?? []) {
+        if (item.groups?.length) map.set(item.id, item.groups);
+      }
+    }
+    return map;
+  }, [menu]);
+
   useEffect(() => {
-    if (method === "debit" && debitAccounts.length === 0) {
+    if (method === "debit" && isOnline && debitAccounts.length === 0) {
       posListDebitAccounts()
         .then(setDebitAccounts)
         .catch(() => {});
     }
-  }, [method]);
+  }, [method, isOnline, debitAccounts.length]);
 
   // Only offer tenders this merchant accepts, and never offer a QR tender
-  // without an actual QR image to show the customer.
+  // without an actual QR image to show the customer. Offline, the list is
+  // narrowed to tenders that can be recorded without the server so the
+  // auto-selection below can never land on one that will be rejected.
   const availableMethods = useMemo(() => {
     const configured = posSettings?.payment_methods;
-    if (configured && configured.length > 0) {
-      return configured.map((option) => ({
-        key: option.key,
-        label: option.label,
-        requiresReference: option.requires_reference,
-        isQr: option.is_qr,
-        icon: METHOD_ICONS[option.key] ?? Banknote,
-      }));
-    }
-    return PAYMENT_METHODS.map((pm) => ({
-      key: pm.key,
-      label: pm.label,
-      requiresReference: pm.key !== "cash" && pm.key !== "debit",
-      isQr: pm.key === "bank_qr",
-      icon: pm.icon,
-    }));
-  }, [posSettings?.payment_methods]);
+    const base =
+      configured && configured.length > 0
+        ? configured.map((option) => ({
+            key: option.key,
+            label: option.label,
+            requiresReference: option.requires_reference,
+            isQr: option.is_qr,
+            icon: METHOD_ICONS[option.key] ?? Banknote,
+          }))
+        : PAYMENT_METHODS.map((pm) => ({
+            key: pm.key,
+            label: pm.label,
+            requiresReference: pm.key !== "cash" && pm.key !== "debit",
+            isQr: pm.key === "bank_qr",
+            icon: pm.icon,
+          }));
+    return isOnline ? base : base.filter((m) => isOfflineCapableMethod(m.key));
+  }, [posSettings?.payment_methods, isOnline]);
 
   const qr = posSettings?.payment_qr ?? null;
   const activeMethod = availableMethods.find((m) => m.key === method);
@@ -264,6 +372,17 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     if (isOffline) {
       try {
         const offlineId = orderMutationId;
+        const kot = makeOfflineKOT(
+          `OFF-${offlineId.slice(0, 6).toUpperCase()}`,
+          merchant,
+          currentWorker,
+          cart,
+          fulfillmentType,
+          tables.find((t) => t.id === selectedTableId) ?? null,
+          groupsByItemId,
+          cartNotes,
+        );
+
         await offlineOrders.save({
           id: offlineId,
           merchant_id: merchant.id,
@@ -286,19 +405,17 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           })),
           total: roundMoney(total),
           status: "pending_sync",
+          kot,
           created_at: new Date().toISOString(),
         });
 
         await enqueueMutation(
           "order",
-          "/pos/orders/create/",
+          "/pos/order/create/",
           "POST",
           {
             merchant_id: merchant.id,
-            items: cart.map((item) => ({
-              menu_item_id: item.menu_item_id,
-              quantity: item.quantity,
-            })),
+            items: cartToOrderItems(cart),
             notes: cartNotes,
             fulfillment_type: fulfillmentType,
             customer_id: selectedCustomerId ?? undefined,
@@ -314,6 +431,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         );
 
         clearCart();
+        setPlacedKot(kot);
         setOrderPlaced(true);
       } catch (err: any) {
         setError(err?.message || "Failed to store offline order.");
@@ -372,9 +490,20 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
       return;
     }
 
+    if (isOffline && !isOfflineCapableMethod(method)) {
+      setError(
+        `${PAYMENT_METHOD_LABELS[method] || method} cannot be recorded without a connection. Please use Cash, bank QR or mobile wallet.`,
+      );
+      setSubmitting(false);
+      return;
+    }
+
     if (isOffline) {
-      if (method !== "cash" && method !== "debit") {
-        setError(`${PAYMENT_METHOD_LABELS[method] || method} requires an active internet connection. Please use Cash offline.`);
+      // shift_id is a required UUID on CreatePaymentSerializer, so queueing
+      // with an empty one would only surface as a 400 at sync time.
+      const offlineShiftId = activeShift?.id;
+      if (!offlineShiftId) {
+        setError("Open a shift before taking payment.");
         setSubmitting(false);
         return;
       }
@@ -382,6 +511,34 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
       try {
         const offlineOrderId = orderMutationId;
         const offlinePaymentId = safeUuid();
+        const offlineTable = tables.find((t) => t.id === selectedTableId) ?? null;
+        const kot = makeOfflineKOT(
+          `OFF-${offlineOrderId.slice(0, 6).toUpperCase()}`,
+          merchant,
+          currentWorker,
+          cart,
+          fulfillmentType,
+          offlineTable,
+          groupsByItemId,
+          cartNotes,
+        );
+        const offlineReceipt = makeOfflineReceiptData(
+          offlineOrderId,
+          merchant,
+          currentWorker,
+          cart,
+          subtotal,
+          tax,
+          total,
+          method,
+          cashAmount,
+          change,
+          fulfillmentType,
+          groupsByItemId,
+          reference.trim(),
+          cartNotes,
+          offlineTable,
+        );
 
         await offlineOrders.save({
           id: offlineOrderId,
@@ -405,6 +562,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           })),
           total: roundMoney(total),
           status: "pending_sync",
+          kot,
+          bill: offlineReceipt,
           created_at: new Date().toISOString(),
         });
 
@@ -435,7 +594,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           payment_method: method,
           amount: roundMoney(total),
           change_amount: method === "cash" ? roundMoney(change) : 0,
-          shift_id: activeShift?.id ?? undefined,
+          shift_id: offlineShiftId,
           worker_id: currentWorker.id,
           device_id: device.id,
           status: "pending_sync",
@@ -448,36 +607,23 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           "POST",
           {
             order_id: offlineOrderId,
-            shift_id: activeShift?.id ?? "",
+            shift_id: offlineShiftId,
             worker_id: currentWorker.id,
             device_id: device.id,
             payment_method: method,
             amount: roundMoney(total),
             change_amount: method === "cash" ? roundMoney(change) : 0,
             debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
+            external_reference: reference.trim() || undefined,
             client_mutation_id: offlinePaymentId,
             client_created_at: new Date().toISOString(),
           },
           offlinePaymentId,
         );
 
+        setReceiptData(offlineReceipt);
+        setPlacedKot(kot);
         clearCart();
-        setReceiptData(
-          makeOfflineReceiptData(
-            offlineOrderId,
-            merchant,
-            currentWorker,
-            cart,
-            subtotal,
-            tax,
-            total,
-            method,
-            cashAmount,
-            change,
-            fulfillmentType,
-            cartNotes,
-          ),
-        );
       } catch (err: any) {
         setError(err?.message || "Failed to process offline checkout.");
       } finally {
@@ -683,13 +829,21 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
               </div>
             ) : receiptData ? (
               <div className="flex flex-col items-center gap-4">
-                {receiptData.kot_number && (
+                {(receiptData.kot_number || placedKot) && (
                   <button
-                    onClick={() => printKOT(kotTicketFromReceipt(receiptData))}
+                    onClick={() =>
+                      printKOT(
+                        receiptData.kot_number
+                          ? kotTicketFromReceipt(receiptData)
+                          : (placedKot as KOTTicketData),
+                      )
+                    }
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-6 py-2.5 text-sm font-bold text-white hover:opacity-90"
                   >
                     <Ticket className="h-4 w-4" />
-                    Print KOT ({String(receiptData.kot_number).padStart(3, "0")})
+                    {receiptData.kot_number
+                      ? `Print KOT (${String(receiptData.kot_number).padStart(3, "0")})`
+                      : "Print KOT"}
                   </button>
                 )}
                 <div className="flex justify-center">

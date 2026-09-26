@@ -5,6 +5,7 @@ import {
   processSyncQueue,
   getSyncStatus,
 } from "./sync";
+import { offlineOrders, OfflineOrder } from "./db";
 
 export function useOnlineStatus() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -21,6 +22,35 @@ export function useOnlineStatus() {
   }, []);
 
   return isOnline;
+}
+
+/**
+ * Orders captured on this device that have not reached the server yet.
+ *
+ * These are the orders a cashier still needs after going offline: the kitchen
+ * display and the orders screen are both server-driven, so without this the
+ * only trace of an offline sale would be IndexedDB. `server_order_id` is set
+ * once the order syncs, so filtering on it keeps a freshly synced order from
+ * showing up twice while the orders list is still on a stale fetch.
+ */
+export function usePendingOfflineOrders() {
+  const isOnline = useOnlineStatus();
+  const [orders, setOrders] = useState<OfflineOrder[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    offlineOrders.getPending().then((pending) => {
+      if (!cancelled) setOrders(pending.filter((o) => !o.server_order_id));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [reloadKey, isOnline]);
+
+  return { orders, reload };
 }
 
 export function useSyncStatus() {

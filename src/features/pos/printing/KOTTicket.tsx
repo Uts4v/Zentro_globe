@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { PosReceiptData } from "../api";
+import { tableLabel } from "./table-label";
 
 /**
  * Kitchen Order Ticket — the ticket sent to the kitchen.
@@ -128,8 +129,9 @@ export function printKOT(ticket: KOTTicketData, printSize: "58mm" | "80mm" = "58
   lines.push(row("Order", ticket.orderNumber));
   lines.push(row("Date", formatDate(ticket.createdAt)));
   lines.push(row("Type", ticket.fulfillmentType ? ticket.fulfillmentType.toUpperCase() : "-"));
-  if (ticket.tableName || ticket.tableNumber != null) {
-    lines.push(row("Table", ticket.tableName || `#${ticket.tableNumber}`));
+  const ticketTable = tableLabel(ticket.tableName, ticket.tableNumber);
+  if (ticketTable) {
+    lines.push(row("Table", ticketTable));
   }
   if (ticket.customerName) lines.push(row("Customer", ticket.customerName));
   if (ticket.workerName) lines.push(row("Served by", ticket.workerName));
@@ -198,6 +200,7 @@ export default function KOTTicket({
   printSize = "58mm",
 }: KOTTicketProps) {
   const kotRef = useRef<HTMLDivElement>(null);
+  const ticketTable = tableLabel(ticket.tableName, ticket.tableNumber);
 
   const handlePrint = () => {
     if (!kotRef.current) return;
@@ -256,10 +259,10 @@ export default function KOTTicket({
             <span>Type</span>
             <span className="font-bold uppercase">{ticket.fulfillmentType || "-"}</span>
           </div>
-          {(ticket.tableName || ticket.tableNumber != null) && (
+          {ticketTable && (
             <div className="flex justify-between">
               <span>Table</span>
-              <span className="font-bold">{ticket.tableName || `#${ticket.tableNumber}`}</span>
+              <span className="font-bold">{ticketTable}</span>
             </div>
           )}
           {ticket.customerName && (
