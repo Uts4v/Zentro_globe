@@ -722,7 +722,6 @@ function AddItemsModal({
     load();
   }, [order.merchant]);
 
-<<<<<<< HEAD
   /** Append a configured line, merging only into an identical configuration. */
   function pushLine(line: AddToOrderLine) {
     setCart((prev) => {
@@ -733,7 +732,6 @@ function AddItemsModal({
       return [...prev, line];
     });
   }
-=======
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -741,7 +739,6 @@ function AddItemsModal({
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
   function addToCart(item: MenuItem) {
     if (needsOptions(item)) {
@@ -877,40 +874,25 @@ function AddItemsModal({
                     <span className="text-lg">{item.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-foreground truncate">{item.name}</p>
-<<<<<<< HEAD
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="numeric text-[11px] text-muted-foreground">
                         {needsOptions(item) ? "from " : ""}
                         {formatCurrency(fromPrice(item), currencySymbol)}
-=======
-                      <p className="numeric text-xs text-muted-foreground">
-                        {formatCurrency(Number(item.price), currencySymbol)}
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                       </p>
                     </div>
                     {inCart ? (
                       <div className="flex items-center gap-1.5">
                         <button
-<<<<<<< HEAD
                           onClick={() => changeQty(inCart.key, -1)}
-                          className="grid h-6 w-6 place-items-center rounded-md bg-muted text-foreground"
-=======
-                          onClick={() => removeFromCart(item.id)}
                           aria-label={`Remove one ${item.name}`}
                           className="grid h-9 w-9 place-items-center rounded-md bg-muted text-foreground"
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                         >
                           <Minus className="h-4 w-4" />
                         </button>
                         <span className="w-6 text-center text-xs font-bold">{inCart.qty}</span>
                         <button
-<<<<<<< HEAD
                           onClick={() => changeQty(inCart.key, 1)}
-                          className="grid h-6 w-6 place-items-center rounded-md bg-ink text-white"
-=======
-                          onClick={() => addToCart(item)}
                           aria-label={`Add one ${item.name}`}
                           className="grid h-9 w-9 place-items-center rounded-md bg-ink text-white"
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                         >
                           <Plus className="h-4 w-4" />
                         </button>

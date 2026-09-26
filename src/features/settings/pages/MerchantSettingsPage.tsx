@@ -2,12 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { useAuth, type MerchantProfile } from "@/lib/auth";
 import { merchantApi } from "@/lib/api";
 import { CURRENCIES } from "@/lib/currency";
-<<<<<<< HEAD
 import { apiUrl } from "@/lib/django-api-base";
 import { uploadPaymentQr as uploadPaymentQrFile } from "@/lib/image-upload";
-=======
-import { uploadMerchantPaymentQr } from "@/lib/image-upload";
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 import {
   Settings,
   Save,
@@ -82,52 +78,12 @@ export function MerchantSettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
-<<<<<<< HEAD
   const [qrUploading, setQrUploading] = useState(false);
-=======
-  const [qrBusy, setQrBusy] = useState(false);
-  const [qrError, setQrError] = useState("");
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
   const qrInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (merchantProfile) setProfile(merchantProfile);
   }, [merchantProfile]);
-
-  // The payment QR saves on its own (the upload is already immediate), so it
-  // doesn't wait for the page's Save button.
-  async function savePaymentQr(url: string) {
-    await merchantApi.update({ payment_qr_url: url });
-    setProfile((p) => (p ? { ...p, payment_qr_url: url } : p));
-    if (refreshProfile) await refreshProfile();
-  }
-
-  async function handleQrFile(file: File | undefined) {
-    if (!file || !profile) return;
-    setQrBusy(true);
-    setQrError("");
-    try {
-      const { publicUrl } = await uploadMerchantPaymentQr(file, String(profile.id));
-      await savePaymentQr(publicUrl);
-    } catch (e: unknown) {
-      setQrError(e instanceof Error ? e.message : "Could not upload the QR code");
-    } finally {
-      setQrBusy(false);
-      if (qrInputRef.current) qrInputRef.current.value = "";
-    }
-  }
-
-  async function handleQrRemove() {
-    setQrBusy(true);
-    setQrError("");
-    try {
-      await savePaymentQr("");
-    } catch (e: unknown) {
-      setQrError(e instanceof Error ? e.message : "Could not remove the QR code");
-    } finally {
-      setQrBusy(false);
-    }
-  }
 
   if (!profile) {
     return (
@@ -493,7 +449,6 @@ export function MerchantSettingsPage() {
         )}
       </section>
 
-<<<<<<< HEAD
       {/* ── Payment methods ────────────────────────────────────────────────── */}
       <section className="glass-strong rounded-3xl p-6">
         <div className="mb-1 flex items-center gap-2">
@@ -660,47 +615,10 @@ export function MerchantSettingsPage() {
                 type="button"
                 onClick={removePaymentQr}
                 className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50"
-=======
-      {/* ── Payment QR Code ───────────────────────────────────────────────── */}
-      <section className="glass-strong rounded-3xl p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <QrCode className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
-            Payment QR Code
-          </h2>
-        </div>
-        <p className="mb-4 text-xs text-muted-foreground">
-          Upload the QR code customers scan to pay you (for example your bank or wallet QR). The
-          POS shows it when staff choose QR Payment, and staff confirm the payment once it's
-          received. Changes save automatically.
-        </p>
-
-        {profile.payment_qr_url ? (
-          <div className="flex flex-wrap items-center gap-4">
-            <img
-              src={profile.payment_qr_url}
-              alt="Your payment QR code"
-              className="h-40 w-40 rounded-xl border border-border bg-white object-contain p-2"
-            />
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => qrInputRef.current?.click()}
-                disabled={qrBusy}
-                className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted/50 disabled:opacity-50"
-              >
-                {qrBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                Replace
-              </button>
-              <button
-                onClick={handleQrRemove}
-                disabled={qrBusy}
-                className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
               >
                 <Trash2 className="h-4 w-4" />
                 Remove
               </button>
-<<<<<<< HEAD
               <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-foreground">
                 <input
                   type="checkbox"
@@ -725,30 +643,6 @@ export function MerchantSettingsPage() {
             Uploading… the image is kept at full size so it stays scannable.
           </p>
         )}
-=======
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => qrInputRef.current?.click()}
-            disabled={qrBusy}
-            className="flex w-full flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border py-8 text-sm font-medium text-muted-foreground hover:bg-muted/30 hover:text-foreground disabled:opacity-50"
-          >
-            {qrBusy ? <Loader2 className="h-6 w-6 animate-spin" /> : <QrCode className="h-6 w-6" />}
-            {qrBusy ? "Uploading…" : "Upload QR code image"}
-            <span className="text-xs font-normal">PNG, JPG or WebP, up to 5 MB</span>
-          </button>
-        )}
-
-        <input
-          ref={qrInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          onChange={(e) => handleQrFile(e.target.files?.[0])}
-        />
-        {qrError && <p className="mt-3 text-xs text-rose-600">{qrError}</p>}
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
       </section>
 
       {/* ── Summary ──────────────────────────────────────────────────────── */}

@@ -11,7 +11,6 @@ import {
   DebitAccount,
 } from "../api";
 import Receipt from "../printing/Receipt";
-import PaymentQrModal from "./PaymentQrModal";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import {
   X,
@@ -63,12 +62,8 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
   const [error, setError] = useState<string | null>(null);
   const [debitAccounts, setDebitAccounts] = useState<DebitAccount[]>([]);
   const [selectedDebitAccount, setSelectedDebitAccount] = useState<string>("");
-<<<<<<< HEAD
   const [reference, setReference] = useState("");
   const [qrConfirmed, setQrConfirmed] = useState(false);
-=======
-  const [showQr, setShowQr] = useState(false);
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
   useEffect(() => {
     if (method === "debit" && debitAccounts.length === 0) {
@@ -153,7 +148,6 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
   async function handleSubmit() {
     if (!canSubmit || !merchant || !currentWorker || !device) return;
     if (!activeShift) {
-      setShowQr(false);
       setError("Open a cash shift before collecting payment.");
       return;
     }
@@ -186,7 +180,6 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
         setLoadingReceipt(false);
       }
     } catch (err: any) {
-      setShowQr(false);
       setError(err?.message || "Payment failed. Please try again.");
     } finally {
       setSubmitting(false);
@@ -298,28 +291,15 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
           </p>
         </div>
 
-<<<<<<< HEAD
-        <div className="grid grid-cols-5 gap-2 px-6 py-4">
-          {availableMethods.map((pm) => {
-=======
         <div className="grid grid-cols-3 gap-2 px-6 py-4 sm:grid-cols-5">
-          {PAYMENT_METHODS.map((pm) => {
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
+          {availableMethods.map((pm) => {
             const Icon = pm.icon;
             const active = method === pm.key;
             return (
               <button
                 key={pm.key}
-<<<<<<< HEAD
                 onClick={() => setMethod(pm.key as PaymentMethod)}
-                className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-[11px] font-medium transition-colors ${
-=======
-                onClick={() => {
-                  setMethod(pm.key);
-                  if (pm.key === "bank_qr") setShowQr(true);
-                }}
                 className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-xs font-medium transition-colors ${
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                   active ? "bg-ink text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
@@ -463,18 +443,6 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
           </div>
         )}
 
-        {method === "bank_qr" && (
-          <div className="px-6 pb-4">
-            <button
-              onClick={() => setShowQr(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium text-foreground hover:bg-muted"
-            >
-              <QrCode className="h-4 w-4" />
-              Show QR code to customer
-            </button>
-          </div>
-        )}
-
         {(method === "card" || method === "mobile_wallet") && (
           <p className="px-6 pb-4 text-center text-xs text-muted-foreground">
             Confirm once the customer has paid. It's recorded as {PAYMENT_METHOD_LABELS[method]}.
@@ -505,15 +473,6 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
           </button>
         </div>
       </div>
-
-      {showQr && (
-        <PaymentQrModal
-          amount={total}
-          onClose={() => setShowQr(false)}
-          onConfirm={handleSubmit}
-          confirming={submitting}
-        />
-      )}
     </div>
   );
 }

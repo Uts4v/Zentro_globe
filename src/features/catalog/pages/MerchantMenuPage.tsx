@@ -86,7 +86,6 @@ export function MerchantMenuPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [merchantId, setMerchantId] = useState<string | null>(null);
-  const [currencySymbol, setCurrencySymbol] = useState("Rs");
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
@@ -124,7 +123,6 @@ export function MerchantMenuPage() {
       ]);
       setItems(itemsData);
       setMerchantId(merchantData.id);
-      setCurrencySymbol(merchantData.currency_symbol || "Rs");
       setCategories(catData);
     } catch (e: unknown) {
       setError(errMessage(e));
@@ -1224,7 +1222,7 @@ function ItemCard({
             <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
               {item.discount_type === "percentage"
                 ? `-${Number(item.discount_value)}%`
-                : `-${formatCurrency(item.discount_value, currencySymbol)}`}
+                : `-${formatCurrency(item.discount_value ?? "0", currencySymbol)}`}
               {item.discount_source === "special" ? " · Special" : ""}
             </span>
           )}

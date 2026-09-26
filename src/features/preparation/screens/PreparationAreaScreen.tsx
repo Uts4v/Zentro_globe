@@ -95,7 +95,6 @@ function OrderCard({
 
       {/* Items */}
       <div className="space-y-1 mb-3">
-<<<<<<< HEAD
         {order.items.map((item) => {
           const modifiers = item.modifiers ?? [];
           const instructions = item.special_instructions || item.notes;
@@ -151,38 +150,6 @@ function OrderCard({
                     </li>
                   ))}
                 </ul>
-=======
-        {order.items.map((item) => (
-          <div
-            key={item.id}
-            className={`flex items-center justify-between py-1 ${
-              item.preparation_status === "ready"
-                ? "line-through text-muted-foreground"
-                : item.preparation_status === "preparing"
-                  ? "text-blue-700"
-                  : ""
-            }`}
-          >
-            <span className="text-lg">
-              <span className="font-bold">{item.quantity}×</span>{" "}
-              <span className="font-semibold">{item.name}</span>
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {item.preparation_status === "preparing" ? (
-                item.started_by ? (
-                  <span className="text-blue-500">Prep: {item.started_by}</span>
-                ) : (
-                  "Prep..."
-                )
-              ) : item.preparation_status === "ready" ? (
-                item.ready_by ? (
-                  <span className="text-green-600">✓ {item.ready_by}</span>
-                ) : (
-                  "✓"
-                )
-              ) : (
-                ""
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
               )}
 
               {instructions && (

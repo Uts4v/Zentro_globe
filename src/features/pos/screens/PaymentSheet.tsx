@@ -11,7 +11,6 @@ import {
 } from "../api";
 import { formatCurrency, calculateTax, roundMoney } from "@/lib/currency";
 import Receipt from "../printing/Receipt";
-import PaymentQrModal from "./PaymentQrModal";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import KOTTicket, { kotTicketFromReceipt, printKOT, KOTTicketData } from "../printing/KOTTicket";
 import {
@@ -73,12 +72,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const [error, setError] = useState<string | null>(null);
   const [debitAccounts, setDebitAccounts] = useState<DebitAccount[]>([]);
   const [selectedDebitAccount, setSelectedDebitAccount] = useState<string>("");
-<<<<<<< HEAD
   const [reference, setReference] = useState("");
   const [qrConfirmed, setQrConfirmed] = useState(false);
-=======
-  const [showQr, setShowQr] = useState(false);
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
   const [receiptData, setReceiptData] = useState<PosReceiptData | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
@@ -95,7 +90,6 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     }
   }, [method]);
 
-<<<<<<< HEAD
   // Only offer tenders this merchant accepts, and never offer a QR tender
   // without an actual QR image to show the customer.
   const availableMethods = useMemo(() => {
@@ -137,7 +131,6 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     setQrConfirmed(false);
     setReference("");
   }, [method]);
-=======
   useEffect(() => {
     if (!open) return;
     function onKeyDown(e: KeyboardEvent) {
@@ -146,7 +139,6 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open, onClose]);
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
   if (!open) return null;
 
@@ -252,7 +244,6 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         setLoadingReceipt(false);
       }
     } catch (err: any) {
-      setShowQr(false);
       setError(err?.message || "Payment failed. Please try again.");
     } finally {
       setSubmitting(false);
@@ -539,28 +530,15 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           </p>
         </div>
 
-<<<<<<< HEAD
-        <div className="grid grid-cols-5 gap-2 px-6 py-4">
-          {availableMethods.map((pm) => {
-=======
         <div className="grid grid-cols-3 gap-2 px-6 py-4 sm:grid-cols-5">
-          {PAYMENT_METHODS.map((pm) => {
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
+          {availableMethods.map((pm) => {
             const Icon = pm.icon;
             const active = method === pm.key;
             return (
               <button
                 key={pm.key}
-<<<<<<< HEAD
                 onClick={() => setMethod(pm.key as PaymentMethod)}
-                className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-[11px] font-medium transition-colors ${
-=======
-                onClick={() => {
-                  setMethod(pm.key);
-                  if (pm.key === "bank_qr") setShowQr(true);
-                }}
                 className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-xs font-medium transition-colors ${
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                   active ? "bg-ink text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
@@ -727,18 +705,6 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           </div>
         )}
 
-        {method === "bank_qr" && (
-          <div className="px-6 pb-4">
-            <button
-              onClick={() => setShowQr(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-medium text-foreground hover:bg-muted"
-            >
-              <QrCode className="h-4 w-4" />
-              Show QR code to customer
-            </button>
-          </div>
-        )}
-
         {(method === "card" || method === "mobile_wallet") && (
           <p className="px-6 pb-4 text-center text-xs text-muted-foreground">
             Confirm once the customer has paid. It's recorded as {PAYMENT_METHOD_LABELS[method]}.
@@ -769,15 +735,6 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           </button>
         </div>
       </div>
-
-      {showQr && (
-        <PaymentQrModal
-          amount={total}
-          onClose={() => setShowQr(false)}
-          onConfirm={handleSubmit}
-          confirming={submitting}
-        />
-      )}
     </div>
   );
 }

@@ -1,10 +1,5 @@
-<<<<<<< HEAD
 import { usePosStore, cartToOrderItems } from "../store";
-import { useState, useMemo } from "react";
-=======
-import { usePosStore } from "../store";
 import { useState, useMemo, useEffect } from "react";
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 import { PosReceiptData, PosCustomer, posCreateOrder } from "../api";
 import { safeUuid } from "@/lib/utils";
 import { formatCurrency, calculateTax } from "@/lib/currency";
@@ -24,18 +19,14 @@ import {
   Check,
   Gift,
   Star,
-<<<<<<< HEAD
   Pencil,
+  PackageMinus,
 } from "lucide-react";
 import ProductDetailSheet, {
   type ProductDraft,
 } from "@/features/catalog/components/ProductDetailSheet";
 import type { MenuItemSelectable } from "@/lib/api/types";
-=======
-  PackageMinus,
-} from "lucide-react";
 import MinusStockModal from "./MinusStockModal";
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
 interface CartPanelProps {
   onCheckout: () => void;
@@ -77,16 +68,13 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const [showFreeConfirm, setShowFreeConfirm] = useState(false);
   const [freeOrderLoading, setFreeOrderLoading] = useState(false);
   const [freeOrderError, setFreeOrderError] = useState<string | null>(null);
-<<<<<<< HEAD
   const [editingKey, setEditingKey] = useState<string | null>(null);
-=======
   const [showMinusStock, setShowMinusStock] = useState(false);
   const [selectedMinusStockItem, setSelectedMinusStockItem] = useState<{
     name: string;
     menu_item_id?: number | null;
     quantity?: number;
   } | null>(null);
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
 
   const menuItemById = useMemo(() => {
     const map = new Map<number, MenuItemSelectable>();
@@ -459,15 +447,8 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                         </p>
                       )}
                     </div>
-<<<<<<< HEAD
-                    <p className="numeric text-[11px] text-muted-foreground">
-                      {item.price === 0
-                        ? "No charge"
-                        : `${formatCurrency(item.price, currencySymbol)} each`}
-=======
                     <p className="numeric text-xs text-muted-foreground">
                       {item.price === 0 ? "No charge" : `${formatCurrency(item.price, currencySymbol)} each`}
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                     </p>
                     {optionsText ? (
                       <p className="mt-0.5 truncate text-[11px] text-muted-foreground/90">
@@ -498,16 +479,12 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                               ? updateCartItemQty(idx, item.quantity - 1)
                               : removeItemFromCart(idx)
                           }
-<<<<<<< HEAD
                           title={item.quantity > 1 ? "Decrease quantity" : "Remove item"}
                           aria-label={
                             item.quantity > 1
                               ? `Decrease ${item.name} quantity`
                               : `Remove ${item.name}`
                           }
-=======
-                          aria-label={item.quantity === 1 ? `Remove ${item.name}` : `Decrease quantity of ${item.name}`}
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                           className="grid h-9 w-9 place-items-center rounded-l-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
                         >
                           <Minus className="h-4 w-4" />
@@ -517,12 +494,8 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                         </span>
                         <button
                           onClick={() => updateCartItemQty(idx, item.quantity + 1)}
-<<<<<<< HEAD
                           title="Increase quantity"
                           aria-label={`Increase ${item.name} quantity`}
-=======
-                          aria-label={`Increase quantity of ${item.name}`}
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                           className="grid h-9 w-9 place-items-center rounded-r-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
                         >
                           <Plus className="h-4 w-4" />
@@ -531,13 +504,8 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                       <button
                         onClick={() => removeItemFromCart(idx)}
                         title="Remove item"
-<<<<<<< HEAD
-                        aria-label={`Remove ${item.name} from order`}
-                        className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-red-200 hover:bg-red-50 hover:text-destructive"
-=======
                         aria-label={`Remove ${item.name}`}
                         className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -724,21 +692,11 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
               required.
             </p>
             <div className="mt-3 rounded-xl bg-mist px-4 py-3 text-xs text-muted-foreground">
-<<<<<<< HEAD
-              {cart.length} item{cart.length !== 1 && "s"} · Total:{" "}
-              <span className="font-bold text-foreground">
-                {formatCurrency(total, currencySymbol)}
-              </span>{" "}
-              → <span className="font-bold text-emerald-600">FREE</span>
-            </div>
-            {freeOrderError && <p className="mt-2 text-xs text-rose-600">{freeOrderError}</p>}
-=======
               {cart.length} item{cart.length !== 1 && "s"} · Total: <span className="numeric font-bold text-foreground">{formatCurrency(total, currencySymbol)}</span> → <span className="font-bold text-success">FREE</span>
             </div>
             {freeOrderError && (
               <p className="mt-2 text-xs text-destructive">{freeOrderError}</p>
             )}
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
             <div className="mt-5 flex gap-2">
               <button
                 onClick={() => {

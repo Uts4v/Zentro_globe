@@ -34,7 +34,12 @@ def noop_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('merchants', '0021_menuitem_discount_source_menuitem_discount_type_and_more'),
+        # Upstream added `payment_qr_url` on its own 0022. Depend on it rather
+        # than forking the graph: this migration used to re-add the same field
+        # with an identical definition, which made two leaf nodes and forced a
+        # merge migration. The field is now added exactly once, by the earlier
+        # migration, so databases that already applied it are unaffected.
+        ('merchants', '0022_merchantprofile_payment_qr_url'),
     ]
 
     operations = [
@@ -51,7 +56,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='merchantprofile',
             name='payment_methods_configured',
-            field=models.BooleanField(default=False, help_text='True once the merchant has saved an explicit accepted-methods list'),
+            field=models.BooleanField(default=False, help_text="True once the merchant has saved an explicit accepted-methods list"),
         ),
         migrations.AddField(
             model_name='merchantprofile',
@@ -73,11 +78,9 @@ class Migration(migrations.Migration):
             name='payment_qr_name',
             field=models.CharField(blank=True, default='', help_text='Display name for the QR, e.g. "Fonepay QR" or "eSewa"', max_length=80),
         ),
-        migrations.AddField(
-            model_name='merchantprofile',
-            name='payment_qr_url',
-            field=models.URLField(blank=True, default='', help_text="Merchant's own payment QR image, shown at POS for QR payments"),
-        ),
+        # `payment_qr_url` is intentionally absent: the dependency migration
+        # 0022_merchantprofile_payment_qr_url already adds it with an identical
+        # definition, and adding it twice is what produced the forked graph.
         # Must precede the constraints below: legacy rows may not satisfy them.
         migrations.RunPython(normalise_required_groups, noop_reverse),
         migrations.AddConstraint(

@@ -150,28 +150,18 @@ export default function MenuGrid() {
             className="w-full rounded-2xl border border-border bg-card py-3.5 pl-12 pr-24 text-[15px] text-foreground shadow-[var(--shadow-card)] placeholder:text-muted-foreground focus:border-ember focus:outline-none focus:ring-2 focus:ring-ember/20"
           />
           <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
-<<<<<<< HEAD
-            <span className="hidden items-center gap-1 rounded-lg border border-border bg-mist px-2 py-1 text-[10px] font-medium text-muted-foreground sm:flex">
-              <Command className="h-3 w-3" />K
-=======
             <span className="hidden items-center gap-1 rounded-lg border border-border bg-mist px-2 py-1 text-xs font-medium text-muted-foreground sm:flex">
               <Command className="h-3 w-3" />
               K
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
             </span>
             <button
               onClick={() => setShowUnavailable((v) => !v)}
               title="Toggle unavailable items"
-<<<<<<< HEAD
-              className={`grid h-8 w-8 place-items-center rounded-lg transition-colors ${
-                showUnavailable ? "bg-ember-soft text-ember" : "text-muted-foreground hover:bg-mist"
-=======
               aria-label="Toggle unavailable items"
               className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${
                 showUnavailable
                   ? "bg-ember-soft text-ember"
                   : "text-muted-foreground hover:bg-mist"
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
               }`}
             >
               <SlidersHorizontal className="h-4 w-4" />
@@ -291,11 +281,7 @@ function ProductGrid({
   }
 
   return (
-<<<<<<< HEAD
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 2xl:grid-cols-4">
-=======
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
       {items.map((item) => {
         const justAdded = lastAddedId === item.id;
         const customizable = (item.groups ?? []).some((g) => g.is_active !== false);
@@ -380,18 +366,13 @@ function ProductGrid({
                 </p>
               )}
               <div className="mt-auto flex items-center justify-between pt-1">
-<<<<<<< HEAD
                 {Number(item.price) === 0 && !customizable ? (
-                  <span className="text-sm font-bold text-emerald-600">FREE</span>
+                  <span className="text-sm font-bold text-success">FREE</span>
                 ) : customizable ? (
                   <p className="text-sm font-bold text-foreground">
                     <span className="mr-1 text-[10px] font-medium text-muted-foreground">from</span>
                     {formatCurrency(fromPrice(item), currencySymbol)}
                   </p>
-=======
-                {Number(item.price) === 0 ? (
-                  <span className="text-sm font-bold text-success">FREE</span>
->>>>>>> 80ccaa5f674bfd3940693f5f8234c0b36bc8e64e
                 ) : (
                   <p className="numeric text-sm font-bold text-foreground">
                     {formatCurrency(Number(item.price), currencySymbol)}
