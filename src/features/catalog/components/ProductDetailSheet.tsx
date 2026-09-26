@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Minus, Plus, X, ChevronRight, AlertCircle } from "lucide-react";
-import type { MenuItem, MenuOptionGroup, MenuSelection } from "@/lib/api/types";
-import { lineUnitPrice, optionLabel, baseDiscount } from "@/lib/menu-utils";
+import type { MenuOptionGroup, MenuSelection, MenuItemSelectable } from "@/lib/api/types";
+import { lineUnitPrice, fromPrice, baseDiscount } from "@/lib/menu-utils";
 import { formatCurrency } from "@/lib/currency";
 
 export interface ProductDraft {
@@ -14,7 +14,7 @@ export interface ProductDraft {
 
 interface Props {
   open: boolean;
-  item: MenuItem | null;
+  item: MenuItemSelectable | null;
   currencySymbol: string;
   onClose: () => void;
   onAdd: (draft: ProductDraft) => void;
@@ -30,7 +30,7 @@ function initSelections(groups: MenuOptionGroup[]): MenuSelection[] {
   const out: MenuSelection[] = [];
   for (const g of groups) {
     if (g.kind === "variant") {
-      const def = g.options.find((o) => o.is_default && o.is_available) ?? g.options[0];
+      const def = g.options.find((o) => o.is_default && o.is_available);
       if (def) out.push({ group_id: g.id, option_id: def.id });
     } else if (g.min_select > 0) {
       const pre = g.options.filter((o) => o.is_default && o.is_available).slice(0, g.min_select);
@@ -45,11 +45,20 @@ function mergeSelections(
   incoming: MenuSelection[],
   groups: MenuOptionGroup[],
 ): MenuSelection[] {
-  const map = new Map<string, MenuSelection>();
-  for (const s of base) map.set(String(s.group_id), s);
-  for (const s of incoming) map.set(String(s.group_id), s);
-  const groupIds = new Set(groups.map((g) => String(g.id)));
-  return Array.from(map.values()).filter((s) => groupIds.has(String(s.group_id)));
+  const groupById = new Map(groups.map((g) => [String(g.id), g]));
+  const incomingGroups = new Set(incoming.map((s) => String(s.group_id)));
+  const merged = base.filter((s) => !incomingGroups.has(String(s.group_id)));
+  for (const selection of incoming) {
+    const group = groupById.get(String(selection.group_id));
+    if (
+      group?.options.some(
+        (option) => String(option.id) === String(selection.option_id) && option.is_available,
+      )
+    ) {
+      merged.push(selection);
+    }
+  }
+  return merged;
 }
 
 export default function ProductDetailSheet({
@@ -69,21 +78,30 @@ export default function ProductDetailSheet({
   const [instructions, setInstructions] = useState("");
   const [error, setError] = useState("");
 
-  const groups = useMemo(() => (item?.groups ?? []).filter((g) => g.is_active !== false), [item]);
+  const groups = useMemo(
+    () =>
+      (item?.groups ?? [])
+        .filter((g) => g.is_active !== false && g.options.length > 0)
+        .slice()
+        .sort(
+          (a, b) =>
+            (a.kind === b.kind ? 0 : a.kind === "variant" ? -1 : 1) ||
+            a.display_order - b.display_order,
+        ),
+    [item?.groups],
+  );
 
   useEffect(() => {
     if (open && item) {
       const base = initSelections(groups);
       const merged =
-        initialSelections && initialSelections.length > 0
-          ? mergeSelections(base, initialSelections, groups)
-          : base;
+        initialSelections !== undefined ? mergeSelections(base, initialSelections, groups) : base;
       setSelections(merged);
       setQty(initialQty ?? 1);
       setInstructions(initialInstructions ?? "");
       setError("");
     }
-  }, [open, item?.id, resetKey, initialQty, initialInstructions, initialSelections]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, item, groups, resetKey, initialQty, initialInstructions, initialSelections]);
 
   useEffect(() => {
     if (!open) return;
@@ -97,12 +115,17 @@ export default function ProductDetailSheet({
   if (!open || !item) return null;
 
   const soldOut = !item.is_available || item.status === "draft" || item.status === "archived";
+  const selectedIn = (g: MenuOptionGroup) =>
+    selections.filter((s) => String(s.group_id) === String(g.id));
+
   const unit = lineUnitPrice(item, selections);
   const total = Math.round(unit * qty * 100) / 100;
   const discount = baseDiscount(item);
-
-  const selectedIn = (g: MenuOptionGroup) =>
-    selections.filter((s) => String(s.group_id) === String(g.id));
+  const hasVariant = groups.some((group) => group.kind === "variant");
+  const selectedVariant = groups
+    .filter((group) => group.kind === "variant")
+    .some((group) => selectedIn(group).length > 0);
+  const shownPrice = hasVariant && !selectedVariant ? fromPrice(item) : unit;
 
   function toggleOption(g: MenuOptionGroup, optionId: string) {
     setError("");
@@ -113,45 +136,38 @@ export default function ProductDetailSheet({
       ]);
       return;
     }
-    setSelections((prev) => {
-      const current = selectedIn(g);
-      const has = current.some((s) => String(s.option_id) === String(optionId));
-      const rest = prev.filter(
+    const current = selectedIn(g);
+    const has = current.some((s) => String(s.option_id) === String(optionId));
+    if (has && current.length - 1 < g.min_select) {
+      setError(`Choose at least ${g.min_select} for "${g.name}".`);
+      return;
+    }
+    if (!has && current.length >= g.max_select) {
+      setError(`You can choose up to ${g.max_select} for "${g.name}".`);
+      return;
+    }
+    setSelections((prev) => [
+      ...prev.filter(
         (s) => String(s.group_id) !== String(g.id) || String(s.option_id) !== String(optionId),
-      );
-      if (has) {
-        if (current.length - 1 < g.min_select) {
-          setError(`Keep at least ${g.min_select} for "${g.name}".`);
-          return prev;
-        }
-        return rest;
-      }
-      if (current.length + 1 > g.max_select) {
-        setError(`You can choose up to ${g.max_select} for "${g.name}".`);
-        return prev;
-      }
-      return [...rest, { group_id: g.id, option_id: optionId }];
-    });
+      ),
+      ...(!has ? [{ group_id: g.id, option_id: optionId }] : []),
+    ]);
   }
 
   function handleAdd() {
     if (!item) return;
     for (const g of groups) {
       const chosen = selectedIn(g);
-      if (g.required && chosen.length === 0) {
-        setError(`Please choose an option for "${g.name}".`);
-        return;
-      }
-      if (chosen.length < g.min_select || chosen.length > g.max_select) {
+      if (chosen.length < g.min_select || (g.required && chosen.length === 0)) {
         setError(
-          g.min_select === g.max_select
-            ? `Please select exactly ${g.min_select} for "${g.name}".`
-            : `Please select between ${g.min_select} and ${g.max_select} for "${g.name}".`,
+          g.max_select === 1
+            ? `Choose an option for ${g.name} to continue.`
+            : `Choose at least ${g.min_select} for ${g.name}.`,
         );
         return;
       }
-      if (g.kind === "variant" && chosen.length > 1) {
-        setError(`Choose only one option for "${g.name}".`);
+      if (chosen.length > g.max_select) {
+        setError(`You can choose up to ${g.max_select} for ${g.name}.`);
         return;
       }
     }
@@ -172,6 +188,9 @@ export default function ProductDetailSheet({
       <div
         className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-background shadow-2xl sm:rounded-[28px]"
         style={{ border: "1px solid var(--border)" }}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="product-detail-title"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -206,10 +225,16 @@ export default function ProductDetailSheet({
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
             {item.category || "Menu"}
           </p>
-          <h2 className="font-display mt-1 text-3xl leading-tight text-foreground">{item.name}</h2>
+          <h2
+            id="product-detail-title"
+            className="font-display mt-1 text-3xl leading-tight text-foreground"
+          >
+            {item.name}
+          </h2>
           <div className="mt-2 flex items-center gap-2">
             <span className="font-display text-xl text-foreground">
-              {formatCurrency(unit, currencySymbol, 0)}
+              {hasVariant && !selectedVariant ? "From " : ""}
+              {formatCurrency(shownPrice, currencySymbol, 0)}
             </span>
             {discount && (
               <span className="text-sm text-muted-foreground line-through">
@@ -241,113 +266,151 @@ export default function ProductDetailSheet({
           ) : null}
 
           <div className="mt-5 space-y-5">
-            {groups.map((g) => {
+            {groups.some((g) => g.kind === "variant") && (
+              <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                Variants
+              </p>
+            )}
+            {groups.map((g, index) => {
+              const previous = groups[index - 1];
+              const startsAddOns = g.kind === "modifier" && previous?.kind !== "modifier";
               const chosen = selectedIn(g);
               return (
-                <section key={g.id}>
-                  <div className="mb-2 flex items-baseline justify-between">
-                    <p className="text-sm font-semibold text-foreground">
-                      {g.name}
-                      {g.required && <span className="ml-1 text-ember">*</span>}
-                      {!g.required && (
-                        <span className="ml-2 text-[10px] font-normal text-muted-foreground">
-                          Optional
-                        </span>
-                      )}
+                <div key={g.id}>
+                  {startsAddOns && (
+                    <p className="mb-3 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      Add-ons
                     </p>
-                    {g.min_select > 0 && !g.required && (
-                      <span className="text-[10px] text-muted-foreground">
-                        up to {g.max_select}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                  <fieldset className="min-w-0">
+                    <legend className="mb-1 text-sm font-semibold text-foreground">{g.name}</legend>
+                    <p className="mb-2 text-xs text-muted-foreground">
+                      {g.required || g.min_select > 0 ? "Required" : "Optional"}
+                      {" · "}
+                      {g.max_select === 1
+                        ? "Choose one"
+                        : g.min_select > 0
+                          ? `Choose ${g.min_select}-${g.max_select}`
+                          : `Choose up to ${g.max_select}`}
+                    </p>
 
-                  {g.kind === "variant" ? (
-                    <div className="space-y-2">
-                      {g.options.map((o) => {
-                        const active = chosen.some((s) => String(s.option_id) === String(o.id));
-                        const disabled = !o.is_available;
-                        return (
-                          <button
-                            key={o.id}
-                            disabled={disabled}
-                            onClick={() => toggleOption(g, o.id)}
-                            className={`flex w-full items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
-                              active
-                                ? "border-foreground bg-foreground text-background"
-                                : "border-border bg-card text-foreground"
-                            } ${disabled ? "opacity-40" : ""}`}
-                          >
-                            <span className="text-sm font-medium">{o.name}</span>
-                            <span className="flex items-center gap-2">
-                              {o.price != null && (
+                    {g.kind === "variant" ? (
+                      <div className="space-y-2">
+                        {g.options.map((o) => {
+                          const active = chosen.some((s) => String(s.option_id) === String(o.id));
+                          const disabled = !o.is_available;
+                          const optionPrice = o.price == null ? null : Number(o.price);
+                          return (
+                            <label
+                              key={o.id}
+                              className={`relative flex min-h-12 w-full cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                                active
+                                  ? "border-[#0F3D3A] bg-[#EAF2EF] text-[#172A2B]"
+                                  : "border-border bg-card text-foreground"
+                              } ${disabled ? "cursor-not-allowed opacity-45" : ""}`}
+                            >
+                              <input
+                                className="peer sr-only"
+                                type="radio"
+                                name={`variant-${g.id}`}
+                                checked={active}
+                                disabled={disabled}
+                                onChange={() => toggleOption(g, o.id)}
+                              />
+                              <span className="flex items-center gap-3">
                                 <span
-                                  className={`text-xs ${active ? "text-background/70" : "text-muted-foreground"}`}
+                                  className={`grid h-5 w-5 place-items-center rounded-full border ${active ? "border-[#0F3D3A]" : "border-muted-foreground"}`}
+                                  aria-hidden="true"
                                 >
-                                  {formatCurrency(parseFloat(o.price), currencySymbol, 0)}
+                                  {active && (
+                                    <span className="h-2.5 w-2.5 rounded-full bg-[#0F3D3A]" />
+                                  )}
+                                </span>
+                                <span className="text-sm font-semibold">{o.name}</span>
+                              </span>
+                              <span className="flex items-center gap-2">
+                                {optionPrice != null && Number.isFinite(optionPrice) && (
+                                  <span className="text-sm font-semibold">
+                                    {formatCurrency(optionPrice, currencySymbol, 0)}
+                                  </span>
+                                )}
+                              </span>
+                              <span
+                                className="pointer-events-none absolute inset-0 rounded-xl ring-0 peer-focus-visible:ring-2 peer-focus-visible:ring-[#0F3D3A]"
+                                aria-hidden="true"
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {g.options.map((o) => {
+                          const active = chosen.some((s) => String(s.option_id) === String(o.id));
+                          const singleChoice = g.max_select === 1;
+                          const delta = Number(o.price_delta ?? 0);
+                          return (
+                            <label
+                              key={o.id}
+                              className={`relative flex min-h-12 cursor-pointer items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+                                active
+                                  ? "border-[#0F3D3A] bg-[#EAF2EF] text-[#172A2B]"
+                                  : "border-border bg-card text-foreground"
+                              } ${!o.is_available ? "cursor-not-allowed opacity-45" : ""}`}
+                            >
+                              <input
+                                className="peer sr-only"
+                                type={singleChoice ? "radio" : "checkbox"}
+                                name={singleChoice ? `modifier-${g.id}` : undefined}
+                                checked={active}
+                                disabled={!o.is_available}
+                                onChange={() => toggleOption(g, o.id)}
+                              />
+                              <span className="flex items-center gap-3">
+                                <span
+                                  className={`grid h-5 w-5 shrink-0 place-items-center border ${singleChoice ? "rounded-full" : "rounded"} ${active ? "border-[#0F3D3A] bg-[#0F3D3A] text-white" : "border-muted-foreground"}`}
+                                  aria-hidden="true"
+                                >
+                                  {active && <span className="text-xs leading-none">✓</span>}
+                                </span>
+                                <span className="text-sm font-medium">{o.name}</span>
+                              </span>
+                              {Number.isFinite(delta) && delta > 0 && (
+                                <span className="text-sm font-medium">
+                                  +{formatCurrency(delta, currencySymbol, 0)}
                                 </span>
                               )}
                               <span
-                                className={`grid h-5 w-5 place-items-center rounded-full border ${
-                                  active ? "border-background/60" : "border-border"
-                                }`}
-                              >
-                                {active && <span className="h-2 w-2 rounded-full bg-background" />}
-                              </span>
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      {g.options.map((o) => {
-                        const active = chosen.some((s) => String(s.option_id) === String(o.id));
-                        const label = optionLabel(o);
-                        return (
-                          <button
-                            key={o.id}
-                            disabled={!o.is_available}
-                            onClick={() => toggleOption(g, o.id)}
-                            className={`flex flex-col items-start gap-1 rounded-2xl border px-3.5 py-3 text-left transition-colors ${
-                              active
-                                ? "border-foreground bg-card-foreground text-background"
-                                : "border-border bg-card text-foreground"
-                            } ${!o.is_available ? "opacity-40" : ""}`}
-                          >
-                            <span className="text-sm font-medium leading-tight">{o.name}</span>
-                            {label && (
-                              <span
-                                className={`text-[11px] ${active ? "text-background/70" : "text-ember"}`}
-                              >
-                                {label}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </section>
+                                className="pointer-events-none absolute inset-0 rounded-xl ring-0 peer-focus-visible:ring-2 peer-focus-visible:ring-[#0F3D3A]"
+                                aria-hidden="true"
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </fieldset>
+                </div>
               );
             })}
 
-            {hasOptions && (
-              <div>
-                <p className="mb-2 text-sm font-semibold text-foreground">Special instructions</p>
-                <textarea
-                  value={instructions}
-                  onChange={(e) => setInstructions(e.target.value)}
-                  maxLength={500}
-                  rows={2}
-                  placeholder="e.g. extra hot, no onions…"
-                  className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground"
-                />
-              </div>
-            )}
+            <div>
+              <p className="mb-2 text-sm font-semibold text-foreground">Special instructions</p>
+              <textarea
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                maxLength={500}
+                rows={2}
+                placeholder="e.g. extra hot, no onions…"
+                className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground"
+              />
+            </div>
 
             {error && (
-              <div className="flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              <div
+                role="alert"
+                className="flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2 text-xs text-rose-700"
+              >
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" /> {error}
               </div>
             )}

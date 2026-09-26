@@ -1,4 +1,12 @@
-import type { MenuItem, MenuOption, MenuOptionGroup, MenuSelection } from "@/lib/api/types";
+import type {
+  MenuItemSelectable,
+  MenuOption,
+  MenuOptionGroup,
+  MenuSelection,
+} from "@/lib/api/types";
+
+/** A product that can be priced/selected, however it was loaded. */
+export type PricedItem = MenuItemSelectable;
 
 /**
  * Client-side helpers that mirror the server's pricing rules (config/menu_pricing.py).
@@ -22,7 +30,7 @@ export function cartKey(
 }
 
 /** A variant that carries an absolute price replaces the base price entirely. */
-function hasAbsoluteVariant(item: MenuItem): boolean {
+function hasAbsoluteVariant(item: PricedItem): boolean {
   return (item.groups ?? []).some(
     (g) =>
       g.kind === "variant" && g.options.some((o) => Number.isFinite(parseFloat(o.price ?? ""))),
@@ -41,7 +49,7 @@ export interface BaseDiscount {
  * Discount fields come from the server, which already applies the special's
  * time window, so an expired special never shows a discount here.
  */
-export function baseDiscount(item: MenuItem): BaseDiscount | null {
+export function baseDiscount(item: PricedItem): BaseDiscount | null {
   const discountedRaw = parseFloat(item.discount_price ?? "");
   if (!Number.isFinite(discountedRaw) || hasAbsoluteVariant(item)) return null;
   const original = Math.round((parseFloat(item.price) || 0) * 100) / 100;
@@ -52,29 +60,33 @@ export function baseDiscount(item: MenuItem): BaseDiscount | null {
 }
 
 /** Estimate the unit price for an item + selections using the same rules as the server. */
-export function lineUnitPrice(item: MenuItem, selections: MenuSelection[] = []): number {
+export function lineUnitPrice(item: PricedItem, selections: MenuSelection[] = []): number {
   let price = baseDiscount(item)?.discounted ?? (parseFloat(item.price) || 0);
 
   const byId = (groupId: string | number) =>
     (item.groups ?? []).find((g) => String(g.id) === String(groupId));
 
-  for (const sel of selections) {
+  const resolved = selections.flatMap((sel) => {
     const group = byId(sel.group_id);
-    if (!group) continue;
+    if (!group) return [];
     const opt = group.options.find((o) => String(o.id) === String(sel.option_id));
-    if (!opt) continue;
-    if (group.kind === "variant") {
-      const abs = parseFloat(opt.price ?? "");
-      if (Number.isFinite(abs)) price = abs;
-    } else {
-      price += parseFloat(opt.price_delta ?? "") || 0;
-    }
+    return opt ? [{ group, opt }] : [];
+  });
+
+  for (const { group, opt } of resolved) {
+    if (group.kind !== "variant") continue;
+    const absolute = parseFloat(opt.price ?? "");
+    if (Number.isFinite(absolute)) price = absolute;
+  }
+  for (const { group, opt } of resolved) {
+    if (group.kind !== "modifier") continue;
+    price += parseFloat(opt.price_delta ?? "") || 0;
   }
   return Math.round(price * 100) / 100;
 }
 
 /** "from" price for display — lowest variant price, else discounted base price. */
-export function fromPrice(item: MenuItem): number {
+export function fromPrice(item: PricedItem): number {
   const variants = (item.groups ?? []).find((g) => g.kind === "variant");
   if (variants) {
     const prices = variants.options
@@ -95,7 +107,7 @@ export function optionLabel(option: MenuOption): string {
 }
 
 /** Human-readable summary of the chosen options for a line, e.g. "Size: Large · Extras: Cheese". */
-export function lineSelectionsText(item: MenuItem, selections: MenuSelection[]): string {
+export function lineSelectionsText(item: PricedItem, selections: MenuSelection[]): string {
   if (!selections || selections.length === 0) return "";
   const groups = item.groups ?? [];
   const parts: string[] = [];

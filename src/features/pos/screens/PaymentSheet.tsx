@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { safeUuid } from "@/lib/utils";
-import { usePosStore } from "../store";
+import { usePosStore, cartToOrderItems } from "../store";
 import {
   posCreateOrder,
   posCreatePayment,
@@ -34,6 +34,10 @@ interface PaymentSheetProps {
 
 type PaymentMethod = "cash" | "card" | "bank_qr" | "mobile_wallet" | "debit";
 
+/**
+ * Fallback list for merchants who have never configured payment methods.
+ * The backend decides the real list - see `PosSettings.payment_methods`.
+ */
 const PAYMENT_METHODS: Array<{
   key: PaymentMethod;
   label: string;
@@ -45,6 +49,9 @@ const PAYMENT_METHODS: Array<{
   { key: "mobile_wallet", label: "E-Wallet", icon: Smartphone },
   { key: "debit", label: "Debit", icon: Wallet },
 ];
+
+const METHOD_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
+  Object.fromEntries(PAYMENT_METHODS.map((pm) => [pm.key, pm.icon]));
 
 export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProps) {
   const cart = usePosStore((s) => s.cart);
@@ -64,6 +71,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const [error, setError] = useState<string | null>(null);
   const [debitAccounts, setDebitAccounts] = useState<DebitAccount[]>([]);
   const [selectedDebitAccount, setSelectedDebitAccount] = useState<string>("");
+  const [reference, setReference] = useState("");
+  const [qrConfirmed, setQrConfirmed] = useState(false);
 
   const [receiptData, setReceiptData] = useState<PosReceiptData | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
@@ -80,6 +89,48 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     }
   }, [method]);
 
+  // Only offer tenders this merchant accepts, and never offer a QR tender
+  // without an actual QR image to show the customer.
+  const availableMethods = useMemo(() => {
+    const configured = posSettings?.payment_methods;
+    if (configured && configured.length > 0) {
+      return configured.map((option) => ({
+        key: option.key,
+        label: option.label,
+        requiresReference: option.requires_reference,
+        isQr: option.is_qr,
+        icon: METHOD_ICONS[option.key] ?? Banknote,
+      }));
+    }
+    return PAYMENT_METHODS.map((pm) => ({
+      key: pm.key,
+      label: pm.label,
+      requiresReference: pm.key !== "cash" && pm.key !== "debit",
+      isQr: pm.key === "bank_qr",
+      icon: pm.icon,
+    }));
+  }, [posSettings?.payment_methods]);
+
+  const qr = posSettings?.payment_qr ?? null;
+  const activeMethod = availableMethods.find((m) => m.key === method);
+
+  // Keep the selected tender valid when the merchant's list differs.
+  useEffect(() => {
+    if (
+      availableMethods.length > 0 &&
+      !availableMethods.some((m) => m.key === method)
+    ) {
+      setMethod(availableMethods[0].key as PaymentMethod);
+    }
+  }, [availableMethods, method]);
+
+  // A QR handover has to be acknowledged before the sale is recorded, otherwise
+  // there is no evidence the customer ever saw the code.
+  useEffect(() => {
+    setQrConfirmed(false);
+    setReference("");
+  }, [method]);
+
   if (!open) return null;
 
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
@@ -94,7 +145,14 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     method !== "debit" ||
     (selectedDebitAccount &&
       debitAccounts.find((a) => a.id === selectedDebitAccount && Number(a.balance) >= total));
-  const canSubmit = !submitting && cart.length > 0 && isCashValid && isDebitValid;
+  const isQrValid = !(activeMethod?.isQr && qr) || qrConfirmed;
+  const canSubmit =
+    !submitting &&
+    cart.length > 0 &&
+    availableMethods.length > 0 &&
+    isCashValid &&
+    isDebitValid &&
+    isQrValid;
 
   async function handlePlaceOrder() {
     if (!merchant || !currentWorker || !device || cart.length === 0) return;
@@ -105,10 +163,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     try {
       const orderRes = await posCreateOrder({
         merchant_id: merchant.id,
-        items: cart.map((item) => ({
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-        })),
+        items: cartToOrderItems(cart),
         notes: cartNotes,
         fulfillment_type: fulfillmentType,
         customer_id: selectedCustomerId ?? undefined,
@@ -143,10 +198,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     try {
       const orderRes = await posCreateOrder({
         merchant_id: merchant.id,
-        items: cart.map((item) => ({
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-        })),
+        items: cartToOrderItems(cart),
         notes: cartNotes,
         fulfillment_type: fulfillmentType,
         customer_id: selectedCustomerId ?? undefined,
@@ -166,6 +218,9 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         amount: roundMoney(total),
         change_amount: method === "cash" ? roundMoney(change) : 0,
         debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
+        // Optional by design: Zentro records the payment, it does not
+        // process it, so there is nothing to look up against a provider.
+        external_reference: reference.trim() || undefined,
         client_mutation_id: safeUuid(),
       });
 
@@ -435,23 +490,62 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         </div>
 
         <div className="grid grid-cols-5 gap-2 px-6 py-4">
-          {PAYMENT_METHODS.map((pm) => {
+          {availableMethods.map((pm) => {
             const Icon = pm.icon;
             const active = method === pm.key;
             return (
               <button
                 key={pm.key}
-                onClick={() => setMethod(pm.key)}
+                onClick={() => setMethod(pm.key as PaymentMethod)}
                 className={`flex flex-col items-center gap-1.5 rounded-xl p-3 text-[11px] font-medium transition-colors ${
                   active ? "bg-ink text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
                 }`}
               >
                 <Icon className="h-5 w-5" />
-                <span>{pm.label}</span>
+                <span className="truncate">{pm.label}</span>
               </button>
             );
           })}
         </div>
+
+        {activeMethod?.isQr && qr && (
+          <div className="mx-6 mb-4 rounded-2xl border border-border bg-muted/40 p-4">
+            <div className="flex flex-col items-center gap-3 sm:flex-row">
+              <img
+                src={qr.url}
+                alt={`${qr.name} payment QR`}
+                className="h-32 w-32 shrink-0 rounded-xl bg-white object-contain p-1"
+              />
+              <div className="min-w-0 flex-1 text-center sm:text-left">
+                <p className="text-sm font-semibold text-foreground">{qr.name}</p>
+                {qr.account_name && (
+                  <p className="text-xs text-muted-foreground">
+                    {qr.account_name}
+                  </p>
+                )}
+                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
+                  {qr.instructions}
+                </p>
+                <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={qrConfirmed}
+                    onChange={(e) => setQrConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-border accent-ink"
+                  />
+                  <span>Customer has scanned and shown me their payment confirmation</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeMethod?.isQr && !qr && (
+          <div className="mx-6 mb-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">
+            This merchant has no payment QR uploaded yet. Add one in settings
+            before taking QR payments.
+          </div>
+        )}
 
         {method === "cash" && (
           <div className="px-6 pb-4">
@@ -491,13 +585,30 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           </div>
         )}
 
-        {method !== "cash" && method !== "debit" && (
+        {method !== "cash" && method !== "debit" && !activeMethod?.isQr && (
           <div className="px-6 pb-4">
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Reference / Transaction ID (optional)
             </label>
             <input
               type="text"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
+              placeholder="e.g. TXN-123456"
+              className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+            />
+          </div>
+        )}
+
+        {activeMethod?.isQr && qr && (
+          <div className="px-6 pb-4">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Reference / Transaction ID (optional)
+            </label>
+            <input
+              type="text"
+              value={reference}
+              onChange={(e) => setReference(e.target.value)}
               placeholder="e.g. TXN-123456"
               className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
             />
@@ -580,3 +691,4 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     </div>
   );
 }
+

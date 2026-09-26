@@ -1,8 +1,9 @@
-import { usePosStore } from "../store";
+import { usePosStore, cartToOrderItems } from "../store";
 import { useState, useMemo } from "react";
 import { PosReceiptData, PosCustomer, posCreateOrder } from "../api";
 import { safeUuid } from "@/lib/utils";
 import { formatCurrency, calculateTax } from "@/lib/currency";
+import { lineSelectionsText } from "@/lib/menu-utils";
 import CustomerSearchModal from "./CustomerSearchModal";
 import TableSelector from "./TableSelector";
 import {
@@ -18,7 +19,12 @@ import {
   Check,
   Gift,
   Star,
+  Pencil,
 } from "lucide-react";
+import ProductDetailSheet, {
+  type ProductDraft,
+} from "@/features/catalog/components/ProductDetailSheet";
+import type { MenuItemSelectable } from "@/lib/api/types";
 
 interface CartPanelProps {
   onCheckout: () => void;
@@ -37,6 +43,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const tables = usePosStore((s) => s.tables);
   const selectedTableId = usePosStore((s) => s.selectedTableId);
   const updateCartItemQty = usePosStore((s) => s.updateCartItemQty);
+  const updateCartItem = usePosStore((s) => s.updateCartItem);
   const removeItemFromCart = usePosStore((s) => s.removeItemFromCart);
   const clearCart = usePosStore((s) => s.clearCart);
   const setCartNotes = usePosStore((s) => s.setCartNotes);
@@ -59,9 +66,10 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const [showFreeConfirm, setShowFreeConfirm] = useState(false);
   const [freeOrderLoading, setFreeOrderLoading] = useState(false);
   const [freeOrderError, setFreeOrderError] = useState<string | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
 
   const menuItemById = useMemo(() => {
-    const map = new Map<number, any>();
+    const map = new Map<number, MenuItemSelectable>();
     if (menu) {
       for (const items of Object.values(menu.categories)) {
         for (const it of items) map.set(it.id, it);
@@ -71,12 +79,31 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   }, [menu]);
 
   const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const { total: tax, breakdown: taxBreakdown } = calculateTax(subtotal, posSettings?.tax_components || []);
+  const { total: tax, breakdown: taxBreakdown } = calculateTax(
+    subtotal,
+    posSettings?.tax_components || [],
+  );
   const total = subtotal + tax;
   const selectedTable = tables.find((t) => t.id === selectedTableId);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const isEmpty = cart.length === 0;
+  const editingLine = cart.find((item) => item.key === editingKey) ?? null;
+  const editingMenuItem = editingLine ? (menuItemById.get(editingLine.menu_item_id) ?? null) : null;
+
+  function handleEditLine(draft: ProductDraft) {
+    if (!editingLine) return;
+    updateCartItem(editingLine.key, {
+      menu_item_id: Number(draft.itemId),
+      name: editingMenuItem?.name ?? editingLine.name,
+      price: draft.unitPrice,
+      quantity: draft.qty,
+      subtotal: draft.unitPrice * draft.qty,
+      selections: draft.selections,
+      special_instructions: draft.specialInstructions,
+    });
+    setEditingKey(null);
+  }
 
   function handlePrintBill() {
     if (isEmpty) return;
@@ -207,10 +234,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
     try {
       await posCreateOrder({
         merchant_id: merchant.id,
-        items: cart.map((item) => ({
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-        })),
+        items: cartToOrderItems(cart),
         notes: `Staff free order — ${cartNotes || "No notes"}`,
         fulfillment_type: fulfillmentType,
         order_type: "staff_comp",
@@ -229,7 +253,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   }
 
   return (
-    <div className="flex h-full flex-col border-l border-border bg-background">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto border-l border-border bg-background">
       {/* ── Header ── */}
       <div className="shrink-0 px-5 pb-4 pt-5">
         <div className="flex items-center justify-between">
@@ -357,8 +381,8 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         />
       )}
 
-      {/* ── Order items ── */}
-      <div className="flex-1 overflow-y-auto border-y border-border">
+      {/* --- Order items --- */}
+      <div className="min-h-40 flex-1 overflow-y-auto border-y border-border">
         {isEmpty ? (
           <div className="flex h-full flex-col items-center justify-center py-12 text-muted-foreground">
             <ShoppingBag className="mb-3 h-12 w-12 opacity-25" />
@@ -369,9 +393,10 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
           <div className="divide-y divide-border">
             {cart.map((item, idx) => {
               const meta = menuItemById.get(item.menu_item_id);
+              const optionsText = meta ? lineSelectionsText(meta, item.selections ?? []) : "";
               return (
                 <div
-                  key={`${item.menu_item_id}-${idx}`}
+                  key={item.key ?? `${item.menu_item_id}-${idx}`}
                   className="flex items-center gap-3 px-5 py-3.5"
                 >
                   {/* Thumbnail */}
@@ -403,11 +428,32 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                       )}
                     </div>
                     <p className="numeric text-[11px] text-muted-foreground">
-                      {item.price === 0 ? "No charge" : `${formatCurrency(item.price, currencySymbol)} each`}
+                      {item.price === 0
+                        ? "No charge"
+                        : `${formatCurrency(item.price, currencySymbol)} each`}
                     </p>
+                    {optionsText ? (
+                      <p className="mt-0.5 truncate text-[11px] text-muted-foreground/90">
+                        {optionsText}
+                      </p>
+                    ) : null}
+                    {item.special_instructions ? (
+                      <p className="mt-0.5 truncate text-[11px] italic text-muted-foreground/90">
+                        &ldquo;{item.special_instructions}&rdquo;
+                      </p>
+                    ) : null}
 
                     {/* Quantity controls */}
                     <div className="mt-2 flex items-center gap-2">
+                      <button
+                        onClick={() => setEditingKey(item.key)}
+                        disabled={!meta}
+                        title="Edit item options and instructions"
+                        aria-label={`Edit ${item.name}`}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-mist disabled:opacity-40"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Edit
+                      </button>
                       <div className="flex items-center rounded-xl border border-border bg-card">
                         <button
                           onClick={() =>
@@ -415,19 +461,23 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                               ? updateCartItemQty(idx, item.quantity - 1)
                               : removeItemFromCart(idx)
                           }
+                          title={item.quantity > 1 ? "Decrease quantity" : "Remove item"}
+                          aria-label={
+                            item.quantity > 1
+                              ? `Decrease ${item.name} quantity`
+                              : `Remove ${item.name}`
+                          }
                           className="grid h-9 w-9 place-items-center rounded-l-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
                         >
-                          {item.quantity === 1 ? (
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          ) : (
-                            <Minus className="h-4 w-4" />
-                          )}
+                          <Minus className="h-4 w-4" />
                         </button>
                         <span className="w-9 text-center text-sm font-semibold text-foreground">
                           {item.quantity}
                         </span>
                         <button
                           onClick={() => updateCartItemQty(idx, item.quantity + 1)}
+                          title="Increase quantity"
+                          aria-label={`Increase ${item.name} quantity`}
                           className="grid h-9 w-9 place-items-center rounded-r-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
                         >
                           <Plus className="h-4 w-4" />
@@ -436,6 +486,7 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
                       <button
                         onClick={() => removeItemFromCart(idx)}
                         title="Remove item"
+                        aria-label={`Remove ${item.name} from order`}
                         className="grid h-9 w-9 place-items-center rounded-xl border border-border bg-card text-muted-foreground transition-colors hover:border-red-200 hover:bg-red-50 hover:text-destructive"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -448,6 +499,21 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
           </div>
         )}
       </div>
+
+      {editingLine && editingMenuItem && (
+        <ProductDetailSheet
+          open
+          item={editingMenuItem}
+          currencySymbol={currencySymbol}
+          resetKey={editingLine.key}
+          initialQty={editingLine.quantity}
+          initialSelections={editingLine.selections}
+          initialInstructions={editingLine.special_instructions}
+          submitLabel="Update item"
+          onClose={() => setEditingKey(null)}
+          onAdd={handleEditLine}
+        />
+      )}
 
       {/* ── Notes ── */}
       {!isEmpty && (
@@ -475,12 +541,21 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
       <div className="shrink-0 space-y-2 border-t border-border bg-card px-5 py-4">
         <div className="flex items-center justify-between text-[13px] text-muted-foreground">
           <span>Subtotal</span>
-          <span className="numeric font-medium text-foreground">{formatCurrency(subtotal, currencySymbol)}</span>
+          <span className="numeric font-medium text-foreground">
+            {formatCurrency(subtotal, currencySymbol)}
+          </span>
         </div>
         {taxBreakdown.map((item, i) => (
-          <div key={i} className="flex items-center justify-between text-[13px] text-muted-foreground">
-            <span>{item.name} ({item.rate}%)</span>
-            <span className="numeric font-medium text-foreground">{formatCurrency(item.amount, currencySymbol)}</span>
+          <div
+            key={i}
+            className="flex items-center justify-between text-[13px] text-muted-foreground"
+          >
+            <span>
+              {item.name} ({item.rate}%)
+            </span>
+            <span className="numeric font-medium text-foreground">
+              {formatCurrency(item.amount, currencySymbol)}
+            </span>
           </div>
         ))}
         <button
@@ -557,17 +632,23 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
             </div>
             <h3 className="text-lg font-bold text-foreground">Staff Free Order</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Create a free order for staff. All items will be recorded at Rs 0 — no payment required.
+              Create a free order for staff. All items will be recorded at Rs 0 — no payment
+              required.
             </p>
             <div className="mt-3 rounded-xl bg-mist px-4 py-3 text-xs text-muted-foreground">
-              {cart.length} item{cart.length !== 1 && "s"} · Total: <span className="font-bold text-foreground">{formatCurrency(total, currencySymbol)}</span> → <span className="font-bold text-emerald-600">FREE</span>
+              {cart.length} item{cart.length !== 1 && "s"} · Total:{" "}
+              <span className="font-bold text-foreground">
+                {formatCurrency(total, currencySymbol)}
+              </span>{" "}
+              → <span className="font-bold text-emerald-600">FREE</span>
             </div>
-            {freeOrderError && (
-              <p className="mt-2 text-xs text-rose-600">{freeOrderError}</p>
-            )}
+            {freeOrderError && <p className="mt-2 text-xs text-rose-600">{freeOrderError}</p>}
             <div className="mt-5 flex gap-2">
               <button
-                onClick={() => { setShowFreeConfirm(false); setFreeOrderError(null); }}
+                onClick={() => {
+                  setShowFreeConfirm(false);
+                  setFreeOrderError(null);
+                }}
                 disabled={freeOrderLoading}
                 className="flex-1 rounded-xl border border-border px-4 py-2.5 text-sm font-medium text-foreground hover:bg-mist"
               >

@@ -83,6 +83,7 @@ export function MerchantMenuPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [merchantId, setMerchantId] = useState<string | null>(null);
+  const [currencySymbol, setCurrencySymbol] = useState("Rs");
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<MenuItem | null>(null);
@@ -118,6 +119,7 @@ export function MerchantMenuPage() {
       ]);
       setItems(itemsData);
       setMerchantId(merchantData.id);
+      setCurrencySymbol(merchantData.currency_symbol || "Rs");
       setCategories(catData);
     } catch (e: unknown) {
       setError(errMessage(e));
@@ -938,6 +940,7 @@ export function MerchantMenuPage() {
         <OptionGroupsEditor
           itemId={optionItem.id}
           itemName={optionItem.name}
+          currencySymbol={currencySymbol}
           onClose={() => setOptionItem(null)}
           onChanged={() => loadAll()}
         />

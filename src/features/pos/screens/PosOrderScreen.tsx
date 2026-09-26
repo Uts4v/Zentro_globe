@@ -172,7 +172,7 @@ function MobileCartButton({
           />
           <div className="absolute bottom-0 left-0 right-0 top-0 flex">
             <div className="flex-1" onClick={() => setOpen(false)} />
-            <div className="w-80 max-w-full">
+            <div className="h-full min-h-0 w-80 max-w-full">
               <CartPanel
                 onCheckout={() => {
                   setOpen(false);

@@ -10,6 +10,11 @@ import {
 } from "../api";
 import { menuApi, type MenuItem } from "@/lib/api";
 import { formatCurrency } from "@/lib/currency";
+import { cartKey, fromPrice, lineSelectionsText } from "@/lib/menu-utils";
+import type { MenuSelection } from "@/lib/api/types";
+import ProductDetailSheet, {
+  type ProductDraft,
+} from "@/features/catalog/components/ProductDetailSheet";
 import Receipt from "../printing/Receipt";
 import { printKOT, kotTicketFromReceipt } from "../printing/KOTTicket";
 import RefundModal from "./RefundModal";
@@ -52,6 +57,21 @@ function canCollectPayment(order: PosOrder) {
   return (
     !["paid", "refunded"].includes(order.payment_status) &&
     !["cancelled", "refunded"].includes(order.status)
+  );
+}
+
+/**
+ * Appending to the bill requires both a workable workflow status *and* an
+ * uncollected balance. Once a tender is recorded the collected total is fixed,
+ * so new lines would under-charge the customer and desync the recorded payment;
+ * the server rejects this too, so the button must not offer it. Refunds go
+ * through RefundModal instead of reopening a settled order.
+ */
+function canAddItems(order: PosOrder) {
+  return (
+    ["pending", "confirmed", "preparing"].includes(order.status) &&
+    !["paid", "partially_paid", "refunded"].includes(order.payment_status) &&
+    order.status !== "cancelled"
   );
 }
 
@@ -340,8 +360,8 @@ export default function OrderDetailScreen({
 
           {/* Actions */}
           <div className="mt-6 space-y-3">
-            {/* Add Items button for active orders */}
-            {["pending", "confirmed", "preparing"].includes(order.status) && (
+            {/* Add Items button, only while the bill is still open and unpaid. */}
+            {canAddItems(order) && (
               <button
                 onClick={() => setShowAddItems(true)}
                 className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink/30 py-2.5 text-sm font-bold text-ink hover:bg-ink/5"
@@ -470,8 +490,9 @@ export default function OrderDetailScreen({
           />
         )}
 
-        {/* Add Items Modal */}
-        {showAddItems && selectedOrder && (
+        {/* Add Items Modal. Re-checked here because the order can be settled by
+            another till (or this one) while the modal is open. */}
+        {showAddItems && selectedOrder && canAddItems(selectedOrder) && (
           <AddItemsModal
             order={selectedOrder}
             onAdded={async () => {
@@ -583,6 +604,24 @@ export default function OrderDetailScreen({
 }
 
 // ── Add Items Modal ─────────────────────────────────────────────────────────
+type AddToOrderLine = {
+  key: string;
+  item: MenuItem;
+  qty: number;
+  unitPrice: number;
+  selections: MenuSelection[];
+  special_instructions: string;
+};
+
+/**
+ * A product needs the detail sheet when it publishes any *active* option group.
+ * Sending it straight through means the server rejects the unselected required
+ * group ("choose one option for Big cup") and there is no picker to fix it with.
+ */
+function needsOptions(item: MenuItem): boolean {
+  return (item.groups ?? []).some((g) => g.is_active !== false);
+}
+
 function AddItemsModal({
   order,
   onAdded,
@@ -596,7 +635,8 @@ function AddItemsModal({
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [cart, setCart] = useState<{ item: MenuItem; qty: number }[]>([]);
+  const [cart, setCart] = useState<AddToOrderLine[]>([]);
+  const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
   const [search, setSearch] = useState("");
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
@@ -615,24 +655,56 @@ function AddItemsModal({
     load();
   }, [order.merchant]);
 
+  /** Append a configured line, merging only into an identical configuration. */
+  function pushLine(line: AddToOrderLine) {
+    setCart((prev) => {
+      const hit = prev.find((c) => c.key === line.key);
+      if (hit) {
+        return prev.map((c) => (c.key === line.key ? { ...c, qty: c.qty + line.qty } : c));
+      }
+      return [...prev, line];
+    });
+  }
+
   function addToCart(item: MenuItem) {
-    setCart((prev) => {
-      const existing = prev.find((c) => c.item.id === item.id);
-      if (existing) return prev.map((c) => (c.item.id === item.id ? { ...c, qty: c.qty + 1 } : c));
-      return [...prev, { item, qty: 1 }];
+    if (needsOptions(item)) {
+      setDetailItem(item);
+      return;
+    }
+    pushLine({
+      key: cartKey(String(item.id), [], ""),
+      item,
+      qty: 1,
+      unitPrice: fromPrice(item),
+      selections: [],
+      special_instructions: "",
     });
   }
 
-  function removeFromCart(itemId: string) {
-    setCart((prev) => {
-      const existing = prev.find((c) => c.item.id === itemId);
-      if (!existing) return prev;
-      if (existing.qty === 1) return prev.filter((c) => c.item.id !== itemId);
-      return prev.map((c) => (c.item.id === itemId ? { ...c, qty: c.qty - 1 } : c));
+  function handleSheetAdd(draft: ProductDraft) {
+    if (!detailItem) return;
+    pushLine({
+      key: cartKey(String(detailItem.id), draft.selections, draft.specialInstructions),
+      item: detailItem,
+      qty: draft.qty,
+      unitPrice: draft.unitPrice,
+      selections: draft.selections,
+      special_instructions: draft.specialInstructions,
     });
+    setDetailItem(null);
   }
 
-  const total = cart.reduce((sum, c) => sum + Number(c.item.price) * c.qty, 0);
+  function changeQty(key: string, delta: number) {
+    setCart((prev) =>
+      prev.flatMap((c) => {
+        if (c.key !== key) return [c];
+        const qty = c.qty + delta;
+        return qty <= 0 ? [] : [{ ...c, qty }];
+      }),
+    );
+  }
+
+  const total = cart.reduce((sum, c) => sum + c.unitPrice * c.qty, 0);
 
   async function handleSubmit() {
     if (cart.length === 0) return;
@@ -641,9 +713,13 @@ function AddItemsModal({
     try {
       await posAddItemsToOrder(
         order.id,
+        // Selections and instructions must ride along: the server prices from
+        // them, so omitting them either 400s or bills the base configuration.
         cart.map((c) => ({
           menu_item_id: Number(c.item.id),
           quantity: c.qty,
+          selections: c.selections,
+          special_instructions: c.special_instructions,
         })),
       );
       onAdded();
@@ -706,7 +782,7 @@ function AddItemsModal({
           ) : (
             <div className="space-y-1.5">
               {filtered.map((item) => {
-                const inCart = cart.find((c) => c.item.id === item.id);
+                const inCart = cart.find((c) => c.key === cartKey(String(item.id), [], ""));
                 return (
                   <div
                     key={item.id}
@@ -716,20 +792,21 @@ function AddItemsModal({
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-foreground truncate">{item.name}</p>
                       <p className="text-[11px] text-muted-foreground">
-                        {formatCurrency(Number(item.price), currencySymbol)}
+                        {needsOptions(item) ? "from " : ""}
+                        {formatCurrency(fromPrice(item), currencySymbol)}
                       </p>
                     </div>
                     {inCart ? (
                       <div className="flex items-center gap-1.5">
                         <button
-                          onClick={() => removeFromCart(item.id)}
+                          onClick={() => changeQty(inCart.key, -1)}
                           className="grid h-6 w-6 place-items-center rounded-md bg-muted text-foreground"
                         >
                           <Minus className="h-3 w-3" />
                         </button>
                         <span className="w-5 text-center text-xs font-bold">{inCart.qty}</span>
                         <button
-                          onClick={() => addToCart(item)}
+                          onClick={() => changeQty(inCart.key, 1)}
                           className="grid h-6 w-6 place-items-center rounded-md bg-ink text-white"
                         >
                           <Plus className="h-3 w-3" />
@@ -740,7 +817,7 @@ function AddItemsModal({
                         onClick={() => addToCart(item)}
                         className="rounded-lg bg-ink/10 px-3 py-1 text-[10px] font-bold text-ink hover:bg-ink/20"
                       >
-                        Add
+                        {needsOptions(item) ? "Options" : "Add"}
                       </button>
                     )}
                   </div>
@@ -755,12 +832,22 @@ function AddItemsModal({
           <div className="border-t border-border px-4 py-3">
             <div className="mb-2 space-y-1 text-xs">
               {cart.map((c) => (
-                <div key={c.item.id} className="flex justify-between">
-                  <span className="text-muted-foreground">
+                <div key={c.key} className="flex justify-between gap-2">
+                  <span className="min-w-0 text-muted-foreground">
                     {c.qty}× {c.item.name}
+                    {c.selections.length > 0 && (
+                      <span className="block text-[10px] text-muted-foreground/80">
+                        {lineSelectionsText(c.item, c.selections)}
+                      </span>
+                    )}
+                    {c.special_instructions && (
+                      <span className="block text-[10px] italic text-muted-foreground/80">
+                        {c.special_instructions}
+                      </span>
+                    )}
                   </span>
-                  <span className="font-medium">
-                    {formatCurrency(Number(c.item.price) * c.qty, currencySymbol)}
+                  <span className="shrink-0 font-medium">
+                    {formatCurrency(c.unitPrice * c.qty, currencySymbol)}
                   </span>
                 </div>
               ))}
@@ -785,6 +872,17 @@ function AddItemsModal({
           </div>
         )}
       </div>
+
+      {/* Variant / modifier capture, shared with the main POS grid so both
+          order entry points price and record configurations identically. */}
+      <ProductDetailSheet
+        open={!!detailItem}
+        item={detailItem}
+        currencySymbol={currencySymbol}
+        onClose={() => setDetailItem(null)}
+        onAdd={handleSheetAdd}
+        submitLabel="Add to order"
+      />
     </div>
   );
 }

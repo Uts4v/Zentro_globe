@@ -1,4 +1,5 @@
 import { apiUrl, djangoFetch, tokenStore } from "@/lib/django-api-base";
+import type { MenuOptionGroup, MenuSelection } from "@/lib/api/types";
 
 const headers = () => ({
   Authorization: `Bearer ${tokenStore.getAccess()}`,
@@ -585,6 +586,21 @@ export interface TaxComponent {
   rate: number;
 }
 
+export interface PosPaymentMethodOption {
+  key: string;
+  label: string;
+  /** UI hint only: a reference is never enforced. */
+  requires_reference: boolean;
+  is_qr: boolean;
+}
+
+export interface PosPaymentQr {
+  url: string;
+  name: string;
+  instructions: string;
+  account_name?: string | null;
+}
+
 export interface PosSettings {
   pos_enabled: boolean;
   offline_pos_enabled: boolean;
@@ -602,6 +618,10 @@ export interface PosSettings {
   currency_code: string;
   currency_symbol: string;
   tax_components: TaxComponent[];
+  accepted_payment_methods: string[];
+  /** Only the tenders this merchant actually offers, already QR-filtered. */
+  payment_methods: PosPaymentMethodOption[];
+  payment_qr: PosPaymentQr | null;
 }
 
 export interface PosMenuSnapshot {
@@ -623,6 +643,9 @@ export interface PosMenuSnapshot {
       loyalty_reward: boolean;
       points_per_item: number;
       emoji: string;
+      updated_at?: string | null;
+      /** Variant/modifier groups, same shape as the public catalog. */
+      groups?: MenuOptionGroup[];
     }>
   >;
 }
@@ -654,6 +677,9 @@ export interface PosCreateOrderPayload {
   items: Array<{
     menu_item_id: number;
     quantity: number;
+    /** Variant/modifier picks for this line. Required when the item has groups. */
+    selections?: MenuSelection[];
+    special_instructions?: string;
   }>;
   notes?: string;
   fulfillment_type?: string;

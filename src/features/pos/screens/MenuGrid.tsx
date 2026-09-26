@@ -1,6 +1,11 @@
 import { usePosStore } from "../store";
 import { useState, useEffect, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
+import { fromPrice } from "@/lib/menu-utils";
+import type { MenuItemSelectable } from "@/lib/api/types";
+import ProductDetailSheet, {
+  type ProductDraft,
+} from "@/features/catalog/components/ProductDetailSheet";
 import {
   Search,
   Plus,
@@ -10,20 +15,15 @@ import {
   SlidersHorizontal,
   Command,
   Gift,
+  Sliders,
 } from "lucide-react";
 
-type MenuItem = {
+/** A product as the POS menu snapshot describes it. */
+type PosMenuItem = MenuItemSelectable & {
   id: number;
-  name: string;
-  description: string;
-  price: string;
-  image_url: string;
-  category: string;
-  is_available: boolean;
   is_featured: boolean;
   loyalty_reward: boolean;
   points_per_item: number;
-  emoji: string;
 };
 
 export default function MenuGrid() {
@@ -35,6 +35,7 @@ export default function MenuGrid() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [lastAddedId, setLastAddedId] = useState<number | null>(null);
+  const [detailItem, setDetailItem] = useState<PosMenuItem | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -65,35 +66,63 @@ export default function MenuGrid() {
     ).values(),
   );
 
-  function isVisible(item: MenuItem) {
+  function isVisible(item: PosMenuItem) {
     return showUnavailable || item.is_available;
   }
 
-  function matchesSearch(item: MenuItem) {
+  function matchesSearch(item: PosMenuItem) {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
-      item.name.toLowerCase().includes(q) ||
-      item.description.toLowerCase().includes(q)
+      item.name.toLowerCase().includes(q) || (item.description ?? "").toLowerCase().includes(q)
     );
   }
 
-  const searchResults = allItems.filter(
-    (item) => isVisible(item) && matchesSearch(item),
-  );
+  const searchResults = allItems.filter((item) => isVisible(item) && matchesSearch(item));
 
-  function handleAdd(item: MenuItem) {
+  function hasOptions(item: PosMenuItem) {
+    return (item.groups ?? []).some((g) => g.is_active !== false);
+  }
+
+  function flashAdded(id: number) {
+    setLastAddedId(id);
+    window.setTimeout(() => {
+      setLastAddedId((cur) => (cur === id ? null : cur));
+    }, 650);
+  }
+
+  function handleAdd(item: PosMenuItem) {
+    // Items with variant/modifier groups must go through the detail sheet:
+    // the server rejects an unselected required group, and guessing a default
+    // here would silently bill the wrong configuration.
+    if (hasOptions(item)) {
+      setDetailItem(item);
+      return;
+    }
+    const price = fromPrice(item);
     addItemToCart({
       menu_item_id: item.id,
       name: item.name,
-      price: parseFloat(item.price),
+      price,
       quantity: 1,
-      subtotal: parseFloat(item.price),
+      subtotal: price,
+      selections: [],
+      special_instructions: "",
     });
-    setLastAddedId(item.id);
-    window.setTimeout(() => {
-      setLastAddedId((cur) => (cur === item.id ? null : cur));
-    }, 650);
+    flashAdded(item.id);
+  }
+
+  function handleSheetAdd(draft: ProductDraft) {
+    addItemToCart({
+      menu_item_id: Number(draft.itemId),
+      name: detailItem?.name ?? "",
+      price: draft.unitPrice,
+      quantity: draft.qty,
+      subtotal: draft.unitPrice * draft.qty,
+      selections: draft.selections,
+      special_instructions: draft.specialInstructions,
+    });
+    if (detailItem) flashAdded(detailItem.id);
   }
 
   // Sections when browsing (no search, no specific category)
@@ -121,16 +150,13 @@ export default function MenuGrid() {
           />
           <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
             <span className="hidden items-center gap-1 rounded-lg border border-border bg-mist px-2 py-1 text-[10px] font-medium text-muted-foreground sm:flex">
-              <Command className="h-3 w-3" />
-              K
+              <Command className="h-3 w-3" />K
             </span>
             <button
               onClick={() => setShowUnavailable((v) => !v)}
               title="Toggle unavailable items"
               className={`grid h-8 w-8 place-items-center rounded-lg transition-colors ${
-                showUnavailable
-                  ? "bg-ember-soft text-ember"
-                  : "text-muted-foreground hover:bg-mist"
+                showUnavailable ? "bg-ember-soft text-ember" : "text-muted-foreground hover:bg-mist"
               }`}
             >
               <SlidersHorizontal className="h-4 w-4" />
@@ -179,16 +205,12 @@ export default function MenuGrid() {
         ) : (
           <div className="space-y-8">
             {sections.map((cat) => {
-              const items = allItems.filter(
-                (item) => isVisible(item) && item.category === cat,
-              );
+              const items = allItems.filter((item) => isVisible(item) && item.category === cat);
               if (items.length === 0) return null;
               return (
                 <section key={cat}>
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-lg font-bold text-foreground">
-                      {cat}
-                    </h3>
+                    <h3 className="text-lg font-bold text-foreground">{cat}</h3>
                     <button
                       onClick={() => setSelectedCategory(cat)}
                       className="rounded-lg px-2 py-1 text-xs font-semibold text-ember hover:bg-ember-soft"
@@ -207,9 +229,7 @@ export default function MenuGrid() {
             })}
             {sections.every(
               (cat) =>
-                allItems.filter(
-                  (item) => isVisible(item) && item.category === cat,
-                ).length === 0,
+                allItems.filter((item) => isVisible(item) && item.category === cat).length === 0,
             ) && (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Coffee className="mb-3 h-10 w-10 opacity-40" />
@@ -219,6 +239,16 @@ export default function MenuGrid() {
           </div>
         )}
       </div>
+
+      {/* Variant / modifier capture for products that publish option groups. */}
+      <ProductDetailSheet
+        open={!!detailItem}
+        item={detailItem}
+        currencySymbol={currencySymbol}
+        onClose={() => setDetailItem(null)}
+        onAdd={handleSheetAdd}
+        submitLabel="Add to order"
+      />
     </div>
   );
 }
@@ -230,8 +260,8 @@ function ProductGrid({
   emptyText,
   currencySymbol,
 }: {
-  items: MenuItem[];
-  onAdd: (item: MenuItem) => void;
+  items: PosMenuItem[];
+  onAdd: (item: PosMenuItem) => void;
   lastAddedId: number | null;
   emptyText?: string;
   currencySymbol: string;
@@ -246,9 +276,10 @@ function ProductGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 2xl:grid-cols-4">
       {items.map((item) => {
         const justAdded = lastAddedId === item.id;
+        const customizable = (item.groups ?? []).some((g) => g.is_active !== false);
         return (
           <button
             key={item.id}
@@ -283,6 +314,12 @@ function ProductGrid({
                     Popular
                   </span>
                 )}
+                {customizable && (
+                  <span className="flex items-center gap-0.5 rounded-full bg-black/70 px-2 py-0.5 text-[10px] font-bold text-white backdrop-blur-sm">
+                    <Sliders className="h-2.5 w-2.5" />
+                    Options
+                  </span>
+                )}
                 {item.loyalty_reward && (
                   <span className="rounded-full bg-ember px-2 py-0.5 text-[10px] font-bold text-white">
                     Loyalty
@@ -307,6 +344,8 @@ function ProductGrid({
               >
                 {justAdded ? (
                   <Check className="h-4 w-4" strokeWidth={3} />
+                ) : customizable ? (
+                  <Sliders className="h-4 w-4" strokeWidth={2.5} />
                 ) : (
                   <Plus className="h-5 w-5" strokeWidth={2.5} />
                 )}
@@ -315,17 +354,20 @@ function ProductGrid({
 
             {/* Info */}
             <div className="flex flex-1 flex-col gap-1 p-3">
-              <p className="truncate text-sm font-semibold text-foreground">
-                {item.name}
-              </p>
+              <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
               {item.description && (
                 <p className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
                   {item.description}
                 </p>
               )}
               <div className="mt-auto flex items-center justify-between pt-1">
-                {Number(item.price) === 0 ? (
+                {Number(item.price) === 0 && !customizable ? (
                   <span className="text-sm font-bold text-emerald-600">FREE</span>
+                ) : customizable ? (
+                  <p className="text-sm font-bold text-foreground">
+                    <span className="mr-1 text-[10px] font-medium text-muted-foreground">from</span>
+                    {formatCurrency(fromPrice(item), currencySymbol)}
+                  </p>
                 ) : (
                   <p className="text-sm font-bold text-foreground">
                     {formatCurrency(Number(item.price), currencySymbol)}

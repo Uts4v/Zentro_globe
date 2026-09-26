@@ -1,7 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth, type MerchantProfile } from "@/lib/auth";
 import { merchantApi } from "@/lib/api";
 import { CURRENCIES } from "@/lib/currency";
+import { apiUrl } from "@/lib/django-api-base";
+import { uploadPaymentQr as uploadPaymentQrFile } from "@/lib/image-upload";
 import {
   Settings,
   Save,
@@ -12,6 +14,8 @@ import {
   Check,
   AlertTriangle,
   Store,
+  QrCode,
+  Upload,
 } from "lucide-react";
 
 const TAX_PRESETS: Record<string, Array<{ name: string; rate: number }>> = {
@@ -26,12 +30,56 @@ const TAX_PRESETS: Record<string, Array<{ name: string; rate: number }>> = {
   custom: [],
 };
 
+/**
+ * Tenders a merchant can turn on. `split` is a marker for multi-tender orders
+ * rather than a tender of its own, so it is not offered here - it mirrors
+ * `PosPayment.METHOD_CHOICES` in `pos/models.py`.
+ */
+const PAYMENT_METHOD_OPTIONS = [
+  { key: "cash", label: "Cash" },
+  { key: "card", label: "Card" },
+  { key: "bank_qr", label: "Bank QR", needsQr: true },
+  { key: "mobile_wallet", label: "Mobile Wallet" },
+  { key: "credit", label: "Credit" },
+  { key: "debit", label: "Debit" },
+  { key: "other", label: "Other" },
+]   as const;
+
+/**
+ * `merchantApi` speaks the API-shaped `MerchantProfile` (string `id`) while the
+ * auth context keeps its own copy (numeric `id`). Only the payment config is
+ * copied back, so the two shapes never have to be reconciled.
+ */
+function paymentConfigOf(source: {
+  payment_methods_configured?: boolean;
+  accepted_payment_methods?: string[];
+  payment_method_labels?: Record<string, string>;
+  payment_qr_enabled?: boolean;
+  payment_qr_url?: string | null;
+  payment_qr_name?: string | null;
+  payment_qr_instructions?: string | null;
+  payment_qr_account_name?: string | null;
+}) {
+  return {
+    payment_methods_configured: source.payment_methods_configured,
+    accepted_payment_methods: source.accepted_payment_methods,
+    payment_method_labels: source.payment_method_labels,
+    payment_qr_enabled: source.payment_qr_enabled,
+    payment_qr_url: source.payment_qr_url,
+    payment_qr_name: source.payment_qr_name,
+    payment_qr_instructions: source.payment_qr_instructions,
+    payment_qr_account_name: source.payment_qr_account_name,
+  };
+}
+
 export function MerchantSettingsPage() {
   const { merchantProfile, refreshProfile } = useAuth();
   const [profile, setProfile] = useState<MerchantProfile | null>(merchantProfile);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [qrUploading, setQrUploading] = useState(false);
+  const qrInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (merchantProfile) setProfile(merchantProfile);
@@ -106,20 +154,125 @@ export function MerchantSettingsPage() {
     );
   }
 
+  function acceptedMethods(): string[] {
+    return profile?.accepted_payment_methods ?? [];
+  }
+
+  function togglePaymentMethod(key: string) {
+    setError("");
+    setProfile((p) => {
+      if (!p) return p;
+      const current = p.accepted_payment_methods || [];
+      const on = current.includes(key);
+      if (on && current.length === 1) {
+        setError("Keep at least one payment method enabled.");
+        return p;
+      }
+      // The backend refuses QR without an image; catch it here so the merchant
+      // gets a useful message instead of a 400 after the fact.
+      if (!on && key === "bank_qr" && !p.payment_qr_url) {
+        setError("Upload a payment QR image before enabling QR payment.");
+        return p;
+      }
+      return {
+        ...p,
+        accepted_payment_methods: on
+          ? current.filter((k) => k !== key)
+          : [...current, key],
+        payment_qr_enabled: key === "bank_qr" ? !on : p.payment_qr_enabled,
+      };
+    });
+  }
+
+  function setPaymentLabel(key: string, value: string) {
+    setProfile((p) => {
+      if (!p) return p;
+      const labels = { ...(p.payment_method_labels || {}) };
+      if (value.trim()) labels[key] = value.trim();
+      else delete labels[key];
+      return { ...p, payment_method_labels: labels };
+    });
+  }
+
+  async function uploadPaymentQr(file: File) {
+    setQrUploading(true);
+    setError("");
+    try {
+      const url = await uploadPaymentQrFile(file);
+      setProfile((p) =>
+        p
+          ? {
+              ...p,
+              payment_qr_url: absoluteMediaUrl(url),
+              payment_qr_name: p.payment_qr_name || "Bank QR",
+            }
+          : p,
+      );
+    } catch (e: any) {
+      setError(e?.message || "Could not upload the QR image.");
+    } finally {
+      setQrUploading(false);
+      if (qrInputRef.current) qrInputRef.current.value = "";
+    }
+  }
+
+  function absoluteMediaUrl(url: string): string {
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    return url.startsWith("/") ? apiUrl(url.replace(/^\/api\//, "")) : url;
+  }
+
+  async function removePaymentQr() {
+    setError("");
+    try {
+      // Clearing the URL also disables QR, otherwise the merchant would be left
+      // with a tender that has nothing to show the customer.
+      const updated = await merchantApi.update({
+        payment_qr_url: "",
+        payment_qr_enabled: false,
+        accepted_payment_methods: (profile?.accepted_payment_methods || []).filter(
+          (k: string) => k !== "bank_qr",
+        ),
+      } as any);
+      setProfile((p) => (p ? { ...p, ...paymentConfigOf(updated) } : p));
+    } catch (e: any) {
+      setError(e?.message || "Could not remove the QR image.");
+    }
+  }
+
   async function handleSave() {
     if (!profile) return;
     setSaving(true);
     setError("");
     setSaved(false);
     try {
-      await merchantApi.update({
+      const payload = {
         tax_enabled: profile.tax_enabled,
         tax_rate_percent: profile.tax_rate_percent,
         tax_components: profile.tax_components,
         currency_code: profile.currency_code,
         currency_symbol: profile.currency_symbol,
-      } as any);
-      setProfile({ ...profile });
+        accepted_payment_methods: profile.accepted_payment_methods,
+        payment_method_labels: profile.payment_method_labels,
+        payment_qr_url: profile.payment_qr_url ?? "",
+        payment_qr_name: profile.payment_qr_name ?? "",
+        payment_qr_instructions: profile.payment_qr_instructions ?? "",
+        payment_qr_account_name: profile.payment_qr_account_name ?? "",
+        payment_qr_enabled: profile.payment_qr_enabled ?? false,
+      } as any;
+      // Never let the serializer's cross-field validation surprise the merchant
+      // after they hit save: QR requires an image, and at least one tender.
+      if (payload.payment_qr_enabled && !payload.payment_qr_url) {
+        setError("Upload a payment QR image before enabling QR payment.");
+        setSaving(false);
+        return;
+      }
+      if (!payload.accepted_payment_methods?.length) {
+        setError("Enable at least one payment method.");
+        setSaving(false);
+        return;
+      }
+      const updated = await merchantApi.update(payload);
+      setProfile((p) => (p ? { ...p, ...paymentConfigOf(updated) } : p));
       if (refreshProfile) await refreshProfile();
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -292,6 +445,202 @@ export function MerchantSettingsPage() {
         )}
       </section>
 
+      {/* ── Payment methods ────────────────────────────────────────────────── */}
+      <section className="glass-strong rounded-3xl p-6">
+        <div className="mb-1 flex items-center gap-2">
+          <Zap className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
+            Payment Methods
+          </h2>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Staff record what the customer paid in cash. Zentro never contacts a
+          payment provider, so no terminal or gateway is required.
+        </p>
+
+        <div className="space-y-2">
+          {PAYMENT_METHOD_OPTIONS.map((option) => {
+            const on = acceptedMethods().includes(option.key);
+            const custom = profile.payment_method_labels?.[option.key];
+            return (
+              <div
+                key={option.key}
+                className={`rounded-2xl border px-4 py-3 transition-colors ${
+                  on ? "border-ink bg-ink/[0.03]" : "border-border"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <label className="flex flex-1 cursor-pointer items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      onChange={() => togglePaymentMethod(option.key)}
+                      className="h-4 w-4 rounded border-border accent-ink"
+                    />
+                    <span className="text-sm font-medium text-foreground">
+                      {custom || option.label}
+                    </span>
+                  </label>
+                  {on && (
+                    <input
+                      value={custom ?? ""}
+                      onChange={(e) => setPaymentLabel(option.key, e.target.value)}
+                      placeholder={option.label}
+                      maxLength={30}
+                      className="w-32 rounded-lg border border-border bg-mist/50 px-2.5 py-1 text-xs text-foreground focus:border-ink focus:outline-none"
+                    />
+                  )}
+                </div>
+                {on && "needsQr" in option && option.needsQr && !profile.payment_qr_url && (
+                  <p className="mt-2 pl-7 text-[11px] text-amber-700">
+                    Add a payment QR below before saving.
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* ── Payment QR ─────────────────────────────────────────────────────── */}
+      <section className="glass-strong rounded-3xl p-6">
+        <div className="mb-1 flex items-center gap-2">
+          <QrCode className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
+            Payment QR
+          </h2>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Shown to the customer in the POS payment sheet. Uploaded images are
+          re-encoded server-side, so only a picture can be stored here.
+        </p>
+
+        <div className="flex items-start gap-4">
+          {profile.payment_qr_url ? (
+            <div className="shrink-0">
+              <img
+                src={profile.payment_qr_url}
+                alt="Payment QR code"
+                className="h-32 w-32 rounded-xl border border-border bg-white object-contain p-1"
+              />
+            </div>
+          ) : (
+            <div className="grid h-32 w-32 shrink-0 place-items-center rounded-xl border border-dashed border-border text-muted-foreground">
+              <QrCode className="h-8 w-8 opacity-40" />
+            </div>
+          )}
+
+          <div className="min-w-0 flex-1 space-y-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Label shown with the QR
+              </label>
+              <input
+                value={profile.payment_qr_name ?? ""}
+                onChange={(e) =>
+                  setProfile((p) => (p ? { ...p, payment_qr_name: e.target.value } : p))
+                }
+                placeholder="e.g. Fonepay QR"
+                maxLength={60}
+                className="w-full rounded-xl border border-border bg-mist/50 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Account name
+              </label>
+              <input
+                value={profile.payment_qr_account_name ?? ""}
+                onChange={(e) =>
+                  setProfile((p) =>
+                    p ? { ...p, payment_qr_account_name: e.target.value } : p,
+                  )
+                }
+                placeholder="e.g. Zentro Cafe Sdn Bhd"
+                maxLength={80}
+                className="w-full rounded-xl border border-border bg-mist/50 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Instructions for the customer
+              </label>
+              <textarea
+                value={profile.payment_qr_instructions ?? ""}
+                onChange={(e) =>
+                  setProfile((p) =>
+                    p ? { ...p, payment_qr_instructions: e.target.value } : p,
+                  )
+                }
+                rows={2}
+                maxLength={240}
+                placeholder="Scan with your banking app, then show us the confirmation."
+                className="w-full resize-none rounded-xl border border-border bg-mist/50 px-3 py-2 text-sm focus:border-ink focus:outline-none"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <input
+            ref={qrInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadPaymentQr(file);
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => qrInputRef.current?.click()}
+            disabled={qrUploading}
+            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-mist disabled:opacity-50"
+          >
+            {qrUploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            {profile.payment_qr_url ? "Replace QR" : "Upload QR"}
+          </button>
+          {profile.payment_qr_url && (
+            <>
+              <button
+                type="button"
+                onClick={removePaymentQr}
+                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-4 py-2 text-sm font-medium text-rose-600 hover:bg-rose-50"
+              >
+                <Trash2 className="h-4 w-4" />
+                Remove
+              </button>
+              <label className="ml-auto flex cursor-pointer items-center gap-2 text-xs text-foreground">
+                <input
+                  type="checkbox"
+                  checked={!!profile.payment_qr_enabled}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    if (on && !profile.payment_qr_url) {
+                      setError("Upload a payment QR image before enabling QR payment.");
+                      return;
+                    }
+                    setProfile((p) => (p ? { ...p, payment_qr_enabled: on } : p));
+                  }}
+                  className="h-4 w-4 rounded border-border accent-ink"
+                />
+                Show this QR to customers
+              </label>
+            </>
+          )}
+        </div>
+        {qrUploading && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Uploading… the image is kept at full size so it stays scannable.
+          </p>
+        )}
+      </section>
+
       {/* ── Summary ──────────────────────────────────────────────────────── */}
       <section className="glass-strong rounded-3xl p-6">
         <h2 className="mb-4 text-sm font-bold text-foreground uppercase tracking-wider">
@@ -321,6 +670,27 @@ export function MerchantSettingsPage() {
               <span className="text-sm text-foreground">Tax Components</span>
               <span className="font-medium text-sm text-foreground">
                 {taxComponents.map((c) => `${c.name} ${c.rate}%`).join(" + ")}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center justify-between rounded-2xl bg-mist px-4 py-3">
+            <span className="text-sm text-foreground">Payment Methods</span>
+            <span className="font-medium text-sm text-foreground">
+              {acceptedMethods()
+                .map(
+                  (key) =>
+                    profile.payment_method_labels?.[key] ||
+                    PAYMENT_METHOD_OPTIONS.find((o) => o.key === key)?.label ||
+                    key,
+                )
+                .join(", ") || "None"}
+            </span>
+          </div>
+          {profile.payment_qr_enabled && (
+            <div className="flex items-center justify-between rounded-2xl bg-mist px-4 py-3">
+              <span className="text-sm text-foreground">Payment QR</span>
+              <span className="font-medium text-sm text-foreground">
+                {profile.payment_qr_name || "Enabled"}
               </span>
             </div>
           )}

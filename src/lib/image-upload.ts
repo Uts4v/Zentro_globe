@@ -64,6 +64,30 @@ export async function uploadProductImage(file: File, merchantId: string, product
   return uploadImage(file, "product", "product-images", `${merchantId}/${productId}`);
 }
 
+/**
+ * Payment QRs are uploaded untouched.
+ *
+ * `uploadImage` resizes and re-encodes because it targets photos. A QR code is
+ * a dense machine-readable pattern, so downscaling or resampling artefacts
+ * make it unscannable at the counter. Django still sniffs the file with Pillow
+ * and stores a clean raster, so nothing untrusted reaches `<img src>`.
+ */
+export async function uploadPaymentQr(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file, file.name || "payment-qr.png");
+
+  // No Content-Type: the browser has to set the multipart boundary itself.
+  const headers = authHeaders(false);
+  delete (headers as any)["Content-Type"];
+
+  const data = await djangoFetch<{ url: string }>(apiUrl("/media/upload/"), {
+    method: "POST",
+    headers,
+    body: formData,
+  });
+  return data.url;
+}
+
 // Kept for API compat — no-op with Django (no separate storage bucket to delete from)
 export async function deleteImage(_bucket: string, _path: string): Promise<void> {}
 
