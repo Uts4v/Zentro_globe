@@ -1,4 +1,4 @@
-﻿// routes/merchant.tables.tsx — Merchant table management & QR codes
+// routes/merchant.tables.tsx — Merchant table management & QR codes
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { requireMerchant } from "@/lib/merchant-auth-guard";
 import { useCallback, useEffect, useState } from "react";
@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { tableApi, merchantApi, type MerchantTable, type MerchantProfile } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { MobileShell } from "@/components/MobileShell";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
 
@@ -236,19 +235,17 @@ function MerchantTablesPage() {
 
   if (loading) {
     return (
-      <MobileShell>
-        <div className="flex min-h-[50vh] items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      </MobileShell>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
     );
   }
 
   const activeCount = tables.filter((t) => t.is_active).length;
 
   return (
-    <MobileShell>
-      <div className="px-5 pb-24 pt-4">
+    <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pb-24 pt-4">
+      <div className="space-y-6">
         {/* Header */}
         <div className="mb-6">
           <Link to="/merchant" className="text-xs text-muted-foreground hover:text-foreground">
@@ -490,6 +487,6 @@ function MerchantTablesPage() {
           </div>
         </div>
       )}
-    </MobileShell>
+    </div>
   );
 }

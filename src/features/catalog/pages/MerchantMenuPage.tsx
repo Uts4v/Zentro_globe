@@ -1221,7 +1221,7 @@ function ItemCard({
             <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700">
               {item.discount_type === "percentage"
                 ? `-${Number(item.discount_value)}%`
-                : `-${formatCurrency(item.discount_value, currencySymbol)}`}
+                : `-${formatCurrency(item.discount_value ?? 0, currencySymbol)}`}
               {item.discount_source === "special" ? " · Special" : ""}
             </span>
           )}

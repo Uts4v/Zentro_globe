@@ -204,6 +204,11 @@ elif os.getenv("DB_ENGINE") == "django.db.backends.postgresql":
         }
     }
 else:
+    if not DEBUG:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "DATABASE_URL or PostgreSQL database configuration is required in production (DEBUG=False)."
+        )
     DATABASES = {
         "default": {
             "ENGINE": "django.db.backends.sqlite3",
@@ -274,7 +279,8 @@ _raw_cors = os.getenv(
     "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://localhost:8081,http://localhost:8082",
 )
 CORS_ALLOWED_ORIGINS = [o.strip() for o in _raw_cors.split(",") if o.strip()]
-CORS_ALLOW_CREDENTIALS = True
+# Enforce mutual exclusivity: credentials must never be allowed with wildcard origins
+CORS_ALLOW_CREDENTIALS = not CORS_ALLOW_ALL_ORIGINS
 
 # In development, allow any localhost / 127.0.0.1 port so dynamic Vite dev ports never get blocked
 if DEBUG:

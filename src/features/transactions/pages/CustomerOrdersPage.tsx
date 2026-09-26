@@ -1,7 +1,6 @@
-// customerorderpage.tsx 
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { Loader2, ChevronDown, ChevronUp, X, Plus } from "lucide-react";
+import { Loader2, ChevronDown, ChevronUp, X, Plus, ArrowLeft, AlertTriangle } from "lucide-react";
 import { orderApi, type Order, type OrderStatus } from "@/lib/api";
 
 const STATUS_COLOR: Record<OrderStatus, string> = {
@@ -29,6 +28,7 @@ export function CustomerOrdersPage() {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [confirmCancelId, setConfirmCancelId] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -48,8 +48,8 @@ export function CustomerOrdersPage() {
   }
 
   async function handleCancel(id: string) {
-    if (!confirm("Cancel this order?")) return;
     setCancelling(id);
+    setConfirmCancelId(null);
     try {
       const updated = await orderApi.cancel(id as any);
       setOrders((prev) => prev.map((o) => (o.id === id ? updated : o)));
@@ -72,10 +72,19 @@ export function CustomerOrdersPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div>
-        <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">History</p>
-        <h1 className="font-display mt-1 text-5xl text-foreground">My Orders</h1>
+    <div className="mx-auto max-w-4xl px-4 sm:px-6 py-6 pb-24 space-y-6">
+      <div className="flex items-center gap-3">
+        <Link
+          to="/"
+          className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border bg-card text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+          aria-label="Back to home"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </Link>
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">History</p>
+          <h1 className="font-display text-3xl sm:text-4xl text-foreground">My Orders</h1>
+        </div>
       </div>
 
       {error && (
@@ -101,7 +110,7 @@ export function CustomerOrdersPage() {
                   order={order}
                   expanded={expanded === order.id}
                   onToggle={() => setExpanded((p) => (p === order.id ? null : order.id))}
-                  onCancel={() => handleCancel(order.id)}
+                  onCancel={() => setConfirmCancelId(order.id)}
                   cancelling={cancelling === order.id}
                 />
               ))}
@@ -124,6 +133,37 @@ export function CustomerOrdersPage() {
             </section>
           )}
         </>
+      )}
+
+      {/* Cancel Confirmation Modal */}
+      {confirmCancelId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-3xl border border-border bg-background p-6 shadow-xl space-y-4">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+              <AlertTriangle className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-foreground">Cancel Order</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Are you sure you want to cancel this order? This action cannot be undone.
+              </p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setConfirmCancelId(null)}
+                className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium hover:bg-mist transition-colors"
+              >
+                Keep Order
+              </button>
+              <button
+                onClick={() => handleCancel(confirmCancelId)}
+                className="flex-1 rounded-xl bg-destructive py-2.5 text-sm font-semibold text-destructive-foreground hover:opacity-90 transition-opacity"
+              >
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -543,52 +543,54 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
       </div>
 
       {/* ── Checkout actions ── */}
-      <div className="shrink-0 space-y-2 border-t border-border px-5 py-4">
-        {!isEmpty && posSettings?.receipt_printing_enabled && (
-          <button
-            onClick={handlePrintBill}
-            disabled={printingBill}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground transition-colors hover:bg-mist"
-          >
-            <FileText className="h-4 w-4" />
-            {printingBill ? "Printing..." : "Print Bill"}
-          </button>
-        )}
-        {posSettings?.discounts_enabled && (
-          <button
-            onClick={onDiscount}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-card text-sm font-medium text-muted-foreground transition-colors hover:bg-mist"
-          >
-            <Percent className="h-4 w-4" />
-            Apply Discount
-          </button>
-        )}
-        {!isEmpty && (
-          <button
-            onClick={() => setShowFreeConfirm(true)}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-dashed border-success/40 bg-success/10 text-sm font-medium text-success transition-colors hover:bg-success/20"
-          >
-            <Gift className="h-4 w-4" />
-            Staff Free Order
-          </button>
-        )}
-        {fulfillmentType === "dine-in" && (
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedMinusStockItem(null);
-              setShowMinusStock(true);
-            }}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/20 shadow-sm"
-          >
-            <PackageMinus className="h-4 w-4" />
-            Minus Stock
-          </button>
-        )}
+      <div className="sticky bottom-0 shrink-0 space-y-2 border-t border-border bg-background/95 backdrop-blur px-5 py-3">
+        <div className="grid grid-cols-2 gap-2">
+          {!isEmpty && posSettings?.receipt_printing_enabled && (
+            <button
+              onClick={handlePrintBill}
+              disabled={printingBill}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              {printingBill ? "Printing..." : "Print Bill"}
+            </button>
+          )}
+          {posSettings?.discounts_enabled && (
+            <button
+              onClick={onDiscount}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+            >
+              <Percent className="h-3.5 w-3.5" />
+              Apply Discount
+            </button>
+          )}
+          {!isEmpty && (
+            <button
+              onClick={() => setShowFreeConfirm(true)}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-dashed border-success/40 bg-success/10 px-2 text-xs font-medium text-success transition-colors hover:bg-success/20"
+            >
+              <Gift className="h-3.5 w-3.5" />
+              Staff Free
+            </button>
+          )}
+          {fulfillmentType === "dine-in" && (
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedMinusStockItem(null);
+                setShowMinusStock(true);
+              }}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 shadow-sm"
+            >
+              <PackageMinus className="h-3.5 w-3.5" />
+              Minus Stock
+            </button>
+          )}
+        </div>
         <button
           onClick={onCheckout}
           disabled={isEmpty}
-          className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-ember text-base font-bold text-white shadow-[var(--shadow-ember)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ember text-base font-bold text-white shadow-[var(--shadow-ember)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
         >
           <Check className="h-5 w-5" strokeWidth={2.5} />
           {isEmpty ? (

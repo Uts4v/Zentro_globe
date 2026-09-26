@@ -14,7 +14,6 @@ from config.db_browser import db_browser
 urlpatterns = [
     path("healthz/", healthz),
     path("admin/", admin.site.urls),
-    path("__db__/", db_browser, name="db_browser"),
     path("api/auth/", include("accounts.urls")),
     path("api/media/upload/", upload_image, name="media-upload"),
     path("api/merchants/", include("merchants.urls")),
@@ -33,3 +32,6 @@ urlpatterns = [
         name="media-serve",
     ),
 ]
+
+if settings.DEBUG:
+    urlpatterns.insert(2, path("__db__/", db_browser, name="db_browser"))

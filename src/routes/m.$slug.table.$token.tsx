@@ -1,4 +1,4 @@
-﻿// routes/m.$slug.table.$token.tsx — Table QR scan entry → menu + ordering (no login required)
+// routes/m.$slug.table.$token.tsx — Table QR scan entry → menu + ordering (no login required)
 //
 // Flow: Scan QR → resolve table → show menu immediately
 // Guest orders placed directly, no auth wall.
@@ -177,22 +177,15 @@ function TableQRScanPage() {
     setActiveTable(tableCtx);
     setSelectedMerchant(String(resolution.merchant.id));
 
-    // Auto-create guest session if not logged in
-    if (!user || user.role !== "customer") {
-      if (!guestSession) {
-        setGuestSession({
-          guestId: safeUuid(),
-          guestName: "",
-          joinedAt: Date.now(),
-        });
-      }
+    // Auto-create guest session if not already initialized
+    if (!guestSession) {
+      setGuestSession({
+        guestId: safeUuid(),
+        guestName: user?.customer_profile?.full_name || user?.first_name || "",
+        joinedAt: Date.now(),
+      });
     }
 
-    // If logged in as customer, redirect to member menu
-    if (user?.role === "customer") {
-      navigate({ to: "/customer/merchant/$slug", params: { slug }, replace: true });
-      return;
-    }
     if (user?.role === "merchant") {
       navigate({ to: "/merchant", replace: true });
       return;

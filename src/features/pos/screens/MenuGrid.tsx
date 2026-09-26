@@ -145,10 +145,10 @@ export default function MenuGrid() {
       <div className="flex shrink-0 gap-2 overflow-x-auto px-5 py-3 scrollbar-none">
         <button
           onClick={() => setSelectedCategory(null)}
-          className={`shrink-0 rounded-full px-5 py-2.5 text-sm font-medium transition-colors ${
+          className={`shrink-0 min-h-[44px] rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
             selectedCategory === null
-              ? "bg-ink text-white shadow-sm"
-              : "bg-mist text-muted-foreground hover:bg-border hover:text-foreground"
+              ? "bg-ink text-primary-foreground shadow-sm"
+              : "bg-card border border-border text-foreground hover:bg-mist"
           }`}
         >
           All
@@ -157,10 +157,10 @@ export default function MenuGrid() {
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`shrink-0 rounded-full px-5 py-2.5 text-sm font-medium transition-colors ${
+            className={`shrink-0 min-h-[44px] rounded-full px-5 py-2.5 text-sm font-semibold transition-colors ${
               selectedCategory === cat
-                ? "bg-ink text-white shadow-sm"
-                : "bg-mist text-muted-foreground hover:bg-border hover:text-foreground"
+                ? "bg-ink text-primary-foreground shadow-sm"
+                : "bg-card border border-border text-foreground hover:bg-mist"
             }`}
           >
             {cat}

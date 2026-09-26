@@ -1713,7 +1713,7 @@ def pos_orders(request):
         "processed_by_worker",
         "pos_device",
         "cash_shift",
-    ).prefetch_related("items")[:50]
+    ).prefetch_related("items__menu_item")[:50]
 
     from orders.serializers import OrderSerializer
     return Response(OrderSerializer(qs, many=True, context={"request": request}).data)
@@ -1738,11 +1738,14 @@ def create_payment(request):
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        order = Order.objects.select_for_update().get(
-            uuid=ser.validated_data["order_id"], merchant=merchant,
-        )
-    except Order.DoesNotExist:
+    target_order_id = ser.validated_data["order_id"]
+    order = (
+        Order.objects.select_for_update()
+        .filter(merchant=merchant)
+        .filter(Q(uuid=target_order_id) | Q(client_mutation_id=target_order_id))
+        .first()
+    )
+    if not order:
         return Response({"error": "Order not found."},
                         status=status.HTTP_404_NOT_FOUND)
 

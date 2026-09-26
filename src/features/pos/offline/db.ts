@@ -55,6 +55,7 @@ export interface SyncQueueItem {
   status: "pending" | "syncing" | "failed";
   attempts: number;
   last_error?: string;
+  next_retry_at?: number;
   created_at: string;
 }
 
@@ -232,11 +233,14 @@ export const syncQueue = {
       await put("sync_queue", item);
     }
   },
-  markFailed: async (id: string, error: string) => {
+  markFailed: async (id: string, error: string, nextRetryAt?: number) => {
     const item = await getById<SyncQueueItem>("sync_queue", id);
     if (item) {
       item.status = "failed";
       item.last_error = error;
+      if (nextRetryAt) {
+        item.next_retry_at = nextRetryAt;
+      }
       await put("sync_queue", item);
     }
   },

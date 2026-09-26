@@ -14,6 +14,8 @@ import Receipt from "../printing/Receipt";
 import PaymentQrModal from "./PaymentQrModal";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import KOTTicket, { kotTicketFromReceipt, printKOT, KOTTicketData } from "../printing/KOTTicket";
+import { enqueueMutation } from "../offline/sync";
+import { offlineOrders, offlinePayments } from "../offline/db";
 import {
   X,
   Banknote,
@@ -48,6 +50,79 @@ const PAYMENT_METHODS: Array<{
   { key: "debit", label: PAYMENT_METHOD_LABELS.debit, icon: Wallet },
 ];
 
+function makeOfflineReceiptData(
+  orderId: string,
+  merchant: any,
+  worker: any,
+  cart: any[],
+  subtotal: number,
+  tax: number,
+  total: number,
+  method: string,
+  cashAmount: number,
+  change: number,
+  fulfillmentType: string,
+  cartNotes?: string,
+): PosReceiptData {
+  return {
+    type: "receipt",
+    order_id: 0,
+    order_uuid: orderId,
+    order_number: `OFF-${orderId.slice(0, 6).toUpperCase()}`,
+    kot_number: null,
+    status: "confirmed",
+    source: "pos_offline",
+    created_at: new Date().toISOString(),
+    client_created_at: new Date().toISOString(),
+    merchant: {
+      id: Number(merchant?.id) || 0,
+      name: merchant?.name || "",
+      address: merchant?.address || "",
+      phone: merchant?.phone || "",
+      logo_url: merchant?.logo_url || "",
+    },
+    table: null,
+    fulfillment_type: fulfillmentType,
+    customer_name: null,
+    worker_name: worker?.name || "Staff",
+    items: cart.map((item) => ({
+      name: item.name,
+      price: String(item.price),
+      quantity: item.quantity,
+      subtotal: String(item.subtotal),
+      options: (item.selectedOptions || []).map((o: any) => ({
+        group_name: o.group_name || "",
+        option_name: o.name || "",
+        kind: o.kind || "",
+      })),
+    })),
+    subtotal: String(roundMoney(subtotal)),
+    notes: cartNotes,
+    discounts: [],
+    discount_amount: "0.00",
+    tax_amount: String(roundMoney(tax)),
+    tax_breakdown: [],
+    service_charge: "0.00",
+    total_amount: String(roundMoney(total)),
+    payments: [
+      {
+        method,
+        amount: String(roundMoney(total)),
+        status: "completed",
+        external_reference: "",
+        change_amount: String(roundMoney(change)),
+        created_at: new Date().toISOString(),
+      },
+    ],
+    total_paid: String(roundMoney(method === "cash" ? cashAmount : total)),
+    change: String(roundMoney(change)),
+    payment_status: "paid",
+    payment_method: method,
+    is_offline_receipt: true,
+    sync_status: "pending",
+  };
+}
+
 export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProps) {
   const cart = usePosStore((s) => s.cart);
   const cartNotes = usePosStore((s) => s.cartNotes);
@@ -72,6 +147,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedKot, setPlacedKot] = useState<KOTTicketData | null>(null);
+  const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const [orderMutationId, setOrderMutationId] = useState<string>(() => safeUuid());
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
@@ -84,7 +161,13 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   }, [method]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setCreatedOrderId(null);
+      setOrderMutationId(safeUuid());
+      setError(null);
+      setOrderPlaced(false);
+      return;
+    }
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
@@ -114,6 +197,77 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     setSubmitting(true);
     setError(null);
 
+    const isOffline = !navigator.onLine;
+    const merchantProfile = merchant as any;
+    const hasDiscounts = cart.some((c) => (c as any).discount_amount > 0 || (c as any).discount_type);
+    if (isOffline && hasDiscounts && merchantProfile?.offline_discounts_allowed === false) {
+      setError("Discounts are not permitted while offline.");
+      setSubmitting(false);
+      return;
+    }
+
+    if (isOffline) {
+      try {
+        const offlineId = orderMutationId;
+        await offlineOrders.save({
+          id: offlineId,
+          merchant_id: merchant.id,
+          items: cart.map((item) => ({
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+          })),
+          notes: cartNotes,
+          fulfillment_type: fulfillmentType,
+          table_id: selectedTableId ?? null,
+          customer_id: selectedCustomerId ?? null,
+          shift_id: activeShift?.id ?? undefined,
+          worker_id: currentWorker.id,
+          device_id: device.id,
+          cart_snapshot: cart.map((item) => ({
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+          })),
+          total: roundMoney(total),
+          status: "pending_sync",
+          created_at: new Date().toISOString(),
+        });
+
+        await enqueueMutation(
+          "order",
+          "/pos/orders/create/",
+          "POST",
+          {
+            merchant_id: merchant.id,
+            items: cart.map((item) => ({
+              menu_item_id: item.menu_item_id,
+              quantity: item.quantity,
+            })),
+            notes: cartNotes,
+            fulfillment_type: fulfillmentType,
+            customer_id: selectedCustomerId ?? undefined,
+            table_id: selectedTableId ?? undefined,
+            shift_id: activeShift?.id ?? undefined,
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            client_mutation_id: offlineId,
+            source: "pos_offline",
+            client_timestamp: new Date().toISOString(),
+          },
+          offlineId,
+        );
+
+        clearCart();
+        setOrderPlaced(true);
+      } catch (err: any) {
+        setError(err?.message || "Failed to store offline order.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     try {
       const orderRes = await posCreateOrder({
         merchant_id: merchant.id,
@@ -128,7 +282,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         shift_id: activeShift?.id ?? undefined,
         worker_id: currentWorker.id,
         device_id: device.id,
-        client_mutation_id: safeUuid(),
+        client_mutation_id: orderMutationId,
       });
 
       clearCart();
@@ -152,25 +306,162 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     setSubmitting(true);
     setError(null);
 
+    const isOffline = !navigator.onLine;
+    const merchantProfile = merchant as any;
+    const hasDiscounts = cart.some((c) => (c as any).discount_amount > 0 || (c as any).discount_type);
+    if (isOffline && hasDiscounts && merchantProfile?.offline_discounts_allowed === false) {
+      setError("Discounts are not permitted while offline.");
+      setSubmitting(false);
+      return;
+    }
+    if (isOffline && method === "debit" && merchantProfile?.offline_credit_allowed === false) {
+      setError("Debit/credit sales are not permitted while offline.");
+      setSubmitting(false);
+      return;
+    }
+
+    if (isOffline) {
+      if (method !== "cash" && method !== "debit") {
+        setError(`${PAYMENT_METHOD_LABELS[method] || method} requires an active internet connection. Please use Cash offline.`);
+        setSubmitting(false);
+        return;
+      }
+
+      try {
+        const offlineOrderId = orderMutationId;
+        const offlinePaymentId = safeUuid();
+
+        await offlineOrders.save({
+          id: offlineOrderId,
+          merchant_id: merchant.id,
+          items: cart.map((item) => ({
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+          })),
+          notes: cartNotes,
+          fulfillment_type: fulfillmentType,
+          table_id: selectedTableId ?? null,
+          customer_id: selectedCustomerId ?? null,
+          shift_id: activeShift?.id ?? undefined,
+          worker_id: currentWorker.id,
+          device_id: device.id,
+          cart_snapshot: cart.map((item) => ({
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+          })),
+          total: roundMoney(total),
+          status: "pending_sync",
+          created_at: new Date().toISOString(),
+        });
+
+        await enqueueMutation(
+          "order",
+          "/pos/orders/create/",
+          "POST",
+          {
+            merchant_id: merchant.id,
+            items: cart.map((item) => ({
+              menu_item_id: item.menu_item_id,
+              quantity: item.quantity,
+            })),
+            notes: cartNotes,
+            fulfillment_type: fulfillmentType,
+            customer_id: selectedCustomerId ?? undefined,
+            table_id: selectedTableId ?? undefined,
+            shift_id: activeShift?.id ?? undefined,
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            client_mutation_id: offlineOrderId,
+            source: "pos_offline",
+            client_timestamp: new Date().toISOString(),
+          },
+          offlineOrderId,
+        );
+
+        await offlinePayments.save({
+          id: offlinePaymentId,
+          order_id: offlineOrderId,
+          payment_method: method,
+          amount: roundMoney(total),
+          change_amount: method === "cash" ? roundMoney(change) : 0,
+          shift_id: activeShift?.id ?? undefined,
+          worker_id: currentWorker.id,
+          device_id: device.id,
+          status: "pending_sync",
+          created_at: new Date().toISOString(),
+        });
+
+        await enqueueMutation(
+          "payment",
+          "/pos/payments/create/",
+          "POST",
+          {
+            order_id: offlineOrderId,
+            shift_id: activeShift?.id ?? "",
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            payment_method: method,
+            amount: roundMoney(total),
+            change_amount: method === "cash" ? roundMoney(change) : 0,
+            debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
+            client_mutation_id: offlinePaymentId,
+            client_created_at: new Date().toISOString(),
+          },
+          offlinePaymentId,
+        );
+
+        clearCart();
+        setReceiptData(
+          makeOfflineReceiptData(
+            offlineOrderId,
+            merchant,
+            currentWorker,
+            cart,
+            subtotal,
+            tax,
+            total,
+            method,
+            cashAmount,
+            change,
+            fulfillmentType,
+            cartNotes,
+          ),
+        );
+      } catch (err: any) {
+        setError(err?.message || "Failed to process offline checkout.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
     try {
-      const orderRes = await posCreateOrder({
-        merchant_id: merchant.id,
-        items: cart.map((item) => ({
-          menu_item_id: item.menu_item_id,
-          quantity: item.quantity,
-        })),
-        notes: cartNotes,
-        fulfillment_type: fulfillmentType,
-        customer_id: selectedCustomerId ?? undefined,
-        table_id: selectedTableId ?? undefined,
-        shift_id: activeShift?.id ?? undefined,
-        worker_id: currentWorker.id,
-        device_id: device.id,
-        client_mutation_id: safeUuid(),
-      });
+      let targetOrderUuid = createdOrderId;
+
+      if (!targetOrderUuid) {
+        const orderRes = await posCreateOrder({
+          merchant_id: merchant.id,
+          items: cart.map((item) => ({
+            menu_item_id: item.menu_item_id,
+            quantity: item.quantity,
+          })),
+          notes: cartNotes,
+          fulfillment_type: fulfillmentType,
+          customer_id: selectedCustomerId ?? undefined,
+          table_id: selectedTableId ?? undefined,
+          shift_id: activeShift?.id ?? undefined,
+          worker_id: currentWorker.id,
+          device_id: device.id,
+          client_mutation_id: orderMutationId,
+        });
+        targetOrderUuid = String(orderRes.uuid);
+        setCreatedOrderId(targetOrderUuid);
+      }
 
       await posCreatePayment({
-        order_id: String(orderRes.uuid),
+        order_id: targetOrderUuid,
         shift_id: activeShift?.id ?? "",
         worker_id: currentWorker.id,
         device_id: device.id,
@@ -182,9 +473,11 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
       });
 
       clearCart();
+      setCreatedOrderId(null);
+      setOrderMutationId(safeUuid());
       setLoadingReceipt(true);
       try {
-        const receipt = await posReceiptData(String(orderRes.uuid));
+        const receipt = await posReceiptData(targetOrderUuid);
         setReceiptData(receipt);
       } catch {
         onPaid();

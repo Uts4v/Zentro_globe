@@ -14,6 +14,7 @@ from django.db.models import Sum, Count, Q, Avg, F, DecimalField
 from django.db.models.functions import TruncDate
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
+from django.utils.html import escape
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -1036,8 +1037,23 @@ def export_csv(request):
     report_type = request.query_params.get("type", "sales")
     active_qs = _build_base_qs(merchant, date_from, date_to).exclude(status=Order.STATUS_CANCELLED)
 
+    def _sanitize_csv_cell(val):
+        if val is None:
+            return ""
+        s = str(val)
+        if s and s[0] in ("=", "+", "-", "@", "\t", "\r"):
+            return f"'{s}"
+        return s
+
+    class _SafeCsvWriter:
+        def __init__(self, target):
+            self._writer = csv.writer(target)
+
+        def writerow(self, row):
+            self._writer.writerow([_sanitize_csv_cell(c) for c in row])
+
     buf = io.StringIO()
-    writer = csv.writer(buf)
+    writer = _SafeCsvWriter(buf)
 
     if report_type == "fiscal":
         writer.writerow(["Fiscal Report", f"{merchant.business_name}"])
@@ -1165,10 +1181,16 @@ def export_pdf(request):
     tax_label = _get_tax_label(merchant) or "Tax"
     total_tax_rate = _get_total_tax_rate(merchant)
 
+    esc_bname = escape(merchant.business_name or "")
+    esc_rtype = escape(report_type.title())
+    esc_tax_label = escape(tax_label)
+    esc_cur_code = escape(merchant.currency_code or "")
+    esc_sym = escape(sym)
+
     # Build HTML
     html_parts = []
     html_parts.append(f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>{report_type.title()} Report — {merchant.business_name}</title>
+<html><head><meta charset="utf-8"><title>{esc_rtype} Report — {esc_bname}</title>
 <style>
 body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 40px; color: #1a1a1a; font-size: 13px; }}
 h1 {{ font-size: 22px; margin-bottom: 4px; }}
@@ -1182,9 +1204,9 @@ th {{ background: #f7f7f7; font-weight: 600; text-transform: uppercase; font-siz
 .metric .label {{ font-size: 11px; color: #777; text-transform: uppercase; }}
 .metric .value {{ font-size: 20px; font-weight: 700; }}
 </style></head><body>
-<h1>{merchant.business_name}</h1>
-<p class="meta">{report_type.title()} Report &middot; {date_from} to {date_to} &middot; Currency: {merchant.currency_code} ({sym})</p>
-<p class="meta">Tax: {tax_label} {total_tax_rate}% &middot; Generated: {timezone.now().strftime('%Y-%m-%d %H:%M')}</p>
+<h1>{esc_bname}</h1>
+<p class="meta">{esc_rtype} Report &middot; {date_from} to {date_to} &middot; Currency: {esc_cur_code} ({esc_sym})</p>
+<p class="meta">Tax: {esc_tax_label} {total_tax_rate}% &middot; Generated: {timezone.now().strftime('%Y-%m-%d %H:%M')}</p>
 """)
 
     # Summary metrics
@@ -1192,12 +1214,12 @@ th {{ background: #f7f7f7; font-weight: 600; text-transform: uppercase; font-siz
     discount = float(agg["discount"] or 0)
     tax = float(agg["tax"] or 0)
     html_parts.append("<div>")
-    html_parts.append(f'<div class="metric"><div class="label">Total Sales</div><div class="value">{sym} {total:,.2f}</div></div>')
+    html_parts.append(f'<div class="metric"><div class="label">Total Sales</div><div class="value">{esc_sym} {total:,.2f}</div></div>')
     html_parts.append(f'<div class="metric"><div class="label">Orders</div><div class="value">{agg["count"] or 0}</div></div>')
-    html_parts.append(f'<div class="metric"><div class="label">Avg Order</div><div class="value">{sym} {float(agg["avg"] or 0):,.2f}</div></div>')
-    html_parts.append(f'<div class="metric"><div class="label">{tax_label}</div><div class="value">{sym} {tax:,.2f}</div></div>')
-    html_parts.append(f'<div class="metric"><div class="label">Discounts</div><div class="value">{sym} {discount:,.2f}</div></div>')
-    html_parts.append(f'<div class="metric"><div class="label">Net Sales</div><div class="value">{sym} {total - discount:,.2f}</div></div>')
+    html_parts.append(f'<div class="metric"><div class="label">Avg Order</div><div class="value">{esc_sym} {float(agg["avg"] or 0):,.2f}</div></div>')
+    html_parts.append(f'<div class="metric"><div class="label">{esc_tax_label}</div><div class="value">{esc_sym} {tax:,.2f}</div></div>')
+    html_parts.append(f'<div class="metric"><div class="label">Discounts</div><div class="value">{esc_sym} {discount:,.2f}</div></div>')
+    html_parts.append(f'<div class="metric"><div class="label">Net Sales</div><div class="value">{esc_sym} {total - discount:,.2f}</div></div>')
     html_parts.append("</div>")
 
     # Payment breakdown table
@@ -1206,21 +1228,22 @@ th {{ background: #f7f7f7; font-weight: 600; text-transform: uppercase; font-siz
     for pm in active_qs.exclude(payment_method="").values("payment_method").annotate(c=Count("id"), t=Sum("total_amount")).order_by("-t"):
         amt = float(pm["t"] or 0)
         pct = (amt / total * 100) if total > 0 else 0
-        html_parts.append(f"<tr><td>{_method_label(pm['payment_method'])}</td><td>{pm['c']}</td><td>{sym} {amt:,.2f}</td><td>{pct:.1f}%</td></tr>")
+        esc_pm = escape(_method_label(pm['payment_method']))
+        html_parts.append(f"<tr><td>{esc_pm}</td><td>{pm['c']}</td><td>{esc_sym} {amt:,.2f}</td><td>{pct:.1f}%</td></tr>")
     html_parts.append("</table>")
 
     # Tax summary
-    html_parts.append(f"<h2>{tax_label} Summary</h2>")
+    html_parts.append(f"<h2>{esc_tax_label} Summary</h2>")
     taxable = float(active_qs.exclude(tax_amount=0).aggregate(t=Sum("total_amount"))["t"] or 0)
     nontaxable = float(active_qs.filter(tax_amount=0).aggregate(t=Sum("total_amount"))["t"] or 0)
     html_parts.append("<table><tr><th>Metric</th><th>Value</th></tr>")
     html_parts.append(f"<tr><td>Tax Enabled</td><td>{'Yes' if merchant.tax_enabled else 'No'}</td></tr>")
-    html_parts.append(f"<tr><td>Tax Type & Rate</td><td>{tax_label} {total_tax_rate}%</td></tr>")
-    html_parts.append(f"<tr><td>Taxable Sales</td><td>{sym} {taxable:,.2f}</td></tr>")
-    html_parts.append(f"<tr><td>Non-Taxable Sales</td><td>{sym} {nontaxable:,.2f}</td></tr>")
-    html_parts.append(f"<tr><td>Tax Collected</td><td>{sym} {tax:,.2f}</td></tr>")
-    html_parts.append(f"<tr><td>Sales Including Tax</td><td>{sym} {float(agg['subtotal'] or 0) + tax:,.2f}</td></tr>")
-    html_parts.append(f"<tr><td>Sales Excluding Tax</td><td>{sym} {float(agg['subtotal'] or 0):,.2f}</td></tr>")
+    html_parts.append(f"<tr><td>Tax Type & Rate</td><td>{esc_tax_label} {total_tax_rate}%</td></tr>")
+    html_parts.append(f"<tr><td>Taxable Sales</td><td>{esc_sym} {taxable:,.2f}</td></tr>")
+    html_parts.append(f"<tr><td>Non-Taxable Sales</td><td>{esc_sym} {nontaxable:,.2f}</td></tr>")
+    html_parts.append(f"<tr><td>Tax Collected</td><td>{esc_sym} {tax:,.2f}</td></tr>")
+    html_parts.append(f"<tr><td>Sales Including Tax</td><td>{esc_sym} {float(agg['subtotal'] or 0) + tax:,.2f}</td></tr>")
+    html_parts.append(f"<tr><td>Sales Excluding Tax</td><td>{esc_sym} {float(agg['subtotal'] or 0):,.2f}</td></tr>")
     html_parts.append("</table>")
 
     # Top items
@@ -1233,7 +1256,8 @@ th {{ background: #f7f7f7; font-weight: 600; text-transform: uppercase; font-siz
             .annotate(qty=Sum("quantity"), rev=Sum("subtotal"))
             .order_by("-rev")[:15]
         ):
-            html_parts.append(f"<tr><td>{item['name']}</td><td>{item['qty']}</td><td>{sym} {float(item['rev'] or 0):,.2f}</td></tr>")
+            esc_iname = escape(item['name'])
+            html_parts.append(f"<tr><td>{esc_iname}</td><td>{item['qty']}</td><td>{esc_sym} {float(item['rev'] or 0):,.2f}</td></tr>")
         html_parts.append("</table>")
 
     # Daily trend
@@ -1246,15 +1270,18 @@ th {{ background: #f7f7f7; font-weight: 600; text-transform: uppercase; font-siz
         .annotate(rev=Sum("total_amount"), c=Count("id"), tax=Sum("tax_amount"))
         .order_by("date")
     ):
-        html_parts.append(f"<tr><td>{d['date']}</td><td>{sym} {float(d['rev'] or 0):,.2f}</td><td>{d['c']}</td><td>{sym} {float(d['tax'] or 0):,.2f}</td></tr>")
+        html_parts.append(f"<tr><td>{d['date']}</td><td>{esc_sym} {float(d['rev'] or 0):,.2f}</td><td>{d['c']}</td><td>{esc_sym} {float(d['tax'] or 0):,.2f}</td></tr>")
     html_parts.append("</table>")
 
     html_parts.append("</body></html>")
     html = "\n".join(html_parts)
 
-    response = HttpResponse(html, content_type="text/html")
+    response = HttpResponse(html, content_type="text/html; charset=utf-8")
     filename = f"{report_type}_report_{date_from}_to_{date_to}.html"
     response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    response["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
+    response["X-Content-Type-Options"] = "nosniff"
+    response["X-Frame-Options"] = "DENY"
 
     # Record in history
     ReportHistory.objects.create(

@@ -22,7 +22,7 @@ class AiCoreConfig(AppConfig):
 
         groq_key = getattr(settings, "GROQ_API_KEY", "") or ""
         if not groq_key.strip():
-            logger.warning("GROQ_API_KEY not set — Groq provider disabled. AI features unavailable.")
+            logger.info("GROQ_API_KEY not set — Groq provider disabled. AI features unavailable.")
             return
 
         try:

@@ -59,19 +59,34 @@ async function processItem(item: SyncQueueItem): Promise<boolean> {
     await syncQueue.remove(item.id);
 
     // Handle special post-sync actions
-    if (item.type === "order" && response?.id) {
-      await offlineOrders.markSynced(item.client_mutation_id, response.id);
+    if (item.type === "order" && (response?.id || response?.uuid)) {
+      const serverId = response.id || 0;
+      const serverUuid = String(response.uuid || serverId);
+      await offlineOrders.markSynced(item.client_mutation_id, serverId);
+
+      // Link any pending payments waiting for this order
+      const allPending = await syncQueue.getPending();
+      for (const p of allPending) {
+        if (p.type === "payment" && p.body && (p.body.order_id === item.client_mutation_id || !p.body.order_id)) {
+          p.body.order_id = serverUuid;
+          await syncQueue.add(p);
+        }
+      }
     }
     if (item.type === "payment" && response?.id) {
-      await offlinePayments.markSynced(item.client_mutation_id, response.id);
+      await offlinePayments.markSynced(item.client_mutation_id, String(response.id));
     }
 
     return true;
   } catch (error: any) {
+    // Exponential backoff with jitter (max 5 minutes)
+    const delay = Math.min(300000, RETRY_DELAY_MS * Math.pow(2, item.attempts)) + Math.floor(Math.random() * 500);
+    const nextRetry = Date.now() + delay;
+
     if (item.attempts >= MAX_RETRIES) {
-      await syncQueue.markFailed(item.id, error?.message || "Max retries exceeded");
+      await syncQueue.markFailed(item.id, error?.message || "Max retries exceeded", nextRetry);
     } else {
-      await syncQueue.markFailed(item.id, error?.message || "Sync failed");
+      await syncQueue.markFailed(item.id, error?.message || "Sync failed", nextRetry);
     }
     return false;
   }
@@ -97,8 +112,14 @@ export async function processSyncQueue(): Promise<{
     // Sort by created_at to process in order
     pending.sort((a, b) => a.created_at.localeCompare(b.created_at));
 
+    const now = Date.now();
     for (const item of pending) {
       if (!navigator.onLine) break; // Stop if we go offline mid-sync
+
+      // Honor exponential backoff retry window
+      if (item.next_retry_at && item.next_retry_at > now && item.attempts < MAX_RETRIES) {
+        continue;
+      }
 
       const success = await processItem(item);
       if (success) synced++;
@@ -118,12 +139,11 @@ export async function processSyncQueue(): Promise<{
 // ── Auto-sync on reconnect ──────────────────────────────────────────────────
 
 function handleOnline() {
-  console.log("[POS Sync] Back online — processing queue...");
   processSyncQueue();
 }
 
 function handleOffline() {
-  console.log("[POS Sync] Gone offline — mutations will be queued");
+  // Offline event handler
 }
 
 // ── Start/stop background sync ──────────────────────────────────────────────
@@ -145,8 +165,6 @@ export function startBackgroundSync(intervalMs = 30000) {
       processSyncQueue();
     }
   }, intervalMs);
-
-  console.log(`[POS Sync] Background sync started (every ${intervalMs / 1000}s)`);
 }
 
 export function stopBackgroundSync() {
@@ -156,7 +174,6 @@ export function stopBackgroundSync() {
   }
   window.removeEventListener("online", handleOnline);
   window.removeEventListener("offline", handleOffline);
-  console.log("[POS Sync] Background sync stopped");
 }
 
 // ── Sync status query ───────────────────────────────────────────────────────

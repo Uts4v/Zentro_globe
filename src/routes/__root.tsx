@@ -198,9 +198,7 @@ function GlobalNotificationToasts() {
       const wsUrl = `${wsProto}//${apiHost}/ws/notifications/?token=${token}`;
       const ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => {
-        console.log("Notification WebSocket connected");
-      };
+      ws.onopen = () => {};
 
       ws.onmessage = (event) => {
         try {
@@ -216,12 +214,10 @@ function GlobalNotificationToasts() {
       };
 
       ws.onerror = () => {
-        console.warn("Notification WebSocket error — will retry on next mount");
+        // Notification WebSocket error — will retry on next mount
       };
 
-      ws.onclose = () => {
-        console.log("Notification WebSocket closed");
-      };
+      ws.onclose = () => {};
 
       return ws;
     };

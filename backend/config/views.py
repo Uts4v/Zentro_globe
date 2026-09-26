@@ -86,13 +86,26 @@ def serve_media(request, path):
     content_type = _IMAGE_CONTENT_TYPES.get(ext, "application/octet-stream")
 
     try:
+        stat = full.stat()
+        mtime = int(stat.st_mtime)
+        size = stat.st_size
+        etag = f'"{mtime}-{size}"'
+
+        if request.headers.get("If-None-Match") == etag:
+            from django.http import HttpResponseNotModified
+            response = HttpResponseNotModified()
+            response["ETag"] = etag
+            response["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
+            return response
+
         f = full.open("rb")
     except OSError:
         raise Http404("Path not found.")
 
     response = FileResponse(f, content_type=content_type)
+    response["ETag"] = etag
     response["X-Content-Type-Options"] = "nosniff"
     response["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; sandbox"
     response["X-Frame-Options"] = "DENY"
-    response["Cache-Control"] = "public, max-age=3600"
+    response["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=604800"
     return response
