@@ -415,7 +415,16 @@ export default function StaffManagementScreen() {
                   {ROLES.map((r) => (
                     <button
                       key={r.value}
-                      onClick={() => setNewRole(r.value)}
+                      type="button"
+                      onClick={() => {
+                        setNewRole(r.value);
+                        if (r.value === "manager" || r.value === "admin") {
+                          setNewDiscount(true);
+                          setNewRefund(true);
+                          setNewCloseShift(true);
+                          setNewViewReports(true);
+                        }
+                      }}
                       className={`flex-1 rounded-xl py-2 text-xs font-medium transition-colors ${
                         newRole === r.value
                           ? "bg-ink text-white"
@@ -558,15 +567,21 @@ function Checkbox({
   onChange: (v: boolean) => void;
 }) {
   return (
-    <label className="flex items-center gap-2 cursor-pointer">
+    <label className="flex cursor-pointer select-none items-center gap-2.5 rounded-lg p-1.5 transition-colors hover:bg-muted/50">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="sr-only"
+      />
       <div
-        className={`grid h-5 w-5 place-items-center rounded border transition-colors ${
-          checked ? "border-ink bg-ink" : "border-border bg-background"
+        className={`grid h-5 w-5 place-items-center rounded-md border transition-colors ${
+          checked ? "border-ink bg-ink text-white" : "border-border bg-background"
         }`}
       >
-        {checked && <Check className="h-3 w-3 text-white" />}
+        {checked && <Check className="h-3.5 w-3.5" />}
       </div>
-      <span className="text-sm text-foreground">{label}</span>
+      <span className="text-xs font-medium text-foreground">{label}</span>
     </label>
   );
 }
