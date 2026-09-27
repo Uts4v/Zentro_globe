@@ -194,9 +194,9 @@ export function MainPageLoyaltyCard({
   // Not-joined state
   if (!joined) {
     return (
-      <div className="relative pt-24">
-        <div className="pointer-events-none absolute right-2 top-0 z-20 animate-mascot-bounce">
-          <ZentroMascot className="h-32 w-32 drop-shadow-2xl" waving />
+      <div className="relative pt-5">
+        <div className="pointer-events-none absolute -top-10 right-4 z-20 animate-mascot-bounce">
+          <ZentroMascot className="h-24 w-24 drop-shadow-xl" waving />
         </div>
         <div
           className="relative min-h-[360px] overflow-hidden rounded-[38px] p-8"
@@ -262,10 +262,10 @@ export function MainPageLoyaltyCard({
 
   // Main Hero Loyalty Card (Clean Minimalist Soft Palette)
   return (
-    <div className="relative pt-24 animate-loyalty-float">
-      {/* ── 3D Mascot positioned cleanly at top-0 right-4 with full 96px top clearance ── */}
-      <div className="pointer-events-none absolute right-4 top-0 z-30 animate-mascot-bounce">
-        <ZentroMascot className="h-[144px] w-[144px] filter drop-shadow-lg" waving celebrate />
+    <div className="relative pt-5 animate-loyalty-float">
+      {/* ── 3D Mascot peeking cleanly over the top right corner of the card ── */}
+      <div className="pointer-events-none absolute -top-10 right-4 z-30 animate-mascot-bounce">
+        <ZentroMascot className="h-24 w-24 filter drop-shadow-lg" waving celebrate />
       </div>
 
       {/* ── Sculpted Organic Card Container ── */}

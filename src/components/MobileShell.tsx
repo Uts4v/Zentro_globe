@@ -168,9 +168,7 @@ export function TopBar({
           ) : (
             <div className="zh-greeting">
               <p>{getGreeting()},</p>
-              <p>
-                {firstName || "Welcome"} <span aria-hidden>👋</span>
-              </p>
+              <p>{firstName || "Welcome"}</p>
             </div>
           )}
         </div>
@@ -206,7 +204,7 @@ export function TopBar({
   }
 
   return (
-    <header className="relative z-40 px-6 pb-2 pt-[max(28px,env(safe-area-inset-top))]">
+    <header className="relative z-40 px-6 pb-1 pt-[max(20px,env(safe-area-inset-top))]">
       <div className="flex items-start justify-between gap-4">
         {/* Left: Logo + Greeting */}
         <div className="min-w-0 flex-1">
@@ -218,47 +216,12 @@ export function TopBar({
             <ZentroLogo className="h-6 w-auto" title="" />
           </Link>
           {title ? (
-            <h1 className="mt-3 text-[28px] font-semibold text-foreground">{title}</h1>
+            <h1 className="mt-2 text-[24px] font-semibold text-foreground">{title}</h1>
           ) : (
-            <div className="mt-2">
-              <p className="text-[15px] font-medium text-muted-foreground">{getGreeting()},</p>
-              <h1 className="mt-0.5 text-[36px] font-extrabold leading-tight tracking-[-0.04em] text-foreground">
-                {firstName || "Welcome"}{" "}
-                <span className="relative inline-block" aria-hidden>
-                  👋
-                  <svg
-                    className="absolute -top-3.5 left-0.5 h-4 w-4 opacity-75"
-                    viewBox="0 0 24 24"
-                  >
-                    <line
-                      x1="12"
-                      y1="2"
-                      x2="12"
-                      y2="8"
-                      stroke="#8D7CFF"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
-                    <line
-                      x1="4"
-                      y1="8"
-                      x2="9"
-                      y2="12"
-                      stroke="#8D7CFF"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
-                    <line
-                      x1="20"
-                      y1="8"
-                      x2="15"
-                      y2="12"
-                      stroke="#8D7CFF"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </span>
+            <div className="mt-1">
+              <p className="text-[13px] font-medium text-muted-foreground">{getGreeting()},</p>
+              <h1 className="text-[28px] font-extrabold leading-tight tracking-[-0.03em] text-foreground">
+                {firstName || "Welcome"}
               </h1>
             </div>
           )}
