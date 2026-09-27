@@ -75,6 +75,7 @@ export function GoogleAuthButton({
   className?: string;
 }) {
   const [busy, setBusy] = useState(false);
+  const clientId = getGoogleClientId();
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const callbackRef = useRef<
     ((response: { credential?: string; error?: string }) => void) | undefined
@@ -90,7 +91,6 @@ export function GoogleAuthButton({
   };
 
   useEffect(() => {
-    const clientId = getGoogleClientId();
     if (!clientId) return;
     let isMounted = true;
 
@@ -131,10 +131,9 @@ export function GoogleAuthButton({
       isMounted = false;
       setBusy(false);
     };
-  }, [onError]);
+  }, [clientId, onError]);
 
   const handleFallbackClick = async () => {
-    const clientId = getGoogleClientId();
     if (!clientId) {
       onError?.("Google sign-in is not configured (add VITE_GOOGLE_CLIENT_ID).");
       return;
@@ -169,8 +168,8 @@ export function GoogleAuthButton({
       </button>
 
       {/* Invisible Google official button overlay — ensures clicking opens the native popup dialog.
-          Only mounted when CLIENT_ID exists, otherwise it would swallow clicks and do nothing. */}
-      {CLIENT_ID ? (
+          Only mounted when clientId exists, otherwise it would swallow clicks and do nothing. */}
+      {clientId ? (
         <div
           ref={overlayRef}
           aria-hidden="true"
