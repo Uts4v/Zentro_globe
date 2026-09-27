@@ -336,7 +336,7 @@ function TableQRScanPage() {
       let orderId: string;
       if (user) {
         try {
-          orderId = await placeOrder(notes, "dine_in");
+          orderId = await placeOrder(notes);
         } catch {
           // If authenticated order creation fails, fallback to guest order
           setGuestName(guestName);
