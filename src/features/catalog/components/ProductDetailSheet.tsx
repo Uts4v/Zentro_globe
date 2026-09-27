@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Minus, Plus, X, ChevronRight, AlertCircle } from "lucide-react";
 import type { MenuOptionGroup, MenuSelection, MenuItemSelectable } from "@/lib/api/types";
 import { lineUnitPrice, fromPrice, baseDiscount } from "@/lib/menu-utils";
@@ -183,7 +184,7 @@ export default function ProductDetailSheet({
 
   const hasOptions = groups.length > 0;
 
-  return (
+  const sheet = (
     <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/45 backdrop-blur-sm sm:items-center sm:p-4">
       <div
         className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-t-[28px] bg-background shadow-2xl sm:rounded-[28px]"
@@ -453,4 +454,12 @@ export default function ProductDetailSheet({
       </div>
     </div>
   );
+
+  // Portal into <body>: the sheet is mounted inside MobileShell's
+  // `relative z-10` wrapper, which forms a stacking context and traps this
+  // element's z-[70] inside it. The shell's fixed bottom nav is a sibling of
+  // that wrapper at z-50, so it would paint on top of the sheet and hide the
+  // add-to-cart bar. Portalling puts both in the root stacking context, where
+  // z-[70] correctly wins.
+  return typeof document === "undefined" ? null : createPortal(sheet, document.body);
 }

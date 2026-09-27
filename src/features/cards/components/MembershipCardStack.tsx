@@ -1,5 +1,6 @@
 // src/features/cards/components/MembershipCardStack.tsx
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { membershipCardApi, type MembershipCard } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -32,7 +33,7 @@ function QrModal({
   const { user } = useAuth();
   const transferCode = user?.customer_profile?.transfer_code;
 
-  return (
+  const overlay = (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-6 backdrop-blur-sm"
       onClick={onClose}
@@ -79,6 +80,10 @@ function QrModal({
       </div>
     </div>
   );
+
+  // Portal to <body> so this escapes MobileShell's `relative z-10` stacking
+  // context, which would otherwise trap z-[100] below the fixed bottom nav.
+  return typeof document === "undefined" ? null : createPortal(overlay, document.body);
 }
 
 /* ── Skeleton ──────────────────────────────────────────────────────────── */
