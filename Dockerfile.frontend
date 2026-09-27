@@ -20,6 +20,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json bun.lock vite.config.ts tsconfig.json ./
 COPY src/ ./src/
 COPY public/ ./public/
+# package.json "build" runs "vite build && node scripts/copy-sw.mjs",
+# so scripts/ must be present or the build fails after a successful vite build.
+COPY scripts/ ./scripts/
 
 # Build-time environment variable for the Django API URL
 ARG VITE_DJANGO_API_BASE_URL=http://localhost:8000/api
