@@ -583,20 +583,29 @@ function TableQRScanPage() {
           </div>
         </div>
 
-        <button
-          onClick={handlePlaceOrder}
-          disabled={placing || cart.length === 0}
-          className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-foreground text-base font-medium text-background transition-all active:scale-[0.98] disabled:opacity-40"
-        >
-          {placing ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <>
-              <SendHorizontal className="h-5 w-5" />
-              Place Order — {formatCurrency(total, currencySymbol)}
-            </>
-          )}
-        </button>
+        {resolution?.merchant?.table_ordering_enabled === false ? (
+          <div className="mt-6 rounded-2xl border border-border bg-muted/40 p-4 text-center">
+            <p className="text-sm font-semibold text-foreground">Menu Browsing Only</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Direct table ordering is currently disabled for this café. Please place your order directly with your server.
+            </p>
+          </div>
+        ) : (
+          <button
+            onClick={handlePlaceOrder}
+            disabled={placing || cart.length === 0}
+            className="mt-6 flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-foreground text-base font-medium text-background transition-all active:scale-[0.98] disabled:opacity-40"
+          >
+            {placing ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <>
+                <SendHorizontal className="h-5 w-5" />
+                Place Order — {formatCurrency(total, currencySymbol)}
+              </>
+            )}
+          </button>
+        )}
 
         {/* Join membership CTA at bottom of checkout (only for guests) */}
         {!user && (

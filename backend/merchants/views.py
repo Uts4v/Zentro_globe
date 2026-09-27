@@ -1165,21 +1165,15 @@ def merchant_table_regenerate_qr(request, pk):
 @permission_classes([AllowAny])
 def public_resolve_table(request, slug, public_token):
     """
-    GET /api/public/merchants/{slug}/tables/{public_token}/
+    GET /api/merchants/public/{slug}/tables/{public_token}/
     Resolves a public table QR token to merchant + table info.
     """
     try:
-        merchant = MerchantProfile.objects.get(slug=slug, is_approved=True)
+        merchant = MerchantProfile.objects.get(slug=slug)
     except MerchantProfile.DoesNotExist:
         return Response(
             {"error": "Merchant not found."},
             status=status.HTTP_404_NOT_FOUND,
-        )
-
-    if not merchant.table_ordering_enabled:
-        return Response(
-            {"error": "Table ordering is not enabled for this merchant."},
-            status=status.HTTP_400_BAD_REQUEST,
         )
 
     try:
@@ -1200,6 +1194,7 @@ def public_resolve_table(request, slug, public_token):
             "name": merchant.business_name,
             "slug": merchant.slug,
             "logo": merchant.logo_url,
+            "table_ordering_enabled": merchant.table_ordering_enabled,
         },
         "table": {
             "id": table.id,
@@ -1208,6 +1203,8 @@ def public_resolve_table(request, slug, public_token):
             "public_token": table.public_token,
         },
     })
+
+
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def public_resolve_table_by_token(request, public_token):
@@ -1227,24 +1224,13 @@ def public_resolve_table_by_token(request, public_token):
         )
 
     merchant = table.merchant
-    if not merchant.is_approved:
-        return Response(
-            {"error": "Merchant not found."},
-            status=status.HTTP_404_NOT_FOUND,
-        )
-
-    if not merchant.table_ordering_enabled:
-        return Response(
-            {"error": "Table ordering is not enabled for this merchant."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
     return Response({
         "merchant": {
             "id": merchant.id,
             "name": merchant.business_name,
             "slug": merchant.slug,
             "logo": merchant.logo_url,
+            "table_ordering_enabled": merchant.table_ordering_enabled,
         },
         "table": {
             "id": table.id,

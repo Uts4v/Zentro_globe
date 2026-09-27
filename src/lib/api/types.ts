@@ -377,6 +377,7 @@ export interface TableResolution {
     name: string;
     slug: string;
     logo: string | null;
+    table_ordering_enabled?: boolean;
   };
   table: {
     id: number;

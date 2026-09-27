@@ -70,4 +70,5 @@ class TableResolutionTests(TestCase):
         self.merchant.save()
         url = f"/api/merchants/public/tables/{self.table.public_token}/"
         response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data["merchant"]["table_ordering_enabled"])
