@@ -1,4 +1,4 @@
-﻿// routes/customer.merchant.$slug.tsx — Merchant-specific customer dashboard (QR entry)
+// routes/customer.merchant.$slug.tsx — Merchant-specific customer dashboard (QR entry)
 //
 // Flow:
 // 1. Customer opens /customer/merchant/{slug}
@@ -194,20 +194,33 @@ function CustomerMerchantDashboard() {
 
         {/* Table context banner */}
         {activeTable && activeTable.merchantSlug === slug && (
-          <div className="mt-4 flex items-center gap-3 rounded-2xl bg-blue-50 border border-blue-100 p-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
-              <Utensils className="h-5 w-5 text-blue-600" />
+          <div className="mt-4 flex items-center gap-3 rounded-2xl bg-blue-50 border border-blue-100 p-4 dark:border-blue-900/40 dark:bg-blue-950/30">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-900/50">
+              <Utensils className="h-5 w-5 text-blue-600 dark:text-blue-400" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium text-blue-800">Dine-in · {activeTable.tableName}</p>
-              <p className="text-xs text-blue-500">Your order will be placed at this table</p>
+              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Dine-in · {activeTable.tableName}
+              </p>
+              <p className="text-xs text-blue-500 dark:text-blue-400">
+                Table active · Orders placed here go to kitchen
+              </p>
             </div>
-            <button
-              onClick={() => setActiveTable(null)}
-              className="text-xs text-blue-600 underline"
-            >
-              Clear
-            </button>
+            <div className="flex items-center gap-2">
+              <Link
+                to="/m/$slug/table/$token"
+                params={{ slug, token: activeTable.tableToken }}
+                className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-transform active:scale-95"
+              >
+                Menu
+              </Link>
+              <button
+                onClick={() => setActiveTable(null)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Clear
+              </button>
+            </div>
           </div>
         )}
 
@@ -280,24 +293,46 @@ function CustomerMerchantDashboard() {
 
         {/* Quick actions — all scoped to this merchant via selectedMerchantId */}
         <div className="mt-6 grid grid-cols-2 gap-3">
-          <Link
-            to="/"
-            className="glass flex flex-col items-start gap-2 rounded-2xl p-4 transition-transform active:scale-[0.98]"
-          >
-            <div
-              className="grid h-9 w-9 place-items-center rounded-xl transition-colors duration-300"
-              style={{
-                background: merchant.store_theme_color
-                  ? `var(--merchant-light, ${merchant.store_theme_color}1a)`
-                  : "var(--muted)",
-                color: merchant.store_theme_color || "var(--ember)",
-              }}
+          {activeTable && activeTable.merchantSlug === slug ? (
+            <Link
+              to="/m/$slug/table/$token"
+              params={{ slug, token: activeTable.tableToken }}
+              className="glass flex flex-col items-start gap-2 rounded-2xl p-4 transition-transform active:scale-[0.98]"
             >
-              <ShoppingBag className="h-5 w-5" />
-            </div>
-            <span className="text-sm font-medium text-foreground">Order</span>
-            <span className="text-[11px] text-muted-foreground">Browse menu</span>
-          </Link>
+              <div
+                className="grid h-9 w-9 place-items-center rounded-xl transition-colors duration-300"
+                style={{
+                  background: merchant.store_theme_color
+                    ? `var(--merchant-light, ${merchant.store_theme_color}1a)`
+                    : "var(--muted)",
+                  color: merchant.store_theme_color || "var(--ember)",
+                }}
+              >
+                <ShoppingBag className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-medium text-foreground">Table Menu</span>
+              <span className="text-[11px] text-muted-foreground">Order at {activeTable.tableName}</span>
+            </Link>
+          ) : (
+            <Link
+              to="/menu"
+              className="glass flex flex-col items-start gap-2 rounded-2xl p-4 transition-transform active:scale-[0.98]"
+            >
+              <div
+                className="grid h-9 w-9 place-items-center rounded-xl transition-colors duration-300"
+                style={{
+                  background: merchant.store_theme_color
+                    ? `var(--merchant-light, ${merchant.store_theme_color}1a)`
+                    : "var(--muted)",
+                  color: merchant.store_theme_color || "var(--ember)",
+                }}
+              >
+                <ShoppingBag className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-medium text-foreground">Order</span>
+              <span className="text-[11px] text-muted-foreground">Browse menu</span>
+            </Link>
+          )}
           <Link
             to="/loyalty"
             className="glass flex flex-col items-start gap-2 rounded-2xl p-4 transition-transform active:scale-[0.98]"

@@ -49,6 +49,7 @@ urlpatterns = [
     path("tables/<int:pk>/regenerate-qr/",   views.merchant_table_regenerate_qr, name="merchant-table-regenerate-qr"),
 
     # ── Public table resolution ───────────────────────────────────────────────
+    path("public/tables/<str:public_token>/", views.public_resolve_table_by_token, name="public-resolve-table-by-token"),
     path("public/<slug:slug>/tables/<str:public_token>/", views.public_resolve_table, name="public-resolve-table"),
 
     # ── PDF Menu ──────────────────────────────────────────────────────────────

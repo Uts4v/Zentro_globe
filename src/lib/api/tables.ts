@@ -47,9 +47,27 @@ export const tableApi = {
     });
   },
 
-  resolve: async (slug: string, token: string): Promise<TableResolution> => {
+  resolve: async (slug: string | null | undefined, token: string): Promise<TableResolution> => {
+    if (slug) {
+      try {
+        return await djangoFetch<TableResolution>(
+          apiUrl(`/merchants/public/${encodeURIComponent(slug)}/tables/${encodeURIComponent(token)}/`),
+        );
+      } catch {
+        // Fall back to token-only resolution if slug was invalid/outdated
+        return await djangoFetch<TableResolution>(
+          apiUrl(`/merchants/public/tables/${encodeURIComponent(token)}/`),
+        );
+      }
+    }
     return djangoFetch<TableResolution>(
-      apiUrl(`/merchants/public/${encodeURIComponent(slug)}/tables/${encodeURIComponent(token)}/`),
+      apiUrl(`/merchants/public/tables/${encodeURIComponent(token)}/`),
+    );
+  },
+
+  resolveByToken: async (token: string): Promise<TableResolution> => {
+    return djangoFetch<TableResolution>(
+      apiUrl(`/merchants/public/tables/${encodeURIComponent(token)}/`),
     );
   },
 };

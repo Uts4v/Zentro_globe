@@ -30,6 +30,7 @@ import {
   ArrowRight,
   Store,
   ChevronDown,
+  Utensils,
 } from "lucide-react";
 import { requireAuth } from "@/lib/auth-guard";
 import { lazy, Suspense, useState, useEffect, useMemo } from "react";
@@ -69,7 +70,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const { add, selectedMerchantId, setSelectedMerchant } = useStore();
+  const { add, selectedMerchantId, setSelectedMerchant, activeTable, clearTable } = useStore();
   const navigate = useNavigate();
 
   // Data states
@@ -470,6 +471,46 @@ function Index() {
                   redeeming={punchRedeeming === card.id}
                 />
               ))}
+            </div>
+          </section>
+        )}
+
+        {/* Active Table Dine-In Indicator */}
+        {activeTable && (
+          <section className="px-5">
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/80 p-3.5 shadow-xs dark:border-blue-900/50 dark:bg-blue-950/40">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-100 text-blue-600 dark:bg-blue-900/60 dark:text-blue-300">
+                  <Utensils className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-blue-900 dark:text-blue-100 truncate">
+                    Active Table: {activeTable.tableName}
+                  </p>
+                  <p className="text-[11px] text-blue-700/80 dark:text-blue-300/80 truncate">
+                    Dine-in ordering active
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  to="/m/$slug/table/$token"
+                  params={{
+                    slug: activeTable.merchantSlug,
+                    token: activeTable.tableToken,
+                  }}
+                  className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-transform active:scale-95"
+                >
+                  View Menu
+                </Link>
+                <button
+                  onClick={() => clearTable()}
+                  className="text-xs text-muted-foreground hover:text-foreground p-1"
+                  title="Leave table"
+                >
+                  <XIcon className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
           </section>
         )}

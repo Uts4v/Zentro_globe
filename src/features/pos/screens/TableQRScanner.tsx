@@ -11,24 +11,81 @@ interface TableQRScannerProps {
 
 const SCANNER_ID = "table-qr-scanner";
 
-function extractTableFromUrl(text: string): { slug: string; token: string } | null {
-  // Handle full URLs: https://example.com/m/<slug>/table/<token>
-  // Handle relative paths: /m/<slug>/table/<token>
-  // Handle bare slug/table/token patterns
-  const patterns = [/\/m\/([^/]+)\/table\/([^/?#]+)/, /\/table\/([^/?#]+)/];
+export function extractTableFromUrl(text: string): { slug?: string; token: string } | null {
+  if (!text) return null;
+  const clean = text.trim();
 
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) {
-      if (match.length === 3) {
-        return { slug: match[1], token: match[2] };
+  // 1. JSON payload support: {"slug": "...", "token": "..."} or {"table_token": "..."}
+  if (clean.startsWith("{") && clean.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(clean);
+      if (typeof parsed === "object" && parsed !== null) {
+        const token =
+          parsed.token ||
+          parsed.table_token ||
+          parsed.tableToken ||
+          parsed.table ||
+          parsed.public_token;
+        const slug = parsed.slug || parsed.merchant_slug || parsed.merchant;
+        if (token && typeof token === "string") {
+          return {
+            slug: typeof slug === "string" && slug.trim() ? slug.trim() : undefined,
+            token: token.trim(),
+          };
+        }
       }
-      // For /table/<token> without slug — try extracting from nearby context
+    } catch {
+      // Not JSON, continue with URL patterns
     }
   }
 
-  // Try to find slug and token as path segments anywhere
-  const parts = text
+  // 2. Full URL or path: /m/<slug>/table/<token>
+  // e.g. https://.../m/coffee-hub/table/TBL-1234 or /m/coffee-hub/table/TBL-1234
+  const mMatch = clean.match(/(?:^|\/)m\/([^/?#]+)\/table\/([^/?#]+)/i);
+  if (mMatch) {
+    return {
+      slug: decodeURIComponent(mMatch[1]),
+      token: decodeURIComponent(mMatch[2]),
+    };
+  }
+
+  // 3. Standalone table path: /table/<token> or /table/<token>/order
+  // e.g. https://.../table/TBL-1234/order or /table/TBL-1234
+  const tableMatch = clean.match(/(?:^|\/)table\/([^/?#]+)/i);
+  if (tableMatch) {
+    const rawToken = decodeURIComponent(tableMatch[1]);
+    if (rawToken && rawToken.toLowerCase() !== "order") {
+      return { token: rawToken };
+    }
+  }
+
+  // 4. Query parameter patterns: ?table=... or ?token=... or ?table_token=...
+  if (clean.includes("?")) {
+    try {
+      const urlObj =
+        clean.startsWith("http://") || clean.startsWith("https://")
+          ? new URL(clean)
+          : new URL(`https://dummy.local/${clean.replace(/^\/+/, "")}`);
+      const token =
+        urlObj.searchParams.get("token") ||
+        urlObj.searchParams.get("table") ||
+        urlObj.searchParams.get("table_token") ||
+        urlObj.searchParams.get("public_token");
+      const slug =
+        urlObj.searchParams.get("slug") || urlObj.searchParams.get("merchant");
+      if (token) {
+        return {
+          slug: slug && slug.trim() ? slug.trim() : undefined,
+          token: token.trim(),
+        };
+      }
+    } catch {
+      // Ignore query parse error
+    }
+  }
+
+  // 5. Check segments anywhere in a URL path (e.g. nested subpaths)
+  const parts = clean
     .replace(/^https?:\/\/[^/]+/, "")
     .split("/")
     .filter(Boolean);
@@ -36,6 +93,19 @@ function extractTableFromUrl(text: string): { slug: string; token: string } | nu
     if (parts[i] === "m" && parts[i + 2] === "table" && parts[i + 3]) {
       return { slug: parts[i + 1], token: parts[i + 3] };
     }
+    if (parts[i] === "table" && parts[i + 1] && parts[i + 1].toLowerCase() !== "order") {
+      return { token: parts[i + 1] };
+    }
+  }
+
+  // 6. Bare table token (e.g. TBL-XXXX or TBL_XXXX)
+  if (/^TBL[-_][A-Za-z0-9_-]+$/i.test(clean)) {
+    return { token: clean };
+  }
+
+  // 7. Generic URL-safe token (no slashes, length 6-64)
+  if (!clean.includes("/") && !clean.includes(" ") && /^[A-Za-z0-9_-]{6,64}$/.test(clean)) {
+    return { token: clean };
   }
 
   return null;
@@ -77,32 +147,60 @@ export function TableQRScanner({ onClose }: TableQRScannerProps) {
           { fps: 10, qrbox: { width: 250, height: 250 } },
           async (decodedText: string) => {
             if (resolving) return;
-            const match = extractTableFromUrl(decodedText);
-            if (!match) {
+            const text = decodedText?.trim() || "";
+
+            // User accidentally scanned a Loyalty QR code instead of Table QR
+            if (text.includes("MQR_") || text.includes("/loyalty/qr/")) {
+              setError(
+                "This appears to be a customer loyalty QR, not a table QR. Please scan the QR code located on your table.",
+              );
+              return;
+            }
+
+            const match = extractTableFromUrl(text);
+            if (!match || !match.token) {
               setError("Invalid table QR code. Please scan a table QR.");
               return;
             }
 
             setResolving(true);
+            setError(null);
             try {
               const resolution = await tableApi.resolve(match.slug, match.token);
+              const resolvedSlug = resolution.merchant.slug;
+              const resolvedToken = resolution.table.public_token;
+
+              // Update store context so table is active across customer experience
               setActiveTable({
-                merchantSlug: match.slug,
-                tableToken: match.token,
+                merchantSlug: resolvedSlug,
+                tableToken: resolvedToken,
                 tableId: resolution.table.id,
                 tableName: resolution.table.name,
                 scannedAt: Date.now(),
               });
               setSelectedMerchant(String(resolution.merchant.id));
+
               startedRef.current = false;
               await scanner.stop().catch(() => {});
+
+              // Close the scanner modal dialog
+              onClose();
+
+              // Redirect directly to that store's table menu!
               navigate({
-                to: "/customer/merchant/$slug",
-                params: { slug: match.slug },
+                to: "/m/$slug/table/$token",
+                params: {
+                  slug: resolvedSlug,
+                  token: resolvedToken,
+                },
                 replace: true,
               });
-            } catch {
-              setError("Table not found. Please scan again.");
+            } catch (err: any) {
+              const message =
+                err?.response?.data?.error ||
+                err?.message ||
+                "Table not found or table ordering is disabled. Please scan again.";
+              setError(message);
               setResolving(false);
             }
           },
@@ -127,7 +225,7 @@ export function TableQRScanner({ onClose }: TableQRScannerProps) {
       }
       scannerRef.current = null;
     };
-  }, [resolving, navigate, setActiveTable, setSelectedMerchant]);
+  }, [resolving, navigate, setActiveTable, setSelectedMerchant, onClose]);
 
   return (
     <div

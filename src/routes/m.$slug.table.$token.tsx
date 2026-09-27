@@ -141,6 +141,7 @@ function TableQRScanPage() {
     activeTable,
     guestSession,
     setGuestName,
+    placeOrder,
     placeGuestOrder,
   } = useStore();
 
@@ -332,8 +333,19 @@ function TableQRScanPage() {
     if (placing || cart.length === 0 || !activeTable) return;
     setPlacing(true);
     try {
-      setGuestName(guestName);
-      const orderId = await placeGuestOrder(notes, guestName);
+      let orderId: string;
+      if (user) {
+        try {
+          orderId = await placeOrder(notes, "dine_in");
+        } catch {
+          // If authenticated order creation fails, fallback to guest order
+          setGuestName(guestName);
+          orderId = await placeGuestOrder(notes, guestName);
+        }
+      } else {
+        setGuestName(guestName);
+        orderId = await placeGuestOrder(notes, guestName);
+      }
       setOrderSuccess({ orderId });
       setShowCheckout(false);
     } catch (err: any) {
@@ -365,7 +377,12 @@ function TableQRScanPage() {
       await orderApi.callWaiter({
         merchant_id: String(resolution.merchant.id),
         table_token: token,
-        guest_name: guestName.trim() || guestSession?.guestName?.trim() || "",
+        guest_name:
+          user?.customer_profile?.full_name ||
+          user?.first_name ||
+          guestName.trim() ||
+          guestSession?.guestName?.trim() ||
+          "",
       });
       setWaiterStatus("sent");
       setWaiterCooldown(60);
@@ -581,21 +598,23 @@ function TableQRScanPage() {
           )}
         </button>
 
-        {/* Join membership CTA at bottom of checkout */}
-        <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-center">
-          <p className="text-xs text-amber-700">
-            <Sparkles className="inline h-3 w-3 mr-1" />
-            <span className="font-semibold">Join Zentro</span> — earn points on every order, unlock
-            rewards & member-only offers.
-          </p>
-          <Link
-            to="/auth/signup"
-            search={{ redirect: `/customer/merchant/${slug}` }}
-            className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 underline"
-          >
-            <UserPlus className="h-3 w-3" /> Join Free
-          </Link>
-        </div>
+        {/* Join membership CTA at bottom of checkout (only for guests) */}
+        {!user && (
+          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-center">
+            <p className="text-xs text-amber-700">
+              <Sparkles className="inline h-3 w-3 mr-1" />
+              <span className="font-semibold">Join Zentro</span> — earn points on every order, unlock
+              rewards & member-only offers.
+            </p>
+            <Link
+              to="/auth/signup"
+              search={{ redirect: `/customer/merchant/${slug}` }}
+              className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 underline"
+            >
+              <UserPlus className="h-3 w-3" /> Join Free
+            </Link>
+          </div>
+        )}
       </div>
     );
   }
@@ -709,41 +728,59 @@ function TableQRScanPage() {
         </div>
       </div>
 
-      {/* Membership banner (subtle, non-blocking) */}
-      <div className="mx-5 mt-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50/80 to-orange-50/50 p-3.5">
-        <div className="flex items-start gap-3">
-          <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-100">
-            <Sparkles className="h-4 w-4 text-amber-600" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-amber-800">Join Zentro — it's free</p>
-            <p className="mt-0.5 text-[11px] text-amber-700/80 leading-relaxed">
-              Earn points on every order, unlock rewards & member-only offers.
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {[
-                { icon: Star, text: "Earn points" },
-                { icon: Gift, text: "Rewards" },
-                { icon: Zap, text: "B2G1 deals" },
-              ].map(({ icon: Icon, text }) => (
-                <span
-                  key={text}
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-700"
-                >
-                  <Icon className="h-2.5 w-2.5" /> {text}
-                </span>
-              ))}
+      {/* Membership status banner */}
+      {user ? (
+        <div className="mx-5 mt-3 rounded-2xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 to-teal-500/5 p-3.5">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+              <Sparkles className="h-4 w-4" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-foreground">
+                Logged in as {user.customer_profile?.full_name || user.first_name || "Member"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Orders placed at this table earn loyalty points automatically.
+              </p>
             </div>
           </div>
-          <Link
-            to="/auth/signup"
-            search={{ redirect: `/customer/merchant/${slug}` }}
-            className="shrink-0 rounded-xl bg-amber-600 px-3 py-1.5 text-[11px] font-semibold text-white active:scale-95 transition-transform"
-          >
-            Join Free
-          </Link>
         </div>
-      </div>
+      ) : (
+        <div className="mx-5 mt-3 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50/80 to-orange-50/50 p-3.5">
+          <div className="flex items-start gap-3">
+            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-100">
+              <Sparkles className="h-4 w-4 text-amber-600" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-semibold text-amber-800">Join Zentro — it's free</p>
+              <p className="mt-0.5 text-[11px] text-amber-700/80 leading-relaxed">
+                Earn points on every order, unlock rewards & member-only offers.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {[
+                  { icon: Star, text: "Earn points" },
+                  { icon: Gift, text: "Rewards" },
+                  { icon: Zap, text: "B2G1 deals" },
+                ].map(({ icon: Icon, text }) => (
+                  <span
+                    key={text}
+                    className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-medium text-amber-700"
+                  >
+                    <Icon className="h-2.5 w-2.5" /> {text}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <Link
+              to="/auth/signup"
+              search={{ redirect: `/customer/merchant/${slug}` }}
+              className="shrink-0 rounded-xl bg-amber-600 px-3 py-1.5 text-[11px] font-semibold text-white active:scale-95 transition-transform"
+            >
+              Join Free
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Menu grid */}
       <div className="px-5 mt-4 pb-32">

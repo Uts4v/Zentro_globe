@@ -1208,7 +1208,51 @@ def public_resolve_table(request, slug, public_token):
             "public_token": table.public_token,
         },
     })
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def public_resolve_table_by_token(request, public_token):
+    """
+    GET /api/merchants/public/tables/{public_token}/
+    Resolves a public table QR token to merchant + table info without requiring the slug.
+    """
+    try:
+        table = MerchantTable.objects.select_related("merchant").get(
+            public_token=public_token,
+            is_active=True,
+        )
+    except MerchantTable.DoesNotExist:
+        return Response(
+            {"error": "Invalid or inactive table QR code."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
 
+    merchant = table.merchant
+    if not merchant.is_approved:
+        return Response(
+            {"error": "Merchant not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    if not merchant.table_ordering_enabled:
+        return Response(
+            {"error": "Table ordering is not enabled for this merchant."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return Response({
+        "merchant": {
+            "id": merchant.id,
+            "name": merchant.business_name,
+            "slug": merchant.slug,
+            "logo": merchant.logo_url,
+        },
+        "table": {
+            "id": table.id,
+            "name": table.name,
+            "table_number": table.table_number,
+            "public_token": table.public_token,
+        },
+    })
 
 # ── PDF Menu ─────────────────────────────────────────────────────────────────
 

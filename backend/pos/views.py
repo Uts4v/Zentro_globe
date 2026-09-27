@@ -4126,6 +4126,8 @@ def table_menu(request, token):
             "table_number": table.table_number,
         },
         "merchant": {
+            "id": merchant.id,
+            "slug": merchant.slug,
             "name": merchant.business_name,
             "logo_url": merchant.logo_url,
         },
