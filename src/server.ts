@@ -55,7 +55,9 @@ async function injectRuntimeConfig(response: Response): Promise<Response> {
         process.env.GOOGLE_OAUTH_CLIENT_IDS)) ||
     "";
 
-  if (!base && !googleClientId) return response;
+  const headers = new Headers(response.headers);
+  // Allow Google OAuth popup window to communicate back with the opener via postMessage
+  headers.set("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
 
   const html = await response.text();
   let scripts = "";
@@ -71,7 +73,7 @@ async function injectRuntimeConfig(response: Response): Promise<Response> {
     : `${html}${scripts}`;
   return new Response(injected, {
     status: response.status,
-    headers: response.headers,
+    headers,
   });
 }
 

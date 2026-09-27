@@ -80,13 +80,18 @@ export function GoogleAuthButton({
   const callbackRef = useRef<
     ((response: { credential?: string; error?: string }) => void) | undefined
   >(undefined);
+  const errorRef = useRef(onError);
+  errorRef.current = onError;
+  const onTokenRef = useRef(onToken);
+  onTokenRef.current = onToken;
+  const initializedClientIdRef = useRef<string | null>(null);
 
   callbackRef.current = (response) => {
     setBusy(false);
     if (response.credential) {
-      onToken(response.credential);
-    } else if (onError) {
-      onError(response.error || "Google sign-in was cancelled.");
+      onTokenRef.current(response.credential);
+    } else if (errorRef.current) {
+      errorRef.current(response.error || "Google sign-in was cancelled.");
     }
   };
 
@@ -99,12 +104,15 @@ export function GoogleAuthButton({
         if (!isMounted || !window.google?.accounts?.id) return;
         const google = window.google;
 
-        google.accounts.id.initialize({
-          client_id: clientId,
-          callback: (response) => callbackRef.current?.(response),
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        });
+        if (initializedClientIdRef.current !== clientId) {
+          google.accounts.id.initialize({
+            client_id: clientId,
+            callback: (response) => callbackRef.current?.(response),
+            auto_select: false,
+            cancel_on_tap_outside: true,
+          });
+          initializedClientIdRef.current = clientId;
+        }
 
         if (overlayRef.current) {
           overlayRef.current.innerHTML = "";
@@ -123,7 +131,7 @@ export function GoogleAuthButton({
       })
       .catch((e) => {
         if (isMounted) {
-          onError?.(e instanceof Error ? e.message : "Failed to load Google sign-in.");
+          errorRef.current?.(e instanceof Error ? e.message : "Failed to load Google sign-in.");
         }
       });
 
@@ -131,11 +139,11 @@ export function GoogleAuthButton({
       isMounted = false;
       setBusy(false);
     };
-  }, [clientId, onError]);
+  }, [clientId]);
 
   const handleFallbackClick = async () => {
     if (!clientId) {
-      onError?.("Google sign-in is not configured (add VITE_GOOGLE_CLIENT_ID).");
+      errorRef.current?.("Google sign-in is not configured (add VITE_GOOGLE_CLIENT_ID).");
       return;
     }
     setBusy(true);
@@ -144,7 +152,7 @@ export function GoogleAuthButton({
       window.google?.accounts?.id.prompt();
     } catch (e: unknown) {
       setBusy(false);
-      onError?.(e instanceof Error ? e.message : "Could not start Google sign-in.");
+      errorRef.current?.(e instanceof Error ? e.message : "Could not start Google sign-in.");
     }
   };
 

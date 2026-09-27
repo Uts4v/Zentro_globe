@@ -413,6 +413,7 @@ GOOGLE_OAUTH_CLIENT_IDS = [
 ]
 # Optional server-side `aud` override for the verify step (advanced use).
 GOOGLE_AUDIENCE = os.getenv("GOOGLE_AUDIENCE", "") or None
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin-allow-popups"
 
 # ── Email ─────────────────────────────────────────────────────────────────────
 EMAIL_BACKEND = os.getenv(
