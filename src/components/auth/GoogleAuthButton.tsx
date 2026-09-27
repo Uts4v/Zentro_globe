@@ -159,13 +159,16 @@ export function GoogleAuthButton({
         )}
       </button>
 
-      {/* Invisible Google official button overlay — ensures clicking opens the native popup dialog */}
-      <div
-        ref={overlayRef}
-        aria-hidden="true"
-        className="absolute inset-0 flex items-center justify-center opacity-[0.0001] cursor-pointer overflow-hidden pointer-events-auto"
-        style={{ transform: "scale(1.4)", transformOrigin: "center" }}
-      />
+      {/* Invisible Google official button overlay — ensures clicking opens the native popup dialog.
+          Only mounted when CLIENT_ID exists, otherwise it would swallow clicks and do nothing. */}
+      {CLIENT_ID ? (
+        <div
+          ref={overlayRef}
+          aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-center opacity-[0.0001] cursor-pointer overflow-hidden pointer-events-auto"
+          style={{ transform: "scale(1.4)", transformOrigin: "center" }}
+        />
+      ) : null}
     </div>
   );
 }
