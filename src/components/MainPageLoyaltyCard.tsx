@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import type { MerchantThemePreset } from "@/lib/merchant-theme-presets";
 import type { MembershipCardDesign, MembershipCard } from "@/lib/api";
-import { ZentroMascot } from "@/components/brand/ZentroMascot";
 
 function hexToRGBA(hex: string, alpha: number): string {
   const r = parseInt(hex.slice(1, 3), 16);
@@ -172,7 +171,9 @@ export function MainPageLoyaltyCard({
         {merchantLogo ? (
           <img src={merchantLogo} alt="" className="h-8 w-8 rounded-xl object-cover" />
         ) : (
-          <ZentroMascot className="h-9 w-9" waving={false} celebrate={false} />
+          <span className="grid h-8 w-8 place-items-center rounded-xl bg-white/10 text-white">
+            <Sparkles className="h-4 w-4" />
+          </span>
         )}
         <div className="min-w-0 flex-1">
           <p className="truncate text-[15px] font-semibold tracking-[-0.02em]">{merchantName}</p>
@@ -194,10 +195,7 @@ export function MainPageLoyaltyCard({
   // Not-joined state
   if (!joined) {
     return (
-      <div className="relative pt-5">
-        <div className="pointer-events-none absolute -top-10 right-4 z-20 animate-mascot-bounce">
-          <ZentroMascot className="h-24 w-24 drop-shadow-xl" waving />
-        </div>
+      <div className="relative">
         <div
           className="relative min-h-[360px] overflow-hidden rounded-[38px] p-8"
           style={{
@@ -262,12 +260,7 @@ export function MainPageLoyaltyCard({
 
   // Main Hero Loyalty Card (Clean Minimalist Soft Palette)
   return (
-    <div className="relative pt-5 animate-loyalty-float">
-      {/* ── 3D Mascot peeking cleanly over the top right corner of the card ── */}
-      <div className="pointer-events-none absolute -top-10 right-4 z-30 animate-mascot-bounce">
-        <ZentroMascot className="h-24 w-24 filter drop-shadow-lg" waving celebrate />
-      </div>
-
+    <div className="relative animate-loyalty-float">
       {/* ── Sculpted Organic Card Container ── */}
       <div
         className="relative overflow-hidden"
