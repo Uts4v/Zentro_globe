@@ -52,3 +52,7 @@ backend/.venv/
 
 # Django collectstatic output
 backend/staticfiles/
+
+# Original high-res brand source art (7.8 MB). The generated icons under
+# public/icons/ are committed; this master file is not.
+src/img/Zentro logo.png

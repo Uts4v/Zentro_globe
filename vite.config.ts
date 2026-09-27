@@ -51,16 +51,28 @@ export default defineConfig({
           categories: ["shopping", "food", "lifestyle"],
           icons: [
             {
-              src: "/icons/pwa-192x192.svg",
+              src: "/icons/pwa-192x192.png",
               sizes: "192x192",
-              type: "image/svg+xml",
+              type: "image/png",
               purpose: "any",
             },
             {
-              src: "/icons/pwa-512x512.svg",
+              src: "/icons/pwa-512x512.png",
               sizes: "512x512",
-              type: "image/svg+xml",
+              type: "image/png",
               purpose: "any",
+            },
+            {
+              src: "/icons/pwa-192x192-maskable.png",
+              sizes: "192x192",
+              type: "image/png",
+              purpose: "maskable",
+            },
+            {
+              src: "/icons/pwa-512x512-maskable.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "maskable",
             },
           ],
           shortcuts: [
