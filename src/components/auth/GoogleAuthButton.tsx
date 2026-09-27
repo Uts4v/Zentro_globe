@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react";
 
 declare global {
   interface Window {
+    __GOOGLE_CLIENT_ID__?: string;
     google?: {
       accounts: {
         id: {
@@ -36,7 +37,13 @@ declare global {
   }
 }
 
-const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() || "";
+function getGoogleClientId(): string {
+  if (typeof window !== "undefined" && window.__GOOGLE_CLIENT_ID__) {
+    return window.__GOOGLE_CLIENT_ID__.trim();
+  }
+  const envVal = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim();
+  return envVal || "";
+}
 
 let gsiPromise: Promise<void> | null = null;
 
@@ -83,7 +90,8 @@ export function GoogleAuthButton({
   };
 
   useEffect(() => {
-    if (!CLIENT_ID) return;
+    const clientId = getGoogleClientId();
+    if (!clientId) return;
     let isMounted = true;
 
     loadGsi()
@@ -92,7 +100,7 @@ export function GoogleAuthButton({
         const google = window.google;
 
         google.accounts.id.initialize({
-          client_id: CLIENT_ID,
+          client_id: clientId,
           callback: (response) => callbackRef.current?.(response),
           auto_select: false,
           cancel_on_tap_outside: true,
@@ -126,7 +134,8 @@ export function GoogleAuthButton({
   }, [onError]);
 
   const handleFallbackClick = async () => {
-    if (!CLIENT_ID) {
+    const clientId = getGoogleClientId();
+    if (!clientId) {
       onError?.("Google sign-in is not configured (add VITE_GOOGLE_CLIENT_ID).");
       return;
     }

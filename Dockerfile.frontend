@@ -24,12 +24,11 @@ COPY public/ ./public/
 # so scripts/ must be present or the build fails after a successful vite build.
 COPY scripts/ ./scripts/
 
-# Build-time env vars (VITE_DJANGO_API_BASE_URL, VITE_GOOGLE_CLIENT_ID) are
-# injected into the build environment by Railway and read straight from it.
-# Do NOT declare ARG/ENV defaults here: `ARG X=default` ignores the ambient
-# environment and the following `ENV X=${X}` would overwrite the real Railway
-# value with the default (e.g. http://localhost:8000/api).
-# VITE_DJANGO_API_BASE_URL is additionally re-injected at runtime by src/server.ts.
+# Build-time env vars (VITE_DJANGO_API_BASE_URL, VITE_GOOGLE_CLIENT_ID)
+ARG VITE_DJANGO_API_BASE_URL
+ARG VITE_GOOGLE_CLIENT_ID
+ENV VITE_DJANGO_API_BASE_URL=$VITE_DJANGO_API_BASE_URL
+ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
 
 RUN bun run build
 
