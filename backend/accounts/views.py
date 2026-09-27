@@ -273,6 +273,21 @@ def change_password(request):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     user = request.user
+    if not user.has_usable_password():
+        # OAuth-only accounts (google_sub set, no password ever chosen) can never
+        # match old_password. Point the client at the reset flow instead of
+        # returning a misleading "incorrect password".
+        return Response(
+            {
+                "error": (
+                    "This account signs in with Google, so it has no password to "
+                    "change. Use 'Forgot password' to set one."
+                ),
+                "code": "no_usable_password",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     if not user.check_password(serializer.validated_data["old_password"]):
         return Response(
             {"error": "Current password is incorrect."},

@@ -86,6 +86,8 @@ export type AuthUser = {
   phone: string;
   avatar_url: string;
   customer_profile: CustomerProfile | null;
+  /** False for OAuth-only accounts — they must use the reset flow instead. */
+  has_usable_password?: boolean;
 };
 
 type AuthContextType = {
@@ -130,6 +132,10 @@ type AuthContextType = {
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   refreshMerchantProfile: () => Promise<void>;
+  changePassword: (
+    oldPassword: string,
+    newPassword: string
+  ) => Promise<{ error: string | null; noUsablePassword?: boolean }>;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -474,6 +480,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // ── Change password ─────────────────────────────────────────────────────────
+
+  const changePassword = useCallback(
+    async (
+      oldPassword: string,
+      newPassword: string
+    ): Promise<{ error: string | null; noUsablePassword?: boolean }> => {
+      const token = tokenStore.getAccess();
+      if (!token) return { error: "Please log in again to change your password." };
+      try {
+        await djangoFetch(apiUrl("/auth/change-password/"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
+        });
+        return { error: null };
+      } catch (e) {
+        const err = e as Error & { code?: string };
+        return { error: err.message, noUsablePassword: err.code === "no_usable_password" };
+      }
+    },
+    []
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -488,6 +518,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signOut,
         refreshProfile,
         refreshMerchantProfile,
+        changePassword,
       }}
     >
       {children}

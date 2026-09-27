@@ -12,9 +12,11 @@ import {
   Loader2,
   ArrowLeftRight,
   Download,
+  KeyRound,
 } from "lucide-react";
 import { customerApi, orderApi, type Order, type CustomerProfile } from "@/lib/api";
 import { usePwa } from "@/features/pwa/PwaProvider";
+import { ChangePasswordDialog } from "@/components/auth/ChangePasswordDialog";
 import { useState, useEffect } from "react";
 
 export function CustomerProfilePage() {
@@ -23,6 +25,7 @@ export function CustomerProfilePage() {
   const [customerProfile, setCustomerProfile] = useState<CustomerProfile | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -143,6 +146,14 @@ export function CustomerProfilePage() {
           <Link to="/notifications" className="block">
             <Row icon={Bell} label="Notifications" />
           </Link>
+          <button
+            onClick={() => setChangePasswordOpen(true)}
+            className="flex w-full items-center gap-3 p-4 text-left"
+          >
+            <KeyRound className="h-4 w-4 text-muted-foreground" />
+            <span className="flex-1 text-sm text-foreground">Change password</span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
           <Row icon={CreditCard} label="Payment methods" />
           <div className="flex items-center gap-3 p-4">
             <Settings className="h-4 w-4 text-muted-foreground" />
@@ -156,6 +167,8 @@ export function CustomerProfilePage() {
           </button>
         </div>
       </section>
+
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </MobileShell>
   );
 }

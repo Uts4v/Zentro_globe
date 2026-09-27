@@ -217,3 +217,74 @@ class GoogleAuthConfigTests(TestCase):
         )
         self.assertEqual(resp.status_code, 503)
         self.assertIn("not configured", str(resp.data).lower())
+
+
+class ChangePasswordTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="changer1",
+            email="changer@example.com",
+            password="OldPass123!",
+            role="customer",
+        )
+        self.client.force_authenticate(self.user)
+
+    def _post(self, **overrides):
+        payload = {"old_password": "OldPass123!", "new_password": "BrandNew456!"}
+        payload.update(overrides)
+        return self.client.post(
+            reverse("auth-change-password"), payload, format="json"
+        )
+
+    def test_change_password_succeeds(self):
+        resp = self._post()
+        self.assertEqual(resp.status_code, 200)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("BrandNew456!"))
+        self.assertFalse(self.user.check_password("OldPass123!"))
+
+    def test_wrong_current_password_is_rejected(self):
+        resp = self._post(old_password="WrongPass123!")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("incorrect", str(resp.data).lower())
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("OldPass123!"))
+
+    def test_short_password_is_rejected(self):
+        resp = self._post(new_password="Sh0rt!")
+        self.assertEqual(resp.status_code, 400)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password("OldPass123!"))
+
+    def test_requires_authentication(self):
+        self.client.force_authenticate(None)
+        resp = self._post()
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_google_only_account_gets_no_usable_password_code(self):
+        oauth_user = User.objects.create_user(
+            username="oauthonly1",
+            email="oauth@example.com",
+            password=None,
+            role="customer",
+        )
+        self.client.force_authenticate(oauth_user)
+        resp = self._post()
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data.get("code"), "no_usable_password")
+
+    def test_me_reports_has_usable_password(self):
+        resp = self.client.get(reverse("auth-me"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.data["has_usable_password"])
+
+        oauth_user = User.objects.create_user(
+            username="oauthonly2",
+            email="oauth2@example.com",
+            password=None,
+            role="customer",
+        )
+        self.client.force_authenticate(oauth_user)
+        resp = self.client.get(reverse("auth-me"))
+        self.assertFalse(resp.data["has_usable_password"])

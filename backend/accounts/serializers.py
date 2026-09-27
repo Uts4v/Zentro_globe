@@ -237,6 +237,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """Full profile response — used for /api/auth/me/."""
 
     customer_profile = CustomerProfileSerializer(read_only=True)
+    has_usable_password = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -249,8 +250,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "phone",
             "avatar_url",
             "customer_profile",
+            "has_usable_password",
         ]
         read_only_fields = ["id", "email", "role"]
+
+    def get_has_usable_password(self, obj) -> bool:
+        return obj.has_usable_password()
 
 
 class UpdateProfileSerializer(serializers.ModelSerializer):

@@ -17,7 +17,9 @@ import {
   Store,
   QrCode,
   Upload,
+  KeyRound,
 } from "lucide-react";
+import { ChangePasswordDialog } from "@/components/auth/ChangePasswordDialog";
 
 const TAX_PRESETS: Record<string, Array<{ name: string; rate: number }>> = {
   nepal: [{ name: "VAT", rate: 13 }],
@@ -78,6 +80,7 @@ export function MerchantSettingsPage() {
   const [profile, setProfile] = useState<MerchantProfile | null>(merchantProfile);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [error, setError] = useState("");
   const [qrUploading, setQrUploading] = useState(false);
   const [qrDragOver, setQrDragOver] = useState(false);
@@ -746,6 +749,25 @@ export function MerchantSettingsPage() {
         </div>
       </section>
 
+      {/* ── Account security ────────────────────────────────────────────── */}
+      <section className="glass-strong rounded-3xl p-6">
+        <h2 className="mb-4 text-sm font-bold text-foreground uppercase tracking-wider">
+          Account Security
+        </h2>
+        <button
+          onClick={() => setChangePasswordOpen(true)}
+          className="flex w-full items-center gap-3 rounded-2xl bg-mist px-4 py-3 text-left transition-opacity hover:opacity-80"
+        >
+          <KeyRound className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="flex-1">
+            <span className="block text-sm font-medium text-foreground">Change password</span>
+            <span className="block text-xs text-muted-foreground">
+              Update the password you use to sign in to Zentro
+            </span>
+          </span>
+        </button>
+      </section>
+
       {/* ── Save ──────────────────────────────────────────────────────── */}
       <button
         onClick={handleSave}
@@ -766,6 +788,8 @@ export function MerchantSettingsPage() {
         These settings are the single source of truth for your entire system. POS, orders, invoices,
         reports, and analytics will use these configurations.
       </p>
+
+      <ChangePasswordDialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen} />
     </div>
   );
 }

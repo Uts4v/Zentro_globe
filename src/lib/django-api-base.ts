@@ -62,7 +62,16 @@ export async function djangoFetch<T>(
         errMsg = messages.join(" | ");
       }
     }
-    throw new Error(errMsg || `Request failed: ${res.status}`);
+    const err = new Error(errMsg || `Request failed: ${res.status}`) as Error & {
+      status?: number;
+      code?: string;
+    };
+    // Preserve HTTP status and any machine-readable `code` so callers can
+    // branch on them instead of pattern-matching the message text.
+    err.status = res.status;
+    const code = (data as { code?: unknown } | null | undefined)?.code;
+    if (typeof code === "string") err.code = code;
+    throw err;
   }
   return data as T;
 }
