@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import path, re_path, include
 from django.conf import settings
-from accounts.views import upload_image
+from accounts.views import upload_image, upload_payment_qr
 from config.views import healthz, serve_media
 from config.db_browser import db_browser
 
@@ -16,6 +16,11 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/auth/", include("accounts.urls")),
     path("api/media/upload/", upload_image, name="media-upload"),
+    path(
+        "api/media/upload/payment-qr/",
+        upload_payment_qr,
+        name="media-upload-payment-qr",
+    ),
     path("api/merchants/", include("merchants.urls")),
     path("api/loyalty/", include("loyalty.urls")),
     path("api/customer/memberships/", include("loyalty.customer_urls")),

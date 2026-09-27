@@ -36,7 +36,7 @@ from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.exceptions import TokenError
 
-from config.media_utils import UploadValidationError, validate_image_upload
+from config.media_utils import UploadValidationError, validate_image_upload, validate_payment_qr_upload
 
 from .models import User, CustomerProfile, PasswordResetToken, OtpCode
 from .sms import send_sms, build_otp_message
@@ -693,3 +693,36 @@ def upload_image(request):
 
 
 upload_image.throttle_scope = "upload"
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([ScopedRateThrottle])
+def upload_payment_qr(request):
+    """
+    POST /api/media/upload/payment-qr/
+    Multipart form: field name = "file"
+    Returns: { "url": "http://..." }
+
+    Separate from ``upload_image`` because a bank payment code is not a photo.
+    Banks distribute these as SVG (which ``upload_image`` refuses, since SVG is
+    markup) and as very large PNGs. This endpoint rasterises SVG to a flat PNG
+    and downscales oversized artwork, then stores the PNG under a
+    server-generated name - the response is always a raster, so nothing that
+    could execute is ever served.
+    """
+    file = request.FILES.get("file")
+
+    try:
+        data, ext = validate_payment_qr_upload(file)
+    except UploadValidationError as e:
+        return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    filename = f"uploads/{_uuid.uuid4().hex}{ext}"
+    saved_path = default_storage.save(filename, ContentFile(data))
+    file_url = request.build_absolute_uri(settings.MEDIA_URL + saved_path)
+
+    return Response({"url": file_url}, status=status.HTTP_201_CREATED)
+
+
+upload_payment_qr.throttle_scope = "upload"

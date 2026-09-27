@@ -4,6 +4,7 @@ import { merchantApi } from "@/lib/api";
 import { CURRENCIES } from "@/lib/currency";
 import { apiUrl } from "@/lib/django-api-base";
 import { uploadPaymentQr as uploadPaymentQrFile } from "@/lib/image-upload";
+import { toast } from "sonner";
 import {
   Settings,
   Save,
@@ -79,6 +80,10 @@ export function MerchantSettingsPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [qrUploading, setQrUploading] = useState(false);
+  const [qrDragOver, setQrDragOver] = useState(false);
+  // Kept separate from `error`: that banner belongs to the top of the page, so a
+  // tax or save failure must not surface under the Payment QR section.
+  const [qrError, setQrError] = useState("");
   const qrInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -196,7 +201,7 @@ export function MerchantSettingsPage() {
 
   async function uploadPaymentQr(file: File) {
     setQrUploading(true);
-    setError("");
+    setQrError("");
     try {
       const url = await uploadPaymentQrFile(file);
       setProfile((p) =>
@@ -208,12 +213,25 @@ export function MerchantSettingsPage() {
             }
           : p,
       );
+      toast.success("Payment QR uploaded. Remember to press Save to publish it.");
     } catch (e: any) {
-      setError(e?.message || "Could not upload the QR image.");
+      // The banner at the top of a long settings page is off-screen by the time
+      // a merchant reaches the QR section, so surface the reason here too.
+      const message = e?.message || "Could not upload the QR image.";
+      setQrError(message);
+      setError(message);
+      toast.error(message);
     } finally {
       setQrUploading(false);
       if (qrInputRef.current) qrInputRef.current.value = "";
     }
+  }
+
+  function handleQrDrop(e: React.DragEvent<HTMLButtonElement>) {
+    e.preventDefault();
+    setQrDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) uploadPaymentQr(file);
   }
 
   function absoluteMediaUrl(url: string): string {
@@ -515,8 +533,10 @@ export function MerchantSettingsPage() {
           </h2>
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Shown to the customer in the POS payment sheet. Uploaded images are
-          re-encoded server-side, so only a picture can be stored here.
+          Shown to the customer in the POS payment sheet. Drop a file on the
+          button or click to browse. PNG, JPEG, WEBP and SVG all work - vector
+          files are converted to a sharp PNG on the server, and the image is
+          kept at full size so it stays scannable.
         </p>
 
         <div className="flex items-start gap-4">
@@ -589,7 +609,7 @@ export function MerchantSettingsPage() {
           <input
             ref={qrInputRef}
             type="file"
-            accept="image/png,image/jpeg,image/webp"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
@@ -599,15 +619,31 @@ export function MerchantSettingsPage() {
           <button
             type="button"
             onClick={() => qrInputRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setQrDragOver(true);
+            }}
+            onDragLeave={() => setQrDragOver(false)}
+            onDrop={handleQrDrop}
             disabled={qrUploading}
-            className="inline-flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-mist disabled:opacity-50"
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium text-foreground transition-colors disabled:opacity-50 ${
+              qrDragOver
+                ? "border-ember bg-ember/10"
+                : "border-border hover:bg-mist"
+            }`}
           >
             {qrUploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <Upload className="h-4 w-4" />
             )}
-            {profile.payment_qr_url ? "Replace QR" : "Upload QR"}
+            {qrUploading
+              ? "Uploading…"
+              : qrDragOver
+                ? "Drop to upload"
+                : profile.payment_qr_url
+                  ? "Replace QR"
+                  : "Upload QR"}
           </button>
           {profile.payment_qr_url && (
             <>
@@ -626,9 +662,12 @@ export function MerchantSettingsPage() {
                   onChange={(e) => {
                     const on = e.target.checked;
                     if (on && !profile.payment_qr_url) {
-                      setError("Upload a payment QR image before enabling QR payment.");
+                      const message = "Upload a payment QR image before enabling QR payment.";
+                      setQrError(message);
+                      setError(message);
                       return;
                     }
+                    setQrError("");
                     setProfile((p) => (p ? { ...p, payment_qr_enabled: on } : p));
                   }}
                   className="h-4 w-4 rounded border-border accent-ink"
@@ -641,6 +680,12 @@ export function MerchantSettingsPage() {
         {qrUploading && (
           <p className="mt-2 text-[11px] text-muted-foreground">
             Uploading… the image is kept at full size so it stays scannable.
+          </p>
+        )}
+        {qrError && !qrUploading && (
+          <p className="mt-2 flex items-start gap-1.5 text-[11px] text-rose-600">
+            <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+            <span>{qrError}</span>
           </p>
         )}
       </section>
