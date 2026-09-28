@@ -31,6 +31,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import IntegrityError, transaction as db_transaction
 from django.db.models import Avg, Count, Min, Sum, Q
 from django.db.models.functions import ExtractHour, TruncDate
 from django.http import FileResponse, HttpResponse, JsonResponse
@@ -40,11 +41,14 @@ from django.utils.text import slugify
 from django.views.decorators.clickjacking import xframe_options_exempt
 
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle, SimpleRateThrottle
 
 from config.media_utils import UploadValidationError, validate_pdf_upload
+
+from .ai.gemini_scanner import MenuScanError, extract_menu, parse_menu, sniff_menu_upload
 
 from .models import MerchantProfile, MenuItem, MerchantTable, MenuCategory, MenuOptionGroup, MenuOption
 from .serializers import (
@@ -613,6 +617,155 @@ def my_menu_items(request):
         .order_by("category", "name")
     )
     return Response(MenuItemEditorSerializer(items, many=True).data)
+
+
+class MenuScanThrottle(ScopedRateThrottle):
+    """Caps Gemini spend per merchant (scope: "menu_scan").
+
+    `api_view` does not propagate a `throttle_scope` set on the function, so
+    the scope is pinned here.
+    """
+
+    def allow_request(self, request, view):
+        self.scope = "menu_scan"
+        self.rate = self.get_rate()
+        self.num_requests, self.duration = self.parse_rate(self.rate)
+        return SimpleRateThrottle.allow_request(self, request, view)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([MenuScanThrottle])
+def scan_menu(request):
+    """
+    POST /api/merchants/menu-items/scan-menu/ — multipart, field="file".
+
+    Gemini reads a menu photo/PDF; every item becomes an active MenuItem with
+    its dietary tags, allergens, calories, variants (e.g. sizes) and add-ons,
+    creating categories as needed. Items that already exist in the same
+    category (case-insensitive name) are skipped so a re-scan does not
+    duplicate the menu.
+    """
+    try:
+        merchant = _get_merchant(request.user)
+    except PermissionError as e:
+        return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        data, mime_type = sniff_menu_upload(request.FILES.get("file"))
+        json_text, truncated, model_used = extract_menu(data, mime_type)
+    except MenuScanError as e:
+        return Response({"error": str(e)}, status=e.status_code)
+
+    scanned, skipped_rows = parse_menu(json_text)
+    if not scanned:
+        return Response(
+            {"error": "No menu items could be read from this file. Try a clearer photo."},
+            status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        )
+
+    counts = {"items": 0, "categories": 0, "duplicates": 0, "variants": 0, "add_ons": 0}
+    used_categories = set()
+    try:
+        with db_transaction.atomic():
+            categories = {c.name.lower(): c for c in MenuCategory.objects.filter(merchant=merchant)}
+            next_order = max((c.display_order for c in categories.values()), default=-1) + 1
+            existing = {
+                (cat.lower(), name.lower())
+                for cat, name in MenuItem.objects.filter(merchant=merchant)
+                .exclude(status=MenuItem.STATUS_ARCHIVED)
+                .values_list("category", "name")
+            }
+
+            for row in scanned:
+                key = row.category.lower()
+                category_obj = categories.get(key)
+                if category_obj is None:
+                    category_obj = MenuCategory.objects.create(
+                        merchant=merchant, name=row.category, display_order=next_order,
+                    )
+                    categories[key] = category_obj
+                    next_order += 1
+                    counts["categories"] += 1
+
+                dedupe_key = (category_obj.name.lower(), row.name.lower())
+                if dedupe_key in existing:
+                    counts["duplicates"] += 1
+                    continue
+                existing.add(dedupe_key)
+                used_categories.add(category_obj.pk)
+
+                item = MenuItem.objects.create(
+                    merchant=merchant,
+                    category_ref=category_obj,
+                    category=category_obj.name,
+                    name=row.name,
+                    price=row.price,
+                    emoji=row.emoji,
+                    description=row.description,
+                    dietary_tags=row.dietary_tags,
+                    allergens=row.allergens,
+                    calories=row.calories,
+                    is_featured=row.is_featured,
+                    is_available=True,
+                    status=MenuItem.STATUS_ACTIVE,
+                )
+                counts["items"] += 1
+                _create_scanned_options(merchant, item, row)
+                counts["variants"] += len(row.variants)
+                counts["add_ons"] += len(row.add_ons)
+
+            # Signals clear the public menu cache per save, but a customer
+            # request between a save and the commit could re-cache the old menu.
+            db_transaction.on_commit(lambda: cache.delete(f"zentro:menu:{merchant.pk}"))
+    except IntegrityError:
+        return Response(
+            {"error": "Your menu changed while scanning. Please try again."},
+            status=status.HTTP_409_CONFLICT,
+        )
+
+    return Response({
+        "success": True,
+        "items_count": counts["items"],
+        "categories_count": counts["categories"],
+        "categories_used": len(used_categories),
+        "variants_count": counts["variants"],
+        "add_ons_count": counts["add_ons"],
+        "duplicates_skipped": counts["duplicates"],
+        "rows_skipped": skipped_rows,
+        "truncated": truncated,
+        "model": model_used,
+    }, status=status.HTTP_201_CREATED)
+
+
+def _create_scanned_options(merchant, item, row) -> None:
+    """Attach a scanned item's variants and add-ons as option groups."""
+    order = 0
+    if row.variants:
+        group = MenuOptionGroup.objects.create(
+            merchant=merchant, menu_item=item, name=row.variant_group,
+            kind=MenuOptionGroup.KIND_VARIANT, required=True, min_select=1, max_select=1,
+            display_order=order,
+        )
+        default_idx = min(range(len(row.variants)), key=lambda i: row.variants[i].price)
+        MenuOption.objects.bulk_create([
+            MenuOption(
+                merchant=merchant, group=group, name=v.name, price=v.price,
+                is_default=(i == default_idx), display_order=i,
+            )
+            for i, v in enumerate(row.variants)
+        ])
+        order += 1
+    if row.add_ons:
+        group = MenuOptionGroup.objects.create(
+            merchant=merchant, menu_item=item, name="Add-ons",
+            kind=MenuOptionGroup.KIND_MODIFIER, required=False, min_select=0,
+            max_select=len(row.add_ons), display_order=order,
+        )
+        MenuOption.objects.bulk_create([
+            MenuOption(merchant=merchant, group=group, name=a.name, price_delta=a.price, display_order=i)
+            for i, a in enumerate(row.add_ons)
+        ])
 
 
 @api_view(["GET", "POST"])

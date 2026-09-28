@@ -437,6 +437,22 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
 
 # ── AI Core ───────────────────────────────────────────────────────────────────
 AI_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# Tried in order (most accurate first); the scanner moves to the next model when
+# one is out of quota, overloaded, hanging or unavailable. Each model has its
+# own free-tier quota, so a longer list means more scans per day.
+_DEFAULT_MENU_SCANNER_MODELS = ",".join([
+    "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash",
+    "gemini-3-flash-preview",
+    "gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-flash-lite-latest",
+    "gemini-3.1-flash-lite-preview",
+    "gemma-4-26b-a4b-it",
+])
+AI_MENU_SCANNER_MODELS = [
+    m.strip()
+    for m in os.getenv("GEMINI_MENU_SCANNER_MODELS", _DEFAULT_MENU_SCANNER_MODELS).split(",")
+    if m.strip()
+]
+AI_MENU_SCANNER_MAX_OUTPUT_TOKENS = int(os.getenv("GEMINI_MENU_SCANNER_MAX_OUTPUT_TOKENS", "65536"))
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 AI_DEFAULT_MODEL_ALIAS = "merchant-insights"
@@ -469,6 +485,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "redeem": "10/min",
     "guest": "60/hour",
     "upload": "100/hour",
+    "menu_scan": "20/hour",
     "leaderboard": "300/hour",
 }
 
@@ -499,6 +516,7 @@ LOGGING = {
     },
     "loggers": {
         "ai_core": {"handlers": ["console_simple"], "level": "INFO", "propagate": False},
+        "merchants.ai": {"handlers": ["console_simple"], "level": "INFO", "propagate": False},
         "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
         "config.middleware": {"handlers": ["console"], "level": "INFO", "propagate": False},
         "django.channels.server": {"handlers": ["console"], "level": "INFO", "propagate": False},

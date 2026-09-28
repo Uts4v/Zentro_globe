@@ -11,10 +11,34 @@ import type {
 
 type CatalogFilters = { q?: string; category_id?: number | string; available_only?: boolean };
 
+export interface MenuScanResult {
+  success: boolean;
+  items_count: number;
+  categories_count: number;
+  categories_used: number;
+  variants_count: number;
+  add_ons_count: number;
+  duplicates_skipped: number;
+  rows_skipped: number;
+  /** The menu was too long to read in one pass; later items may be missing. */
+  truncated: boolean;
+}
+
 export const menuApi = {
   myItems: async (): Promise<MenuItem[]> => {
     return djangoFetch<MenuItem[]>(apiUrl("/merchants/menu-items/my-items/"), {
       headers: authHeaders(),
+    });
+  },
+
+  /** Gemini reads a menu photo/PDF and the backend saves every item it finds. */
+  scanMenu: async (file: File): Promise<MenuScanResult> => {
+    const form = new FormData();
+    form.append("file", file);
+    return djangoFetch<MenuScanResult>(apiUrl("/merchants/menu-items/scan-menu/"), {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
     });
   },
 

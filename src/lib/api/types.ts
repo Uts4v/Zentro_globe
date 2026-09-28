@@ -51,6 +51,8 @@ export type MenuItemSelectable = Pick<
   status?: MenuItem["status"];
   short_description?: string | null;
   dietary_tags?: string[];
+  allergens?: string[];
+  calories?: number | null;
   discount_price?: string | null;
   groups?: MenuOptionGroup[];
 };
@@ -77,6 +79,8 @@ export interface MenuItem {
   short_description?: string | null;
   dietary_tags?: string[];
   allergens?: string[];
+  /** kcal per serving; null when unknown. */
+  calories?: number | null;
   display_order?: number;
   category_id?: number | null;
   category_ref?: number | null;

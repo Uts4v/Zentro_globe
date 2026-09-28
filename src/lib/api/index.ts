@@ -2,7 +2,7 @@ export * from "./types";
 
 export { specialApi } from "./specials";
 export { notificationApi } from "./notifications";
-export { menuApi } from "./menu";
+export { menuApi, type MenuScanResult } from "./menu";
 export { orderApi } from "./orders";
 export { merchantApi } from "./merchants";
 export { tableApi } from "./tables";

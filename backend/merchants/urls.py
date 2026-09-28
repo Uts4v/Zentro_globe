@@ -28,6 +28,7 @@ urlpatterns = [
     path("categories/<int:pk>/",    views.merchant_category_detail,     name="merchant-category-detail"),
     # ── Menu items ────────────────────────────────────────────────────────────
     path("menu-items/my-items/", views.my_menu_items,           name="my-menu-items"),
+    path("menu-items/scan-menu/", views.scan_menu,              name="menu-items-scan-menu"),
     path("menu-items/",          views.menu_item_list_create,   name="menu-item-list-create"),
     path("menu-items/<int:pk>/", views.menu_item_detail,        name="menu-item-detail"),
     path(

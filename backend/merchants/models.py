@@ -558,6 +558,10 @@ class MenuItem(models.Model):
         default=list, blank=True,
         help_text='e.g. ["dairy", "nuts", "shellfish"]',
     )
+    calories = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="Energy per serving in kcal; blank when unknown.",
+    )
     display_order = models.PositiveIntegerField(default=0)
 
     # ── Preparation routing (optional) ─────────────────────────────────────────

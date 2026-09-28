@@ -15,6 +15,7 @@ import {
   FileType,
   ArrowRight,
   Layers,
+  ScanLine,
 } from "lucide-react";
 import {
   menuApi,
@@ -27,6 +28,7 @@ import { optimizeImage } from "@/lib/image-optimize";
 import { uploadImage } from "@/lib/image-upload";
 import { usePreparationAreas, usePreparationSettings } from "@/features/preparation/hooks";
 import { OptionGroupsEditor } from "@/features/catalog/components/OptionGroupsEditor";
+import { MenuScannerDialog } from "@/features/catalog/components/MenuScannerDialog";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 import { formatCurrency } from "@/lib/currency";
@@ -43,6 +45,7 @@ const EMPTY_FORM = {
   category_ref: "" as string,
   dietary_tags: "",
   allergens: "",
+  calories: "",
   status: "active",
   emoji: "☕",
   points_per_item: 1,
@@ -97,6 +100,7 @@ export function MerchantMenuPage() {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
 
   const [optionItem, setOptionItem] = useState<MenuItem | null>(null);
+  const [showScanner, setShowScanner] = useState(false);
 
   const [imgState, setImgState] = useState<ImgStatus>({ status: "idle" });
   const imgInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +156,7 @@ export function MerchantMenuPage() {
       category_ref: item.category_ref != null ? String(item.category_ref) : "",
       dietary_tags: (item.dietary_tags ?? []).join(", "),
       allergens: (item.allergens ?? []).join(", "),
+      calories: item.calories != null ? String(item.calories) : "",
       status: item.status ?? "active",
       emoji: item.emoji,
       points_per_item: item.points_per_item,
@@ -314,6 +319,7 @@ export function MerchantMenuPage() {
           .split(",")
           .map((t: string) => t.trim())
           .filter(Boolean),
+        calories: form.calories.trim() ? Math.round(Number(form.calories)) : null,
         short_description: form.short_description,
         status: form.status as MenuItemInput["status"],
         discount_source: undefined,
@@ -396,6 +402,13 @@ export function MerchantMenuPage() {
             className="h-11 rounded-2xl text-muted-foreground"
           >
             <Layers className="h-4 w-4" /> Layout
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setShowScanner(true)}
+            className="h-11 rounded-2xl"
+          >
+            <ScanLine className="h-4 w-4" /> AI Menu Scanner
           </Button>
           <Button onClick={openCreate} className="h-11 rounded-2xl px-5">
             <Plus className="h-4 w-4" /> Add item
@@ -866,6 +879,26 @@ export function MerchantMenuPage() {
                 </div>
               </div>
 
+              <div className="max-w-[10rem]">
+                <label
+                  htmlFor="menu-item-calories"
+                  className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                >
+                  Calories (kCal)
+                </label>
+                <input
+                  id="menu-item-calories"
+                  type="number"
+                  min={0}
+                  step={1}
+                  inputMode="numeric"
+                  value={form.calories}
+                  onChange={(e) => setForm((f) => ({ ...f, calories: e.target.value }))}
+                  placeholder="Optional"
+                  className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                />
+              </div>
+
               {/* Points */}
               <div className="flex flex-wrap gap-3">
                 <div className="min-w-[10rem] flex-1">
@@ -1028,6 +1061,12 @@ export function MerchantMenuPage() {
           onChanged={() => loadAll()}
         />
       )}
+
+      <MenuScannerDialog
+        open={showScanner}
+        onClose={() => setShowScanner(false)}
+        onScanned={loadAll}
+      />
 
       {/* Layout manager */}
       {showLayout && (

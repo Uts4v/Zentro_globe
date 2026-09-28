@@ -106,7 +106,7 @@ class MenuItemSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "description", "price", "image_url",
             "category", "is_available", "is_featured", "loyalty_reward",
-            "points_per_item", "emoji",
+            "points_per_item", "emoji", "calories",
             "discount_type", "discount_value", "discount_source",
             "discount_price", "discount_amount",
             "preparation_area", "requires_preparation",
@@ -160,7 +160,7 @@ class MenuItemEditorSerializer(serializers.ModelSerializer):
             "category", "category_ref", "category_name",
             "is_available", "is_featured", "status",
             "loyalty_reward", "points_per_item", "emoji",
-            "dietary_tags", "allergens", "display_order",
+            "dietary_tags", "allergens", "calories", "display_order",
             "discount_type", "discount_value", "discount_source",
             "preparation_area", "requires_preparation",
             "groups", "from_price", "discount_price", "discount_amount",
@@ -247,7 +247,7 @@ class PublicMenuItemSerializer(serializers.ModelSerializer):
         fields = [
             "id", "name", "description", "short_description", "price", "image_url",
             "emoji", "category", "category_id", "is_featured", "is_available", "status",
-            "dietary_tags", "allergens", "points_per_item", "loyalty_reward",
+            "dietary_tags", "allergens", "calories", "points_per_item", "loyalty_reward",
             "discount_type", "discount_value", "discount_source",
             "groups", "from_price", "discount_price", "discount_amount",
         ]

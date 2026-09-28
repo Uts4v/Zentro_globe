@@ -265,6 +265,19 @@ export default function ProductDetailSheet({
               {item.short_description || item.description}
             </p>
           ) : null}
+          {(item.allergens?.length ?? 0) > 0 || item.calories != null ? (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+              {item.calories != null && (
+                <span className="font-medium text-foreground">{item.calories} kCal</span>
+              )}
+              {(item.allergens?.length ?? 0) > 0 && (
+                <span>
+                  <span className="font-medium text-foreground">Contains:</span>{" "}
+                  {item.allergens!.map((a) => a.charAt(0).toUpperCase() + a.slice(1)).join(", ")}
+                </span>
+              )}
+            </div>
+          ) : null}
 
           <div className="mt-5 space-y-5">
             {groups.some((g) => g.kind === "variant") && (
