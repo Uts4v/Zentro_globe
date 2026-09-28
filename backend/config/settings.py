@@ -470,23 +470,24 @@ AI_MODEL_ALIASES = {
 }
 
 # ── Rate Limiting (DRF throttling) ───────────────────────────────────────────
+REST_FRAMEWORK["NUM_PROXIES"] = 1
 REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = [
     "rest_framework.throttling.AnonRateThrottle",
     "rest_framework.throttling.UserRateThrottle",
 ]
 REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
-    "anon": "500/hour",
-    "user": "1000/day",
-    "pos": "1200/hour",
-    "pin": "20/min",
-    "login": "10/min",
-    "otp": "5/min",
-    "transfer": "10/hour",
-    "redeem": "10/min",
-    "guest": "60/hour",
-    "upload": "100/hour",
-    "menu_scan": "20/hour",
-    "leaderboard": "300/hour",
+    "anon": "2000/hour",
+    "user": "10000/hour",
+    "pos": "2000/hour",
+    "pin": "30/min",
+    "login": "60/min",
+    "otp": "10/min",
+    "transfer": "20/hour",
+    "redeem": "20/min",
+    "guest": "120/hour",
+    "upload": "200/hour",
+    "menu_scan": "50/hour",
+    "leaderboard": "600/hour",
 }
 
 # ── Logging ───────────────────────────────────────────────────────────────────

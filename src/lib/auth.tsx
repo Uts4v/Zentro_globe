@@ -194,11 +194,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setMerchantProfile(null);
       }
-    } catch {
-      // Token likely expired and refresh failed
-      tokenStore.clear();
-      setUser(null);
-      setMerchantProfile(null);
+    } catch (err: any) {
+      if (err?.status === 401) {
+        // Token is actually invalid or expired
+        tokenStore.clear();
+        setUser(null);
+        setMerchantProfile(null);
+      } else {
+        // For rate limit (429) or temporary server errors, retain user session from valid token
+        const payload = decodeJwt(token);
+        if (payload && secondsUntilExpiry(token) > 0) {
+          setUser((prev) => prev || {
+            id: payload.user_id || payload.id,
+            email: payload.email,
+            role: payload.role,
+            full_name: payload.full_name || payload.name,
+          });
+        }
+      }
     }
   }, []);
 

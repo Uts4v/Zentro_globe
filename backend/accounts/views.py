@@ -235,6 +235,7 @@ def logout(request):
 
 @api_view(["GET", "PATCH"])
 @permission_classes([IsAuthenticated])
+@throttle_classes([])
 def me(request):
     """
     GET  /api/auth/me/ — return full user + loyalty profile
