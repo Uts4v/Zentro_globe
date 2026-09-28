@@ -2,6 +2,7 @@ import logging
 import uuid
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from django.db.models import Sum, Count, Q, F
 from django.db.models.functions import Coalesce
@@ -1477,82 +1478,27 @@ def create_pos_order(request):
             return Response({"error": "Table not found."},
                             status=status.HTTP_404_NOT_FOUND)
 
-    # Calculate totals server-side (never trust frontend totals).
-    # Batch-fetch menu items in a single query instead of one per line item.
-    item_ids = [item_data.get("menu_item_id") for item_data in items_data]
-    menu_items_by_id = {
-        mi.id: mi
-        for mi in MenuItem.objects.filter(
-            id__in=item_ids, merchant=merchant, is_available=True,
-        )
-    }
-
-    total_amount = 0
-    points_earned = 0
-    order_items_data = []
-
     # Determine order type early so staff_comp orders can zero prices
     order_type = data.get("order_type", Order.ORDER_TYPE_REGULAR)
     if order_type not in dict(Order.ORDER_TYPE_CHOICES):
         order_type = Order.ORDER_TYPE_REGULAR
     is_staff_comp = order_type == Order.ORDER_TYPE_STAFF_COMP
 
-    from config.menu_pricing import validate_and_price_line, LineValidationError
-
-    option_rows = []
-
-    for item_data in items_data:
-        menu_item_id = item_data.get("menu_item_id")
-        menu_item = menu_items_by_id.get(menu_item_id)
-        if menu_item is None:
-            return Response(
-                {"error": f"Menu item {menu_item_id} not found or unavailable."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        selections = [
-            (sel.get("group_id"), sel.get("option_id"))
-            for sel in (item_data.get("selections") or [])
-        ]
-        try:
-            line = validate_and_price_line(
-                menu_item,
-                item_data.get("quantity", 1),
-                selections,
-                special_instructions=item_data.get("special_instructions", ""),
-                loyalty_eligible=not is_staff_comp,
-            )
-        except LineValidationError as exc:
-            return Response(
-                {"error": f"{menu_item.name}: {exc}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Staff comp orders are free — override price to 0
-        unit_price = Decimal("0") if is_staff_comp else line.unit_price
-        subtotal = unit_price * line.quantity
-        total_amount += subtotal
-
-        if is_staff_comp:
-            line.points = 0
-
-        points_earned += line.points
-        option_rows.append(line.options)
-
-        order_items_data.append({
-            "menu_item": menu_item,
-            "name": line.name,
-            "price": unit_price,
-            "quantity": line.quantity,
-            "subtotal": subtotal,
-            "special_instructions": line.special_instructions,
-        })
+    # ── Server-side authoritative pricing (orders.pricing; never trust
+    # frontend totals). Staff comp orders are priced at zero. ───────────────
+    from orders.pricing import PricingError, price_request_lines
+    try:
+        priced = price_request_lines(merchant, items_data, staff_comp=is_staff_comp)
+    except PricingError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    points_earned = sum(p.points for p in priced)
+    goods_subtotal = sum((p.item_fields["subtotal"] for p in priced), Decimal("0"))
 
     # Apply spend-based points from LoyaltyRules (points_per_npr)
     try:
         rules = merchant.loyalty_rules
         if rules.points_per_npr > 0:
-            points_earned += int(Decimal(str(total_amount)) * rules.points_per_npr)
+            points_earned += int(goods_subtotal * rules.points_per_npr)
     except Exception:
         pass
 
@@ -1608,17 +1554,16 @@ def create_pos_order(request):
 
     try:
         with transaction.atomic():
-            # Apply merchant tax components server-side (never trust frontend totals).
-            from config.tax_utils import calculate_tax
-            tax_amount, tax_breakdown = calculate_tax(total_amount, merchant)
+            from orders.pricing import persist_new_order, price_new_order_lines
+            from orders.pricing.service import order_fields as pricing_order_fields
+            pricing_ctx, pricing = price_new_order_lines(
+                merchant, priced, fulfillment_type=fulfillment, order_type=order_type,
+            )
 
             order = Order.objects.create(
                 customer=customer,
                 merchant=merchant,
-                subtotal=total_amount,
-                tax_amount=tax_amount,
-                tax_breakdown=tax_breakdown,
-                total_amount=total_amount + tax_amount,
+                **pricing_order_fields(pricing_ctx, pricing, merchant),
                 points_earned=points_earned,
                 notes=data.get("notes", ""),
                 status=Order.STATUS_CONFIRMED,  # POS orders go directly to confirmed
@@ -1635,14 +1580,16 @@ def create_pos_order(request):
 
             # Apply preparation routing
             from orders.services.preparation import prepare_order_items_for_routing
-            order_items_data = prepare_order_items_for_routing(order, order_items_data)
+            order_items_data = prepare_order_items_for_routing(
+                order, [dict(p.item_fields) for p in priced],
+            )
 
             created_items = OrderItem.objects.bulk_create(
                 [OrderItem(order=order, **item) for item in order_items_data],
                 batch_size=200,
             )
             snapshot_rows = []
-            for index, line_options in enumerate(option_rows):
+            for index, line_options in enumerate(p.options for p in priced):
                 created = created_items[index]
                 for display_order, opt in enumerate(line_options):
                     snapshot_rows.append(OrderItemOption(
@@ -1654,6 +1601,7 @@ def create_pos_order(request):
                         display_order=display_order,
                     ))
             OrderItemOption.objects.bulk_create(snapshot_rows, batch_size=200)
+            persist_new_order(order, pricing_ctx, pricing, created_items)
 
             # POS orders are created confirmed, so dine-in orders consume
             # linked stock now (at most once per line).
@@ -1691,7 +1639,7 @@ def create_pos_order(request):
            entity_type="order", entity_id=order.id,
            metadata={
                "source": source,
-               "total": str(total_amount),
+               "total": str(pricing.grand_total),
                "items_count": len(order_items_data),
            })
 
@@ -2208,7 +2156,7 @@ def apply_discount(request):
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        order = Order.objects.get(
+        order = Order.objects.select_for_update().get(
             uuid=ser.validated_data["order_id"], merchant=merchant,
         )
     except Order.DoesNotExist:
@@ -2251,10 +2199,11 @@ def apply_discount(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    # Calculate discount amount server-side
+    # The amount itself is computed by the pricing engine from the stored
+    # definition, and re-computed whenever the order changes.
     discount_type = ser.validated_data["discount_type"]
     discount_value = ser.validated_data["discount_value"]
-    effective_subtotal = order.subtotal or order.total_amount
+    reason = ser.validated_data.get("reason", "")
 
     if discount_type == PosDiscount.TYPE_PERCENTAGE:
         if discount_value > 100:
@@ -2267,14 +2216,11 @@ def apply_discount(request):
                     {"error": f"Discount exceeds max ({merchant.max_worker_discount_percent}%). Manager approval required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-        discount_amount = effective_subtotal * discount_value / 100
-    else:
-        discount_amount = discount_value
-        if discount_amount > effective_subtotal:
-            return Response(
-                {"error": f"Fixed discount ({discount_amount}) cannot exceed order subtotal ({effective_subtotal})."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+    elif discount_value > order.subtotal:
+        return Response(
+            {"error": f"Fixed discount ({discount_value}) cannot exceed order subtotal ({order.subtotal})."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
 
     authorized_by = None
     authorized_by_id = ser.validated_data.get("authorized_by_worker_id")
@@ -2287,28 +2233,42 @@ def apply_discount(request):
             return Response({"error": "Authorizing worker not found."},
                             status=status.HTTP_404_NOT_FOUND)
 
+    from orders.pricing import ADJ_MANUAL_DISCOUNT, AdjustmentSpec, PricingError, attach_adjustment
+    try:
+        adjustment, _pricing = attach_adjustment(
+            order,
+            AdjustmentSpec(
+                kind=ADJ_MANUAL_DISCOUNT,
+                calc_type=discount_type,
+                value=discount_value,
+                label=(reason or "Discount")[:120],
+            ),
+            # A cashier changing 10% to 15% replaces their own discount; a
+            # loyalty reward or offer already on the order blocks it.
+            replaces_kinds=(ADJ_MANUAL_DISCOUNT,),
+            created_by=request.user,
+        )
+    except PricingError as exc:
+        return Response(
+            {"error": str(exc), "code": exc.code, **exc.details},
+            status=status.HTTP_409_CONFLICT if exc.code == "discount_slot_taken" else status.HTTP_400_BAD_REQUEST,
+        )
+
     discount = PosDiscount.objects.create(
         merchant=merchant,
         order=order,
         worker=worker,
         discount_type=discount_type,
         discount_value=discount_value,
-        discount_amount=discount_amount,
-        reason=ser.validated_data.get("reason", ""),
+        discount_amount=adjustment.amount,
+        reason=reason,
         authorized_by=authorized_by,
     )
+    adjustment.source_ref = f"pos_discount:{discount.id}"
+    adjustment.save(update_fields=["source_ref", "updated_at"])
 
-    # Update order discount fields and recalculate total
-    order.subtotal = effective_subtotal
-    order.discount_type = discount_type
-    order.discount_value = discount_value
-    order.discount_amount = discount_amount
-    order.total_amount = effective_subtotal - discount_amount + order.tax_amount + order.service_charge
     order.version += 1
-    order.save(update_fields=[
-        "subtotal", "discount_type", "discount_value", "discount_amount",
-        "total_amount", "version", "updated_at",
-    ])
+    order.save(update_fields=["version", "updated_at"])
 
     _audit(merchant, PosAuditLog.ACTION_DISCOUNT_APPLY,
            worker=worker, user=request.user,
@@ -2317,10 +2277,53 @@ def apply_discount(request):
                "order_id": str(order.id),
                "type": discount_type,
                "value": str(discount_value),
-               "amount": str(discount_amount),
+               "amount": str(adjustment.amount),
            })
 
     return Response(PosDiscountSerializer(discount).data, status=status.HTTP_201_CREATED)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+@transaction.atomic
+def remove_discount(request):
+    """POST /api/pos/discount/remove/ {order_id, worker_id} — clear the order's manual discount."""
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response({"error": "POS is not enabled."}, status=status.HTTP_403_FORBIDDEN)
+
+    try:
+        order = Order.objects.select_for_update().get(
+            uuid=request.data.get("order_id"), merchant=merchant,
+        )
+    except (Order.DoesNotExist, ValueError, DjangoValidationError):
+        return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        worker = ShiftWorker.objects.get(
+            id=request.data.get("worker_id"), merchant=merchant, is_active=True,
+        )
+    except (ShiftWorker.DoesNotExist, ValueError, DjangoValidationError):
+        return Response({"error": "Worker not found."}, status=status.HTTP_404_NOT_FOUND)
+    if not worker.can_apply_discount:
+        return Response(
+            {"error": "This worker does not have permission to change discounts."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    from orders.pricing import ADJ_MANUAL_DISCOUNT, PricingError, remove_adjustments
+    try:
+        pricing = remove_adjustments(order, kinds=[ADJ_MANUAL_DISCOUNT])
+    except PricingError as exc:
+        return Response({"error": str(exc), "code": exc.code}, status=status.HTTP_400_BAD_REQUEST)
+
+    order.version += 1
+    order.save(update_fields=["version", "updated_at"])
+    _audit(merchant, PosAuditLog.ACTION_ORDER_UPDATE,
+           worker=worker, user=request.user, entity_type="order", entity_id=order.id,
+           metadata={"action": "discount_remove"})
+
+    return Response({"order_id": str(order.uuid), "pricing": pricing.to_dict()})
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2902,6 +2905,7 @@ def _pos_menu_categories(merchant):
             "name": item.name,
             "description": item.description,
             "price": str(item.price),
+            "tax_class": item.tax_class,
             "image_url": item.image_url,
             "category": item.category,
             "is_available": item.is_available,
@@ -2986,7 +2990,7 @@ def receipt_data(request, order_id):
             Order.objects
             .select_related("customer__user", "merchant", "table",
                             "processed_by_worker", "pos_device", "cash_shift")
-            .prefetch_related("items", "pos_payments", "pos_discounts")
+            .prefetch_related("items", "pos_payments", "pos_discounts", "charges")
             .get(uuid=order_id, merchant=merchant)
         )
     except Order.DoesNotExist:
@@ -2999,8 +3003,13 @@ def receipt_data(request, order_id):
         {
             "name": item.name,
             "price": str(item.price),
+            "list_unit_price": str(item.list_unit_price) if item.list_unit_price is not None else None,
             "quantity": item.quantity,
             "subtotal": str(item.subtotal),
+            "discount_amount": str(item.discount_amount),
+            "tax_amount": str(item.tax_amount),
+            "line_total": str(item.total_amount),
+            "tax_class": item.tax_class,
             "special_instructions": item.special_instructions or "",
             "options": [
                 {
@@ -3014,16 +3023,50 @@ def receipt_data(request, order_id):
         for item in order_items
     ]
 
-    # Discounts
-    discounts = [
+    # Discounts: the adjustments currently on the bill, as the pricing engine
+    # computed them. (Replaced manual discounts stay in pos_discounts for audit.)
+    pos_discounts = {f"pos_discount:{d.id}": d for d in order.pos_discounts.all()}
+    discounts = []
+    for adj in order.adjustments.filter(status="active"):
+        pos_discount = pos_discounts.get(adj.source_ref)
+        discounts.append({
+            "kind": adj.kind,
+            "label": adj.label,
+            "type": adj.calc_type,
+            "value": str(adj.value),
+            "amount": str(adj.amount),
+            "eligible": adj.eligible,
+            "reason": pos_discount.reason if pos_discount else adj.label,
+            "authorized_by": (
+                pos_discount.authorized_by.display_name
+                if pos_discount and pos_discount.authorized_by else None
+            ),
+        })
+    if not discounts and not order.pricing_version:
+        # Pre-v1 order: the discount only exists as PosDiscount rows.
+        discounts = [
+            {
+                "kind": "manual_discount",
+                "label": d.reason or "Discount",
+                "type": d.discount_type,
+                "value": str(d.discount_value),
+                "amount": str(d.discount_amount),
+                "eligible": True,
+                "reason": d.reason,
+                "authorized_by": d.authorized_by.display_name if d.authorized_by else None,
+            }
+            for d in pos_discounts.values()
+        ]
+    charges = [
         {
-            "type": d.discount_type,
-            "value": str(d.discount_value),
-            "amount": str(d.discount_amount),
-            "reason": d.reason,
-            "authorized_by": d.authorized_by.display_name if d.authorized_by else None,
+            "kind": c.kind,
+            "label": c.label,
+            "amount": str(c.amount),
+            "taxable": c.taxable,
+            "tax_amount": str(c.tax_amount),
         }
-        for d in order.pos_discounts.all()
+        for c in order.charges.all()
+        if c.amount > 0
     ]
 
     # Payments
@@ -3080,10 +3123,15 @@ def receipt_data(request, order_id):
         "subtotal": str(order.subtotal or order.total_amount),
         "discounts": discounts,
         "discount_amount": str(order.discount_amount),
+        "taxable_amount": str(order.taxable_amount),
         "tax_amount": str(order.tax_amount),
         "tax_breakdown": order.tax_breakdown or [],
+        "prices_include_tax": order.prices_include_tax,
         "service_charge": str(order.service_charge),
+        "charges": charges,
         "total_amount": str(order.total_amount),
+        "currency_code": order.currency_code_snapshot or merchant.currency_code,
+        "currency_symbol": order.currency_symbol_snapshot or merchant.currency_symbol,
 
         "payments": payments,
         "total_paid": str(total_paid),
@@ -3674,6 +3722,46 @@ def process_refund(request):
         return Response({"error": "Order is not paid. Only paid orders can be refunded."},
                         status=status.HTTP_400_BAD_REQUEST)
 
+    # Line refunds are computed from what each line was actually charged
+    # (its stored discount and tax), never from today's menu or tax settings.
+    refund_lines = request.data.get("items") or []
+    refunded_items = []
+    if refund_lines:
+        if refund_amount is not None:
+            return Response({"error": "Send either an amount or items to refund, not both."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        if not order.pricing_version:
+            return Response(
+                {"error": "This order predates line-level pricing. Refund an amount instead."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from orders.pricing import currency_quantum, quantize
+        quantum = currency_quantum(order.currency_code_snapshot)
+        items_by_id = {item.id: item for item in order.items.select_for_update()}
+        line_total = Decimal("0")
+        for row in refund_lines:
+            try:
+                item = items_by_id[int(row.get("order_item_id"))]
+                qty = int(row.get("quantity", 0))
+            except (KeyError, TypeError, ValueError):
+                return Response({"error": "Unknown order line in refund."},
+                                status=status.HTTP_400_BAD_REQUEST)
+            remaining = item.quantity - item.refunded_quantity
+            if qty < 1 or qty > remaining:
+                return Response(
+                    {"error": f"{item.name}: can refund at most {remaining}."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            if qty == remaining:
+                amount = item.total_amount - item.refunded_amount
+            else:
+                amount = quantize(item.total_amount * qty / item.quantity, quantum)
+            item.refunded_quantity += qty
+            item.refunded_amount += amount
+            refunded_items.append(item)
+            line_total += amount
+        refund_amount = line_total
+
     # Calculate refund amount (money math in Decimal, never float)
     if refund_amount is None:
         refund_amount_dec = order.total_amount
@@ -3706,6 +3794,15 @@ def process_refund(request):
         external_reference=f"REFUND-{order.id}",
         client_mutation_id=uuid.uuid4(),
     )
+
+    if not refund_lines and refund_amount == order.total_amount and order.pricing_version:
+        # A full refund returns every line in full.
+        for item in order.items.all():
+            item.refunded_amount = item.total_amount
+            item.refunded_quantity = item.quantity
+            refunded_items.append(item)
+    if refunded_items:
+        OrderItem.objects.bulk_update(refunded_items, ["refunded_quantity", "refunded_amount"])
 
     # Update order status
     order.status = "refunded"
@@ -3771,6 +3868,11 @@ def process_refund(request):
                "refund_amount": str(refund_amount),
                "refund_method": refund_method,
                "reason": reason,
+               "lines": [
+                   {"order_item_id": i.id, "refunded_quantity": i.refunded_quantity,
+                    "refunded_amount": str(i.refunded_amount)}
+                   for i in refunded_items
+               ],
            })
 
     return Response({
@@ -3926,16 +4028,12 @@ def resolve_conflict(request):
                 order.notes = str(client_data["notes"])[:2000]
                 changed = True
 
-            # A client-supplied total_amount is unconditionally IGNORED —
-            # recompute from the persisted items using the same path as POS
-            # order creation.
-            from config.tax_utils import calculate_tax
-            subtotal = sum((item.subtotal or 0) for item in order.items.all())
-            tax_amount, tax_breakdown = calculate_tax(subtotal, merchant)
-            order.subtotal = subtotal
-            order.tax_amount = tax_amount
-            order.tax_breakdown = tax_breakdown
-            order.total_amount = subtotal - order.discount_amount + tax_amount + order.service_charge
+            # A client-supplied total_amount is unconditionally IGNORED — the
+            # bill is re-priced from the persisted lines by the same engine as
+            # every other flow (a settled order's pricing is frozen).
+            if not order.pricing_locked_at:
+                from orders.pricing import reprice_order
+                reprice_order(order)
 
             if changed:
                 order.source = "pos_offline_resolved"
@@ -4174,30 +4272,35 @@ def table_order(request, token):
         except CustomerProfile.DoesNotExist:
             pass
 
-    # Validate all menu items exist before creating anything
-    menu_items_by_id = {
-        mi.id: mi
-        for mi in MenuItem.objects.filter(
-            id__in=[item_data["menu_item_id"] for item_data in items_data],
-            merchant=merchant,
-            is_available=True,
-        )
-    }
+    # Price every line before creating anything, so a rejected line can never
+    # leave a half-built order behind.
+    from orders.pricing import PricingError, persist_new_order, price_new_order_lines, price_request_lines
+    from orders.pricing.service import order_fields as pricing_order_fields
     for item_data in items_data:
-        menu_item_id = item_data.get("menu_item_id")
-        if menu_item_id not in menu_items_by_id:
-            return Response({"error": f"Menu item {menu_item_id} not found."},
-                            status=status.HTTP_400_BAD_REQUEST)
         try:
             parse_quantity(item_data.get("quantity"), default=1)
         except QuantityValidationError as exc:
             return Response(
-                {"error": f"Invalid quantity for menu item {menu_item_id}: {exc}"},
+                {"error": f"Invalid quantity for menu item {item_data.get('menu_item_id')}: {exc}"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+    try:
+        priced = price_request_lines(merchant, items_data, loyalty_eligible=False)
+    except PricingError as exc:
+        return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+    pricing_ctx, pricing = price_new_order_lines(
+        merchant, priced, fulfillment_type="dine_in", order_type="dine_in",
+    )
 
-    # Build order
-    order = Order(
+    points_earned = sum(p.points for p in priced)
+    try:
+        rules = merchant.loyalty_rules
+        if rules.points_per_npr > 0:
+            points_earned += int(pricing.subtotal * rules.points_per_npr)
+    except Exception:
+        pass
+
+    order = Order.objects.create(
         customer=customer,
         merchant=merchant,
         status="pending",
@@ -4208,86 +4311,27 @@ def table_order(request, token):
         table_name_snapshot=table.name,
         table_number_snapshot=table.table_number,
         notes=notes,
-        subtotal=0,
-        tax_amount=0,
-        total_amount=0,
+        points_earned=points_earned,
+        guest_name_snapshot=customer_name,
+        **pricing_order_fields(pricing_ctx, pricing, merchant),
     )
-    order.save()
 
-    # Create order items and calculate points (Decimal math only, backend authority)
-    from config.menu_pricing import validate_and_price_line, LineValidationError
-
-    subtotal = Decimal("0")
-    points_earned = 0
-    order_items = []
-    option_snapshot_rows = []
-
-    for item_data in items_data:
-        menu_item = menu_items_by_id[item_data["menu_item_id"]]
-        selections = [
-            (s.get("group_id"), s.get("option_id"))
-            for s in (item_data.get("selections") or [])
-        ]
-        try:
-            line = validate_and_price_line(
-                menu_item,
-                item_data.get("quantity", 1),
-                selections,
-                special_instructions=item_data.get("special_instructions", ""),
-                loyalty_eligible=False,
-            )
-        except LineValidationError as exc:
-            return Response(
-                {"error": f"{menu_item.name}: {exc}"},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        subtotal += line.subtotal
-        points_earned += line.points
-
-        order_item = OrderItem.objects.create(
-            order=order,
-            menu_item=menu_item,
-            name=line.name,
-            price=line.unit_price,
-            quantity=line.quantity,
-            subtotal=line.subtotal,
-            special_instructions=line.special_instructions,
+    created_items = OrderItem.objects.bulk_create(
+        [OrderItem(order=order, **p.item_fields) for p in priced], batch_size=200,
+    )
+    OrderItemOption.objects.bulk_create([
+        OrderItemOption(
+            order_item=item,
+            group_name=opt.group_name,
+            option_name=opt.option_name,
+            kind=opt.kind,
+            price_effect=opt.price_effect,
+            display_order=i,
         )
-        order_items.append(order_item)
-        for i, opt in enumerate(line.options):
-            option_snapshot_rows.append(OrderItemOption(
-                order_item=order_item,
-                group_name=opt.group_name,
-                option_name=opt.option_name,
-                kind=opt.kind,
-                price_effect=opt.price_effect,
-                display_order=i,
-            ))
-
-    OrderItemOption.objects.bulk_create(option_snapshot_rows, batch_size=200)
-
-    # Apply spend-based points from LoyaltyRules
-    try:
-        rules = merchant.loyalty_rules
-        if rules.points_per_npr > 0:
-            points_earned += int(Decimal(str(subtotal)) * rules.points_per_npr)
-    except Exception:
-        pass
-
-    order.subtotal = subtotal
-    order.total_amount = subtotal
-    order.points_earned = points_earned
-    order.guest_name_snapshot = customer_name
-
-    # Apply tax
-    from config.tax_utils import calculate_tax
-    tax_amount, tax_breakdown = calculate_tax(subtotal, merchant)
-    order.tax_amount = tax_amount
-    order.tax_breakdown = tax_breakdown
-    order.total_amount = subtotal + tax_amount
-
-    order.save(update_fields=["subtotal", "total_amount", "tax_amount", "tax_breakdown", "points_earned", "guest_name_snapshot", "updated_at"])
+        for item, p in zip(created_items, priced)
+        for i, opt in enumerate(p.options)
+    ], batch_size=200)
+    persist_new_order(order, pricing_ctx, pricing, created_items)
 
     _audit(merchant, PosAuditLog.ACTION_ORDER_CREATE,
            entity_type="order", entity_id=order.id,
@@ -4296,7 +4340,7 @@ def table_order(request, token):
     _notify_safe(
         user=merchant.user,
         title=f"New Table Order — {table.name}",
-        message=f"Table {table.table_number}: {len(items_data)} items, {merchant.currency_symbol} {subtotal:.2f}",
+        message=f"Table {table.table_number}: {len(items_data)} items, {merchant.currency_symbol} {pricing.grand_total}",
         notification_type="pos_new_order",
         merchant_name=merchant.business_name,
     )
@@ -4305,7 +4349,8 @@ def table_order(request, token):
         "message": "Order placed successfully",
         "order_id": order.id,
         "table": table.name,
-        "total": str(subtotal),
+        "subtotal": str(pricing.subtotal),
+        "total": str(pricing.grand_total),
     }, status=status.HTTP_201_CREATED)
 
 

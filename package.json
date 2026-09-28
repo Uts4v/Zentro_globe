@@ -13,6 +13,7 @@
     "start": "node .output/server/index.mjs",
     "preview": "node .output/server/index.mjs",
     "lint": "eslint .",
+    "test:pricing": "node --test src/lib/pricing/preview.test.ts",
     "format": "prettier --write ."
   },
   "dependencies": {

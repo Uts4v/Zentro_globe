@@ -130,12 +130,15 @@ export const orderApi = {
   preview: async (payload: {
     merchant_id: string;
     items: CreateOrderPayload["items"];
+    /** Lets the server include charges that depend on it (e.g. dine-in service charge). */
+    fulfillment_type?: string;
   }): Promise<OrderPreview> => {
     return djangoFetch<OrderPreview>(apiUrl("/orders/preview/"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         merchant_id: payload.merchant_id,
+        ...(payload.fulfillment_type ? { fulfillment_type: payload.fulfillment_type } : {}),
         items: payload.items.map((i) => ({
           menu_item_id: i.menu_item_id,
           quantity: i.quantity,

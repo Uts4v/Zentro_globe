@@ -79,6 +79,8 @@ export interface MenuItem {
   short_description?: string | null;
   dietary_tags?: string[];
   allergens?: string[];
+  /** "standard" (taxed), "exempt" or "zero_rated". */
+  tax_class?: "standard" | "exempt" | "zero_rated";
   /** kcal per serving; null when unknown. */
   calories?: number | null;
   display_order?: number;
@@ -282,9 +284,14 @@ export interface OrderPreview {
   merchant_id?: number;
   currency?: { code: string; symbol: string };
   subtotal: string;
+  discount_amount?: string;
+  taxable_amount?: string;
   tax_amount: string;
-  tax_breakdown: Array<{ name: string; rate: number; amount: number }>;
+  /** Exact decimal strings from the pricing engine. */
+  tax_breakdown: Array<{ name: string; rate: number | string; amount: number | string }>;
+  charges?: Array<{ kind: string; label: string; amount: string; taxable: boolean; tax: string }>;
   service_charge?: string;
+  prices_include_tax?: boolean;
   total_amount: string;
   points_earned: number;
   lines: Array<{
@@ -342,6 +349,10 @@ export interface MerchantProfile {
   tax_enabled?: boolean;
   tax_rate_percent?: string;
   tax_components?: Array<{ name: string; rate: number }>;
+  /** How tax is calculated; set by Zentro per jurisdiction, read-only for merchants. */
+  tax_policy?: "legacy" | "exclusive" | "inclusive";
+  service_charge_percent?: string;
+  service_charge_dine_in_only?: boolean;
   pos_enabled?: boolean;
   offline_pos_enabled?: boolean;
   credit_accounts_enabled?: boolean;

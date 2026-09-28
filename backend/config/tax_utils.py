@@ -1,54 +1,35 @@
 """Shared tax calculation utilities."""
 
-from decimal import Decimal, ROUND_HALF_UP
-
-_ONE_CENT = Decimal("0.01")
-
-
-def _component_tax(subtotal: Decimal, rate) -> Decimal:
-    """Tax on subtotal at ``rate`` percent, rounded to the cent (half-up)."""
-    r = Decimal(str(rate))
-    if r <= 0:
-        return Decimal("0")
-    amt = subtotal * r / Decimal("100")
-    return amt.quantize(_ONE_CENT, rounding=ROUND_HALF_UP)
+from decimal import Decimal
 
 
 def calculate_tax(subtotal, merchant):
     """
-    Calculate tax breakdown from a merchant's tax_components.
+    Tax on a plain subtotal with the merchant's current components.
 
-    Returns (tax_amount, tax_breakdown) where:
-      - tax_amount is the total tax (Decimal, computed entirely in Decimal)
-      - tax_breakdown is a list of dicts: [{"name": str, "rate": float, "amount": float}, ...]
+    Kept for callers that only have a subtotal; the arithmetic lives in the
+    pricing engine (orders.pricing), which every order flow uses directly.
 
-    Falls back to the legacy tax_rate_percent when tax_components is empty.
+    Returns (tax_amount, tax_breakdown) where tax_breakdown is a list of
+    {"name", "rate", "amount"} dicts.
     """
-    if not getattr(merchant, "tax_enabled", True):
-        return Decimal("0"), []
+    from orders.pricing import LineInput, PricingContext, calculate, resolve_components
 
-    components = merchant.tax_components or []
-    subtotal_dec = Decimal(str(subtotal))
-
+    components = resolve_components(merchant)
     if not components:
-        # Fallback to legacy field
-        rate = Decimal(str(merchant.tax_rate_percent or 0))
-        if rate > 0:
-            amt = _component_tax(subtotal_dec, rate)
-            return amt, [{"name": "VAT", "rate": float(rate), "amount": float(amt)}]
         return Decimal("0"), []
-
-    total_tax = Decimal("0")
-    breakdown = []
-    for comp in components:
-        name = comp.get("name", "Tax")
-        amt = _component_tax(subtotal_dec, comp.get("rate", 0))
-        if amt <= 0:
-            continue
-        breakdown.append({"name": name, "rate": float(comp.get("rate", 0)), "amount": float(amt)})
-        total_tax += amt
-
-    return total_tax, breakdown
+    amount = Decimal(str(subtotal))
+    result = calculate(PricingContext(
+        currency_code=getattr(merchant, "currency_code", "") or "NPR",
+        policy_code="legacy",
+        tax_enabled=True,
+        tax_components=components,
+        lines=(LineInput(key="subtotal", name="subtotal", quantity=1,
+                         unit_price=amount, list_unit_price=amount),),
+    ))
+    return result.tax_total, [
+        {"name": t.name, "rate": float(t.rate), "amount": float(t.amount)} for t in result.taxes
+    ]
 
 
 def get_tax_display_label(merchant):

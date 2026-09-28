@@ -28,6 +28,18 @@ type PosOrderItem = {
   special_instructions: string;
 };
 
+/**
+ * A manual discount chosen for the cart before the order exists. The server
+ * applies (and prices) it right after the order is created; the cart only
+ * previews it.
+ */
+export type PendingDiscount = {
+  type: "percentage" | "fixed";
+  value: number;
+  reason: string;
+  authorizedByWorkerId?: string;
+};
+
 /** What callers hand to `addItemToCart`; `key` is derived when omitted. */
 export type PosOrderItemInput = Omit<PosOrderItem, "key"> & { key?: string };
 
@@ -82,6 +94,8 @@ interface PosState {
   updateCartItemQty: (idx: number, qty: number) => void;
   clearCart: () => void;
   setCartNotes: (n: string) => void;
+  pendingDiscount: PendingDiscount | null;
+  setPendingDiscount: (d: PendingDiscount | null) => void;
   setFulfillmentType: (t: string) => void;
   setSelectedTable: (id: number | null) => void;
   setSelectedCustomer: (id: number | null) => void;
@@ -105,6 +119,7 @@ const initialState = {
   tables: [],
   cart: [],
   cartNotes: "",
+  pendingDiscount: null,
   fulfillmentType: "dine-in",
   selectedTableId: null,
   selectedCustomerId: null,
@@ -213,8 +228,15 @@ export const usePosStore = create<PosState>((set) => ({
     }),
 
   clearCart: () =>
-    set({ cart: [], cartNotes: "", selectedTableId: null, selectedCustomerId: null }),
+    set({
+      cart: [],
+      cartNotes: "",
+      selectedTableId: null,
+      selectedCustomerId: null,
+      pendingDiscount: null,
+    }),
   setCartNotes: (n) => set({ cartNotes: n }),
+  setPendingDiscount: (d) => set({ pendingDiscount: d }),
   setFulfillmentType: (t) => set({ fulfillmentType: t }),
   setSelectedTable: (id) => set({ selectedTableId: id }),
   setSelectedCustomer: (id) => set({ selectedCustomerId: id }),

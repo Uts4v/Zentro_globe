@@ -191,36 +191,52 @@ export default function Receipt({
             <span>Subtotal</span>
             <span>{formatCurrency(data.subtotal, currencySymbol)}</span>
           </div>
-          {data.discounts.map((d, i) => (
-            <div key={i} className="receipt-line text-green-700">
-              <span>
-                Discount{" "}
-                {d.type === "percentage" ? `(${d.value}%)` : ""}
-              </span>
-              <span>-{formatCurrency(d.amount, currencySymbol)}</span>
-            </div>
-          ))}
-          {Number(data.discount_amount) > 0 && (
+          {data.discounts
+            .filter((d) => Number(d.amount) > 0)
+            .map((d, i) => (
+              <div key={i} className="receipt-line text-green-700">
+                <span>
+                  {d.label && d.label !== "Discount" ? d.label : "Discount"}{" "}
+                  {d.type === "percentage" ? `(${d.value}%)` : ""}
+                </span>
+                <span>-{formatCurrency(d.amount, currencySymbol)}</span>
+              </div>
+            ))}
+          {Number(data.discount_amount) > 0 && data.discounts.length === 0 && (
             <div className="receipt-line text-green-700">
-              <span>Total Discount</span>
+              <span>Discount</span>
               <span>-{formatCurrency(data.discount_amount, currencySymbol)}</span>
             </div>
           )}
+          {data.charges && data.charges.length > 0
+            ? data.charges.map((c, i) => (
+                <div key={i} className="receipt-line">
+                  <span>{c.label}</span>
+                  <span>{formatCurrency(c.amount, currencySymbol)}</span>
+                </div>
+              ))
+            : Number(data.service_charge) > 0 && (
+                <div className="receipt-line">
+                  <span>Service Charge</span>
+                  <span>{formatCurrency(data.service_charge, currencySymbol)}</span>
+                </div>
+              )}
+          {Number(data.taxable_amount ?? 0) > 0 &&
+            (Number(data.discount_amount) > 0 || Number(data.service_charge) > 0) && (
+              <div className="receipt-line">
+                <span>Taxable Amount</span>
+                <span>{formatCurrency(data.taxable_amount ?? 0, currencySymbol)}</span>
+              </div>
+            )}
           {(data.tax_breakdown?.length ?? 0) > 0 &&
             (data.tax_breakdown ?? []).map((tax, i) => (
               <div key={i} className="receipt-line">
                 <span>
-                  {tax.name} ({tax.rate}%)
+                  {tax.name} ({tax.rate}%){data.prices_include_tax ? " incl." : ""}
                 </span>
                 <span>{formatCurrency(tax.amount, currencySymbol)}</span>
               </div>
             ))}
-          {Number(data.service_charge) > 0 && (
-            <div className="receipt-line">
-              <span>Service Charge</span>
-              <span>{formatCurrency(data.service_charge, currencySymbol)}</span>
-            </div>
-          )}
           <hr className="receipt-divider-thick my-2" />
           <div className="receipt-total-row">
             <span>TOTAL</span>

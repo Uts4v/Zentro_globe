@@ -38,6 +38,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
         model = OrderItem
         fields = [
             "id", "menu_item", "name", "price", "quantity", "subtotal",
+            "list_unit_price", "discount_amount", "taxable_amount", "tax_amount",
+            "total_amount", "tax_class", "refunded_quantity", "refunded_amount",
             "special_instructions", "options",
             "variant_name", "modifier_summary",
         ]
@@ -152,8 +154,10 @@ class OrderSerializer(serializers.ModelSerializer):
             "merchant", "merchant_id", "merchant_name",
             "status", "order_type", "source", "fulfillment_type",
             "subtotal", "discount_type", "discount_value", "discount_amount",
-            "tax_amount", "tax_breakdown", "service_charge",
+            "taxable_amount", "tax_amount", "tax_breakdown", "service_charge",
             "total_amount", "points_earned",
+            "prices_include_tax", "pricing_version", "tax_policy_snapshot",
+            "currency_code_snapshot", "currency_symbol_snapshot", "pricing_locked_at",
             "payment_status", "payment_method",
             "notes", "items",
             "cancellation_reason", "cancelled_by",
@@ -213,8 +217,10 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
             "merchant", "merchant_id", "merchant_name",
             "status", "order_type", "source", "fulfillment_type",
             "subtotal", "discount_type", "discount_value", "discount_amount",
-            "tax_amount", "tax_breakdown", "service_charge",
+            "taxable_amount", "tax_amount", "tax_breakdown", "service_charge",
             "total_amount", "points_earned",
+            "prices_include_tax", "pricing_version", "tax_policy_snapshot",
+            "currency_code_snapshot", "currency_symbol_snapshot", "pricing_locked_at",
             "payment_status", "payment_method",
             "notes", "items",
             "cancellation_reason", "cancelled_by",

@@ -287,6 +287,24 @@ class Order(models.Model):
         help_text="Combined tax rate at time of order",
     )
 
+    # ── Pricing engine snapshot (orders.pricing) ─────────────────────────────
+    # Empty pricing_version = the order was priced before pricing v1.
+    pricing_version = models.CharField(max_length=8, blank=True, default="")
+    tax_policy_snapshot = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="Tax policy code applied (see orders.pricing.tax.POLICIES)",
+    )
+    prices_include_tax = models.BooleanField(default=False)
+    tax_components_snapshot = models.JSONField(
+        default=list, blank=True,
+        help_text='Tax components applied, e.g. [{"name":"VAT","rate":"13"}]',
+    )
+    taxable_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    pricing_locked_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="Set once the order is paid, completed, cancelled or refunded; pricing is frozen after.",
+    )
+
     # ── Guest order fields ────────────────────────────────────────────────────
     guest_session_id = models.CharField(
         max_length=64, blank=True, default="",
@@ -337,6 +355,23 @@ class Order(models.Model):
     def __str__(self):
         customer_label = self.customer or "Walk-in"
         return f"Order #{self.id} [{self.status}] — {customer_label}"
+
+    PRICING_LOCK_STATUSES = frozenset({"completed", "cancelled", "refunded"})
+    PRICING_LOCK_PAYMENT_STATUSES = frozenset({"paid", "refunded"})
+
+    def save(self, *args, **kwargs):
+        # Money on a settled order is historical fact: freeze its pricing the
+        # moment it is paid, completed, cancelled or refunded, whichever path
+        # got it there.
+        if self.pricing_locked_at is None and (
+            self.status in self.PRICING_LOCK_STATUSES
+            or self.payment_status in self.PRICING_LOCK_PAYMENT_STATUSES
+        ):
+            self.pricing_locked_at = timezone.now()
+            update_fields = kwargs.get("update_fields")
+            if update_fields is not None and "pricing_locked_at" not in update_fields:
+                kwargs["update_fields"] = [*update_fields, "pricing_locked_at"]
+        super().save(*args, **kwargs)
 
     def can_transition_to(self, new_status):
         """Check if a status transition is valid."""
@@ -431,6 +466,26 @@ class OrderItem(models.Model):
         related_name="prepared_items",
     )
 
+    # ── Pricing snapshot (orders.pricing). `price` is the effective unit
+    # selling price; these record how the line was charged. ─────────────────
+    list_unit_price = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Unit price before Today's Special; null on pre-v1 lines.",
+    )
+    tax_class = models.CharField(max_length=12, default="standard")
+    discount_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="Order-level discounts allocated to this line.",
+    )
+    taxable_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    total_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="What the customer paid for this line (0 on pre-v1 lines).",
+    )
+    refunded_quantity = models.PositiveIntegerField(default=0)
+    refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
     class Meta:
         db_table = "order_items"
         indexes = [
@@ -476,3 +531,107 @@ class OrderItemOption(models.Model):
 
     def __str__(self):
         return f"{self.option_name} ({self.group_name})"
+
+
+class OrderAdjustment(models.Model):
+    """
+    An order-level discount or reward (POS manual discount, loyalty reward,
+    punch reward, future promotion). Stores the *definition*, so pricing can
+    re-evaluate it whenever the order changes; ``amount`` is the latest result.
+    """
+
+    STATUS_ACTIVE = "active"
+    STATUS_REMOVED = "removed"
+    STATUS_CHOICES = [(STATUS_ACTIVE, "Active"), (STATUS_REMOVED, "Removed")]
+
+    KIND_CHOICES = [
+        ("manual_discount", "Manual discount"),
+        ("loyalty_reward", "Loyalty reward"),
+        ("punch_reward", "Punch-card reward"),
+        ("promotion", "Promotion"),
+    ]
+    CALC_CHOICES = [("percentage", "Percentage"), ("fixed", "Fixed amount")]
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="adjustments")
+    kind = models.CharField(max_length=20, choices=KIND_CHOICES)
+    calc_type = models.CharField(max_length=12, choices=CALC_CHOICES)
+    value = models.DecimalField(max_digits=10, decimal_places=2)
+    label = models.CharField(max_length=120, blank=True, default="")
+    max_amount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    min_subtotal = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    eligible_item_ids = models.JSONField(
+        null=True, blank=True,
+        help_text="OrderItem ids the adjustment applies to; null = whole order.",
+    )
+    source_ref = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text='Where it came from, e.g. "pos_discount:12".',
+    )
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default=STATUS_ACTIVE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    eligible = models.BooleanField(default=True)
+    reason = models.JSONField(null=True, blank=True)
+    created_by = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
+    removed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "order_adjustments"
+        ordering = ["id"]
+        constraints = [
+            # V1 business rule: one financial discount/reward per order. Drop
+            # this (and raise pricing.MAX_ORDER_ADJUSTMENTS) to allow stacking.
+            models.UniqueConstraint(
+                fields=["order"],
+                condition=models.Q(status="active"),
+                name="one_active_order_adjustment_v1",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.kind} {self.calc_type} {self.value} on order #{self.order_id}"
+
+
+class OrderAdjustmentAllocation(models.Model):
+    """How much of an adjustment landed on each line (sums to its amount)."""
+
+    adjustment = models.ForeignKey(OrderAdjustment, on_delete=models.CASCADE, related_name="allocations")
+    order_item = models.ForeignKey(OrderItem, on_delete=models.CASCADE, related_name="adjustment_allocations")
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    class Meta:
+        db_table = "order_adjustment_allocations"
+        constraints = [
+            models.UniqueConstraint(fields=["adjustment", "order_item"], name="uniq_adjustment_line"),
+        ]
+
+
+class OrderCharge(models.Model):
+    """A non-product charge on an order (service, delivery, packaging, other)."""
+
+    KIND_CHOICES = [
+        ("service", "Service charge"),
+        ("delivery", "Delivery fee"),
+        ("packaging", "Packaging fee"),
+        ("other", "Other"),
+    ]
+
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="charges")
+    kind = models.CharField(max_length=12, choices=KIND_CHOICES)
+    label = models.CharField(max_length=80)
+    calc_type = models.CharField(max_length=12, choices=OrderAdjustment.CALC_CHOICES)
+    value = models.DecimalField(max_digits=10, decimal_places=2)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    taxable = models.BooleanField(default=False)
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "order_charges"
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.label} {self.amount} on order #{self.order_id}"

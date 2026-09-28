@@ -60,49 +60,6 @@ export function getCurrencySymbol(code: string): string {
 }
 
 /**
- * Tax-breakdown interface matching the backend shape.
- */
-export interface TaxComponent {
-  name: string;
-  rate: number;
-}
-
-export interface TaxBreakdownItem {
-  name: string;
-  rate: number;
-  amount: number;
-}
-
-/**
- * Calculate tax from merchant's tax_components.
- * Returns { total, breakdown }.
- */
-export function calculateTax(
-  subtotal: number,
-  taxComponents: TaxComponent[],
-): { total: number; breakdown: TaxBreakdownItem[] } {
-  if (!taxComponents || taxComponents.length === 0) {
-    return { total: 0, breakdown: [] };
-  }
-
-  let total = 0;
-  const breakdown: TaxBreakdownItem[] = [];
-
-  for (const comp of taxComponents) {
-    const rate = Number(comp.rate) || 0;
-    if (rate <= 0) continue;
-    const amount = Math.round(subtotal * (rate / 100) * 100) / 100;
-    breakdown.push({ name: comp.name, rate, amount });
-    total += amount;
-  }
-
-  return {
-    total: Math.round(total * 100) / 100,
-    breakdown,
-  };
-}
-
-/**
  * Round a money value to cents. Float math like `120 - 113.11` yields
  * 6.890000000000001, which the API's 2-decimal fields reject.
  */

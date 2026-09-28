@@ -2,7 +2,8 @@ import { usePosStore, cartToOrderItems } from "../store";
 import { useState, useMemo, useEffect } from "react";
 import { PosReceiptData, PosCustomer, posCreateOrder } from "../api";
 import { safeUuid } from "@/lib/utils";
-import { formatCurrency, calculateTax } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { usePosCartPricing } from "../pricing";
 import { lineSelectionsText } from "@/lib/menu-utils";
 import CustomerSearchModal from "./CustomerSearchModal";
 import TableSelector from "./TableSelector";
@@ -53,6 +54,8 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const setSelectedTable = usePosStore((s) => s.setSelectedTable);
   const selectedCustomerId = usePosStore((s) => s.selectedCustomerId);
   const setSelectedCustomer = usePosStore((s) => s.setSelectedCustomer);
+  const pendingDiscount = usePosStore((s) => s.pendingDiscount);
+  const setPendingDiscount = usePosStore((s) => s.setPendingDiscount);
 
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
@@ -98,12 +101,17 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showFreeConfirm]);
 
-  const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const { total: tax, breakdown: taxBreakdown } = calculateTax(
-    subtotal,
-    posSettings?.tax_components || [],
-  );
-  const total = subtotal + tax;
+  // Preview only: the order is priced by the server when it is created.
+  const pricing = usePosCartPricing();
+  const subtotal = pricing.subtotalValue;
+  const tax = pricing.taxValue;
+  const total = pricing.totalValue;
+  const taxBreakdown = pricing.taxes;
+  const discountLabel = pendingDiscount
+    ? pendingDiscount.type === "percentage"
+      ? `Discount (${pendingDiscount.value}%)`
+      : "Discount"
+    : "Discount";
   const selectedTable = tables.find((t) => t.id === selectedTableId);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -159,13 +167,23 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         quantity: item.quantity,
         subtotal: String(item.subtotal),
       })),
-      subtotal: String(subtotal),
-      discounts: [],
-      discount_amount: "0.00",
-      tax_amount: String(tax),
+      subtotal: pricing.subtotal,
+      discounts: pendingDiscount
+        ? [
+            {
+              type: pendingDiscount.type,
+              value: String(pendingDiscount.value),
+              amount: pricing.discountTotal,
+              reason: pendingDiscount.reason,
+              authorized_by: null,
+            },
+          ]
+        : [],
+      discount_amount: pricing.discountTotal,
+      tax_amount: pricing.taxTotal,
       tax_breakdown: taxBreakdown,
-      service_charge: "0.00",
-      total_amount: String(total),
+      service_charge: pricing.chargeTotal,
+      total_amount: pricing.grandTotal,
       payments: [],
       total_paid: "0.00",
       change: "0.00",
@@ -213,6 +231,8 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
         <hr style="border: none; border-top: 1px dashed #000; margin: 6px 0;">
         <div style="font-size: 11px;">
           <div style="display: flex; justify-content: space-between;"><span>Subtotal</span><span>${formatCurrency(subtotal, currencySymbol)}</span></div>
+          ${pricing.discountValue > 0 ? `<div style="display: flex; justify-content: space-between;"><span>${discountLabel}</span><span>-${formatCurrency(pricing.discountValue, currencySymbol)}</span></div>` : ""}
+          ${pricing.chargeValue > 0 ? `<div style="display: flex; justify-content: space-between;"><span>Service charge</span><span>${formatCurrency(pricing.chargeValue, currencySymbol)}</span></div>` : ""}
           ${taxBreakdown.map((item) => `<div style="display: flex; justify-content: space-between;"><span>${item.name} (${item.rate}%)</span><span>${formatCurrency(item.amount, currencySymbol)}</span></div>`).join("")}
           <hr style="border: none; border-top: 2px solid #000; margin: 6px 0;">
           <div style="display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;">
@@ -581,29 +601,58 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
             {formatCurrency(subtotal, currencySymbol)}
           </span>
         </div>
+        {pendingDiscount ? (
+          <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <Percent className="h-3.5 w-3.5" />
+              {discountLabel}
+              <button
+                onClick={() => setPendingDiscount(null)}
+                className="text-[11px] font-medium text-ember hover:underline"
+              >
+                Remove
+              </button>
+            </span>
+            <span className="numeric font-medium text-success">
+              -{formatCurrency(pricing.discountValue, currencySymbol)}
+            </span>
+          </div>
+        ) : (
+          <button
+            onClick={onDiscount}
+            className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-ember"
+          >
+            <span className="flex items-center gap-1.5">
+              <Percent className="h-3.5 w-3.5" />
+              Discount
+            </span>
+            <span className="font-medium text-ember">Add</span>
+          </button>
+        )}
+        {pricing.charges.map((charge) => (
+          <div
+            key={charge.kind}
+            className="flex items-center justify-between text-[13px] text-muted-foreground"
+          >
+            <span>{charge.label}</span>
+            <span className="numeric font-medium text-foreground">
+              {formatCurrency(charge.amount, currencySymbol)}
+            </span>
+          </div>
+        ))}
         {taxBreakdown.map((item, i) => (
           <div
             key={i}
             className="flex items-center justify-between text-[13px] text-muted-foreground"
           >
             <span>
-              {item.name} ({item.rate}%)
+              {item.name} ({item.rate}%){pricing.pricesIncludeTax ? " incl." : ""}
             </span>
             <span className="numeric font-medium text-foreground">
               {formatCurrency(item.amount, currencySymbol)}
             </span>
           </div>
         ))}
-        <button
-          onClick={onDiscount}
-          className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-ember"
-        >
-          <span className="flex items-center gap-1.5">
-            <Percent className="h-3.5 w-3.5" />
-            Discount
-          </span>
-          <span className="font-medium text-ember">Add</span>
-        </button>
         <div className="flex items-end justify-between border-t border-border pt-2">
           <span className="text-sm font-semibold text-foreground">Total</span>
           <span className="numeric text-2xl font-bold tracking-tight text-foreground">

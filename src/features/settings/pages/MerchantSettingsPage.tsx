@@ -75,6 +75,12 @@ function paymentConfigOf(source: {
   };
 }
 
+const TAX_POLICY_LABELS: Record<string, string> = {
+  legacy: "Tax on the full price, before discounts",
+  exclusive: "Tax added at checkout on the discounted amount",
+  inclusive: "Menu prices include tax",
+};
+
 export function MerchantSettingsPage() {
   const { merchantProfile, refreshProfile } = useAuth();
   const [profile, setProfile] = useState<MerchantProfile | null>(merchantProfile);
@@ -270,6 +276,8 @@ export function MerchantSettingsPage() {
         tax_enabled: profile.tax_enabled,
         tax_rate_percent: profile.tax_rate_percent,
         tax_components: profile.tax_components,
+        service_charge_percent: profile.service_charge_percent ?? "0",
+        service_charge_dine_in_only: profile.service_charge_dine_in_only ?? true,
         currency_code: profile.currency_code,
         currency_symbol: profile.currency_symbol,
         accepted_payment_methods: profile.accepted_payment_methods,
@@ -468,6 +476,53 @@ export function MerchantSettingsPage() {
             </div>
           </>
         )}
+
+        <p className="mt-4 text-xs text-muted-foreground">
+          Tax calculation:{" "}
+          <span className="font-medium text-foreground">
+            {TAX_POLICY_LABELS[profile.tax_policy ?? "legacy"] ?? TAX_POLICY_LABELS.legacy}
+          </span>
+          . This depends on your country's tax rules and is set by Zentro support.
+        </p>
+      </section>
+
+      {/* ── Service charge ─────────────────────────────────────────────────── */}
+      <section className="glass-strong rounded-3xl p-6">
+        <h2 className="mb-1 text-sm font-bold text-foreground uppercase tracking-wider">
+          Service Charge
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Added to the bill as a percentage of the order after discounts. Set 0 to turn it off.
+        </p>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="relative w-28">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              step={0.5}
+              aria-label="Service charge percent"
+              value={profile.service_charge_percent ?? ""}
+              onChange={(e) =>
+                setProfile((p) => (p ? { ...p, service_charge_percent: e.target.value } : p))
+              }
+              className="w-full rounded-xl border border-border bg-muted/50 px-3 py-2 pr-7 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+            />
+            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+              %
+            </span>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={profile.service_charge_dine_in_only ?? true}
+              onChange={(e) =>
+                setProfile((p) => (p ? { ...p, service_charge_dine_in_only: e.target.checked } : p))
+              }
+            />
+            Dine-in orders only
+          </label>
+        </div>
       </section>
 
       {/* ── Payment methods ────────────────────────────────────────────────── */}

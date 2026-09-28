@@ -54,6 +54,9 @@ export type MerchantProfile = {
   tax_enabled?: boolean;
   tax_rate_percent?: string;
   tax_components?: Array<{ name: string; rate: number }>;
+  tax_policy?: "legacy" | "exclusive" | "inclusive";
+  service_charge_percent?: string;
+  service_charge_dine_in_only?: boolean;
   pos_enabled?: boolean;
   offline_pos_enabled?: boolean;
   credit_accounts_enabled?: boolean;

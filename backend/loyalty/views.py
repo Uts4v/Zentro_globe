@@ -902,6 +902,10 @@ def confirm_punch_proof(request):
         quantity=1,
         subtotal=0,
     )
+    # Reward orders are free, but priced through the same engine so they carry
+    # the same pricing snapshot as every other order.
+    from orders.pricing import reprice_order
+    reprice_order(redemption_order)
 
     card.redeem(order=redemption_order)
 
@@ -1018,6 +1022,10 @@ def redeem_reward(request, pk):
         quantity=1,
         subtotal=0,
     )
+    # Reward orders are free, but priced through the same engine so they carry
+    # the same pricing snapshot as every other order.
+    from orders.pricing import reprice_order
+    reprice_order(redemption_order)
 
     # Deduct the points — same transaction, wallet already locked.
     balance_before = wallet.points_balance

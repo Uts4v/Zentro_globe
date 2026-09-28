@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { safeUuid } from "@/lib/utils";
 import { usePosStore, cartToOrderItems } from "../store";
 import {
+  posApplyDiscount,
   posCreateOrder,
   posCreatePayment,
   posReceiptData,
@@ -9,7 +10,8 @@ import {
   posListDebitAccounts,
   DebitAccount,
 } from "../api";
-import { formatCurrency, calculateTax, roundMoney } from "@/lib/currency";
+import { formatCurrency, roundMoney } from "@/lib/currency";
+import { usePosCartPricing } from "../pricing";
 import Receipt from "../printing/Receipt";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import KOTTicket, { kotTicketFromReceipt, printKOT, KOTTicketData } from "../printing/KOTTicket";
@@ -232,6 +234,10 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const selectedTableId = usePosStore((s) => s.selectedTableId);
   const tables = usePosStore((s) => s.tables);
   const clearCart = usePosStore((s) => s.clearCart);
+  const pendingDiscount = usePosStore((s) => s.pendingDiscount);
+  const setPendingDiscount = usePosStore((s) => s.setPendingDiscount);
+  // Preview for display and cash validation; the charge uses the server total.
+  const cartPricing = usePosCartPricing();
 
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [cashReceived, setCashReceived] = useState("");
@@ -247,6 +253,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedKot, setPlacedKot] = useState<KOTTicketData | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const [discountAppliedTo, setDiscountAppliedTo] = useState<string | null>(null);
   const [orderMutationId, setOrderMutationId] = useState<string>(() => safeUuid());
   const posSettings = usePosStore((s) => s.posSettings);
   const menu = usePosStore((s) => s.menu);
@@ -319,6 +326,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   useEffect(() => {
     if (!open) {
       setCreatedOrderId(null);
+      setDiscountAppliedTo(null);
       setOrderMutationId(safeUuid());
       setError(null);
       setOrderPlaced(false);
@@ -333,9 +341,60 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
   if (!open) return null;
 
-  const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const { total: tax } = calculateTax(subtotal, posSettings?.tax_components || []);
-  const total = subtotal + tax;
+  const subtotal = cartPricing.subtotalValue;
+  const tax = cartPricing.taxValue;
+  const total = cartPricing.totalValue;
+
+  /**
+   * Create the order on the server (once), apply the cart's discount there,
+   * and return the server's authoritative total — the amount actually charged.
+   */
+  async function ensureServerOrder(): Promise<{ uuid: string; total: number }> {
+    if (!merchant || !currentWorker || !device) throw new Error("POS is not ready.");
+    let uuid = createdOrderId;
+    let serverTotal: number | null = null;
+    if (!uuid) {
+      const orderRes = await posCreateOrder({
+        merchant_id: merchant.id,
+        items: cartToOrderItems(cart),
+        notes: cartNotes,
+        fulfillment_type: fulfillmentType,
+        customer_id: selectedCustomerId ?? undefined,
+        table_id: selectedTableId ?? undefined,
+        shift_id: activeShift?.id ?? undefined,
+        worker_id: currentWorker.id,
+        device_id: device.id,
+        client_mutation_id: orderMutationId,
+      });
+      uuid = String(orderRes.uuid);
+      setCreatedOrderId(uuid);
+      serverTotal = Number(orderRes.total_amount);
+    }
+    if (pendingDiscount && discountAppliedTo !== uuid) {
+      try {
+        await posApplyDiscount({
+          order_id: uuid,
+          worker_id: currentWorker.id,
+          discount_type: pendingDiscount.type,
+          discount_value: pendingDiscount.value,
+          reason: pendingDiscount.reason,
+          authorized_by_worker_id: pendingDiscount.authorizedByWorkerId,
+          source: "pos",
+        });
+        setDiscountAppliedTo(uuid);
+        serverTotal = null;
+      } catch (err: unknown) {
+        setPendingDiscount(null);
+        throw new Error(
+          `The order was saved, but the discount could not be applied: ${(err as Error)?.message || "unknown error"}. Check the total and try again.`,
+        );
+      }
+    }
+    if (serverTotal === null || !Number.isFinite(serverTotal)) {
+      serverTotal = Number((await posReceiptData(uuid)).total_amount);
+    }
+    return { uuid, total: serverTotal };
+  }
   const cashAmount = parseFloat(cashReceived) || 0;
   const change = method === "cash" ? Math.max(0, cashAmount - total) : 0;
   const isDineIn = fulfillmentType === "dine-in";
@@ -362,9 +421,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
     const isOffline = !navigator.onLine;
     const merchantProfile = merchant as any;
-    const hasDiscounts = cart.some((c) => (c as any).discount_amount > 0 || (c as any).discount_type);
-    if (isOffline && hasDiscounts && merchantProfile?.offline_discounts_allowed === false) {
-      setError("Discounts are not permitted while offline.");
+    if (isOffline && pendingDiscount) {
+      setError("Discounts need an internet connection. Remove the discount to continue offline.");
       setSubmitting(false);
       return;
     }
@@ -442,23 +500,14 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     }
 
     try {
-      const orderRes = await posCreateOrder({
-        merchant_id: merchant.id,
-        items: cartToOrderItems(cart),
-        notes: cartNotes,
-        fulfillment_type: fulfillmentType,
-        customer_id: selectedCustomerId ?? undefined,
-        table_id: selectedTableId ?? undefined,
-        shift_id: activeShift?.id ?? undefined,
-        worker_id: currentWorker.id,
-        device_id: device.id,
-        client_mutation_id: orderMutationId,
-      });
+      const { uuid: placedUuid } = await ensureServerOrder();
 
       clearCart();
+      setCreatedOrderId(null);
+      setDiscountAppliedTo(null);
       setOrderPlaced(true);
       try {
-        const r = await posReceiptData(String(orderRes.uuid));
+        const r = await posReceiptData(placedUuid);
         setPlacedKot(kotTicketFromReceipt(r));
       } catch {
         // KOT not critical on this path
@@ -478,9 +527,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
     const isOffline = !navigator.onLine;
     const merchantProfile = merchant as any;
-    const hasDiscounts = cart.some((c) => (c as any).discount_amount > 0 || (c as any).discount_type);
-    if (isOffline && hasDiscounts && merchantProfile?.offline_discounts_allowed === false) {
-      setError("Discounts are not permitted while offline.");
+    if (isOffline && pendingDiscount) {
+      setError("Discounts need an internet connection. Remove the discount to continue offline.");
       setSubmitting(false);
       return;
     }
@@ -633,23 +681,11 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     }
 
     try {
-      let targetOrderUuid = createdOrderId;
-
-      if (!targetOrderUuid) {
-        const orderRes = await posCreateOrder({
-          merchant_id: merchant.id,
-          items: cartToOrderItems(cart),
-          notes: cartNotes,
-          fulfillment_type: fulfillmentType,
-          customer_id: selectedCustomerId ?? undefined,
-          table_id: selectedTableId ?? undefined,
-          shift_id: activeShift?.id ?? undefined,
-          worker_id: currentWorker.id,
-          device_id: device.id,
-          client_mutation_id: orderMutationId,
-        });
-        targetOrderUuid = String(orderRes.uuid);
-        setCreatedOrderId(targetOrderUuid);
+      const { uuid: targetOrderUuid, total: serverTotal } = await ensureServerOrder();
+      if (method === "cash" && cashAmount < serverTotal) {
+        throw new Error(
+          `The order total is ${formatCurrency(serverTotal, currencySymbol)}; cash received is not enough.`,
+        );
       }
 
       await posCreatePayment({
@@ -658,8 +694,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         worker_id: currentWorker.id,
         device_id: device.id,
         payment_method: method,
-        amount: roundMoney(total),
-        change_amount: method === "cash" ? roundMoney(change) : 0,
+        amount: roundMoney(serverTotal),
+        change_amount: method === "cash" ? roundMoney(Math.max(0, cashAmount - serverTotal)) : 0,
         debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
         // Optional by design: Zentro records the payment, it does not
         // process it, so there is nothing to look up against a provider.
@@ -669,6 +705,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
       clearCart();
       setCreatedOrderId(null);
+      setDiscountAppliedTo(null);
       setOrderMutationId(safeUuid());
       setLoadingReceipt(true);
       try {

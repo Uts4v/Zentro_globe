@@ -1,6 +1,5 @@
 # orders/views.py
 import logging
-from decimal import Decimal
 
 from django.db import transaction
 from django.db import IntegrityError
@@ -16,9 +15,16 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 
-from merchants.models import MerchantProfile, MenuItem
+from merchants.models import MerchantProfile
 from config.order_utils import parse_quantity, QuantityValidationError
-from config.menu_pricing import validate_and_price_line, LineValidationError
+from orders.pricing import (
+    PricingError,
+    persist_new_order,
+    price_new_order_lines,
+    price_request_lines,
+    reprice_order,
+)
+from orders.pricing.service import order_fields as pricing_order_fields
 from loyalty.models import (
     MerchantPunchCard, CustomerPunchCard, PunchCardEvent,
     CustomerMission, Mission, CustomerMerchantProfile,
@@ -47,60 +53,13 @@ def _paginate(request, qs, default=100, max_limit=200):
     return qs[offset:offset + limit]
 
 
-class _LineError(ValueError):
-    """Internal signal for a cart-line validation failure."""
+def _option_rows(priced):
+    """(line index, options) pairs for _bulk_create_items_with_options."""
+    return [(index, p.options) for index, p in enumerate(priced)]
 
 
-def _priced_items(menu_items_by_id, request_items, *, loyalty_eligible=True):
-    """
-    Compute authoritative prices for every cart line via config.menu_pricing
-    (backend is the price authority). Returns:
-      (order_items_data, option_rows, total, points)
-
-    option_rows maps line index -> [PricedOption, ...] so callers can snapshot
-    structured options onto the created OrderItem rows.
-    Raises _LineError with a user-safe message on any violation.
-    """
-    order_items_data = []
-    option_rows = []
-    total = Decimal("0")
-    points = 0
-
-    for index, item_data in enumerate(request_items):
-        menu_item = menu_items_by_id.get(item_data["menu_item_id"])
-        if menu_item is None:
-            raise _LineError(
-                f"Menu item {item_data['menu_item_id']} not found or unavailable."
-            )
-
-        selections = [
-            (sel.get("group_id"), sel.get("option_id"))
-            for sel in (item_data.get("selections") or [])
-        ]
-        try:
-            line = validate_and_price_line(
-                menu_item,
-                item_data.get("quantity"),
-                selections,
-                special_instructions=item_data.get("special_instructions", ""),
-                loyalty_eligible=loyalty_eligible,
-            )
-        except LineValidationError as exc:
-            raise _LineError(f"{menu_item.name}: {exc}")
-
-        total += line.subtotal
-        points += line.points
-        option_rows.append((index, line.options))
-        order_items_data.append({
-            "menu_item": menu_item,
-            "name": line.name,
-            "price": line.unit_price,
-            "quantity": line.quantity,
-            "subtotal": line.subtotal,
-            "special_instructions": line.special_instructions,
-        })
-
-    return order_items_data, option_rows, total, points
+def _item_rows(priced):
+    return [dict(p.item_fields) for p in priced]
 
 
 def _bulk_create_items_with_options(order, order_items_data, option_rows):
@@ -572,36 +531,20 @@ def create_order(request):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-    # Batch-fetch menu items in one query instead of one per line item.
-    menu_items_by_id = {
-        mi.id: mi
-        for mi in MenuItem.objects.filter(
-            id__in=[i["menu_item_id"] for i in data["items"]],
-            merchant=merchant,
-            is_available=True,
-        )
-    }
-
-    # ── Server-side authoritative pricing (variants/modifiers included) ──────
+    # ── Server-side authoritative pricing (orders.pricing) ───────────────────
     try:
-        order_items_data, option_rows, total_amount, points_earned = _priced_items(
-            menu_items_by_id, data["items"]
-        )
-    except _LineError as exc:
+        priced = price_request_lines(merchant, data["items"])
+    except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-
-    # Apply tax
-    from config.tax_utils import calculate_tax
-    tax_amount, tax_breakdown = calculate_tax(total_amount, merchant)
+    pricing_ctx, pricing = price_new_order_lines(
+        merchant, priced, fulfillment_type=fulfillment_type, order_type=Order.ORDER_TYPE_REGULAR,
+    )
 
     order = Order.objects.create(
         customer=customer,
         merchant=merchant,
-        subtotal=total_amount,
-        tax_amount=tax_amount,
-        tax_breakdown=tax_breakdown,
-        total_amount=total_amount + tax_amount,
-        points_earned=points_earned,
+        **pricing_order_fields(pricing_ctx, pricing, merchant),
+        points_earned=sum(p.points for p in priced),
         notes=data.get("notes", ""),
         status=Order.STATUS_PENDING,
         order_type=Order.ORDER_TYPE_REGULAR,
@@ -614,9 +557,10 @@ def create_order(request):
 
     try:
         # Apply preparation routing
-        order_items_data = prepare_order_items_for_routing(order, order_items_data)
+        order_items_data = prepare_order_items_for_routing(order, _item_rows(priced))
 
-        _bulk_create_items_with_options(order, order_items_data, option_rows)
+        created_items = _bulk_create_items_with_options(order, order_items_data, _option_rows(priced))
+        persist_new_order(order, pricing_ctx, pricing, created_items)
     except IntegrityError:
         # A concurrent request already persisted an order with the same
         # client_mutation_id (customer + merchant). Return that one.
@@ -638,7 +582,7 @@ def create_order(request):
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
         title="New order received",
-        message=f"Order #{order.id} from {customer.full_name or 'Customer'} — {merchant.currency_symbol} {total_amount}",
+        message=f"Order #{order.id} from {customer.full_name or 'Customer'} — {merchant.currency_symbol} {pricing.grand_total}",
         notification_type=Notification.TYPE_NEW_ORDER,
         merchant_name=merchant.business_name,
         context_url="/merchant/orders",
@@ -695,26 +639,10 @@ def guest_create_order(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    total_amount = 0
-    points_earned = 0
-    order_items_data = []
-
-    # Batch-fetch menu items in one query instead of one per line item.
-    menu_items_by_id = {
-        mi.id: mi
-        for mi in MenuItem.objects.filter(
-            id__in=[i["menu_item_id"] for i in data["items"]],
-            merchant=merchant,
-            is_available=True,
-        )
-    }
-
     # ── Server-side authoritative pricing for guest/table-QR orders ───────────
     try:
-        order_items_data, option_rows, total_amount, points_earned = _priced_items(
-            menu_items_by_id, data["items"], loyalty_eligible=False
-        )
-    except _LineError as exc:
+        priced = price_request_lines(merchant, data["items"], loyalty_eligible=False)
+    except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     # Generate KOT number. Lock the merchant row so concurrent guest orders
@@ -727,17 +655,14 @@ def guest_create_order(request):
     ).count()
     kot_number = today_count + 1
 
-    # Apply tax
-    from config.tax_utils import calculate_tax
-    tax_amount, tax_breakdown = calculate_tax(total_amount, merchant)
+    pricing_ctx, pricing = price_new_order_lines(
+        merchant, priced, fulfillment_type=Order.FULFILLMENT_DINE_IN, order_type=Order.ORDER_TYPE_REGULAR,
+    )
 
     order = Order.objects.create(
         customer=None,
         merchant=merchant,
-        subtotal=total_amount,
-        tax_amount=tax_amount,
-        tax_breakdown=tax_breakdown,
-        total_amount=total_amount + tax_amount,
+        **pricing_order_fields(pricing_ctx, pricing, merchant),
         points_earned=0,  # Guest orders don't earn points
         notes=data.get("notes", ""),
         status=Order.STATUS_PENDING,
@@ -753,14 +678,15 @@ def guest_create_order(request):
     )
 
     # Apply preparation routing
-    order_items_data = prepare_order_items_for_routing(order, order_items_data)
+    order_items_data = prepare_order_items_for_routing(order, _item_rows(priced))
 
-    _bulk_create_items_with_options(order, order_items_data, option_rows)
+    created_items = _bulk_create_items_with_options(order, order_items_data, _option_rows(priced))
+    persist_new_order(order, pricing_ctx, pricing, created_items)
 
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
         title="New guest order",
-        message=f"Guest Order #{order.id} — Table {table_instance.table_number} — {merchant.currency_symbol} {total_amount}",
+        message=f"Guest Order #{order.id} — Table {table_instance.table_number} — {merchant.currency_symbol} {pricing.grand_total}",
         notification_type=Notification.TYPE_NEW_ORDER,
         merchant_name=merchant.business_name,
         context_url="/merchant/orders",
@@ -796,37 +722,31 @@ def preview_order(request):
     except MerchantProfile.DoesNotExist:
         return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    menu_items_by_id = {
-        mi.id: mi
-        for mi in MenuItem.objects.filter(
-            id__in=[i["menu_item_id"] for i in data["items"]],
-            merchant=merchant,
-            is_available=True,
-        )
-    }
-
     try:
-        order_items_data, option_rows, subtotal, points = _priced_items(
-            menu_items_by_id, data["items"]
-        )
-    except _LineError as exc:
+        priced = price_request_lines(merchant, data["items"])
+    except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-    from config.tax_utils import calculate_tax
-    tax_amount, tax_breakdown = calculate_tax(subtotal, merchant)
+    fulfillment_type = data.get("fulfillment_type") or Order.FULFILLMENT_PICKUP
+    if data.get("table_token"):
+        fulfillment_type = Order.FULFILLMENT_DINE_IN
+    _, pricing = price_new_order_lines(
+        merchant, priced, fulfillment_type=fulfillment_type, order_type=Order.ORDER_TYPE_REGULAR,
+    )
+    breakdown = pricing.to_dict()
 
     lines = []
-    opts_by_index = {idx: opts for idx, opts in option_rows}
-    for index, item in enumerate(order_items_data):
-        menu_item = item["menu_item"]
-        unit = item["price"]
+    for p, priced_line in zip(priced, pricing.lines):
         lines.append({
-            "menu_item_id": menu_item.id,
-            "name": item["name"],
-            "quantity": item["quantity"],
-            "unit_price": str(unit),
-            "subtotal": str(item["subtotal"]),
-            "special_instructions": item.get("special_instructions", ""),
+            "menu_item_id": p.item_fields["menu_item"].id,
+            "name": p.item_fields["name"],
+            "quantity": p.item_fields["quantity"],
+            "unit_price": str(priced_line.unit_price),
+            "list_unit_price": str(priced_line.list_unit_price),
+            "subtotal": str(priced_line.line_subtotal),
+            "tax": str(priced_line.tax),
+            "line_total": str(priced_line.total),
+            "special_instructions": p.item_fields.get("special_instructions", ""),
             "options": [
                 {
                     "group_name": opt.group_name,
@@ -834,7 +754,7 @@ def preview_order(request):
                     "kind": opt.kind,
                     "price_effect": str(opt.price_effect),
                 }
-                for opt in (opts_by_index.get(index) or [])
+                for opt in p.options
             ],
         })
 
@@ -844,12 +764,18 @@ def preview_order(request):
             "code": merchant.currency_code,
             "symbol": merchant.currency_symbol,
         },
-        "subtotal": str(subtotal),
-        "tax_amount": str(tax_amount),
-        "tax_breakdown": tax_breakdown,
-        "total_amount": str(subtotal + tax_amount),
-        "points_earned": points,
+        "subtotal": breakdown["subtotal"],
+        "discount_amount": breakdown["discount_total"],
+        "taxable_amount": breakdown["taxable_total"],
+        "tax_amount": breakdown["tax_total"],
+        "tax_breakdown": breakdown["taxes"],
+        "charges": breakdown["charges"],
+        "service_charge": breakdown["charge_total"],
+        "prices_include_tax": breakdown["prices_include_tax"],
+        "total_amount": breakdown["grand_total"],
+        "points_earned": sum(p.points for p in priced),
         "lines": lines,
+        "pricing": breakdown,
     })
 
 
@@ -985,6 +911,30 @@ def order_detail(request, pk):
         return Response({"error": "Not authorised."}, status=status.HTTP_403_FORBIDDEN)
 
     return Response(OrderSerializer(order, context={"request": request}).data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def order_pricing(request, pk):
+    """
+    GET /api/orders/<id>/pricing/ — the order's stored price breakdown (lines,
+    discount allocations, charges, taxes) exactly as charged. Never re-computed.
+    """
+    try:
+        order = Order.objects.select_related("merchant", "customer").get(pk=pk)
+    except Order.DoesNotExist:
+        return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    user = request.user
+    is_owner = (
+        (hasattr(user, "customer_profile") and order.customer == user.customer_profile)
+        or (hasattr(user, "merchant_profile") and order.merchant == user.merchant_profile)
+    )
+    if not is_owner and not user.is_staff:
+        return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    from orders.pricing.snapshot import order_pricing_snapshot
+    return Response(order_pricing_snapshot(order))
 
 
 @api_view(["PATCH"])
@@ -1268,59 +1218,37 @@ def add_items_to_order(request, pk):
     data = serializer.validated_data
     merchant = order.merchant
 
-    menu_items_by_id = {
-        mi.id: mi
-        for mi in MenuItem.objects.filter(
-            id__in=[i["menu_item_id"] for i in data["items"]],
-            merchant=merchant,
-            is_available=True,
+    if order.pricing_locked_at:
+        return Response(
+            {"error": "This order's bill is final and can no longer be changed."},
+            status=status.HTTP_400_BAD_REQUEST,
         )
-    }
 
     # ── Server-side authoritative pricing for added items ─────────────────────
-    new_items_data = []
-    option_rows = []
-    new_total_added = 0
-    new_points_added = 0
-
     try:
-        priced_data, option_rows, new_total_added, new_points_added = _priced_items(
-            menu_items_by_id, data["items"]
-        )
-        new_items_data = priced_data
-    except _LineError as exc:
+        priced = price_request_lines(merchant, data["items"])
+    except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
     # Apply preparation routing for new items
-    new_items_data = prepare_order_items_for_routing(order, new_items_data)
+    new_items_data = prepare_order_items_for_routing(order, _item_rows(priced))
 
-    created_items = _bulk_create_items_with_options(order, new_items_data, option_rows)
+    created_items = _bulk_create_items_with_options(order, new_items_data, _option_rows(priced))
 
     # Items added to an already-confirmed dine-in order consume stock now;
     # a pending order's items are consumed when it is confirmed.
     if order.status != Order.STATUS_PENDING:
         safe_deduct_stock_for_order(order, lines=created_items, performed_by=request.user)
 
-    # Drop the stale prefetch cache so order.items.all() re-queries and
-    # actually sees the rows we just created.
+    # Drop the stale prefetch cache so the re-price sees the new rows.
     order._prefetched_objects_cache.pop("items", None)
 
-    # Recalculate order totals. Tax MUST be recomputed from the new subtotal —
-    # the stored tax_amount only covers the pre-add subtotal.
-    from config.tax_utils import calculate_tax
-    order.subtotal = sum((item.subtotal or 0) for item in order.items.all())
-    tax_amount, tax_breakdown = calculate_tax(order.subtotal, merchant)
-    order.tax_amount = tax_amount
-    order.tax_breakdown = tax_breakdown
-    order.total_amount = order.subtotal - order.discount_amount + tax_amount + order.service_charge
-    order.points_earned += new_points_added
+    # Re-price the whole bill: tax, charges and any attached discount are
+    # recalculated (and the discount re-validated) for the new basket.
+    pricing = reprice_order(order)
+    order.points_earned += sum(p.points for p in priced)
     order.version += 1
-    order.save(
-        update_fields=[
-            "subtotal", "tax_amount", "tax_breakdown", "total_amount",
-            "points_earned", "version", "updated_at",
-        ]
-    )
+    order.save(update_fields=["points_earned", "version", "updated_at"])
 
     # Append notes if provided
     new_notes = data.get("notes", "").strip()
@@ -1336,7 +1264,7 @@ def add_items_to_order(request, pk):
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
         title="Order updated 🔄",
-        message=f"Order #{order.id} — {len(new_items_data)} item(s) added by {added_by}",
+        message=f"Order #{order.id} — {len(created_items)} item(s) added by {added_by}",
         notification_type=Notification.TYPE_NEW_ORDER,
         merchant_name=merchant.business_name,
         context_url="/merchant/orders",
@@ -1344,7 +1272,9 @@ def add_items_to_order(request, pk):
         merchant_id=merchant.id,
     ))
 
-    return Response(OrderSerializer(order, context={"request": request}).data)
+    data = OrderSerializer(order, context={"request": request}).data
+    data["pricing_messages"] = pricing.messages
+    return Response(data)
 
 
 # Add these two views to orders/views.py

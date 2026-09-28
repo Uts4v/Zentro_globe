@@ -15,6 +15,7 @@ urlpatterns = [
     path("call-waiter/", views.call_waiter, name="call-waiter"),
     path("merchant-history/", views.merchant_order_history, name="merchant-order-history"),
     path("<int:pk>/", views.order_detail, name="order-detail"),
+    path("<int:pk>/pricing/", views.order_pricing, name="order-pricing"),
     path("<int:pk>/update-status/", views.update_order_status, name="update-order-status"),
     path("<int:pk>/cancel/", views.cancel_order, name="cancel-order"),
     path("<int:pk>/add-items/", views.add_items_to_order, name="add-items-to-order"),

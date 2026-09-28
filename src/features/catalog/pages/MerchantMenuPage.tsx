@@ -46,6 +46,7 @@ const EMPTY_FORM = {
   dietary_tags: "",
   allergens: "",
   calories: "",
+  tax_class: "standard" as "standard" | "exempt" | "zero_rated",
   status: "active",
   emoji: "☕",
   points_per_item: 1,
@@ -157,6 +158,7 @@ export function MerchantMenuPage() {
       dietary_tags: (item.dietary_tags ?? []).join(", "),
       allergens: (item.allergens ?? []).join(", "),
       calories: item.calories != null ? String(item.calories) : "",
+      tax_class: item.tax_class ?? "standard",
       status: item.status ?? "active",
       emoji: item.emoji,
       points_per_item: item.points_per_item,
@@ -879,7 +881,8 @@ export function MerchantMenuPage() {
                 </div>
               </div>
 
-              <div className="max-w-[10rem]">
+              <div className="flex flex-wrap gap-3">
+              <div className="w-40">
                 <label
                   htmlFor="menu-item-calories"
                   className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
@@ -897,6 +900,27 @@ export function MerchantMenuPage() {
                   placeholder="Optional"
                   className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
                 />
+              </div>
+              <div className="w-48">
+                <label
+                  htmlFor="menu-item-tax-class"
+                  className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                >
+                  Tax
+                </label>
+                <select
+                  id="menu-item-tax-class"
+                  value={form.tax_class}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, tax_class: e.target.value as FormState["tax_class"] }))
+                  }
+                  className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                >
+                  <option value="standard">Taxed (standard)</option>
+                  <option value="exempt">Tax exempt</option>
+                  <option value="zero_rated">Zero-rated</option>
+                </select>
+              </div>
               </div>
 
               {/* Points */}

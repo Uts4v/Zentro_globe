@@ -1,11 +1,8 @@
 import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
-import {
-  posApplyDiscount,
-  posWorkerLogin,
-  ShiftWorker,
-} from "../api";
+import { posWorkerLogin, ShiftWorker } from "../api";
+import { usePosCartPricing } from "../pricing";
 import {
   X,
   Percent,
@@ -18,18 +15,19 @@ import {
 
 interface DiscountModalProps {
   open: boolean;
-  orderId: string;
   onApplied: () => void;
   onClose: () => void;
 }
 
-export default function DiscountModal({
-  open,
-  orderId,
-  onApplied,
-  onClose,
-}: DiscountModalProps) {
+/**
+ * Chooses the cart's manual discount. It is stored on the cart and applied by
+ * the server right after the order is created, so the discount is always
+ * priced by the backend (and re-validated if the order changes).
+ */
+export default function DiscountModal({ open, onApplied, onClose }: DiscountModalProps) {
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const setPendingDiscount = usePosStore((s) => s.setPendingDiscount);
+  const cartPricing = usePosCartPricing();
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [type, setType] = useState<"percentage" | "fixed">("percentage");
@@ -69,9 +67,11 @@ export default function DiscountModal({
       ? numValue > maxDiscount && maxDiscount > 0
       : numValue > approvalThreshold && approvalThreshold > 0;
 
+  const exceedsSubtotal = type === "fixed" && numValue > cartPricing.subtotalValue;
   const canSubmit =
     numValue > 0 &&
     !submitting &&
+    !exceedsSubtotal &&
     (type === "fixed" || (numValue > 0 && numValue <= 100));
 
   async function handleManagerVerify() {
@@ -98,19 +98,9 @@ export default function DiscountModal({
     setError(null);
 
     try {
-      await posApplyDiscount({
-        order_id: orderId,
-        worker_id: currentWorker.id,
-        discount_type: type,
-        discount_value: numValue,
-        reason,
-        authorized_by_worker_id: authorizedByWorkerId,
-        source: "pos",
-      });
+      setPendingDiscount({ type, value: numValue, reason, authorizedByWorkerId });
       onApplied();
       onClose();
-    } catch (err: any) {
-      setError(err?.message || "Failed to apply discount");
     } finally {
       setSubmitting(false);
     }

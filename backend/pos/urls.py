@@ -60,6 +60,7 @@ urlpatterns = [
 
     # Discounts
     path("discount/apply/", views.apply_discount, name="pos-discount-apply"),
+    path("discount/remove/", views.remove_discount, name="pos-discount-remove"),
 
     # Cash movements (pay-in / pay-out / cash drop)
     path("cash/movement/", views.create_cash_movement, name="pos-cash-movement"),

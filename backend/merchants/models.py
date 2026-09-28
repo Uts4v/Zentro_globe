@@ -129,6 +129,26 @@ class MerchantProfile(models.Model):
         max_length=5, default="Rs",
         help_text="Display currency symbol (e.g. Rs, ₹, $, ฿)",
     )
+    # How tax is calculated (orders.pricing.tax.POLICIES). Controlled by Zentro
+    # per jurisdiction (Django admin), not by merchants: it decides whether
+    # prices include tax and whether discounts reduce the taxable value.
+    tax_policy = models.CharField(
+        max_length=20,
+        choices=[
+            ("legacy", "Tax on full price, before discounts (legacy)"),
+            ("exclusive", "Tax added at checkout; discounts reduce the taxable value"),
+            ("inclusive", "Prices include tax; discounts reduce the taxable value"),
+        ],
+        default="legacy",
+    )
+    service_charge_percent = models.DecimalField(
+        max_digits=5, decimal_places=2, default=0,
+        help_text="Service charge added to orders, as a percent of the discounted goods value (0 = off).",
+    )
+    service_charge_dine_in_only = models.BooleanField(
+        default=True,
+        help_text="Apply the service charge to dine-in orders only.",
+    )
     tax_components = models.JSONField(
         default=list, blank=True,
         help_text=(
@@ -550,6 +570,15 @@ class MenuItem(models.Model):
     loyalty_reward = models.BooleanField(default=True)
     points_per_item = models.IntegerField(default=1)
     emoji = models.CharField(max_length=10, default="☕")
+    tax_class = models.CharField(
+        max_length=12,
+        choices=[
+            ("standard", "Standard (taxed)"),
+            ("exempt", "Tax exempt"),
+            ("zero_rated", "Zero-rated"),
+        ],
+        default="standard",
+    )
     dietary_tags = models.JSONField(
         default=list, blank=True,
         help_text='e.g. ["vegetarian", "vegan", "spicy", "gluten-free", "bestseller"]',

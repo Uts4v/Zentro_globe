@@ -271,6 +271,13 @@ export const posApplyDiscount = (data: PosApplyDiscountPayload) =>
     body: JSON.stringify(data),
   });
 
+export const posRemoveDiscount = (data: { order_id: string; worker_id: string }) =>
+  djangoFetch<{ order_id: string; pricing: unknown }>(apiUrl("/pos/discount/remove/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
+
 // ── Debit Accounts (Prepaid / Wallet) ────────────────────────────────────────
 export const posListDebitAccounts = () =>
   djangoFetch<DebitAccount[]>(apiUrl("/pos/debit/accounts/"), {
@@ -444,7 +451,7 @@ export interface PosOrder {
   discount_value: string;
   discount_amount: string;
   tax_amount: string;
-  tax_breakdown: Array<{ name: string; rate: number; amount: number }>;
+  tax_breakdown: TaxBreakdownEntry[];
   service_charge: string;
   total_amount: string;
   points_earned: number;
@@ -529,25 +536,38 @@ export interface PosReceiptData {
   items: Array<{
     name: string;
     price: string;
+    list_unit_price?: string | null;
     quantity: number;
     subtotal: string;
+    discount_amount?: string;
+    tax_amount?: string;
+    line_total?: string;
+    tax_class?: string;
     special_instructions?: string;
     options?: Array<{ group_name: string; option_name: string; kind: string }>;
   }>;
   subtotal: string;
   notes?: string;
   discounts: Array<{
+    kind?: string;
+    label?: string;
     type: string;
     value: string;
     amount: string;
+    eligible?: boolean;
     reason: string;
     authorized_by: string | null;
   }>;
   discount_amount: string;
+  taxable_amount?: string;
   tax_amount: string;
-  tax_breakdown: Array<{ name: string; rate: number; amount: number }>;
+  tax_breakdown: TaxBreakdownEntry[];
+  prices_include_tax?: boolean;
   service_charge: string;
+  charges?: Array<{ kind: string; label: string; amount: string; taxable: boolean; tax_amount: string }>;
   total_amount: string;
+  currency_code?: string;
+  currency_symbol?: string;
   payments: Array<{
     method: string;
     amount: string;
@@ -564,23 +584,11 @@ export interface PosReceiptData {
   sync_status: string;
 }
 
-// Safe tax-rate helper: never return NaN for missing/empty/invalid values.
-// Uses tax_components when available, falls back to legacy tax_rate_percent.
-export function getTaxRate(settings?: PosSettings | null): number {
-  if (!settings) return 0;
-
-  // Prefer tax_components if present
-  if (settings.tax_components && settings.tax_components.length > 0) {
-    return settings.tax_components.reduce((sum, c) => {
-      const rate = Number.parseFloat(String(c.rate)) || 0;
-      return sum + (rate > 0 ? rate / 100 : 0);
-    }, 0);
-  }
-
-  // Fallback to legacy field
-  const raw = Number.parseFloat(settings?.tax_rate_percent ?? "");
-  if (!Number.isFinite(raw) || raw < 0) return 0;
-  return raw / 100;
+/** One tax line on an order: exact decimal strings on priced orders, numbers on older ones. */
+export interface TaxBreakdownEntry {
+  name: string;
+  rate: number | string;
+  amount: number | string;
 }
 
 export interface TaxComponent {
@@ -619,6 +627,10 @@ export interface PosSettings {
   payment_qr_url?: string;
   tax_enabled: boolean;
   tax_rate_percent: string;
+  /** How tax is calculated; set by Zentro per jurisdiction ("legacy" | "exclusive" | "inclusive"). */
+  tax_policy?: string;
+  service_charge_percent?: string;
+  service_charge_dine_in_only?: boolean;
   currency_code: string;
   currency_symbol: string;
   tax_components: TaxComponent[];
@@ -640,6 +652,7 @@ export interface PosMenuSnapshot {
       name: string;
       description: string;
       price: string;
+      tax_class?: string;
       image_url: string;
       category: string;
       is_available: boolean;

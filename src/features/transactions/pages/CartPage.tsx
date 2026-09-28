@@ -86,8 +86,9 @@ export function CartPage() {
         price: c.unitPrice,
         points_per_item: 0,
       })),
+      fulfillment_type: fulfillmentType,
     }),
-    [cart, selectedMerchantId],
+    [cart, selectedMerchantId, fulfillmentType],
   );
 
   const runPreview = useCallback(async () => {
@@ -325,12 +326,23 @@ export function CartPage() {
             </div>
 
             <Row label="Subtotal" value={formatCurrency(subtotal, symFromCatalog, 0)} />
+            {preview && Number(preview.discount_amount ?? 0) > 0 && (
+              <Row
+                label="Discount"
+                value={`-${formatCurrency(preview.discount_amount ?? 0, symFromCatalog, 0)}`}
+              />
+            )}
+            {preview?.charges
+              ?.filter((c) => Number(c.amount) > 0)
+              .map((c) => (
+                <Row key={c.kind} label={c.label} value={formatCurrency(c.amount, symFromCatalog, 0)} />
+              ))}
             {preview && taxValue > 0 && (
               <>
                 {preview.tax_breakdown.map((t) => (
                   <Row
                     key={t.name}
-                    label={`${t.name || "Tax"} (${t.rate}%)`}
+                    label={`${t.name || "Tax"} (${t.rate}%)${preview.prices_include_tax ? " incl." : ""}`}
                     value={formatCurrency(t.amount, symFromCatalog, 0)}
                   />
                 ))}

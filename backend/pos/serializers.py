@@ -419,6 +419,12 @@ class PosSettingsSerializer(serializers.Serializer):
     payment_qr_url = serializers.URLField(required=False, allow_blank=True)
     tax_enabled = serializers.BooleanField(required=False)
     tax_rate_percent = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)
+    # Set by Zentro per jurisdiction (Django admin), never by the merchant.
+    tax_policy = serializers.CharField(read_only=True)
+    service_charge_percent = serializers.DecimalField(
+        max_digits=5, decimal_places=2, min_value=0, max_value=100, required=False,
+    )
+    service_charge_dine_in_only = serializers.BooleanField(required=False)
     currency_code = serializers.CharField(max_length=3, required=False)
     currency_symbol = serializers.CharField(max_length=5, required=False)
     tax_components = serializers.ListField(

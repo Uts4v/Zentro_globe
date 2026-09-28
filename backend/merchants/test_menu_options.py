@@ -666,8 +666,9 @@ class TaxPreviewTests(TestCase):
         self.assertEqual(Decimal(resp.data["subtotal"]), Decimal("200.00"))
         self.assertEqual(Decimal(resp.data["tax_amount"]), Decimal("26.00"))
         self.assertEqual(resp.data["tax_breakdown"][0]["name"], "VAT")
-        self.assertEqual(resp.data["tax_breakdown"][0]["rate"], 13.0)
-        self.assertEqual(resp.data["tax_breakdown"][0]["amount"], 26.0)
+        # Exact decimal strings from the pricing engine, never floats.
+        self.assertEqual(Decimal(resp.data["tax_breakdown"][0]["rate"]), Decimal("13"))
+        self.assertEqual(Decimal(resp.data["tax_breakdown"][0]["amount"]), Decimal("26.00"))
         self.assertEqual(Decimal(resp.data["total_amount"]), Decimal("226.00"))
 
     def test_preview_omits_tax_when_disabled(self):

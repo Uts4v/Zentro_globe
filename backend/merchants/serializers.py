@@ -160,7 +160,7 @@ class MenuItemEditorSerializer(serializers.ModelSerializer):
             "category", "category_ref", "category_name",
             "is_available", "is_featured", "status",
             "loyalty_reward", "points_per_item", "emoji",
-            "dietary_tags", "allergens", "calories", "display_order",
+            "dietary_tags", "allergens", "calories", "tax_class", "display_order",
             "discount_type", "discount_value", "discount_source",
             "preparation_area", "requires_preparation",
             "groups", "from_price", "discount_price", "discount_amount",
@@ -328,6 +328,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "max_worker_discount_percent", "manager_approval_threshold",
             "offline_discounts_allowed", "offline_credit_allowed", "payment_qr_url",
             "tax_enabled", "tax_rate_percent", "tax_components",
+            "tax_policy", "service_charge_percent", "service_charge_dine_in_only",
             "currency_code", "currency_symbol",
             "ai_enabled", "ai_insights_enabled", "ai_insights_time", "timezone",
             "pdf_menu_url", "pdf_menu_token",
@@ -338,7 +339,34 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "payment_qr_instructions", "payment_qr_account_name",
             "menu_items", "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "is_approved", "qr_code", "pdf_menu_token", "created_at", "updated_at"]
+        # tax_policy decides how tax is calculated (inclusive/exclusive, whether
+        # discounts reduce the taxable value): a jurisdiction rule Zentro sets,
+        # not a merchant preference.
+        read_only_fields = [
+            "id", "is_approved", "qr_code", "pdf_menu_token", "tax_policy", "created_at", "updated_at",
+        ]
+
+    def validate_tax_components(self, value):
+        from decimal import Decimal, InvalidOperation
+
+        cleaned = []
+        for comp in value or []:
+            if not isinstance(comp, dict):
+                raise serializers.ValidationError("Each tax component needs a name and a rate.")
+            name = str(comp.get("name") or "").strip()[:50] or "Tax"
+            try:
+                rate = Decimal(str(comp.get("rate", 0)))
+            except InvalidOperation:
+                raise serializers.ValidationError(f"{name}: rate must be a number.")
+            if rate < 0 or rate > 100:
+                raise serializers.ValidationError(f"{name}: rate must be between 0 and 100.")
+            cleaned.append({"name": name, "rate": float(rate.quantize(Decimal("0.01")))})
+        return cleaned
+
+    def validate_service_charge_percent(self, value):
+        if value < 0 or value > 100:
+            raise serializers.ValidationError("Service charge must be between 0 and 100%.")
+        return value
 
     def validate(self, attrs):
         # A lone latitude or longitude is a pin in the wrong place: either

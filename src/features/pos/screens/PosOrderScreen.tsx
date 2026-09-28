@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { posBootstrap } from "../api";
-import { formatCurrency, calculateTax } from "@/lib/currency";
+import { formatCurrency } from "@/lib/currency";
+import { usePosCartPricing } from "../pricing";
 import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
 import PaymentSheet from "./PaymentSheet";
@@ -17,7 +18,6 @@ export default function PosOrderScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
-  const [lastOrderId, setLastOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (merchant) {
@@ -134,11 +134,9 @@ export default function PosOrderScreen() {
       {showDiscount && (
         <DiscountModal
           open={showDiscount}
-          orderId={lastOrderId ?? ""}
           onApplied={() => {
-            // Discount applied — continue to payment
+            // The discount now sits on the cart; the cashier continues from there.
             setShowDiscount(false);
-            setShowPayment(true);
           }}
           onClose={() => setShowDiscount(false)}
         />
@@ -161,9 +159,7 @@ function MobileCartButton({
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   const count = cart.reduce((sum, item) => sum + item.quantity, 0);
-  const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-  const { total: tax } = calculateTax(subtotal, posSettings?.tax_components || []);
-  const grandTotal = subtotal + tax;
+  const grandTotal = usePosCartPricing().totalValue;
 
   if (count === 0) return null;
 
