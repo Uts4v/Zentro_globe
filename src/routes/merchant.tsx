@@ -6,6 +6,7 @@ import { requireMerchant } from "@/lib/merchant-auth-guard";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import {
   LayoutDashboard,
+  TicketPercent,
   ShoppingBag,
   UtensilsCrossed,
   Trophy,
@@ -59,6 +60,7 @@ const navItems = [
   { to: "/merchant/specials", label: "Today's Special", icon: Sparkles, section: "Products" },
   { to: "/merchant/customers", label: "Customers", icon: Users, section: "Customers" },
   { to: "/merchant/loyalty", label: "Loyalty", icon: Trophy, section: "Customers" },
+  { to: "/merchant/offers", label: "Offers", icon: TicketPercent, section: "Customers" },
   { to: "/merchant/ai", label: "AI Assistant", icon: Bot, section: "Tools" },
   { to: "/merchant/settings", label: "Settings", icon: Settings, section: "Account" },
   { to: "/merchant/store", label: "Storefront", icon: Store, section: "Account" },

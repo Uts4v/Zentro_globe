@@ -1598,6 +1598,7 @@ def create_pos_order(request):
                         option_name=opt.option_name,
                         kind=opt.kind,
                         price_effect=opt.price_effect,
+                        option_id=opt.option_id,
                         display_order=display_order,
                     ))
             OrderItemOption.objects.bulk_create(snapshot_rows, batch_size=200)
@@ -4326,6 +4327,7 @@ def table_order(request, token):
             option_name=opt.option_name,
             kind=opt.kind,
             price_effect=opt.price_effect,
+            option_id=opt.option_id,
             display_order=i,
         )
         for item, p in zip(created_items, priced)

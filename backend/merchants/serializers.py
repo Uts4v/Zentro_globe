@@ -2,7 +2,7 @@
 from decimal import ROUND_HALF_UP
 
 from rest_framework import serializers
-from .models import MerchantProfile, MenuItem, MenuCategory, MenuOptionGroup, MenuOption
+from .models import MerchantCategory, MerchantProfile, MenuItem, MenuCategory, MenuOptionGroup, MenuOption
 import re
 
 
@@ -308,6 +308,20 @@ def _discount_amount(menu_item):
 
 class MerchantProfileSerializer(serializers.ModelSerializer):
     menu_items = MenuItemSerializer(many=True, read_only=True)
+    primary_category = serializers.PrimaryKeyRelatedField(
+        queryset=MerchantCategory.objects.filter(is_active=True), required=False, allow_null=True,
+    )
+    primary_category_detail = serializers.SerializerMethodField()
+
+    def get_primary_category_detail(self, obj):
+        c = obj.primary_category
+        return {"id": c.id, "slug": c.slug, "name": c.name, "icon": c.icon} if c else None
+
+    def validate_city(self, value):
+        return (value or "").strip()[:80]
+
+    def validate_area(self, value):
+        return (value or "").strip()[:80]
     latitude = CoordinateField(bound=90)
     longitude = CoordinateField(bound=180)
 
@@ -315,6 +329,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
         model = MerchantProfile
         fields = [
             "id", "business_name", "slug", "business_type",
+            "primary_category", "primary_category_detail", "city", "area",
             "address", "phone", "logo_url", "banner_url",
             "description", "is_approved", "is_open",
             "onboarding_complete",

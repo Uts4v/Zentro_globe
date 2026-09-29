@@ -12,6 +12,7 @@ import {
 } from "../api";
 import { formatCurrency, roundMoney } from "@/lib/currency";
 import { usePosCartPricing } from "../pricing";
+import { posOffersApi } from "@/lib/api/offers";
 import Receipt from "../printing/Receipt";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import KOTTicket, { kotTicketFromReceipt, printKOT, KOTTicketData } from "../printing/KOTTicket";
@@ -235,6 +236,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const tables = usePosStore((s) => s.tables);
   const clearCart = usePosStore((s) => s.clearCart);
   const pendingDiscount = usePosStore((s) => s.pendingDiscount);
+  const pendingOffer = usePosStore((s) => s.pendingOffer);
+  const setPendingOffer = usePosStore((s) => s.setPendingOffer);
   const setPendingDiscount = usePosStore((s) => s.setPendingDiscount);
   // Preview for display and cash validation; the charge uses the server total.
   const cartPricing = usePosCartPricing();
@@ -390,6 +393,18 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         );
       }
     }
+    if (pendingOffer && discountAppliedTo !== uuid) {
+      try {
+        await posOffersApi.apply({ order_id: uuid, code: pendingOffer.code, worker_id: currentWorker.id });
+        setDiscountAppliedTo(uuid);
+        serverTotal = null;
+      } catch (err: unknown) {
+        setPendingOffer(null);
+        throw new Error(
+          `The order was saved, but the offer could not be applied: ${(err as Error)?.message || "unknown error"}. Check the total and try again.`,
+        );
+      }
+    }
     if (serverTotal === null || !Number.isFinite(serverTotal)) {
       serverTotal = Number((await posReceiptData(uuid)).total_amount);
     }
@@ -421,8 +436,12 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
     const isOffline = !navigator.onLine;
     const merchantProfile = merchant as any;
-    if (isOffline && pendingDiscount) {
-      setError("Discounts need an internet connection. Remove the discount to continue offline.");
+    if (isOffline && (pendingDiscount || pendingOffer)) {
+      setError(
+        pendingOffer
+          ? "Offers need an internet connection to be checked. Remove the offer to continue offline."
+          : "Discounts need an internet connection. Remove the discount to continue offline.",
+      );
       setSubmitting(false);
       return;
     }
@@ -527,8 +546,12 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
     const isOffline = !navigator.onLine;
     const merchantProfile = merchant as any;
-    if (isOffline && pendingDiscount) {
-      setError("Discounts need an internet connection. Remove the discount to continue offline.");
+    if (isOffline && (pendingDiscount || pendingOffer)) {
+      setError(
+        pendingOffer
+          ? "Offers need an internet connection to be checked. Remove the offer to continue offline."
+          : "Discounts need an internet connection. Remove the discount to continue offline.",
+      );
       setSubmitting(false);
       return;
     }

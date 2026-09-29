@@ -82,6 +82,9 @@ def price_request_lines(
             unit_price = line.unit_price
             list_unit_price = line.unit_price + to_decimal(line.unit_discount)
         tax_class = _tax_class(menu_item)
+        modifier_total = sum(
+            (to_decimal(opt.price_effect) for opt in line.options if opt.kind != "variant"), ZERO,
+        )
 
         priced.append(PricedRequestLine(
             line=LineInput(
@@ -93,6 +96,8 @@ def price_request_lines(
                 tax_class=tax_class,
                 menu_item_id=menu_item.id,
                 category_id=getattr(menu_item, "category_ref_id", None),
+                option_ids=frozenset(o.option_id for o in line.options if o.option_id),
+                modifier_unit_total=ZERO if staff_comp else modifier_total,
             ),
             item_fields={
                 "menu_item": menu_item,
@@ -110,9 +115,20 @@ def price_request_lines(
     return priced
 
 
+def mark_reward(priced_line: PricedRequestLine) -> PricedRequestLine:
+    """Flag a requested line as an offer's reward item."""
+    from dataclasses import replace
+
+    priced_line.line = replace(priced_line.line, is_reward=True)
+    priced_line.item_fields["is_promotion_reward"] = True
+    return priced_line
+
+
 def line_from_order_item(item) -> LineInput:
+    """An existing order line, from its stored snapshot (callers prefetch options/menu_item)."""
     price = to_decimal(item.price)
     list_price = to_decimal(item.list_unit_price) if item.list_unit_price is not None else price
+    options = list(item.options.all())
     return LineInput(
         key=str(item.pk),
         name=item.name,
@@ -121,4 +137,10 @@ def line_from_order_item(item) -> LineInput:
         list_unit_price=max(list_price, price),
         tax_class=item.tax_class or TAX_CLASS_STANDARD,
         menu_item_id=item.menu_item_id,
+        category_id=item.menu_item.category_ref_id if item.menu_item_id and item.menu_item else None,
+        option_ids=frozenset(o.option_id for o in options if o.option_id),
+        modifier_unit_total=sum(
+            (to_decimal(o.price_effect) for o in options if o.kind != "variant"), ZERO,
+        ),
+        is_reward=bool(getattr(item, "is_promotion_reward", False)),
     )

@@ -18,6 +18,7 @@ from decimal import Decimal
 from .money import HUNDRED, ZERO, allocate, quantize
 from .types import (
     CALC_FIXED,
+    CALC_LINES,
     CALC_PERCENTAGE,
     REASON_MINIMUM_ORDER_NOT_MET,
     REASON_NO_ELIGIBLE_ITEMS,
@@ -42,6 +43,8 @@ def evaluate_adjustment(
     quantum: Decimal,
 ) -> DiscountResult:
     """Compute one adjustment against lines' *remaining* (net) amounts."""
+    if spec.forced_reason:
+        return _ineligible(spec, spec.forced_reason)
     if spec.min_subtotal is not None and order_subtotal < spec.min_subtotal:
         shortfall = quantize(spec.min_subtotal - order_subtotal, quantum)
         return _ineligible(spec, {
@@ -50,6 +53,9 @@ def evaluate_adjustment(
             "current": str(quantize(order_subtotal, quantum)),
             "shortfall": str(shortfall),
         })
+
+    if spec.calc_type == CALC_LINES:
+        return _apply_line_amounts(spec, lines, quantum)
 
     eligible = [
         ln for ln in lines
@@ -88,6 +94,34 @@ def evaluate_adjustment(
     return DiscountResult(
         kind=spec.kind, calc_type=spec.calc_type, value=spec.value, label=spec.label,
         source_ref=spec.source_ref, eligible=True, amount=amount, allocations=allocations,
+    )
+
+
+def _apply_line_amounts(spec: AdjustmentSpec, lines: list[PricedLineResult], quantum: Decimal) -> DiscountResult:
+    by_key = {ln.key: ln for ln in lines}
+    wanted = {}
+    for key, amount in (spec.line_amounts or {}).items():
+        line = by_key.get(key)
+        if line is None:
+            continue
+        amount = min(quantize(max(amount, ZERO), quantum), line.net_amount)
+        if amount > ZERO:
+            wanted[key] = amount
+    total = sum(wanted.values(), ZERO)
+    if total <= ZERO:
+        return _ineligible(spec, {"code": REASON_NO_ELIGIBLE_ITEMS})
+    if spec.max_amount is not None and total > spec.max_amount:
+        cap = quantize(spec.max_amount, quantum)
+        keys = list(wanted)
+        wanted = dict(zip(keys, allocate(cap, [wanted[k] for k in keys], quantum)))
+        total = cap
+    for key, amount in wanted.items():
+        by_key[key].discount += amount
+        by_key[key].net_amount -= amount
+    return DiscountResult(
+        kind=spec.kind, calc_type=spec.calc_type, value=spec.value, label=spec.label,
+        source_ref=spec.source_ref, eligible=True, amount=total,
+        allocations={k: v for k, v in wanted.items() if v > ZERO},
     )
 
 

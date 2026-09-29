@@ -1,7 +1,9 @@
 # Zentro Offers — Architecture (domain: offers)
 
-> Status: **proposed design, not built yet**. This refines the original "Zentro Offers"
-> product brief against how Zentro actually works today.
+> Status: **implemented (v1)** — backend app `backend/offers/`, frontend
+> `src/features/offers/` + POS `src/features/pos/offers.ts`. See **§16** for what was
+> built and where it deliberately differs from the design below. This document
+> refines the original "Zentro Offers" product brief against how Zentro works.
 > Evidence for the "today" statements: `orders/models.py` (`Order.discount_*`,
 > `reward_redemption`, `punch_card_redemption`), `orders/views.py` (tax recompute on
 > item add), `pos/views.py` (`PosDiscount` apply, offline mutations), `config/tax_utils.py`,
@@ -511,3 +513,52 @@ Merchant (authenticated merchant or POS device):
 - Buy X Get Y: cheapest-eligible selection, max applications, a unit is never counted
   as both qualifying and reward, and variant pricing is correct.
 - Limits aren't oversold under concurrent reservations.
+
+## 16. As built (v1)
+
+**Backend (`backend/offers/`)**
+
+| Module | Contents |
+|---|---|
+| `models.py` | `PromotionCampaign`, `PromotionBenefit`, `PromotionCondition`, `PromotionTarget`, `VoucherClaim`, `VoucherRedemption`, `PromotionDailyStats` |
+| `codes.py` | Crockford-base32 codes with a check character (every single-character typo is rejected), 128-bit QR tokens (`zentro://offer/<token>`) |
+| `engine.py` | claim, `check_usable`, `build_spec` (all four benefit kinds), reserve / release / redeem / void, in-store redemption, code lookup, nightly upkeep |
+| `checkout.py` | the shared "apply an offer to a basket" step used by order preview and order creation |
+| `signals.py` | redeem / release / void from the `Order` lifecycle (fires whenever an order's pricing locks), release on order delete |
+| `views.py`, `pos_views.py` | customer, merchant and POS APIs (`/api/offers/…`) |
+| `management/commands/offers_maintenance.py`, `tasks.py` | nightly: expire claims, end campaigns, fill 7/30-day return rates (schedule with cron or Celery beat) |
+
+Merchant taxonomy lives in `merchants` (`MerchantCategory`, seeded by migration
+`0026_seed_merchant_categories`, which also maps existing `business_type` text by whole
+words), plus `MerchantProfile.primary_category`, `city`, `area`.
+
+The pricing engine gained a resolver hook (`orders.pricing.register_adjustment_resolver`):
+a `promotion` adjustment is recomputed by `offers.engine` from the order's current
+lines on every re-price, so the offer follows every order change and the pricing
+engine stays the only place totals are computed. Order lines now snapshot the option
+ids chosen (`OrderItemOption.option_id`) for variant-targeted offers, and a free item
+is a real line flagged `OrderItem.is_promotion_reward`.
+
+**Deliberate differences from the design above**
+
+- **No reservation timeout.** Zentro has no payment gateway: an order exists the moment
+  it is placed, so there is no abandoned checkout to time out. A claim stays reserved on
+  its order until the order is paid/completed (redeemed), cancelled (released) or deleted
+  (released). A redeemed order that is later cancelled or refunded is voided and the use
+  restored when the campaign allows it.
+- **An offer that gives nothing is never burned.** If order changes make an applied offer
+  ineligible, the order still completes at full price and the claim is released, not redeemed.
+- **Verified phone for claiming is a setting** (`OFFERS_REQUIRE_VERIFIED_PHONE`, off):
+  Zentro has no customer phone-verification flow yet, so requiring it would block everyone.
+- **Online checkout validates first.** An offer that does not apply returns a specific
+  message ("Add Rs 160.00 more…", "Choose your free item…") and no order is created.
+- **POS:** the cashier scans or types the code before payment; the server prices the cart
+  with it, and the offer is applied to the order right after it is created. Offers need a
+  connection (the offline POS refuses them). "Confirm use (no order)" records an in-store
+  redemption for services not rung up as a Zentro order.
+- **Redemption history survives deletions:** redemptions keep their money and a rules
+  snapshot and use `SET_NULL`, because customers can hard-delete old orders and accounts.
+
+**Tests:** `offers/test_claims_and_campaigns.py`, `offers/test_checkout_and_lifecycle.py`,
+`offers/test_pos_and_security.py`. The two truly parallel tests (`ParallelTests`) run only
+on Postgres; the same race outcomes are also checked deterministically on any database.

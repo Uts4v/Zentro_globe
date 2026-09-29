@@ -27,6 +27,7 @@ import { Route as CardsRouteImport } from './routes/cards'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PosIndexRouteImport } from './routes/pos.index'
+import { Route as OffersIndexRouteImport } from './routes/offers.index'
 import { Route as MerchantIndexRouteImport } from './routes/merchant.index'
 import { Route as StoresIdRouteImport } from './routes/stores_.$id'
 import { Route as PosStaffReportRouteImport } from './routes/pos.staff-report'
@@ -40,6 +41,8 @@ import { Route as PosConflictsRouteImport } from './routes/pos.conflicts'
 import { Route as PosCashMovementsRouteImport } from './routes/pos.cash-movements'
 import { Route as PosAccountsRouteImport } from './routes/pos.accounts'
 import { Route as OrdersIdRouteImport } from './routes/orders.$id'
+import { Route as OffersMineRouteImport } from './routes/offers.mine'
+import { Route as OffersIdRouteImport } from './routes/offers.$id'
 import { Route as MerchantTablesRouteImport } from './routes/merchant.tables'
 import { Route as MerchantStoreRouteImport } from './routes/merchant.store'
 import { Route as MerchantSpecialsRouteImport } from './routes/merchant.specials'
@@ -49,6 +52,7 @@ import { Route as MerchantPreparationRouteImport } from './routes/merchant.prepa
 import { Route as MerchantPdfMenuRouteImport } from './routes/merchant.pdf-menu'
 import { Route as MerchantOrdersRouteImport } from './routes/merchant.orders'
 import { Route as MerchantOnboardingRouteImport } from './routes/merchant.onboarding'
+import { Route as MerchantOffersRouteImport } from './routes/merchant.offers'
 import { Route as MerchantMenuRouteImport } from './routes/merchant.menu'
 import { Route as MerchantLoyaltyRouteImport } from './routes/merchant.loyalty'
 import { Route as MerchantInventoryRouteImport } from './routes/merchant.inventory'
@@ -167,6 +171,11 @@ const PosIndexRoute = PosIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PosRoute,
 } as any)
+const OffersIndexRoute = OffersIndexRouteImport.update({
+  id: '/offers/',
+  path: '/offers/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MerchantIndexRoute = MerchantIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -232,6 +241,16 @@ const OrdersIdRoute = OrdersIdRouteImport.update({
   path: '/orders/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OffersMineRoute = OffersMineRouteImport.update({
+  id: '/offers/mine',
+  path: '/offers/mine',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OffersIdRoute = OffersIdRouteImport.update({
+  id: '/offers/$id',
+  path: '/offers/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MerchantTablesRoute = MerchantTablesRouteImport.update({
   id: '/tables',
   path: '/tables',
@@ -275,6 +294,11 @@ const MerchantOrdersRoute = MerchantOrdersRouteImport.update({
 const MerchantOnboardingRoute = MerchantOnboardingRouteImport.update({
   id: '/onboarding',
   path: '/onboarding',
+  getParentRoute: () => MerchantRoute,
+} as any)
+const MerchantOffersRoute = MerchantOffersRouteImport.update({
+  id: '/offers',
+  path: '/offers',
   getParentRoute: () => MerchantRoute,
 } as any)
 const MerchantMenuRoute = MerchantMenuRouteImport.update({
@@ -447,6 +471,7 @@ export interface FileRoutesByFullPath {
   '/merchant/inventory': typeof MerchantInventoryRoute
   '/merchant/loyalty': typeof MerchantLoyaltyRoute
   '/merchant/menu': typeof MerchantMenuRoute
+  '/merchant/offers': typeof MerchantOffersRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
   '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
@@ -456,6 +481,8 @@ export interface FileRoutesByFullPath {
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
+  '/offers/$id': typeof OffersIdRoute
+  '/offers/mine': typeof OffersMineRoute
   '/orders/$id': typeof OrdersIdRoute
   '/pos/accounts': typeof PosAccountsRoute
   '/pos/cash-movements': typeof PosCashMovementsRoute
@@ -469,6 +496,7 @@ export interface FileRoutesByFullPath {
   '/pos/staff-report': typeof PosStaffReportRoute
   '/stores/$id': typeof StoresIdRoute
   '/merchant/': typeof MerchantIndexRoute
+  '/offers/': typeof OffersIndexRoute
   '/pos/': typeof PosIndexRoute
   '/auth/merchant/login': typeof AuthMerchantLoginRoute
   '/auth/merchant/signup': typeof AuthMerchantSignupRoute
@@ -514,6 +542,7 @@ export interface FileRoutesByTo {
   '/merchant/inventory': typeof MerchantInventoryRoute
   '/merchant/loyalty': typeof MerchantLoyaltyRoute
   '/merchant/menu': typeof MerchantMenuRoute
+  '/merchant/offers': typeof MerchantOffersRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
   '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
@@ -523,6 +552,8 @@ export interface FileRoutesByTo {
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
+  '/offers/$id': typeof OffersIdRoute
+  '/offers/mine': typeof OffersMineRoute
   '/orders/$id': typeof OrdersIdRoute
   '/pos/accounts': typeof PosAccountsRoute
   '/pos/cash-movements': typeof PosCashMovementsRoute
@@ -536,6 +567,7 @@ export interface FileRoutesByTo {
   '/pos/staff-report': typeof PosStaffReportRoute
   '/stores/$id': typeof StoresIdRoute
   '/merchant': typeof MerchantIndexRoute
+  '/offers': typeof OffersIndexRoute
   '/pos': typeof PosIndexRoute
   '/auth/merchant/login': typeof AuthMerchantLoginRoute
   '/auth/merchant/signup': typeof AuthMerchantSignupRoute
@@ -584,6 +616,7 @@ export interface FileRoutesById {
   '/merchant/inventory': typeof MerchantInventoryRoute
   '/merchant/loyalty': typeof MerchantLoyaltyRoute
   '/merchant/menu': typeof MerchantMenuRoute
+  '/merchant/offers': typeof MerchantOffersRoute
   '/merchant/onboarding': typeof MerchantOnboardingRoute
   '/merchant/orders': typeof MerchantOrdersRoute
   '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
@@ -593,6 +626,8 @@ export interface FileRoutesById {
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
+  '/offers/$id': typeof OffersIdRoute
+  '/offers/mine': typeof OffersMineRoute
   '/orders/$id': typeof OrdersIdRoute
   '/pos/accounts': typeof PosAccountsRoute
   '/pos/cash-movements': typeof PosCashMovementsRoute
@@ -606,6 +641,7 @@ export interface FileRoutesById {
   '/pos/staff-report': typeof PosStaffReportRoute
   '/stores_/$id': typeof StoresIdRoute
   '/merchant/': typeof MerchantIndexRoute
+  '/offers/': typeof OffersIndexRoute
   '/pos/': typeof PosIndexRoute
   '/auth/merchant/login': typeof AuthMerchantLoginRoute
   '/auth/merchant/signup': typeof AuthMerchantSignupRoute
@@ -655,6 +691,7 @@ export interface FileRouteTypes {
     | '/merchant/inventory'
     | '/merchant/loyalty'
     | '/merchant/menu'
+    | '/merchant/offers'
     | '/merchant/onboarding'
     | '/merchant/orders'
     | '/merchant/pdf-menu'
@@ -664,6 +701,8 @@ export interface FileRouteTypes {
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
+    | '/offers/$id'
+    | '/offers/mine'
     | '/orders/$id'
     | '/pos/accounts'
     | '/pos/cash-movements'
@@ -677,6 +716,7 @@ export interface FileRouteTypes {
     | '/pos/staff-report'
     | '/stores/$id'
     | '/merchant/'
+    | '/offers/'
     | '/pos/'
     | '/auth/merchant/login'
     | '/auth/merchant/signup'
@@ -722,6 +762,7 @@ export interface FileRouteTypes {
     | '/merchant/inventory'
     | '/merchant/loyalty'
     | '/merchant/menu'
+    | '/merchant/offers'
     | '/merchant/onboarding'
     | '/merchant/orders'
     | '/merchant/pdf-menu'
@@ -731,6 +772,8 @@ export interface FileRouteTypes {
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
+    | '/offers/$id'
+    | '/offers/mine'
     | '/orders/$id'
     | '/pos/accounts'
     | '/pos/cash-movements'
@@ -744,6 +787,7 @@ export interface FileRouteTypes {
     | '/pos/staff-report'
     | '/stores/$id'
     | '/merchant'
+    | '/offers'
     | '/pos'
     | '/auth/merchant/login'
     | '/auth/merchant/signup'
@@ -791,6 +835,7 @@ export interface FileRouteTypes {
     | '/merchant/inventory'
     | '/merchant/loyalty'
     | '/merchant/menu'
+    | '/merchant/offers'
     | '/merchant/onboarding'
     | '/merchant/orders'
     | '/merchant/pdf-menu'
@@ -800,6 +845,8 @@ export interface FileRouteTypes {
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
+    | '/offers/$id'
+    | '/offers/mine'
     | '/orders/$id'
     | '/pos/accounts'
     | '/pos/cash-movements'
@@ -813,6 +860,7 @@ export interface FileRouteTypes {
     | '/pos/staff-report'
     | '/stores_/$id'
     | '/merchant/'
+    | '/offers/'
     | '/pos/'
     | '/auth/merchant/login'
     | '/auth/merchant/signup'
@@ -849,8 +897,11 @@ export interface RootRouteChildren {
   CustomerOrderRoute: typeof CustomerOrderRoute
   CustomerOrdersRoute: typeof CustomerOrdersRoute
   MSlugRoute: typeof MSlugRouteWithChildren
+  OffersIdRoute: typeof OffersIdRoute
+  OffersMineRoute: typeof OffersMineRoute
   OrdersIdRoute: typeof OrdersIdRoute
   StoresIdRoute: typeof StoresIdRoute
+  OffersIndexRoute: typeof OffersIndexRoute
   CustomerMerchantSlugRoute: typeof CustomerMerchantSlugRoute
   GuestMerchantSlugRoute: typeof GuestMerchantSlugRoute
   OrdersAddToOrderIdRoute: typeof OrdersAddToOrderIdRoute
@@ -985,6 +1036,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PosIndexRouteImport
       parentRoute: typeof PosRoute
     }
+    '/offers/': {
+      id: '/offers/'
+      path: '/offers'
+      fullPath: '/offers/'
+      preLoaderRoute: typeof OffersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/merchant/': {
       id: '/merchant/'
       path: '/'
@@ -1076,6 +1134,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrdersIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/offers/mine': {
+      id: '/offers/mine'
+      path: '/offers/mine'
+      fullPath: '/offers/mine'
+      preLoaderRoute: typeof OffersMineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/offers/$id': {
+      id: '/offers/$id'
+      path: '/offers/$id'
+      fullPath: '/offers/$id'
+      preLoaderRoute: typeof OffersIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/merchant/tables': {
       id: '/merchant/tables'
       path: '/tables'
@@ -1137,6 +1209,13 @@ declare module '@tanstack/react-router' {
       path: '/onboarding'
       fullPath: '/merchant/onboarding'
       preLoaderRoute: typeof MerchantOnboardingRouteImport
+      parentRoute: typeof MerchantRoute
+    }
+    '/merchant/offers': {
+      id: '/merchant/offers'
+      path: '/offers'
+      fullPath: '/merchant/offers'
+      preLoaderRoute: typeof MerchantOffersRouteImport
       parentRoute: typeof MerchantRoute
     }
     '/merchant/menu': {
@@ -1391,6 +1470,7 @@ interface MerchantRouteChildren {
   MerchantInventoryRoute: typeof MerchantInventoryRoute
   MerchantLoyaltyRoute: typeof MerchantLoyaltyRoute
   MerchantMenuRoute: typeof MerchantMenuRoute
+  MerchantOffersRoute: typeof MerchantOffersRoute
   MerchantOnboardingRoute: typeof MerchantOnboardingRoute
   MerchantOrdersRoute: typeof MerchantOrdersRoute
   MerchantPdfMenuRoute: typeof MerchantPdfMenuRoute
@@ -1410,6 +1490,7 @@ const MerchantRouteChildren: MerchantRouteChildren = {
   MerchantInventoryRoute: MerchantInventoryRoute,
   MerchantLoyaltyRoute: MerchantLoyaltyRoute,
   MerchantMenuRoute: MerchantMenuRoute,
+  MerchantOffersRoute: MerchantOffersRoute,
   MerchantOnboardingRoute: MerchantOnboardingRoute,
   MerchantOrdersRoute: MerchantOrdersRoute,
   MerchantPdfMenuRoute: MerchantPdfMenuRoute,
@@ -1514,8 +1595,11 @@ const rootRouteChildren: RootRouteChildren = {
   CustomerOrderRoute: CustomerOrderRoute,
   CustomerOrdersRoute: CustomerOrdersRoute,
   MSlugRoute: MSlugRouteWithChildren,
+  OffersIdRoute: OffersIdRoute,
+  OffersMineRoute: OffersMineRoute,
   OrdersIdRoute: OrdersIdRoute,
   StoresIdRoute: StoresIdRoute,
+  OffersIndexRoute: OffersIndexRoute,
   CustomerMerchantSlugRoute: CustomerMerchantSlugRoute,
   GuestMerchantSlugRoute: GuestMerchantSlugRoute,
   OrdersAddToOrderIdRoute: OrdersAddToOrderIdRoute,

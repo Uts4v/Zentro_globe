@@ -138,6 +138,7 @@ class PricedOption:
     option_name: str
     kind: str
     price_effect: Decimal
+    option_id: int | None = None
 
 
 @dataclass
@@ -339,6 +340,7 @@ def validate_and_price_line(
             option_name=opt.name,
             kind=opt.group.kind,
             price_effect=opt_price if opt_price is not None else Decimal("0"),
+            option_id=opt.id,
 
         ))
 
@@ -360,6 +362,7 @@ def validate_and_price_line(
             option_name=opt.name,
             kind=opt.group.kind,
             price_effect=delta,
+            option_id=opt.id,
 
         ))
 

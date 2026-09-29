@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { previewPricing, resolveTaxComponents, type PreviewResult } from "@/lib/pricing/preview";
-import { usePosStore } from "./store";
+import { cartFingerprint, usePosStore } from "./store";
 
 export type PosCartPricing = PreviewResult & {
   /** Numeric copies for UI arithmetic (cash change, validation). */
@@ -23,6 +23,7 @@ export function usePosCartPricing(): PosCartPricing {
   const settings = usePosStore((s) => s.posSettings);
   const fulfillmentType = usePosStore((s) => s.fulfillmentType);
   const pendingDiscount = usePosStore((s) => s.pendingDiscount);
+  const pendingOffer = usePosStore((s) => s.pendingOffer);
 
   return useMemo(() => {
     const taxClassById = new Map<number, string>();
@@ -45,9 +46,13 @@ export function usePosCartPricing(): PosCartPricing {
         unitPrice: item.price,
         taxClass: taxClassById.get(item.menu_item_id) ?? "standard",
       })),
+      // An offer's value was computed by the server for this cart; it is
+      // re-checked whenever the cart changes (see usePendingOfferRefresh).
       adjustment: pendingDiscount
         ? { calcType: pendingDiscount.type, value: pendingDiscount.value }
-        : null,
+        : pendingOffer
+          ? { calcType: "fixed", value: pendingOffer.discount }
+          : null,
       charges: chargesService
         ? [
             {
@@ -60,6 +65,30 @@ export function usePosCartPricing(): PosCartPricing {
         : [],
     });
 
+    // With an offer the server has priced this exact cart: show its numbers.
+    const server =
+      pendingOffer?.pricing && pendingOffer.cartKey === cartFingerprint(cart, fulfillmentType)
+        ? pendingOffer.pricing
+        : null;
+    if (server) {
+      return {
+        ...result,
+        subtotal: server.subtotal,
+        discountTotal: server.discount_total,
+        taxableTotal: server.taxable_total,
+        taxTotal: server.tax_total,
+        chargeTotal: server.charge_total,
+        grandTotal: server.grand_total,
+        pricesIncludeTax: server.prices_include_tax,
+        taxes: server.taxes,
+        charges: server.charges,
+        subtotalValue: Number(server.subtotal),
+        discountValue: Number(server.discount_total),
+        taxValue: Number(server.tax_total),
+        chargeValue: Number(server.charge_total),
+        totalValue: Number(server.grand_total),
+      };
+    }
     return {
       ...result,
       subtotalValue: Number(result.subtotal),
@@ -68,5 +97,5 @@ export function usePosCartPricing(): PosCartPricing {
       chargeValue: Number(result.chargeTotal),
       totalValue: Number(result.grandTotal),
     };
-  }, [cart, menu, settings, fulfillmentType, pendingDiscount]);
+  }, [cart, menu, settings, fulfillmentType, pendingDiscount, pendingOffer]);
 }

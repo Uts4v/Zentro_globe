@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     "pos",
     "ai_core",
     "inventory",
+    "offers",
     "config",
 ]
 
@@ -488,7 +489,15 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "upload": "200/hour",
     "menu_scan": "50/hour",
     "leaderboard": "600/hour",
+    "offer_claim": "30/hour",
+    "offer_lookup": "60/min",
+    "offer_preview": "240/hour",
 }
+
+# Require a verified phone number before a customer can claim an offer (the
+# strongest defence against one person farming offers with many accounts).
+# Off until Zentro ships a phone-verification flow for customers.
+OFFERS_REQUIRE_VERIFIED_PHONE = os.getenv("OFFERS_REQUIRE_VERIFIED_PHONE", "False").lower() in ("true", "1", "yes")
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 LOGGING = {

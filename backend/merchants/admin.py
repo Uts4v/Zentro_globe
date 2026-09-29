@@ -1,7 +1,7 @@
 # merchants/admin.py
 from django.contrib import admin
 from unfold.admin import ModelAdmin as UnfoldModelAdmin
-from .models import MerchantProfile, MenuItem, MerchantTable
+from .models import MerchantCategory, MerchantProfile, MenuItem, MerchantTable
 from config.admin import FastAdminMixin
 
 
@@ -55,3 +55,11 @@ class MerchantTableAdmin(FastAdminMixin, UnfoldModelAdmin):
     list_filter = ["is_active", "merchant"]
     search_fields = ["name", "merchant__business_name", "public_token"]
     readonly_fields = ["public_token", "created_at", "updated_at"]
+
+
+@admin.register(MerchantCategory)
+class MerchantCategoryAdmin(UnfoldModelAdmin):
+    list_display = ("name", "slug", "parent", "display_order", "is_active")
+    list_filter = ("is_active", "parent")
+    search_fields = ("name", "slug")
+    prepopulated_fields = {"slug": ("name",)}

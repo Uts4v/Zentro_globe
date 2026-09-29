@@ -21,6 +21,8 @@ TAX_CLASSES = (TAX_CLASS_STANDARD, TAX_CLASS_EXEMPT, TAX_CLASS_ZERO_RATED)
 
 CALC_PERCENTAGE = "percentage"
 CALC_FIXED = "fixed"
+# Exact per-line amounts computed by a promotion (free items, buy-X-get-Y).
+CALC_LINES = "lines"
 
 ADJ_MANUAL_DISCOUNT = "manual_discount"
 ADJ_LOYALTY_REWARD = "loyalty_reward"
@@ -60,6 +62,9 @@ class LineInput:
     tax_class: str = TAX_CLASS_STANDARD
     menu_item_id: int | None = None
     category_id: int | None = None
+    option_ids: frozenset[int] = frozenset()
+    modifier_unit_total: Decimal = ZERO  # modifier deltas included in unit_price
+    is_reward: bool = False              # an offer's reward line
 
 
 @dataclass(frozen=True)
@@ -75,6 +80,10 @@ class AdjustmentSpec:
     # None = whole order; otherwise only these line keys are discounted.
     eligible_line_keys: frozenset[str] | None = None
     source_ref: str = ""
+    # CALC_LINES: the exact amount per line key (capped at each line's value).
+    line_amounts: dict | None = None
+    # Set by a resolver when the adjustment does not apply right now.
+    forced_reason: dict | None = None
 
 
 @dataclass(frozen=True)

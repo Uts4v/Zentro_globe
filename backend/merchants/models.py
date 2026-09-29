@@ -12,6 +12,30 @@ def _generate_pdf_menu_token():
     return f"MENU-{secrets.token_urlsafe(8)}".upper()
 
 
+class MerchantCategory(models.Model):
+    """
+    Controlled business taxonomy (Food & Drink → Café, Restaurant…) used for
+    discovery filters. Seeded by migration; edited by platform admins only.
+    """
+
+    name = models.CharField(max_length=80)
+    slug = models.SlugField(max_length=80, unique=True)
+    parent = models.ForeignKey(
+        "self", on_delete=models.PROTECT, null=True, blank=True, related_name="children",
+    )
+    icon = models.CharField(max_length=8, blank=True, default="")
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "merchant_categories"
+        ordering = ["display_order", "name"]
+        verbose_name_plural = "merchant categories"
+
+    def __str__(self):
+        return f"{self.parent.name} › {self.name}" if self.parent_id else self.name
+
+
 class MerchantProfile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -25,6 +49,16 @@ class MerchantProfile(models.Model):
     slug = models.SlugField(unique=True, db_column="store_slug")
 
     business_type = models.CharField(max_length=100, blank=True)
+    primary_category = models.ForeignKey(
+        MerchantCategory, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="merchants",
+        help_text="Controlled category used for discovery (replaces free-text business_type).",
+    )
+    city = models.CharField(max_length=80, blank=True, default="", db_index=True)
+    area = models.CharField(
+        max_length=80, blank=True, default="",
+        help_text="Neighbourhood / area within the city, for 'choose your area' filtering.",
+    )
     address = models.TextField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     logo_url = models.URLField(blank=True)

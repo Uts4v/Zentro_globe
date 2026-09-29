@@ -269,6 +269,14 @@ class CreateOrderSerializer(serializers.Serializer):
         required=False, allow_blank=True, default="",
         help_text="Public token of the scanned table (required for dine-in)",
     )
+    claim_id = serializers.IntegerField(
+        required=False, allow_null=True,
+        help_text="A claimed Zentro Offer (VoucherClaim id) to apply to this order.",
+    )
+    reward_choice = serializers.DictField(
+        required=False, allow_null=True,
+        help_text='The free item for the offer: {"menu_item_id": 1, "selections": [...]}',
+    )
 
     def validate_items(self, value):
         if not value:

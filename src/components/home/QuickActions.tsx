@@ -1,6 +1,7 @@
 // src/components/home/QuickActions.tsx
 // Two minimalist action tiles matching clean design system: Scan QR + Transfer Points
-import { ScanLine, ArrowLeftRight, ArrowRight } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ScanLine, ArrowLeftRight, ArrowRight, TicketPercent } from "lucide-react";
 
 interface QuickActionsProps {
   onScanQR: () => void;
@@ -67,6 +68,31 @@ export function QuickActions({ onScanQR, onTransfer, availablePoints }: QuickAct
             <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
           </span>
         </button>
+
+        {/* Zentro Offers: discover and claim deals from all stores */}
+        <Link
+          to="/offers"
+          className="group animate-card-enter relative col-span-2 flex items-center gap-3.5 overflow-hidden bg-card p-4 text-left transition-all active:scale-[0.98]"
+          style={{
+            borderRadius: 28,
+            boxShadow: "var(--shadow-card)",
+            border: "1px solid var(--border)",
+            animationDelay: "0.3s",
+          }}
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-ember-soft text-ember">
+            <TicketPercent className="h-5.5 w-5.5" strokeWidth={2} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-[15px] font-extrabold text-foreground">Offers</p>
+            <p className="mt-0.5 text-[11px] font-medium leading-snug text-muted-foreground">
+              Discover deals near you and save them to My Offers
+            </p>
+          </div>
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-foreground transition-all group-hover:translate-x-0.5">
+            <ArrowRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </span>
+        </Link>
       </div>
     </section>
   );

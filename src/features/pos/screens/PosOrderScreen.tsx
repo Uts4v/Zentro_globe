@@ -7,6 +7,7 @@ import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
 import PaymentSheet from "./PaymentSheet";
 import DiscountModal from "./DiscountModal";
+import RedeemOfferModal from "./RedeemOfferModal";
 import IncomingOrdersPanel from "./IncomingOrdersPanel";
 import WaiterCallPanel from "./WaiterCallPanel";
 import { Loader2, AlertTriangle } from "lucide-react";
@@ -18,6 +19,7 @@ export default function PosOrderScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
+  const [showOffer, setShowOffer] = useState(false);
 
   useEffect(() => {
     if (merchant) {
@@ -112,6 +114,7 @@ export default function PosOrderScreen() {
         <CartPanel
           onCheckout={() => setShowPayment(true)}
           onDiscount={() => setShowDiscount(true)}
+          onRedeemOffer={() => setShowOffer(true)}
         />
       </div>
 
@@ -119,7 +122,10 @@ export default function PosOrderScreen() {
       <MobileCartButton
         onCheckout={() => setShowPayment(true)}
         onDiscount={() => setShowDiscount(true)}
+        onRedeemOffer={() => setShowOffer(true)}
       />
+
+      <RedeemOfferModal open={showOffer} onClose={() => setShowOffer(false)} />
 
       {/* Payment sheet */}
       <PaymentSheet
@@ -149,9 +155,11 @@ export default function PosOrderScreen() {
 function MobileCartButton({
   onCheckout,
   onDiscount,
+  onRedeemOffer,
 }: {
   onCheckout: () => void;
   onDiscount: () => void;
+  onRedeemOffer: () => void;
 }) {
   const cart = usePosStore((s) => s.cart);
   const posSettings = usePosStore((s) => s.posSettings);
@@ -194,6 +202,10 @@ function MobileCartButton({
                 onDiscount={() => {
                   setOpen(false);
                   onDiscount();
+                }}
+                onRedeemOffer={() => {
+                  setOpen(false);
+                  onRedeemOffer();
                 }}
               />
             </div>

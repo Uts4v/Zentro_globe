@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { orderApi } from "@/lib/api/orders";
 import { cartKey } from "@/lib/menu-utils";
-import type { MenuSelection } from "@/lib/api/types";
+import type { CreateOrderPayload, MenuSelection } from "@/lib/api/types";
 
 export type MenuItem = {
   id: string;
@@ -95,7 +95,10 @@ type State = {
   replaceLine: (oldKey: string, line: CartLineInput) => void;
   clearCart: () => void;
   clearTable: () => void;
-  placeOrder: (notes?: string) => Promise<string>;
+  placeOrder: (
+    notes?: string,
+    offer?: { claimId: number; rewardChoice?: CreateOrderPayload["reward_choice"] } | null,
+  ) => Promise<string>;
   placeGuestOrder: (notes?: string, guestName?: string) => Promise<string>;
   updateOrderStatus: (id: string, s: OrderStatus) => void;
   setOrders: (orders: Order[]) => void;
@@ -208,7 +211,7 @@ export const useStore = create<State>()(
 
       clearTable: () => set({ activeTable: null, fulfillmentType: "pickup" }),
 
-      placeOrder: async (notes = "") => {
+      placeOrder: async (notes = "", offer = null) => {
         const { cart, selectedMerchantId, activeTable, fulfillmentType } = get();
         if (!selectedMerchantId) throw new Error("No merchant selected");
         if (cart.length === 0) throw new Error("Cart is empty");
@@ -229,6 +232,7 @@ export const useStore = create<State>()(
           notes,
           fulfillment_type: fulfillmentType,
           table_token: activeTable?.tableToken ?? "",
+          ...(offer ? { claim_id: offer.claimId, reward_choice: offer.rewardChoice } : {}),
         });
 
         const order: Order = {

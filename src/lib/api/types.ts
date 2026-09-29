@@ -260,6 +260,10 @@ export interface CreateOrderPayload {
   notes?: string;
   fulfillment_type?: FulfillmentType;
   table_token?: string;
+  /** A claimed Zentro Offer to apply (server validates and prices it). */
+  claim_id?: number;
+  /** The free item chosen for the offer, when it has one. */
+  reward_choice?: { menu_item_id: number; selections?: Array<{ group_id: number; option_id: number }> };
 }
 
 export interface CreateGuestOrderPayload {
@@ -293,6 +297,14 @@ export interface OrderPreview {
   service_charge?: string;
   prices_include_tax?: boolean;
   total_amount: string;
+  /** Present when a claim_id was sent: whether and how the offer applies. */
+  offer?: {
+    eligible: boolean;
+    discount_amount?: string;
+    error?: string;
+    code?: string;
+    reward_options?: Array<{ menu_item_id: number; name: string; price: string; selections: Array<{ group_id: number; option_id: number }> }>;
+  } | null;
   points_earned: number;
   lines: Array<{
     menu_item_id: number;
@@ -325,6 +337,11 @@ export interface MerchantProfile {
   business_name: string;
   slug: string | null;
   business_type: string | null;
+  /** Controlled category (merchant taxonomy) used for Offers discovery. */
+  primary_category?: number | null;
+  primary_category_detail?: { id: number; slug: string; name: string; icon: string } | null;
+  city?: string;
+  area?: string;
   address: string | null;
   phone: string | null;
   logo_url: string | null;

@@ -1,5 +1,6 @@
 // business-profile/MerchantStore.tsx 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { offersApi, type OfferCategory } from "@/lib/api/offers";
 import {
   MapPin, Clock, Loader2, Save, Check, X,
   ImageIcon, Upload, QrCode, ExternalLink, RefreshCw,
@@ -306,10 +307,18 @@ export function MerchantStorePage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [categoryOptions, setCategoryOptions] = useState<OfferCategory[]>([]);
+  useEffect(() => {
+    offersApi.categories().then(setCategoryOptions).catch(() => setCategoryOptions([]));
+  }, []);
+
   const [form, setForm] = useState({
     business_name: "",
     description: "",
     business_type: "",
+    primary_category: "",
+    city: "",
+    area: "",
     address: "",
     phone: "",
     logo_url: "",
@@ -330,6 +339,9 @@ export function MerchantStorePage() {
         business_name: data.business_name || "",
         description: data.description || "",
         business_type: data.business_type || "",
+        primary_category: data.primary_category ? String(data.primary_category) : "",
+        city: data.city || "",
+        area: data.area || "",
         address: data.address || "",
         phone: data.phone || "",
         logo_url: data.logo_url || "",
@@ -353,12 +365,18 @@ export function MerchantStorePage() {
       setSaving(true);
       setSaved(false);
       setError(null);
-      const updated = await merchantApi.update(form);
+      const updated = await merchantApi.update({
+        ...form,
+        primary_category: form.primary_category ? Number(form.primary_category) : null,
+      });
       setProfile(updated);
       setForm({
         business_name: updated.business_name || "",
         description: updated.description || "",
         business_type: updated.business_type || "",
+        primary_category: updated.primary_category ? String(updated.primary_category) : "",
+        city: updated.city || "",
+        area: updated.area || "",
         address: updated.address || "",
         phone: updated.phone || "",
         logo_url: updated.logo_url || "",
@@ -667,6 +685,27 @@ export function MerchantStorePage() {
             onChange={(v) => updateField("business_type", v)}
             placeholder="e.g. Café · Bakery"
           />
+          <label className="block">
+            <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              Offers category (how customers find you)
+            </span>
+            <select
+              value={form.primary_category}
+              onChange={(e) => updateField("primary_category", e.target.value)}
+              className="mt-1.5 h-12 w-full rounded-2xl bg-mist px-4 text-sm text-ink outline-none transition-all focus:ring-2 focus:ring-ember/40"
+            >
+              <option value="">Not set</option>
+              {categoryOptions.map((group) => (
+                <optgroup key={group.slug} label={`${group.icon} ${group.name}`}>
+                  {group.children.map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.icon} {c.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </label>
         </div>
       </section>
 
@@ -683,6 +722,10 @@ export function MerchantStorePage() {
               onChange={(v) => updateField("address", v)}
               placeholder="42 Thamel Street, Kathmandu"
             />
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="City" value={form.city} onChange={(v) => updateField("city", v)} placeholder="Kathmandu" />
+              <Field label="Area" value={form.area} onChange={(v) => updateField("area", v)} placeholder="Thamel" />
+            </div>
             <Field
               label="Phone"
               value={form.phone}

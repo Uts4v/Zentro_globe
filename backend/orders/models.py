@@ -485,6 +485,10 @@ class OrderItem(models.Model):
     )
     refunded_quantity = models.PositiveIntegerField(default=0)
     refunded_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    is_promotion_reward = models.BooleanField(
+        default=False,
+        help_text="Added as an offer's free/reward item (still a real, priced line).",
+    )
 
     class Meta:
         db_table = "order_items"
@@ -522,6 +526,10 @@ class OrderItemOption(models.Model):
     price_effect = models.DecimalField(
         max_digits=10, decimal_places=2, default=0,
         help_text="Absolute variant price or modifier price_delta applied to this line.",
+    )
+    option_id = models.PositiveIntegerField(
+        null=True, blank=True,
+        help_text="MenuOption id at order time (for variant-targeted offers); null on older rows.",
     )
     display_order = models.PositiveIntegerField(default=0)
 

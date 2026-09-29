@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth";
 import {
   Settings,
   Bell,
+  Ticket,
   CreditCard,
   ChevronRight,
   LogOut,
@@ -143,6 +144,9 @@ export function CustomerProfilePage() {
       <section className="mt-6 px-5">
         <div className="glass-strong divide-y divide-border rounded-3xl">
           <InstallAppRow />
+          <Link to="/offers/mine" className="block">
+            <Row icon={Ticket} label="My Offers" />
+          </Link>
           <Link to="/notifications" className="block">
             <Row icon={Bell} label="Notifications" />
           </Link>

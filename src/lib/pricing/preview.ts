@@ -61,21 +61,41 @@ export interface PreviewResult {
   chargeTotal: string;
   grandTotal: string;
   pricesIncludeTax: boolean;
-  lines: Array<{ key: string; lineSubtotal: string; discount: string; tax: string; lineTotal: string }>;
+  lines: Array<{
+    key: string;
+    lineSubtotal: string;
+    discount: string;
+    tax: string;
+    lineTotal: string;
+  }>;
   taxes: Array<{ name: string; rate: string; amount: string }>;
   charges: Array<{ kind: string; label: string; amount: string; tax: string; taxable: boolean }>;
   messages: PreviewMessage[];
 }
 
-const POLICIES: Record<string, { inclusive: boolean; discountReducesTaxable: boolean; chargesTaxable: boolean }> = {
+const POLICIES: Record<
+  string,
+  { inclusive: boolean; discountReducesTaxable: boolean; chargesTaxable: boolean }
+> = {
   legacy: { inclusive: false, discountReducesTaxable: false, chargesTaxable: false },
   exclusive: { inclusive: false, discountReducesTaxable: true, chargesTaxable: true },
   inclusive: { inclusive: true, discountReducesTaxable: true, chargesTaxable: true },
 };
 
 const EXPONENTS: Record<string, number> = {
-  JPY: 0, KRW: 0, VND: 0, CLP: 0, ISK: 0, UGX: 0,
-  BHD: 3, KWD: 3, OMR: 3, JOD: 3, TND: 3, LYD: 3, IQD: 3,
+  JPY: 0,
+  KRW: 0,
+  VND: 0,
+  CLP: 0,
+  ISK: 0,
+  UGX: 0,
+  BHD: 3,
+  KWD: 3,
+  OMR: 3,
+  JOD: 3,
+  TND: 3,
+  LYD: 3,
+  IQD: 3,
 };
 
 export function currencyExponent(code: string): number {
@@ -147,7 +167,9 @@ function allocate(total: bigint, weights: bigint[]): bigint[] {
   let leftover = total - sum(floors);
   const order = weights
     .map((_, i) => i)
-    .sort((a, b) => (remainders[b] > remainders[a] ? 1 : remainders[b] < remainders[a] ? -1 : a - b));
+    .sort((a, b) =>
+      remainders[b] > remainders[a] ? 1 : remainders[b] < remainders[a] ? -1 : a - b,
+    );
   for (const i of order) {
     if (leftover <= 0n) break;
     floors[i] += 1n;
@@ -192,7 +214,8 @@ export function previewPricing(ctx: PreviewContext): PreviewResult {
   const messages: PreviewMessage[] = [];
   const adj = ctx.adjustment;
   if (adj) {
-    const minSubtotal = adj.minSubtotal != null && adj.minSubtotal !== "" ? toMinor(adj.minSubtotal, exp) : null;
+    const minSubtotal =
+      adj.minSubtotal != null && adj.minSubtotal !== "" ? toMinor(adj.minSubtotal, exp) : null;
     if (minSubtotal !== null && subtotal < minSubtotal) {
       messages.push({
         code: "MINIMUM_ORDER_NOT_MET",
@@ -216,9 +239,13 @@ export function previewPricing(ctx: PreviewContext): PreviewResult {
         } else {
           amount = max(toMinor(adj.value, exp), 0n);
         }
-        if (adj.maxAmount != null && adj.maxAmount !== "") amount = min(amount, toMinor(adj.maxAmount, exp));
+        if (adj.maxAmount != null && adj.maxAmount !== "")
+          amount = min(amount, toMinor(adj.maxAmount, exp));
         amount = min(amount, base);
-        const shares = allocate(amount, eligible.map((l) => l.net));
+        const shares = allocate(
+          amount,
+          eligible.map((l) => l.net),
+        );
         eligible.forEach((l, i) => {
           l.discount += shares[i];
           l.net -= shares[i];

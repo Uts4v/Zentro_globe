@@ -85,6 +85,7 @@ def _bulk_create_items_with_options(order, order_items_data, option_rows):
                 option_name=opt.option_name,
                 kind=opt.kind,
                 price_effect=opt.price_effect,
+                option_id=opt.option_id,
                 display_order=display_order,
             ))
     OrderItemOption.objects.bulk_create(snapshot_rows, batch_size=200)
@@ -536,6 +537,21 @@ def create_order(request):
         priced = price_request_lines(merchant, data["items"])
     except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+    # A claimed offer is checked against the basket before anything is written,
+    # so an offer that doesn't apply never produces an undiscounted order.
+    claim = None
+    if data.get("claim_id"):
+        from offers.checkout import apply_offer_to_basket
+        from offers.engine import OfferError
+        try:
+            claim, priced, _evaluation = apply_offer_to_basket(
+                claim_id=data["claim_id"], customer=customer, merchant=merchant, priced=priced,
+                reward_choice=data.get("reward_choice"), fulfillment_type=fulfillment_type,
+            )
+        except OfferError as exc:
+            return Response(exc.as_response_data(), status=exc.status)
+
     pricing_ctx, pricing = price_new_order_lines(
         merchant, priced, fulfillment_type=fulfillment_type, order_type=Order.ORDER_TYPE_REGULAR,
     )
@@ -579,10 +595,19 @@ def create_order(request):
             )
         raise
 
+    if claim is not None:
+        from offers.engine import CHANNEL_ONLINE, OfferError, reserve_for_order
+        try:
+            reserve_for_order(claim, order, channel=CHANNEL_ONLINE, created_by=request.user)
+        except OfferError as exc:
+            transaction.set_rollback(True)
+            return Response(exc.as_response_data(), status=exc.status)
+        order.refresh_from_db()
+
     transaction.on_commit(lambda: _notify_safe(
         user=merchant.user,
         title="New order received",
-        message=f"Order #{order.id} from {customer.full_name or 'Customer'} — {merchant.currency_symbol} {pricing.grand_total}",
+        message=f"Order #{order.id} from {customer.full_name or 'Customer'} — {merchant.currency_symbol} {order.total_amount}",
         notification_type=Notification.TYPE_NEW_ORDER,
         merchant_name=merchant.business_name,
         context_url="/merchant/orders",
@@ -730,9 +755,35 @@ def preview_order(request):
     fulfillment_type = data.get("fulfillment_type") or Order.FULFILLMENT_PICKUP
     if data.get("table_token"):
         fulfillment_type = Order.FULFILLMENT_DINE_IN
-    _, pricing = price_new_order_lines(
-        merchant, priced, fulfillment_type=fulfillment_type, order_type=Order.ORDER_TYPE_REGULAR,
-    )
+
+    offer = None
+    if data.get("claim_id"):
+        from offers.checkout import apply_offer_to_basket
+        from offers.engine import OfferError
+        customer = getattr(request.user, "customer_profile", None) if request.user.is_authenticated else None
+        try:
+            _claim, priced, evaluation = apply_offer_to_basket(
+                claim_id=data["claim_id"], customer=customer, merchant=merchant, priced=priced,
+                reward_choice=data.get("reward_choice"), fulfillment_type=fulfillment_type,
+            )
+            offer = {"eligible": True, "discount_amount": evaluation.discount_amount}
+        except OfferError as exc:
+            if exc.status == 404:
+                return Response(exc.as_response_data(), status=exc.status)
+            offer = {"eligible": False, **exc.as_response_data()}
+
+    if offer and offer["eligible"]:
+        from offers.engine import build_spec
+        from orders.pricing import calculate, context_for_merchant, default_charges
+        pricing = calculate(context_for_merchant(
+            merchant, [p.line for p in priced],
+            adjustments=(build_spec(_claim, [p.line for p in priced]),),
+            charges=default_charges(merchant, fulfillment_type=fulfillment_type, order_type=Order.ORDER_TYPE_REGULAR),
+        ))
+    else:
+        _, pricing = price_new_order_lines(
+            merchant, priced, fulfillment_type=fulfillment_type, order_type=Order.ORDER_TYPE_REGULAR,
+        )
     breakdown = pricing.to_dict()
 
     lines = []
@@ -740,6 +791,8 @@ def preview_order(request):
         lines.append({
             "menu_item_id": p.item_fields["menu_item"].id,
             "name": p.item_fields["name"],
+            "is_reward": bool(p.item_fields.get("is_promotion_reward")),
+            "discount": str(priced_line.discount),
             "quantity": p.item_fields["quantity"],
             "unit_price": str(priced_line.unit_price),
             "list_unit_price": str(priced_line.list_unit_price),
@@ -776,6 +829,7 @@ def preview_order(request):
         "points_earned": sum(p.points for p in priced),
         "lines": lines,
         "pricing": breakdown,
+        "offer": offer,
     })
 
 

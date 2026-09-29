@@ -13,6 +13,7 @@ basket always produces the same numbers.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from decimal import Decimal
 
 from django.utils import timezone
@@ -48,6 +49,17 @@ from .types import (
 MAX_ORDER_ADJUSTMENTS = 1
 
 SLOT_TAKEN_MESSAGE = "Remove the current reward before applying another offer."
+
+# Adjustment kinds whose amount another domain computes from the order's
+# current lines (e.g. offers → "promotion"). A resolver receives the stored
+# OrderAdjustment and the order's LineInputs and returns an AdjustmentSpec,
+# so the rule lives in its own app while pricing stays the only place totals
+# are calculated.
+_ADJUSTMENT_RESOLVERS: dict = {}
+
+
+def register_adjustment_resolver(kind: str, resolver) -> None:
+    _ADJUSTMENT_RESOLVERS[kind] = resolver
 
 
 # ── Pure calculation ──────────────────────────────────────────────────────────
@@ -198,7 +210,15 @@ def context_for_order(order, items) -> PricingContext:
         currency = merchant.currency_code
 
     _legacy_discount_adjustment(order)
-    adjustments = [_adjustment_spec(a) for a in order.adjustments.filter(status="active").order_by("id")]
+    lines = tuple(line_from_order_item(i) for i in items)
+    adjustments = []
+    for adj in order.adjustments.filter(status="active").order_by("id"):
+        resolver = _ADJUSTMENT_RESOLVERS.get(adj.kind)
+        if resolver is None:
+            adjustments.append(_adjustment_spec(adj))
+        else:
+            spec = resolver(adj, lines, order)
+            adjustments.append(replace(spec, source_ref=f"adjustment:{adj.pk}"))
     charges = [
         ChargeSpec(kind=c.kind, label=c.label, calc_type=c.calc_type, value=to_decimal(c.value), taxable=c.taxable)
         for c in order.charges.order_by("id")
@@ -211,9 +231,15 @@ def context_for_order(order, items) -> PricingContext:
         policy_code=policy_code,
         tax_enabled=bool(components),
         tax_components=components,
-        lines=tuple(line_from_order_item(i) for i in items),
+        lines=lines,
         adjustments=tuple(adjustments),
         charges=tuple(charges),
+    )
+
+
+def order_items_for_pricing(order):
+    return list(
+        order.items.all().select_related("menu_item").prefetch_related("options").order_by("id")
     )
 
 
@@ -252,7 +278,7 @@ def order_fields(ctx: PricingContext, result: PricingResult, merchant) -> dict:
 
 
 def _persist(order, ctx: PricingContext, result: PricingResult, items_by_key: dict) -> None:
-    from orders.models import OrderAdjustment, OrderAdjustmentAllocation, OrderCharge, OrderItem
+    from orders.models import OrderAdjustmentAllocation, OrderCharge, OrderItem
 
     changed_items = []
     for line in result.lines:
@@ -326,7 +352,7 @@ def reprice_order(order) -> PricingResult:
         raise PricingError(
             "This order's pricing is final and can no longer change.", code="pricing_locked",
         )
-    items = list(order.items.all().order_by("id"))
+    items = order_items_for_pricing(order)
     ctx = context_for_order(order, items)
     result = calculate(ctx)
     _persist(order, ctx, result, {str(i.pk): i for i in items})

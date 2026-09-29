@@ -5,7 +5,7 @@ See ``service.py`` for the pipeline and ``docs/architecture/pricing.md`` for the
 design. Import from here, not from the submodules.
 """
 
-from .items import PricedRequestLine, line_from_order_item, price_request_lines
+from .items import PricedRequestLine, line_from_order_item, mark_reward, price_request_lines
 from .money import allocate, currency_quantum, quantize, to_decimal
 from .service import (
     MAX_ORDER_ADJUSTMENTS,
@@ -16,6 +16,8 @@ from .service import (
     persist_new_order,
     price_new_order_lines,
     remove_adjustments,
+    order_items_for_pricing,
+    register_adjustment_resolver,
     reprice_order,
 )
 from .split import split_result
@@ -27,6 +29,7 @@ from .types import (
     ADJ_PUNCH_REWARD,
     ADJUSTMENT_KINDS,
     CALC_FIXED,
+    CALC_LINES,
     CALC_PERCENTAGE,
     CHARGE_KINDS,
     PRICING_VERSION,

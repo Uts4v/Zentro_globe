@@ -231,7 +231,7 @@ class RevalidationTests(PricingFlowBase):
             {"menu_item_id": self.water.id, "quantity": 4},
         ])  # 800 + 400 = 1200
         _, result = attach_adjustment(order, AdjustmentSpec(
-            kind="promotion", calc_type="percentage", value=D("10"), label="10% over 1000",
+            kind="loyalty_reward", calc_type="percentage", value=D("10"), label="10% over 1000",
             min_subtotal=D("1000")))
         self.assertEqual(result.discount_total, D("120.00"))
 
@@ -244,7 +244,7 @@ class RevalidationTests(PricingFlowBase):
         result = reprice_order(order)  # 800 + 50 = 850
         self.assertEqual(result.discount_total, D("0.00"))
         self.assertEqual(result.messages, [{
-            "kind": "promotion", "label": "10% over 1000", "code": "MINIMUM_ORDER_NOT_MET",
+            "kind": "loyalty_reward", "label": "10% over 1000", "code": "MINIMUM_ORDER_NOT_MET",
             "required": "1000.00", "current": "850.00", "shortfall": "150.00",
         }])
         adj = order.adjustments.get(status="active")

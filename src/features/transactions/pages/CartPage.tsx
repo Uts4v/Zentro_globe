@@ -13,7 +13,10 @@ import {
   Scan,
   Pencil,
   Trash2,
+  Ticket,
 } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { offersApi, type OfferClaim } from "@/lib/api/offers";
 import { menuApi, merchantApi, orderApi } from "@/lib/api";
 import type { MenuCatalog, MenuItem, OrderPreview } from "@/lib/api";
 import ProductDetailSheet, {
@@ -44,6 +47,26 @@ export function CartPage() {
   const [sym, setSym] = useState("Rs");
   const [preview, setPreview] = useState<OrderPreview | null>(null);
   const [editing, setEditing] = useState<{ line: CartItem; item: MenuItem } | null>(null);
+  const { user } = useAuth();
+  const [claims, setClaims] = useState<OfferClaim[]>([]);
+  const [claimId, setClaimId] = useState<number | null>(null);
+  const [rewardChoice, setRewardChoice] = useState<
+    { menu_item_id: number; selections?: Array<{ group_id: number; option_id: number }> } | null
+  >(null);
+
+  // The customer's saved offers for this store, for checkout.
+  useEffect(() => {
+    setClaimId(null);
+    setRewardChoice(null);
+    if (!selectedMerchantId || user?.role !== "customer") {
+      setClaims([]);
+      return;
+    }
+    offersApi
+      .mine("available", selectedMerchantId)
+      .then((list) => setClaims(list.filter((c) => c.status === "available" && c.offer.channels !== "in_store")))
+      .catch(() => setClaims([]));
+  }, [selectedMerchantId, user?.role]);
 
   const symFromCatalog = catalog?.merchant.currency_symbol || sym;
 
@@ -87,8 +110,9 @@ export function CartPage() {
         points_per_item: 0,
       })),
       fulfillment_type: fulfillmentType,
+      ...(claimId ? { claim_id: claimId, reward_choice: rewardChoice ?? undefined } : {}),
     }),
-    [cart, selectedMerchantId, fulfillmentType],
+    [cart, selectedMerchantId, fulfillmentType, claimId, rewardChoice],
   );
 
   const runPreview = useCallback(async () => {
@@ -134,10 +158,14 @@ export function CartPage() {
       setError("Scan a table QR code to place a dine-in order.");
       return;
     }
+    if (claimId && preview?.offer && !preview.offer.eligible) {
+      setError(preview.offer.error || "This offer can't be used on this order. Remove it to continue.");
+      return;
+    }
     setPlacing(true);
     setError("");
     try {
-      const id = await placeOrder();
+      const id = await placeOrder("", claimId ? { claimId, rewardChoice: rewardChoice ?? undefined } : null);
       nav({ to: "/orders/$id", params: { id } });
     } catch (e: unknown) {
       setError((e as { message?: string }).message || "Failed to place order");
@@ -300,6 +328,62 @@ export function CartPage() {
           );
         })}
       </div>
+
+      {cart.length > 0 && claims.length > 0 && (
+        <div className="mt-6 px-5">
+          <div className="glass-strong rounded-2xl p-4">
+            <p className="mb-3 flex items-center gap-1.5 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+              <Ticket className="h-3.5 w-3.5" /> Offer
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => {
+                  setClaimId(null);
+                  setRewardChoice(null);
+                }}
+                className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${claimId === null ? "bg-ink text-primary-foreground" : "bg-mist text-foreground"}`}
+              >
+                No offer
+              </button>
+              {claims.map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => {
+                    setClaimId(c.id);
+                    setRewardChoice(null);
+                  }}
+                  className={`rounded-full px-3.5 py-1.5 text-xs font-bold ${claimId === c.id ? "bg-ink text-primary-foreground" : "bg-mist text-foreground"}`}
+                >
+                  {c.offer.summary}
+                </button>
+              ))}
+            </div>
+            {claimId && preview?.offer && !preview.offer.eligible && (
+              <div className="mt-3">
+                <p className="text-xs text-ember">{preview.offer.error}</p>
+                {(preview.offer.reward_options?.length ?? 0) > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {preview.offer.reward_options!.map((o) => (
+                      <button
+                        key={`${o.menu_item_id}-${o.selections.map((x) => x.option_id).join(".")}`}
+                        onClick={() => setRewardChoice({ menu_item_id: o.menu_item_id, selections: o.selections })}
+                        className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground"
+                      >
+                        {o.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {claimId && preview?.offer?.eligible && (
+              <p className="mt-3 text-xs font-semibold text-emerald-700">
+                Offer applied{rewardChoice ? " with your free item" : ""}.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {cart.length > 0 && (
         <div className="mt-8 px-5">

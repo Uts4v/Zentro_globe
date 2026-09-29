@@ -40,6 +40,39 @@ export type PendingDiscount = {
   authorizedByWorkerId?: string;
 };
 
+/**
+ * A customer's Zentro Offer scanned at the till. The server checked it against
+ * the cart (discount below); it is applied to the order right after creation.
+ */
+export type PendingOffer = {
+  code: string;
+  claimId: number;
+  summary: string;
+  customerFirstName: string;
+  discount: string;
+  /** The server's full pricing of the cart with this offer (exact totals to show). */
+  pricing: ServerCartPricing | null;
+  /** Cart fingerprint the pricing belongs to; a different cart needs a re-check. */
+  cartKey: string;
+};
+
+export type ServerCartPricing = {
+  subtotal: string;
+  discount_total: string;
+  taxable_total: string;
+  tax_total: string;
+  charge_total: string;
+  grand_total: string;
+  prices_include_tax: boolean;
+  taxes: Array<{ name: string; rate: string; amount: string }>;
+  charges: Array<{ kind: string; label: string; amount: string; tax: string; taxable: boolean }>;
+};
+
+/** Identifies the cart contents an offer check was made for. */
+export function cartFingerprint(cart: PosOrderItem[], fulfillmentType: string): string {
+  return JSON.stringify([fulfillmentType, cart.map((c) => [c.key, c.quantity])]);
+}
+
 /** What callers hand to `addItemToCart`; `key` is derived when omitted. */
 export type PosOrderItemInput = Omit<PosOrderItem, "key"> & { key?: string };
 
@@ -96,6 +129,8 @@ interface PosState {
   setCartNotes: (n: string) => void;
   pendingDiscount: PendingDiscount | null;
   setPendingDiscount: (d: PendingDiscount | null) => void;
+  pendingOffer: PendingOffer | null;
+  setPendingOffer: (o: PendingOffer | null) => void;
   setFulfillmentType: (t: string) => void;
   setSelectedTable: (id: number | null) => void;
   setSelectedCustomer: (id: number | null) => void;
@@ -120,6 +155,7 @@ const initialState = {
   cart: [],
   cartNotes: "",
   pendingDiscount: null,
+  pendingOffer: null,
   fulfillmentType: "dine-in",
   selectedTableId: null,
   selectedCustomerId: null,
@@ -234,9 +270,12 @@ export const usePosStore = create<PosState>((set) => ({
       selectedTableId: null,
       selectedCustomerId: null,
       pendingDiscount: null,
+      pendingOffer: null,
     }),
   setCartNotes: (n) => set({ cartNotes: n }),
-  setPendingDiscount: (d) => set({ pendingDiscount: d }),
+  // One discount/reward per order (V1): choosing one replaces the other.
+  setPendingDiscount: (d) => set(d ? { pendingDiscount: d, pendingOffer: null } : { pendingDiscount: null }),
+  setPendingOffer: (o) => set(o ? { pendingOffer: o, pendingDiscount: null } : { pendingOffer: null }),
   setFulfillmentType: (t) => set({ fulfillmentType: t }),
   setSelectedTable: (id) => set({ selectedTableId: id }),
   setSelectedCustomer: (id) => set({ selectedCustomerId: id }),

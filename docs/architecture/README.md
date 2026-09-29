@@ -43,7 +43,7 @@ docs/architecture/
 ├── payments.md                ← payments/refunds/transfers domain
 ├── loyalty.md                 ← loyalty engine (points/streaks/punch cards/missions/rewards)
 ├── pricing.md                 ← pricing engine (v1): one authority for order totals, tax, discounts
-├── offers.md                  ← Zentro Offers (proposed): campaigns, claims, redemptions, PromotionEngine
+├── offers.md                  ← Zentro Offers (v1): campaigns, claims, redemptions, PromotionEngine
 ├── pos-kds.md                 ← POS screens + Kitchen/Preparation (KDS) domain
 ├── ai.md                      ← AI architecture (AI waiter, merchant assistant, insights)
 ├── realtime.md                ← Channels/WebSocket realtime graph
@@ -70,7 +70,7 @@ giant monolith) plus a file-paths evidence map.
 | Orders | `orders.md` | `transactions`, `pos`, `guest` | `orders` | `Order`, `OrderItem`, `OrderItemOption`, `PreparationArea` |
 | Payments | `payments.md` | `transactions`, `pos` | `orders` (payment endpoints), `pos` | `OrderPayment`, `PosPayment`, `Refund` |
 | Loyalty & rewards | `loyalty.md` | `loyalty-engine`, `rewards`, `punch-cards`, `missions`, `leaderboard` | `loyalty` | `CustomerMerchantWallet`, `PunchCard`, `PunchCardReward`, `Mission`, `Reward` |
-| Offers (proposed) | `offers.md` | `offers` (planned) | `offers` (planned) | `PromotionCampaign`, `VoucherClaim`, `VoucherRedemption` |
+| Offers | `offers.md` | `offers` | `offers` | `PromotionCampaign`, `VoucherClaim`, `VoucherRedemption` |
 | POS | `pos-kds.md` | `pos` | `pos` | `PosDevice`, `ShiftWorker`, `StaffShift`, `CashShift` |
 | Preparation / KDS | `pos-kds.md` | `preparation` | `orders.preparation_views`, `pos` | `PreparationArea`, `PreparationSettings` |
 | Realtime | `realtime.md` | `ws` lib, `preparation`, `pos` | `notifications` (Channels), `config.asgi` | `Notification` |

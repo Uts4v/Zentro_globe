@@ -4,6 +4,7 @@ import { PosReceiptData, PosCustomer, posCreateOrder } from "../api";
 import { safeUuid } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import { usePosCartPricing } from "../pricing";
+import { usePendingOfferRefresh } from "../offers";
 import { lineSelectionsText } from "@/lib/menu-utils";
 import CustomerSearchModal from "./CustomerSearchModal";
 import TableSelector from "./TableSelector";
@@ -14,6 +15,7 @@ import {
   MessageSquare,
   ShoppingBag,
   Percent,
+  Ticket,
   FileText,
   User,
   ChevronRight,
@@ -32,9 +34,10 @@ import MinusStockModal from "./MinusStockModal";
 interface CartPanelProps {
   onCheckout: () => void;
   onDiscount: () => void;
+  onRedeemOffer: () => void;
 }
 
-export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
+export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: CartPanelProps) {
   const cart = usePosStore((s) => s.cart);
   const cartNotes = usePosStore((s) => s.cartNotes);
   const fulfillmentType = usePosStore((s) => s.fulfillmentType);
@@ -56,6 +59,9 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
   const setSelectedCustomer = usePosStore((s) => s.setSelectedCustomer);
   const pendingDiscount = usePosStore((s) => s.pendingDiscount);
   const setPendingDiscount = usePosStore((s) => s.setPendingDiscount);
+  const pendingOffer = usePosStore((s) => s.pendingOffer);
+  const setPendingOffer = usePosStore((s) => s.setPendingOffer);
+  usePendingOfferRefresh();
 
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
@@ -601,7 +607,26 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
             {formatCurrency(subtotal, currencySymbol)}
           </span>
         </div>
-        {pendingDiscount ? (
+        {pendingOffer && (
+          <div className="flex items-center justify-between text-[13px] text-muted-foreground">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Ticket className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">
+                {pendingOffer.customerFirstName ? `${pendingOffer.customerFirstName}'s offer` : "Offer"}: {pendingOffer.summary}
+              </span>
+              <button
+                onClick={() => setPendingOffer(null)}
+                className="shrink-0 text-[11px] font-medium text-ember hover:underline"
+              >
+                Remove
+              </button>
+            </span>
+            <span className="numeric shrink-0 font-medium text-success">
+              -{formatCurrency(pricing.discountValue, currencySymbol)}
+            </span>
+          </div>
+        )}
+        {pendingOffer ? null : pendingDiscount ? (
           <div className="flex items-center justify-between text-[13px] text-muted-foreground">
             <span className="flex items-center gap-1.5">
               <Percent className="h-3.5 w-3.5" />
@@ -683,6 +708,13 @@ export default function CartPanel({ onCheckout, onDiscount }: CartPanelProps) {
               Apply Discount
             </button>
           )}
+          <button
+            onClick={onRedeemOffer}
+            className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+          >
+            <Ticket className="h-3.5 w-3.5" />
+            Redeem Offer
+          </button>
           {!isEmpty && (
             <button
               onClick={() => setShowFreeConfirm(true)}
