@@ -93,6 +93,7 @@ export function ZentroSplashScreen({
   inkColor = "#073F4B",
 }: ZentroSplashScreenProps) {
   const [visible, setVisible] = useState(true);
+  const [dismissed, setDismissed] = useState(false);
   const finishedRef = useRef(false);
 
   const reducedMotion = useMemo(
@@ -103,6 +104,22 @@ export function ZentroSplashScreen({
   );
 
   useEffect(() => {
+    // If already marked as seen by the inline head script (e.g. page reload or prior visit),
+    // immediately unmount without running animation timers.
+    try {
+      if (
+        sessionStorage.getItem("zentro-splash-played") === "1" &&
+        document.documentElement.classList.contains("zentro-splash-seen")
+      ) {
+        finishedRef.current = true;
+        setVisible(false);
+        return;
+      }
+      sessionStorage.setItem("zentro-splash-played", "1");
+    } catch {
+      // ignore storage errors
+    }
+
     const total = reducedMotion ? REDUCED_TOTAL : TRANSITION_END;
     const timer = setTimeout(() => {
       if (!finishedRef.current) {
@@ -114,6 +131,16 @@ export function ZentroSplashScreen({
     return () => clearTimeout(timer);
   }, [reducedMotion, onFinish, autoUnmount]);
 
+  const handleDismiss = () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    setDismissed(true);
+    setTimeout(() => {
+      onFinish?.();
+      if (autoUnmount) setVisible(false);
+    }, 250);
+  };
+
   // Scoped stylesheet: per-letter draw + stroke→fill crossfade, glow, fade-out.
   const css = useMemo(() => {
     if (reducedMotion) {
@@ -123,6 +150,9 @@ export function ZentroSplashScreen({
           stroke: none;
           stroke-dasharray: 1;
           stroke-dashoffset: 0;
+        }
+        html.dark .zentro-stroke {
+          fill: #f7efe2;
         }
       `;
     }
@@ -144,6 +174,14 @@ export function ZentroSplashScreen({
     }).join("\n");
 
     return `
+      #zentro-splash-root {
+        background-color: ${backgroundColor};
+        color: ${inkColor};
+      }
+      html.dark #zentro-splash-root {
+        background-color: #122122;
+        color: #f7efe2;
+      }
       .zentro-stroke {
         fill: ${inkColor};
         fill-opacity: 0;
@@ -157,6 +195,10 @@ export function ZentroSplashScreen({
         stroke-dashoffset: 1;
         paint-order: stroke fill;
       }
+      html.dark .zentro-stroke {
+        fill: #f7efe2;
+        stroke: #f7efe2;
+      }
       ${perLetter}
       @keyframes zs-glow {
         0%   { filter: drop-shadow(0 0 0 rgba(7,63,75,0)); }
@@ -164,16 +206,18 @@ export function ZentroSplashScreen({
         100% { filter: drop-shadow(0 0 0 rgba(7,63,75,0)); }
       }
       @keyframes zs-fadeout {
-        to { opacity: 0; visibility: hidden; }
+        to { opacity: 0; visibility: hidden; pointer-events: none; }
       }
     `;
-  }, [reducedMotion, inkColor]);
+  }, [reducedMotion, inkColor, backgroundColor]);
 
   if (!visible) return null;
 
   return (
     <div
+      id="zentro-splash-root"
       aria-hidden="true"
+      onClick={handleDismiss}
       style={{
         position: "fixed",
         inset: 0,
@@ -182,10 +226,15 @@ export function ZentroSplashScreen({
         justifyContent: "center",
         background: backgroundColor,
         zIndex: 9999,
-        pointerEvents: "auto",
-        animation: reducedMotion
-          ? `zs-fadeout 400ms ease 1400ms forwards`
-          : `zs-fadeout 500ms ease ${TRANSITION_START}ms forwards`,
+        pointerEvents: dismissed ? "none" : "auto",
+        cursor: "pointer",
+        opacity: dismissed ? 0 : undefined,
+        transition: dismissed ? "opacity 250ms ease-out" : undefined,
+        animation: dismissed
+          ? "none"
+          : reducedMotion
+            ? `zs-fadeout 400ms ease 1400ms forwards`
+            : `zs-fadeout 500ms ease ${TRANSITION_START}ms forwards`,
       }}
     >
       <style>{css}</style>

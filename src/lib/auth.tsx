@@ -207,12 +207,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // For rate limit (429) or temporary server errors, retain user session from valid token
         const payload = decodeJwt(token);
         if (payload && secondsUntilExpiry(token) > 0) {
-          setUser((prev) => prev || {
-            id: payload.user_id || payload.id,
-            email: payload.email,
-            role: payload.role,
-            full_name: payload.full_name || payload.name,
-          });
+          const fullName = payload.full_name || payload.name || "";
+          const nameParts = fullName.trim().split(/\s+/);
+          const firstName = payload.first_name || nameParts[0] || "";
+          const lastName = payload.last_name || nameParts.slice(1).join(" ") || "";
+          const fallbackUser: AuthUser = {
+            id: Number(payload.user_id || payload.id || 0),
+            email: String(payload.email || ""),
+            first_name: String(firstName),
+            last_name: String(lastName),
+            role: (payload.role === "merchant" ? "merchant" : "customer") as Role,
+            phone: String(payload.phone || ""),
+            avatar_url: String(payload.avatar_url || ""),
+            customer_profile: null,
+            has_usable_password: payload.has_usable_password,
+          };
+          setUser((prev) => prev || fallbackUser);
         }
       }
     }

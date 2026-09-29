@@ -296,41 +296,42 @@ function RootComponent() {
 // ── Shell ─────────────────────────────────────────────────────────────────────
 function RootShell({ children }: { children: ReactNode }) {
   // Splash plays once per app session (first open of a tab/launch), never on reload
-  // or in-app navigation. sessionStorage survives reloads in the same tab and is
-  // cleared when the session ends, so reopening the web app shows it again.
-  const [showSplash, setShowSplash] = useState(false);
-
-  useEffect(() => {
-    let seen = true;
-    try {
-      seen = sessionStorage.getItem("zentro-splash-played") === "1";
-    } catch {
-      // ignore storage errors (private mode, disabled storage)
-    }
-    if (!seen) {
-      setShowSplash(true);
-      try {
-        sessionStorage.setItem("zentro-splash-played", "1");
-      } catch {
-        // ignore storage errors
-      }
-    }
-  }, []);
-
+  // or in-app navigation. An inline script in <head> checks sessionStorage before
+  // the first paint:
+  // - On fresh open: splash is visible immediately from frame 0 (no home page flash)
+  // - On reload: .zentro-splash-seen hides the splash instantly before paint
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem("zentro-theme");var d=t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme:dark)").matches);if(d)document.documentElement.classList.add("dark")}catch(e){}})();`,
+            __html: `(function(){
+              try {
+                var t = localStorage.getItem("zentro-theme");
+                var d = t === "dark" || (t !== "light" && matchMedia("(prefers-color-scheme:dark)").matches);
+                if (d) document.documentElement.classList.add("dark");
+              } catch(e) {}
+              try {
+                if (sessionStorage.getItem("zentro-splash-played") === "1") {
+                  document.documentElement.classList.add("zentro-splash-seen");
+                }
+              } catch(e) {}
+            })();`,
+          }}
+        />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: `
+              html.zentro-splash-seen #zentro-splash-root {
+                display: none !important;
+              }
+            `,
           }}
         />
       </head>
-      <body>
-        {showSplash && (
-          <ZentroSplashScreen onFinish={() => setShowSplash(false)} autoUnmount={false} />
-        )}
+      <body suppressHydrationWarning>
+        <ZentroSplashScreen />
         {children}
         <Scripts />
       </body>
