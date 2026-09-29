@@ -147,13 +147,27 @@ class ClaimSerializer(serializers.ModelSerializer):
     tab = serializers.SerializerMethodField()
     offer = serializers.SerializerMethodField()
     uses_remaining = serializers.IntegerField(read_only=True)
+    needs_bill_amount = serializers.SerializerMethodField()
+    bill_label = serializers.SerializerMethodField()
+    store_pin_enabled = serializers.SerializerMethodField()
 
     class Meta:
         model = VoucherClaim
         fields = [
             "id", "code", "qr_payload", "status", "tab", "uses_allowed", "uses_count", "uses_remaining",
-            "claimed_at", "expires_at", "offer",
+            "claimed_at", "expires_at", "offer", "needs_bill_amount", "bill_label", "store_pin_enabled",
         ]
+
+    def get_needs_bill_amount(self, obj):
+        from .engine import needs_bill_amount
+        return needs_bill_amount(obj.campaign)
+
+    def get_bill_label(self, obj):
+        from .engine import bill_label
+        return bill_label(obj.campaign)
+
+    def get_store_pin_enabled(self, obj):
+        return hasattr(obj.campaign.merchant, "offer_redemption_pin")
 
     def get_qr_payload(self, obj):
         return f"{QR_PREFIX}{obj.qr_token}"

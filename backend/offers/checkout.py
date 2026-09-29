@@ -5,24 +5,16 @@ so the customer sees exactly what the order will get.
 
 from __future__ import annotations
 
-from .engine import CHANNEL_ONLINE, OfferError, evaluate_lines, load_claim, reward_options, validate_reward_choice
+from .engine import (
+    CHANNEL_ONLINE,
+    OfferError,
+    evaluate_lines,
+    load_claim,
+    reason_message,
+    reward_options,
+    validate_reward_choice,
+)
 from .models import VoucherClaim
-
-
-def reason_message(reason: dict | None, merchant) -> str:
-    reason = reason or {}
-    code = reason.get("code")
-    symbol = merchant.currency_symbol or merchant.currency_code
-    if code == "MINIMUM_ORDER_NOT_MET":
-        return f"Add {symbol} {reason.get('shortfall')} more to use this offer."
-    if code == "REWARD_ITEM_REQUIRED":
-        return "Choose your free item to use this offer."
-    if code == "QUALIFYING_ITEMS_REQUIRED":
-        missing = max(int(reason.get("required", 1)) - int(reason.get("current", 0)), 1)
-        return f"Add {missing} more qualifying item{'s' if missing > 1 else ''} to use this offer."
-    if code == "NO_ELIGIBLE_ITEMS":
-        return "Nothing in your order qualifies for this offer."
-    return reason.get("message") or "This offer can't be used on this order."
 
 
 def apply_offer_to_basket(*, claim_id, customer, merchant, priced, reward_choice, fulfillment_type):

@@ -559,6 +559,37 @@ is a real line flagged `OrderItem.is_promotion_reward`.
 - **Redemption history survives deletions:** redemptions keep their money and a rules
   snapshot and use `SET_NULL`, because customers can hard-delete old orders and accounts.
 
+**Counter redemption without a POS**
+
+Most stores never open the Zentro POS, so a customer showing a QR code needs another way
+to be confirmed. There are two, and both go through `engine.redeem_in_store`, the same
+locked and idempotent path the POS uses. `VoucherRedemption.confirmed_via` records which
+one was used: `order`, `pos`, `dashboard` or `pin`.
+
+1. **Dashboard: Merchant → Redeem Offer (`/merchant/redeem`).** Any logged-in merchant
+   device can scan the QR code with its camera or type the code. The server shows the
+   offer and whether it is valid for this store, and staff confirm it. Endpoints:
+   `POST merchant/redeem/lookup/` and `POST merchant/redeem/confirm/`.
+2. **Store PIN fallback.** For when nobody can scan. The merchant sets a 4–6 digit PIN
+   (Offers → Redeem Offer → Store PIN). It is hashed, and trivial PINs are refused. Staff
+   type it on the customer's own phone, under "Store can't scan? Confirm with store PIN"
+   in the voucher sheet, which calls `POST mine/<id>/redeem-with-pin/`.
+   - **Customer lock:** 5 wrong PINs lock that customer for 15 minutes.
+   - **Store lock:** 20 wrong PINs in an hour pause PIN confirmation for the whole store and
+     notify the merchant. Changing the PIN lifts the pause.
+   - **Notification:** every PIN redemption notifies the merchant, so a leaked PIN is
+     noticed.
+   - **No PIN set:** the customer gets `PIN_NOT_ENABLED`.
+   - **Weaker than scanning:** the PIN confirms "a staff member was here", not which
+     device. That is why it is optional, rate-limited and audited.
+
+**Bill amount.** Percent and amount offers, and any offer with a minimum spend, need the
+bill amount at the counter. `engine.needs_bill_amount` decides this, and `bill_label`
+reads "Amount spent on the offer's items" when the offer targets specific items.
+`engine.evaluate_bill` prices it through the pricing engine as a single line, so caps and
+minimums behave exactly as they do online. The redemption stores the bill, discount and
+net total. The POS "Confirm use (no order)" button asks for the bill the same way.
+
 **Tests:** `offers/test_claims_and_campaigns.py`, `offers/test_checkout_and_lifecycle.py`,
-`offers/test_pos_and_security.py`. The two truly parallel tests (`ParallelTests`) run only
+`offers/test_pos_and_security.py`, `offers/test_counter_redemption.py`. The two truly parallel tests (`ParallelTests`) run only
 on Postgres; the same race outcomes are also checked deterministically on any database.

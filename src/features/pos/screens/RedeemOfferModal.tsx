@@ -37,12 +37,15 @@ export default function RedeemOfferModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<PosOfferLookup | null>(null);
+  const [bill, setBill] = useState("");
+  const attemptKey = useRef(safeUuid());
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
     setCode("");
     setResult(null);
+    setBill("");
     setError(null);
     setScanning(false);
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -71,6 +74,7 @@ export default function RedeemOfferModal({
       );
       setCode(value);
       setResult(lookup);
+      attemptKey.current = safeUuid();
     } catch (e: unknown) {
       setResult(null);
       setError((e as Error).message || "Couldn't check that code.");
@@ -103,15 +107,25 @@ export default function RedeemOfferModal({
 
   async function confirmInStore() {
     if (!result || !currentWorker) return;
+    if (result.needs_bill_amount && !(Number(bill) > 0)) {
+      setError(`Enter the ${result.bill_label.toLowerCase()}.`);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      await posOffersApi.redeemInStore({
+      const done = await posOffersApi.redeemInStore({
         code,
         worker_id: currentWorker.id,
-        idempotency_key: safeUuid(),
+        // Stable per lookup so a double tap or retry can't redeem twice.
+        idempotency_key: attemptKey.current,
+        ...(result.needs_bill_amount ? { bill_amount: bill } : {}),
       });
-      toast.success("Offer confirmed.");
+      toast.success(
+        done.discount_amount
+          ? `Offer confirmed: give ${formatCurrency(done.discount_amount, currencySymbol)} off.`
+          : "Offer confirmed.",
+      );
       onClose();
     } catch (e: unknown) {
       setError((e as Error).message || "Couldn't confirm the offer.");
@@ -239,6 +253,23 @@ export default function RedeemOfferModal({
                   ))}
                 </div>
               </div>
+            )}
+
+            {cart.length === 0 && eligible && result.needs_bill_amount && (
+              <label className="block">
+                <span className="mb-1 block text-xs text-muted-foreground">
+                  {result.bill_label} ({currencySymbol})
+                </span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="0.01"
+                  value={bill}
+                  onChange={(e) => setBill(e.target.value)}
+                  className="h-11 w-full rounded-xl border border-border bg-muted/50 px-3 text-sm focus:border-ink focus:outline-none"
+                />
+              </label>
             )}
 
             <div className="flex gap-2 pt-1">

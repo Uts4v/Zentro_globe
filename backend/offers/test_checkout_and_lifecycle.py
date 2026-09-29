@@ -5,8 +5,6 @@ void, the one-discount slot, and each refusal reason.
 Run with: python manage.py test offers
 """
 
-from decimal import Decimal
-
 from django.test import TestCase
 from django.utils import timezone
 

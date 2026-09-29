@@ -15,6 +15,11 @@ urlpatterns = [
     path("mine/", views.my_offers, name="my-offers"),
     path("mine/<int:claim_id>/", views.my_offer_detail, name="my-offer-detail"),
     path("mine/<int:claim_id>/preview/", views.my_offer_preview, name="my-offer-preview"),
+    path("mine/<int:claim_id>/redeem-with-pin/", views.my_offer_redeem_with_pin, name="my-offer-redeem-with-pin"),
+    # Merchant: counter confirmation (no POS needed) and store PIN
+    path("merchant/redeem/lookup/", views.merchant_redeem_lookup, name="merchant-redeem-lookup"),
+    path("merchant/redeem/confirm/", views.merchant_redeem_confirm, name="merchant-redeem-confirm"),
+    path("merchant/redemption-pin/", views.merchant_redemption_pin, name="merchant-redemption-pin"),
     # Merchant campaigns
     path("merchant/campaigns/", views.merchant_campaigns, name="merchant-campaigns"),
     path("merchant/campaigns/<int:pk>/", views.merchant_campaign_detail, name="merchant-campaign-detail"),

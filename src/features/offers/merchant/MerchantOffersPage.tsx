@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Copy, Link2, Pencil, Plus, TicketPercent } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { BarChart3, Copy, Link2, Pencil, Plus, ScanLine, TicketPercent } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
@@ -100,9 +101,17 @@ export function MerchantOffersPage() {
             counter.
           </p>
         </div>
-        <Button onClick={() => setEditing("new")} className="h-11 rounded-2xl px-5">
-          <Plus className="h-4 w-4" /> Create offer
-        </Button>
+        <div className="flex gap-2">
+          <Link
+            to="/merchant/redeem"
+            className="inline-flex h-11 items-center gap-2 rounded-2xl bg-mist px-5 text-sm font-semibold text-foreground"
+          >
+            <ScanLine className="h-4 w-4" /> Redeem a code
+          </Link>
+          <Button onClick={() => setEditing("new")} className="h-11 rounded-2xl px-5">
+            <Plus className="h-4 w-4" /> Create offer
+          </Button>
+        </div>
       </div>
 
       {campaigns.isLoading && <p className="text-sm text-muted-foreground">Loading offers…</p>}

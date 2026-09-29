@@ -40,6 +40,11 @@ export interface OfferClaim {
   id: number;
   code: string;
   qr_payload: string;
+  /** Money offers (and minimum-spend offers) need the bill amount at the counter. */
+  needs_bill_amount: boolean;
+  bill_label: string;
+  /** The store accepts confirmation with its counter PIN on the customer's phone. */
+  store_pin_enabled: boolean;
   status: "available" | "reserved" | "redeemed" | "expired" | "revoked";
   tab: "available" | "used" | "expired";
   uses_allowed: number;
@@ -204,6 +209,8 @@ export interface CampaignStats {
 export interface PosOfferLookup {
   claim_id: number;
   code: string;
+  needs_bill_amount: boolean;
+  bill_label: string;
   status: string;
   customer_first_name: string;
   uses_remaining: number;
@@ -392,13 +399,86 @@ export const posOffersApi = {
       body: JSON.stringify(input),
     }),
 
-  redeemInStore: (input: { code: string; worker_id: string; idempotency_key: string }) =>
-    djangoFetch<{ redemption_id: number }>(apiUrl("/offers/pos/redeem-in-store/"), {
+  redeemInStore: (input: {
+    code: string;
+    worker_id: string;
+    idempotency_key: string;
+    bill_amount?: string;
+  }) =>
+    djangoFetch<{ redemption_id: number; discount_amount: string | null }>(
+      apiUrl("/offers/pos/redeem-in-store/"),
+      { method: "POST", headers: authHeaders(true), body: JSON.stringify(input) },
+    ),
+};
+
+export interface CounterRedemption {
+  redemption_id: number;
+  discount_amount: string | null;
+  bill_amount: string | null;
+  claim: PosOfferLookup;
+}
+
+// ── Merchant: confirm at the counter without a POS ──────────────────────────
+
+export const counterRedeemApi = {
+  lookup: (code: string) =>
+    djangoFetch<PosOfferLookup>(apiUrl("/offers/merchant/redeem/lookup/"), {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify({ code }),
+    }),
+
+  confirm: (input: { code: string; idempotency_key: string; bill_amount?: string }) =>
+    djangoFetch<CounterRedemption>(apiUrl("/offers/merchant/redeem/confirm/"), {
       method: "POST",
       headers: authHeaders(true),
       body: JSON.stringify(input),
     }),
+
+  pinStatus: () =>
+    djangoFetch<{ enabled: boolean; updated_at: string | null }>(
+      apiUrl("/offers/merchant/redemption-pin/"),
+      {
+        headers: authHeaders(),
+      },
+    ),
+
+  setPin: (pin: string) =>
+    djangoFetch<{ enabled: boolean; updated_at: string | null }>(
+      apiUrl("/offers/merchant/redemption-pin/"),
+      {
+        method: "PUT",
+        headers: authHeaders(true),
+        body: JSON.stringify({ pin }),
+      },
+    ),
+
+  clearPin: () =>
+    djangoFetch<{ enabled: boolean; updated_at: string | null }>(
+      apiUrl("/offers/merchant/redemption-pin/"),
+      {
+        method: "DELETE",
+        headers: authHeaders(),
+      },
+    ),
 };
+
+/** Customer side: staff type the store PIN on the customer's phone. */
+export function redeemWithStorePin(
+  claimId: number,
+  input: { pin: string; idempotency_key: string; bill_amount?: string },
+) {
+  return djangoFetch<{
+    redemption_id: number;
+    confirmed_at: string;
+    discount_amount: string | null;
+    claim: OfferClaim;
+  }>(apiUrl(`/offers/mine/${claimId}/redeem-with-pin/`), {
+    method: "POST",
+    headers: authHeaders(true),
+    body: JSON.stringify(input),
+  });
+}
 
 /** A customer-facing sentence for why an offer can't be used right now. */
 export function offerReasonText(

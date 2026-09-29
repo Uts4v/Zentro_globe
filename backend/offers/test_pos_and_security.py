@@ -98,7 +98,7 @@ class PosOfferTests(OffersFixture, TestCase):
         campaign = self.make_campaign(channels="in_store")
         claim = self.claim(campaign)
         key = str(uuid.uuid4())
-        body = {"code": claim["code"], "worker_id": str(self.worker.id), "idempotency_key": key}
+        body = {"code": claim["code"], "worker_id": str(self.worker.id), "idempotency_key": key, "bill_amount": "500"}
         first = self.as_merchant.post("/api/offers/pos/redeem-in-store/", body, format="json")
         second = self.as_merchant.post("/api/offers/pos/redeem-in-store/", body, format="json")
         self.assertEqual((first.status_code, second.status_code), (201, 200), (first.data, second.data))

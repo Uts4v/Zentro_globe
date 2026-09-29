@@ -67,7 +67,7 @@ def _record_failure(request, merchant) -> None:
         )
 
 
-def _resolve(request, merchant, raw):
+def resolve_or_error(request, merchant, raw):
     """(claim, error_response)."""
     if _locked_out(request, merchant):
         return None, Response(
@@ -89,12 +89,16 @@ def _worker(merchant, worker_id):
         return None
 
 
-def _claim_card(claim) -> dict:
+def claim_card(claim) -> dict:
     campaign = claim.campaign
     first_name = (claim.customer.full_name or "").split(" ")[0] if claim.customer_id else ""
+    from .engine import bill_label, needs_bill_amount
+
     return {
         "claim_id": claim.id,
         "code": claim.display_code,
+        "needs_bill_amount": needs_bill_amount(campaign),
+        "bill_label": bill_label(campaign),
         "status": claim.customer_status(),
         "customer_first_name": first_name,
         "uses_remaining": claim.uses_remaining,
@@ -132,7 +136,7 @@ def pos_offer_lookup(request):
     )
 
     merchant = request.user.merchant_profile
-    claim, error = _resolve(request, merchant, request.data.get("code"))
+    claim, error = resolve_or_error(request, merchant, request.data.get("code"))
     if error:
         return error
     claim = type(claim).objects.select_related("campaign", "campaign__benefit", "customer", "merchant").get(pk=claim.pk)
@@ -140,7 +144,7 @@ def pos_offer_lookup(request):
     prefetch_related_objects([claim.campaign], "targets__menu_item", "targets__category",
                              "targets__option__group__menu_item", "conditions")
 
-    data = _claim_card(claim)
+    data = claim_card(claim)
     order = None
     lines = None
     charges = ()
@@ -197,7 +201,7 @@ def pos_offer_apply(request):
         return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
     if order.pricing_locked_at or order.status == Order.STATUS_CANCELLED:
         return Response({"error": "This order is already settled."}, status=status.HTTP_400_BAD_REQUEST)
-    claim, error = _resolve(request, merchant, request.data.get("code"))
+    claim, error = resolve_or_error(request, merchant, request.data.get("code"))
     if error:
         return error
 
@@ -287,17 +291,27 @@ def pos_offer_redeem_in_store(request):
     worker = _worker(merchant, request.data.get("worker_id"))
     if worker is None:
         return Response({"error": "Worker not found."}, status=status.HTTP_404_NOT_FOUND)
-    claim, error = _resolve(request, merchant, request.data.get("code"))
+    from .views import parse_bill_amount
+
+    amount, error = parse_bill_amount(request.data.get("bill_amount"))
+    if error:
+        return error
+    claim, error = resolve_or_error(request, merchant, request.data.get("code"))
     if error:
         return error
     try:
         redemption, created = redeem_in_store(
             claim.pk, merchant, worker=worker, user=request.user,
             idempotency_key=str(request.data.get("idempotency_key") or ""),
+            bill_amount=amount,
         )
     except OfferError as exc:
         return Response(exc.as_response_data(), status=exc.status)
     return Response(
-        {"redemption_id": redemption.id, "claim": _claim_card(redemption.claim) if redemption.claim_id else None},
+        {
+            "redemption_id": redemption.id,
+            "discount_amount": str(redemption.discount_amount) if redemption.discount_amount is not None else None,
+            "claim": claim_card(redemption.claim) if redemption.claim_id else None,
+        },
         status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
     )

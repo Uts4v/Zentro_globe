@@ -302,7 +302,55 @@ def offer_claim(request, pk):
 def _claims_qs():
     return VoucherClaim.objects.select_related(
         "campaign", "campaign__benefit", "campaign__merchant", "campaign__merchant__primary_category",
+        "campaign__merchant__offer_redemption_pin",
     ).prefetch_related(*(f"campaign__{p}" for p in CAMPAIGN_PREFETCH))
+
+
+def parse_bill_amount(raw):
+    """``(Decimal|None, error_response|None)`` for an optional bill amount."""
+    if raw in (None, ""):
+        return None, None
+    try:
+        amount = Decimal(str(raw))
+    except (ArithmeticError, ValueError):
+        amount = None
+    if amount is None or not amount.is_finite() or amount <= 0 or amount > Decimal("99999999"):
+        return None, Response({"error": "Enter a valid bill amount.", "code": "INVALID_BILL_AMOUNT"},
+                              status=status.HTTP_400_BAD_REQUEST)
+    return amount, None
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([OfferClaimThrottle])
+def my_offer_redeem_with_pin(request, claim_id):
+    """
+    POST /api/offers/mine/<id>/redeem-with-pin/ {pin, idempotency_key, bill_amount?}
+    Staff type the store PIN on the customer's phone to confirm the offer.
+    """
+    from .pin import redeem_with_pin
+
+    customer = _customer(request)
+    amount, error = parse_bill_amount(request.data.get("bill_amount"))
+    if error:
+        return error
+    try:
+        redemption, created = redeem_with_pin(
+            claim_id, customer, str(request.data.get("pin") or ""),
+            idempotency_key=str(request.data.get("idempotency_key") or ""), bill_amount=amount,
+        )
+    except OfferError as exc:
+        return _error(exc)
+    claim = _claims_qs().get(pk=redemption.claim_id)
+    return Response(
+        {
+            "redemption_id": redemption.id,
+            "confirmed_at": redemption.created_at,
+            "discount_amount": str(redemption.discount_amount) if redemption.discount_amount is not None else None,
+            "claim": ClaimSerializer(claim).data,
+        },
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+    )
 
 
 @api_view(["GET"])
@@ -599,3 +647,90 @@ def merchant_campaign_stats(request, pk):
         "returned_within_30d_rate": rate(measured_30.filter(returned_within_30d=True).count(), measured_30.count()),
         "series": series,
     })
+
+
+# ── Merchant: confirm offers at the counter (no POS needed) ──────────────────
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([_scoped_throttle("offer_lookup")])
+def merchant_redeem_lookup(request):
+    """POST /api/offers/merchant/redeem/lookup/ {code} — is this customer's code valid here?"""
+    from .engine import CHANNEL_IN_STORE, check_usable
+    from .pos_views import claim_card, resolve_or_error
+
+    merchant = _merchant(request)
+    if merchant is None:
+        return Response({"error": "Merchant account required."}, status=status.HTTP_403_FORBIDDEN)
+    claim, error = resolve_or_error(request, merchant, request.data.get("code"))
+    if error:
+        return error
+    data = claim_card(claim)
+    try:
+        check_usable(claim, merchant=merchant, channel=CHANNEL_IN_STORE)
+        data["evaluation"] = {"eligible": True, "reason": None}
+    except OfferError as exc:
+        data["evaluation"] = {"eligible": False, "reason": {"code": exc.code, "message": str(exc)}}
+    return Response(data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+@throttle_classes([_scoped_throttle("offer_lookup")])
+def merchant_redeem_confirm(request):
+    """POST /api/offers/merchant/redeem/confirm/ {code, idempotency_key, bill_amount?}"""
+    from .engine import redeem_in_store
+    from .pos_views import claim_card, resolve_or_error
+
+    merchant = _merchant(request)
+    if merchant is None:
+        return Response({"error": "Merchant account required."}, status=status.HTTP_403_FORBIDDEN)
+    amount, error = parse_bill_amount(request.data.get("bill_amount"))
+    if error:
+        return error
+    claim, error = resolve_or_error(request, merchant, request.data.get("code"))
+    if error:
+        return error
+    try:
+        redemption, created = redeem_in_store(
+            claim.pk, merchant, user=request.user,
+            idempotency_key=str(request.data.get("idempotency_key") or ""),
+            bill_amount=amount, confirmed_via=VoucherRedemption.CONFIRMED_DASHBOARD,
+        )
+    except OfferError as exc:
+        return _error(exc)
+    claim.refresh_from_db()
+    return Response(
+        {
+            "redemption_id": redemption.id,
+            "discount_amount": str(redemption.discount_amount) if redemption.discount_amount is not None else None,
+            "bill_amount": str(redemption.order_subtotal) if redemption.order_subtotal is not None else None,
+            "claim": claim_card(claim),
+        },
+        status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+    )
+
+
+@api_view(["GET", "PUT", "DELETE"])
+@permission_classes([IsAuthenticated])
+def merchant_redemption_pin(request):
+    """
+    GET    /api/offers/merchant/redemption-pin/  → {enabled, updated_at}
+    PUT    {pin}                                 → set / change the store PIN
+    DELETE                                       → turn PIN confirmation off
+    """
+    from .models import MerchantRedemptionPin
+    from .pin import clear_pin, set_pin
+
+    merchant = _merchant(request)
+    if merchant is None:
+        return Response({"error": "Merchant account required."}, status=status.HTTP_403_FORBIDDEN)
+    if request.method == "PUT":
+        try:
+            set_pin(merchant, request.data.get("pin"))
+        except OfferError as exc:
+            return _error(exc)
+    elif request.method == "DELETE":
+        clear_pin(merchant)
+    row = MerchantRedemptionPin.objects.filter(merchant=merchant).first()
+    return Response({"enabled": row is not None, "updated_at": row.updated_at if row else None})

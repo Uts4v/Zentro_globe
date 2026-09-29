@@ -48,6 +48,7 @@ import { Route as MerchantStoreRouteImport } from './routes/merchant.store'
 import { Route as MerchantSpecialsRouteImport } from './routes/merchant.specials'
 import { Route as MerchantSettingsRouteImport } from './routes/merchant.settings'
 import { Route as MerchantReportsRouteImport } from './routes/merchant.reports'
+import { Route as MerchantRedeemRouteImport } from './routes/merchant.redeem'
 import { Route as MerchantPreparationRouteImport } from './routes/merchant.preparation'
 import { Route as MerchantPdfMenuRouteImport } from './routes/merchant.pdf-menu'
 import { Route as MerchantOrdersRouteImport } from './routes/merchant.orders'
@@ -276,6 +277,11 @@ const MerchantReportsRoute = MerchantReportsRouteImport.update({
   path: '/reports',
   getParentRoute: () => MerchantRoute,
 } as any)
+const MerchantRedeemRoute = MerchantRedeemRouteImport.update({
+  id: '/redeem',
+  path: '/redeem',
+  getParentRoute: () => MerchantRoute,
+} as any)
 const MerchantPreparationRoute = MerchantPreparationRouteImport.update({
   id: '/preparation',
   path: '/preparation',
@@ -476,6 +482,7 @@ export interface FileRoutesByFullPath {
   '/merchant/orders': typeof MerchantOrdersRoute
   '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
   '/merchant/preparation': typeof MerchantPreparationRoute
+  '/merchant/redeem': typeof MerchantRedeemRoute
   '/merchant/reports': typeof MerchantReportsRoute
   '/merchant/settings': typeof MerchantSettingsRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
@@ -547,6 +554,7 @@ export interface FileRoutesByTo {
   '/merchant/orders': typeof MerchantOrdersRoute
   '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
   '/merchant/preparation': typeof MerchantPreparationRoute
+  '/merchant/redeem': typeof MerchantRedeemRoute
   '/merchant/reports': typeof MerchantReportsRoute
   '/merchant/settings': typeof MerchantSettingsRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
@@ -621,6 +629,7 @@ export interface FileRoutesById {
   '/merchant/orders': typeof MerchantOrdersRoute
   '/merchant/pdf-menu': typeof MerchantPdfMenuRoute
   '/merchant/preparation': typeof MerchantPreparationRoute
+  '/merchant/redeem': typeof MerchantRedeemRoute
   '/merchant/reports': typeof MerchantReportsRoute
   '/merchant/settings': typeof MerchantSettingsRoute
   '/merchant/specials': typeof MerchantSpecialsRoute
@@ -696,6 +705,7 @@ export interface FileRouteTypes {
     | '/merchant/orders'
     | '/merchant/pdf-menu'
     | '/merchant/preparation'
+    | '/merchant/redeem'
     | '/merchant/reports'
     | '/merchant/settings'
     | '/merchant/specials'
@@ -767,6 +777,7 @@ export interface FileRouteTypes {
     | '/merchant/orders'
     | '/merchant/pdf-menu'
     | '/merchant/preparation'
+    | '/merchant/redeem'
     | '/merchant/reports'
     | '/merchant/settings'
     | '/merchant/specials'
@@ -840,6 +851,7 @@ export interface FileRouteTypes {
     | '/merchant/orders'
     | '/merchant/pdf-menu'
     | '/merchant/preparation'
+    | '/merchant/redeem'
     | '/merchant/reports'
     | '/merchant/settings'
     | '/merchant/specials'
@@ -1183,6 +1195,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MerchantReportsRouteImport
       parentRoute: typeof MerchantRoute
     }
+    '/merchant/redeem': {
+      id: '/merchant/redeem'
+      path: '/redeem'
+      fullPath: '/merchant/redeem'
+      preLoaderRoute: typeof MerchantRedeemRouteImport
+      parentRoute: typeof MerchantRoute
+    }
     '/merchant/preparation': {
       id: '/merchant/preparation'
       path: '/preparation'
@@ -1475,6 +1494,7 @@ interface MerchantRouteChildren {
   MerchantOrdersRoute: typeof MerchantOrdersRoute
   MerchantPdfMenuRoute: typeof MerchantPdfMenuRoute
   MerchantPreparationRoute: typeof MerchantPreparationRoute
+  MerchantRedeemRoute: typeof MerchantRedeemRoute
   MerchantReportsRoute: typeof MerchantReportsRoute
   MerchantSettingsRoute: typeof MerchantSettingsRoute
   MerchantSpecialsRoute: typeof MerchantSpecialsRoute
@@ -1495,6 +1515,7 @@ const MerchantRouteChildren: MerchantRouteChildren = {
   MerchantOrdersRoute: MerchantOrdersRoute,
   MerchantPdfMenuRoute: MerchantPdfMenuRoute,
   MerchantPreparationRoute: MerchantPreparationRoute,
+  MerchantRedeemRoute: MerchantRedeemRoute,
   MerchantReportsRoute: MerchantReportsRoute,
   MerchantSettingsRoute: MerchantSettingsRoute,
   MerchantSpecialsRoute: MerchantSpecialsRoute,

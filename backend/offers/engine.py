@@ -28,6 +28,7 @@ from django.utils import timezone
 
 from orders.pricing import (
     ADJ_PROMOTION,
+    PricingContext,
     CALC_FIXED,
     CALC_LINES,
     AdjustmentSpec,
@@ -662,6 +663,7 @@ def redeem_order_claims(order) -> list:
                 order_total=order.total_amount,
                 rules_snapshot=_snapshot(claim),
                 redeemed_by_worker=order.processed_by_worker,
+                confirmed_via=VoucherRedemption.CONFIRMED_ORDER,
                 idempotency_key=f"order:{order.uuid}",
                 is_new_customer=_is_new_customer(claim.customer, order.merchant, order),
             )
@@ -727,7 +729,90 @@ def finalize_order(order) -> None:
 
 # ── Counter confirmation without a Zentro order ──────────────────────────────
 
-def redeem_in_store(claim_id: int, merchant, *, worker=None, user=None, idempotency_key: str):
+def reason_message(reason: dict | None, merchant) -> str:
+    """A customer/staff-facing sentence for why an offer does not apply."""
+    reason = reason or {}
+    code = reason.get("code")
+    symbol = merchant.currency_symbol or merchant.currency_code
+    if code == "MINIMUM_ORDER_NOT_MET":
+        return f"Add {symbol} {reason.get('shortfall')} more to use this offer."
+    if code == "REWARD_ITEM_REQUIRED":
+        return "Choose your free item to use this offer."
+    if code == "QUALIFYING_ITEMS_REQUIRED":
+        missing = max(int(reason.get("required", 1)) - int(reason.get("current", 0)), 1)
+        return f"Add {missing} more qualifying item{'s' if missing > 1 else ''} to use this offer."
+    if code == "NO_ELIGIBLE_ITEMS":
+        return "Nothing in this order qualifies for this offer."
+    return reason.get("message") or "This offer can't be used on this order."
+
+
+def needs_bill_amount(campaign) -> bool:
+    """
+    At the counter there is no Zentro order to price, so money-based offers
+    (and any offer with a minimum spend) need the bill amount to be checked.
+    """
+    return (
+        campaign.benefit.kind in (PromotionBenefit.KIND_PERCENT, PromotionBenefit.KIND_AMOUNT)
+        or campaign.min_order_amount is not None
+    )
+
+
+def bill_label(campaign) -> str:
+    benefit = campaign.benefit
+    if benefit.kind in (PromotionBenefit.KIND_PERCENT, PromotionBenefit.KIND_AMOUNT) and \
+            benefit.scope == PromotionBenefit.SCOPE_TARGETS:
+        return "Amount spent on the offer's items"
+    return "Bill amount"
+
+
+def evaluate_bill(claim, bill_amount):
+    """
+    ``(discount_or_None, reason_or_None)`` for a counter bill. Money offers are
+    priced by the pricing engine (min spend, max discount, rounding); item
+    offers only have their minimum spend checked (staff hand over the item).
+    """
+    from orders.pricing import LineInput
+
+    campaign = claim.campaign
+    benefit = campaign.benefit
+    if bill_amount is None:
+        return None, None
+    if bill_amount <= ZERO:
+        raise OfferError("Enter a bill amount above zero.", code="INVALID_BILL_AMOUNT")
+    quantum = currency_quantum(campaign.currency_code)
+    amount = quantize(bill_amount, quantum)
+    min_order = to_decimal(campaign.min_order_amount) if campaign.min_order_amount is not None else None
+
+    if benefit.kind in (PromotionBenefit.KIND_PERCENT, PromotionBenefit.KIND_AMOUNT):
+        spec = AdjustmentSpec(
+            kind=ADJ_PROMOTION,
+            calc_type="percentage" if benefit.kind == PromotionBenefit.KIND_PERCENT else CALC_FIXED,
+            value=to_decimal(benefit.value),
+            min_subtotal=min_order,
+            max_amount=to_decimal(campaign.max_discount_amount) if campaign.max_discount_amount is not None else None,
+            eligible_line_keys=frozenset({"bill"}),
+        )
+        result = calculate(PricingContext(
+            currency_code=campaign.currency_code, policy_code="legacy", tax_enabled=False,
+            tax_components=(), lines=(LineInput("bill", "Bill", 1, amount, amount),), adjustments=(spec,),
+        ))
+        discount = result.discounts[0]
+        return (discount.amount, None) if discount.eligible else (None, discount.reason)
+
+    if min_order is not None and amount < min_order:
+        return None, {
+            "code": "MINIMUM_ORDER_NOT_MET",
+            "required": str(quantize(min_order, quantum)),
+            "current": str(amount),
+            "shortfall": str(quantize(min_order - amount, quantum)),
+        }
+    return None, None
+
+
+def redeem_in_store(
+    claim_id: int, merchant, *, worker=None, user=None, idempotency_key: str,
+    bill_amount=None, confirmed_via: str = VoucherRedemption.CONFIRMED_POS,
+):
     if not idempotency_key or len(idempotency_key) > 64:
         raise OfferError("A request id is required.", code="IDEMPOTENCY_KEY_REQUIRED")
     existing = VoucherRedemption.objects.filter(idempotency_key=idempotency_key).first()
@@ -740,10 +825,23 @@ def redeem_in_store(claim_id: int, merchant, *, worker=None, user=None, idempote
         with transaction.atomic():
             claim = _lock_campaign_then_claim(claim_id)
             check_usable(claim, merchant=merchant, channel=CHANNEL_IN_STORE)
+            if bill_amount is None and needs_bill_amount(claim.campaign):
+                raise OfferError(
+                    "Enter the bill amount so the offer can be checked.", code="BILL_AMOUNT_REQUIRED",
+                )
+            discount, reason = evaluate_bill(claim, bill_amount)
+            if reason:
+                raise OfferError(reason_message(reason, merchant), code=reason.get("code", "NOT_ELIGIBLE"),
+                                 details={"reason": reason})
+            bill = quantize(bill_amount, currency_quantum(claim.campaign.currency_code)) if bill_amount else None
             redemption = VoucherRedemption.objects.create(
                 claim=claim, campaign=claim.campaign, merchant=merchant, customer=claim.customer,
                 channel=VoucherRedemption.CHANNEL_IN_STORE,
+                confirmed_via=confirmed_via,
                 currency_code=merchant.currency_code,
+                order_subtotal=bill,
+                discount_amount=discount,
+                order_total=(bill - discount) if bill is not None and discount is not None else bill,
                 rules_snapshot=_snapshot(claim),
                 redeemed_by_worker=worker, redeemed_by_user=user,
                 idempotency_key=idempotency_key,

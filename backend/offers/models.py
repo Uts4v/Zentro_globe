@@ -343,6 +343,18 @@ class VoucherRedemption(models.Model):
     order_total = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     rules_snapshot = models.JSONField(default=dict)
 
+    CONFIRMED_ORDER = "order"          # applied to a Zentro order, used when it settled
+    CONFIRMED_POS = "pos"              # staff confirmed at the POS without an order
+    CONFIRMED_DASHBOARD = "dashboard"  # staff confirmed from the merchant dashboard
+    CONFIRMED_PIN = "pin"              # staff typed the store PIN on the customer's phone
+    CONFIRMED_CHOICES = [
+        (CONFIRMED_ORDER, "Order"),
+        (CONFIRMED_POS, "POS"),
+        (CONFIRMED_DASHBOARD, "Merchant dashboard"),
+        (CONFIRMED_PIN, "Store PIN"),
+    ]
+    confirmed_via = models.CharField(max_length=10, choices=CONFIRMED_CHOICES, default=CONFIRMED_ORDER)
+
     redeemed_by_worker = models.ForeignKey(
         "pos.ShiftWorker", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
     )
@@ -384,3 +396,19 @@ class PromotionDailyStats(models.Model):
     class Meta:
         db_table = "promotion_daily_stats"
         constraints = [models.UniqueConstraint(fields=["campaign", "date"], name="one_stats_row_per_day")]
+
+
+class MerchantRedemptionPin(models.Model):
+    """
+    Optional counter PIN: staff type it on the customer's phone to confirm an
+    offer when the store has no device to scan with. Only a hash is stored.
+    """
+
+    merchant = models.OneToOneField(
+        "merchants.MerchantProfile", on_delete=models.CASCADE, related_name="offer_redemption_pin",
+    )
+    pin_hash = models.CharField(max_length=128)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "merchant_redemption_pins"

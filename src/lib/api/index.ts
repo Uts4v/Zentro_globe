@@ -18,5 +18,12 @@ export { transferApi } from "./transfers";
 export { merchantCardDesignApi, membershipCardApi, publicQrApi } from "./cards";
 export { leaderboardApi } from "./leaderboard";
 export * from "./inventory";
-export { offersApi, merchantOffersApi, posOffersApi, offerReasonText } from "./offers";
+export {
+  offersApi,
+  merchantOffersApi,
+  posOffersApi,
+  counterRedeemApi,
+  redeemWithStorePin,
+  offerReasonText,
+} from "./offers";
 export type * from "./offers";
