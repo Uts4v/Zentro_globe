@@ -11,6 +11,7 @@ Verifies:
 - throttling is active
 """
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import TestCase
@@ -94,8 +95,13 @@ class LeaderboardSecurityTests(TestCase):
         client = APIClient()
         client.force_authenticate(user=self.customer_user)
         url = f"/api/loyalty/leaderboard/?merchant={self.merchant.id}"
-        # 300/hour budget — exceed it and expect a 429.
-        for _ in range(301):
+        # Read the budget from settings instead of hardcoding it, so raising
+        # REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["leaderboard"] cannot leave
+        # this test quietly passing (or failing) against a stale number.
+        rate = settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"]["leaderboard"]
+        allowed = int(rate.split("/")[0])
+        self.assertGreater(allowed, 0, f"unexpected leaderboard rate: {rate!r}")
+        for _ in range(allowed):
             client.get(url)
         resp = client.get(url)
         self.assertEqual(resp.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
