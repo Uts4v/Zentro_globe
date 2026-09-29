@@ -26,7 +26,14 @@ class OffersFixture:
         super().setUp()
         cache.clear()
         self.m_user = User.objects.create_user(username="of-m", email="of-m@t.com", password="Pass123!", role="merchant")
-        cafe_cat = MerchantCategory.objects.get(slug="cafe")
+        # Seeded by merchants/0026, but a TransactionTestCase flush wipes seed data,
+        # so recreate it when missing (the Postgres-only ParallelTests hit this in CI).
+        food, _ = MerchantCategory.objects.get_or_create(
+            slug="food-drink", defaults={"name": "Food & Drink", "icon": "🍽️"}
+        )
+        cafe_cat, _ = MerchantCategory.objects.get_or_create(
+            slug="cafe", defaults={"name": "Café", "icon": "☕", "parent": food}
+        )
         self.merchant = MerchantProfile.objects.create(
             user=self.m_user, business_name="Offer Cafe", slug="offer-cafe", is_approved=True, is_open=True,
             onboarding_complete=True, pos_enabled=True, discounts_enabled=True, allow_pickup=True,
