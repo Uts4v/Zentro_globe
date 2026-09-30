@@ -179,7 +179,8 @@ class WasteApiTests(InventoryApiTestBase):
             format="json",
         )
         self.assertEqual(InventoryMovement.objects.filter(movement_type="EXPLICIT_WASTE").count(), 1)
-        self.assertEqual(InventoryWasteRecord.objects.count(), 2)
+        # A retry must not leave an orphan waste record without a movement.
+        self.assertEqual(InventoryWasteRecord.objects.count(), 1)
 
     def test_waste_query_total(self):
         item = self._create_item(opening_quantity="1000")

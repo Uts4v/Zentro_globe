@@ -1,5 +1,7 @@
-// src/features/inventory/tabs/suppliers-tab.tsx
-import { useCallback, useEffect, useState } from "react";
+// src/features/inventory/screens/SuppliersScreen.tsx
+// Suppliers and Orders From Suppliers (manager feature). Receiving an order
+// adds only what actually arrived, through the stock movement service.
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Plus, Loader2, Trash2, Building2, PackageCheck } from "lucide-react";
 import {
   inventoryApi,
@@ -21,6 +23,7 @@ import {
   ErrorBlock,
   Field,
   LoadingBlock,
+  ScreenHeader,
   SectionHeader,
   formatDate,
   formatMoney,
@@ -29,13 +32,22 @@ import {
   errorMessage,
   uid,
 } from "@/features/inventory/components/bits";
+import { copy } from "@/features/inventory/copy";
 
 const PO_STATUS_STYLE: Record<string, string> = {
   DRAFT: "bg-mist text-muted-foreground",
-  SENT: "bg-sky-100 text-sky-700",
-  PARTIALLY_RECEIVED: "bg-amber-100 text-amber-700",
-  RECEIVED: "bg-emerald-100 text-emerald-700",
-  CANCELLED: "bg-rose-100 text-rose-600",
+  SENT: "bg-periwinkle-soft text-info",
+  PARTIALLY_RECEIVED: "bg-butter-soft text-[#8a5d1f]",
+  RECEIVED: "bg-olive-soft text-olive",
+  CANCELLED: "bg-bordeaux-soft text-danger",
+};
+
+const PO_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Draft",
+  SENT: "Ordered",
+  PARTIALLY_RECEIVED: "Partly delivered",
+  RECEIVED: "Delivered",
+  CANCELLED: "Cancelled",
 };
 
 interface POLine {
@@ -44,7 +56,15 @@ interface POLine {
   unit_cost: string;
 }
 
-export function SuppliersTab({ sym }: { sym: string }) {
+export function SuppliersTab({
+  sym,
+  canCost = true,
+  onBack,
+}: {
+  sym: string;
+  canCost?: boolean;
+  onBack?: () => void;
+}) {
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [pos, setPos] = useState<PurchaseOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -98,7 +118,7 @@ export function SuppliersTab({ sym }: { sym: string }) {
 
   useEffect(() => {
     inventoryApi
-      .items({ include_balance: 0 })
+      .items({ include_balance: 0, page_size: 200 })
       .then((d) => setItems(d.results ?? []))
       .catch(() => void 0);
     inventoryApi
@@ -175,7 +195,10 @@ export function SuppliersTab({ sym }: { sym: string }) {
     }
   }
 
+  const receiveKey = useRef(uid("po-recv"));
+
   function openReceive(po: PurchaseOrder) {
+    receiveKey.current = uid("po-recv");
     setReceiving(po);
     setRecvLocation("");
     const q: Record<number, string> = {};
@@ -211,29 +234,37 @@ export function SuppliersTab({ sym }: { sym: string }) {
       await inventoryApi.receivePurchaseOrder(receiving.id, {
         received,
         location: recvLocation ? Number(recvLocation) : null,
-        idempotency_key: uid("po-recv"),
+        idempotency_key: receiveKey.current,
       });
       setReceiving(null);
       load();
     } catch (e: unknown) {
-      setFormError(errorMessage(e, "Failed to receive purchase order"));
+      setFormError(
+        `Delivery was not added. Your stock has not changed. ${errorMessage(e, "")}`.trim(),
+      );
     } finally {
       setBusy(false);
     }
   }
 
   async function cancelPO(po: PurchaseOrder) {
-    if (!window.confirm(`Cancel ${po.po_number}?`)) return;
+    if (
+      !window.confirm(
+        `Cancel order ${po.po_number}? Nothing has arrived yet, so stock does not change.`,
+      )
+    )
+      return;
     try {
       await inventoryApi.cancelPurchaseOrder(po.id);
       load();
     } catch (e: unknown) {
-      setError(errorMessage(e, "Failed to cancel PO"));
+      setError(errorMessage(e, "Could not cancel this order."));
     }
   }
 
   return (
     <div className="space-y-8">
+      {onBack && <ScreenHeader title={copy.suppliers.title} onBack={onBack} />}
       {/* Suppliers */}
       <div className="space-y-4">
         <SectionHeader
@@ -309,7 +340,7 @@ export function SuppliersTab({ sym }: { sym: string }) {
 
         {pos.length === 0 ? (
           <div className="rounded-2xl border border-border bg-card px-5 py-8 text-center text-sm text-muted-foreground">
-            No purchase orders yet.
+            No supplier orders yet.
           </div>
         ) : (
           <div className="overflow-x-auto rounded-2xl border border-border bg-card">
@@ -341,25 +372,25 @@ export function SuppliersTab({ sym }: { sym: string }) {
                       <span
                         className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${PO_STATUS_STYLE[po.status] ?? "bg-mist text-muted-foreground"}`}
                       >
-                        {po.status.replace(/_/g, " ")}
+                        {PO_STATUS_LABEL[po.status] ?? po.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right font-medium text-foreground">
-                      {formatMoney(po.total_amount, sym)}
+                      {canCost ? formatMoney(po.total_amount, sym) : "—"}
                     </td>
                     <td className="hidden px-4 py-3 text-muted-foreground md:table-cell">
                       {formatDate(po.expected_date)}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-2">
-                        {po.status === "DRAFT" && (
+                        {(po.status === "DRAFT" || po.status === "SENT") && (
                           <Button size="sm" variant="outline" onClick={() => cancelPO(po)}>
                             Cancel
                           </Button>
                         )}
                         {["DRAFT", "SENT", "PARTIALLY_RECEIVED"].includes(po.status) && (
                           <Button size="sm" onClick={() => openReceive(po)}>
-                            Receive Items
+                            Add Delivery
                           </Button>
                         )}
                       </div>
@@ -434,7 +465,7 @@ export function SuppliersTab({ sym }: { sym: string }) {
       <Dialog open={poOpen} onOpenChange={setPoOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>New Purchase Order</DialogTitle>
+            <DialogTitle>New Supplier Order</DialogTitle>
             <DialogDescription>
               Drafts the order. It becomes payable/expected stock only when received.
             </DialogDescription>
@@ -455,7 +486,7 @@ export function SuppliersTab({ sym }: { sym: string }) {
                   ))}
                 </select>
               </Field>
-              <Field label="Delivery Location">
+              <Field label="Deliver to">
                 <select
                   className={inputCls}
                   value={poLocation}
@@ -529,7 +560,7 @@ export function SuppliersTab({ sym }: { sym: string }) {
                     </Field>
                   </div>
                   <div className="w-24">
-                    <Field label="Qty">
+                    <Field label="How many?">
                       <input
                         type="number"
                         step="any"
@@ -575,7 +606,7 @@ export function SuppliersTab({ sym }: { sym: string }) {
               Cancel
             </Button>
             <Button onClick={createPO} disabled={busy}>
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Create PO
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Create Order
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -585,13 +616,13 @@ export function SuppliersTab({ sym }: { sym: string }) {
       <Dialog open={!!receiving} onOpenChange={(v) => !v && setReceiving(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Receive {receiving?.po_number ?? ""}</DialogTitle>
+            <DialogTitle>Add Delivery · {receiving?.po_number ?? ""}</DialogTitle>
             <DialogDescription>
-              Adds received quantities to stock. Safe to retry — the batch is idempotent.
+              Enter what actually arrived. Only these amounts are added to stock.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
-            <Field label="Receiving Location" optional>
+            <Field label="Where did it arrive?" optional>
               <select
                 className={inputCls}
                 value={recvLocation}
@@ -612,7 +643,7 @@ export function SuppliersTab({ sym }: { sym: string }) {
                     <th className="px-3 py-2">Item</th>
                     <th className="px-3 py-2 text-right">Ordered</th>
                     <th className="px-3 py-2 text-right">Remaining</th>
-                    <th className="px-3 py-2 text-right">Receive Qty</th>
+                    <th className="px-3 py-2 text-right">Arrived</th>
                     <th className="px-3 py-2 text-right">Unit Cost</th>
                   </tr>
                 </thead>
@@ -666,7 +697,7 @@ export function SuppliersTab({ sym }: { sym: string }) {
               Cancel
             </Button>
             <Button onClick={submitReceive} disabled={busy}>
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Receive Stock
+              {busy && <Loader2 className="h-4 w-4 animate-spin" />} Add to Stock
             </Button>
           </DialogFooter>
         </DialogContent>

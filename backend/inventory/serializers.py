@@ -5,10 +5,12 @@ inventory/serializers.py
 from decimal import Decimal
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
 from .models import (
+    AnItemType,
     InventoryItem,
     InventoryCategory,
     InventoryLocation,
@@ -32,13 +34,67 @@ from .models import (
 from .services import (
     InventoryMovementService,
     InventorySettings,
+    allocate_document_number,
     base_quantity_for_purchase,
+    current_actor_label,
     merchant_overview,
     next_count_overview,
     stock_status,
     suggested_order_qty,
+    to_decimal,
     validate_merchant,
 )
+
+
+def _person(user, label=""):
+    """Display name for who did something: staff name first, then the account."""
+    if label:
+        return label
+    if not user:
+        return ""
+    return user.get_full_name() or user.email
+
+
+class CostPrivacyMixin:
+    """Blank out money fields unless the viewer may see costs.
+
+    Views pass ``include_cost`` in the serializer context (from
+    ``view_cost_allowed``). It defaults to hidden, so a new call site that
+    forgets the context can never leak costs.
+    """
+
+    cost_fields: tuple = ()
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if not self.context.get("include_cost", False):
+            for name in self.cost_fields:
+                if name in data:
+                    data[name] = None
+        return data
+
+
+def _merchant_owned(obj, merchant, label):
+    """Serializer-level tenant check for a related object (None allowed)."""
+    if obj is None:
+        return None
+    owner = getattr(obj, "merchant_id", None)
+    if owner is not None and owner != merchant.id:
+        raise serializers.ValidationError({label: "Not found."})
+    return obj
+
+
+def _check_unique_codes(merchant, *, sku, barcode, exclude_id=None):
+    qs = InventoryItem.objects.filter(merchant=merchant, archived=False)
+    if exclude_id:
+        qs = qs.exclude(id=exclude_id)
+    errors = {}
+    if sku and qs.filter(sku__iexact=sku).exists():
+        errors["sku"] = f"Another stock item already uses SKU “{sku}”."
+    if barcode and qs.filter(barcode=barcode).exists():
+        errors["barcode"] = f"Another stock item already uses barcode “{barcode}”."
+    if errors:
+        raise serializers.ValidationError(errors)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -60,7 +116,8 @@ class CategorySerializer(serializers.ModelSerializer):
         fields = ["id", "name", "display_order", "is_default", "is_active", "item_count"]
 
     def get_item_count(self, obj):
-        return obj.inventory_items.count()
+        annotated = getattr(obj, "n_items", None)
+        return annotated if annotated is not None else obj.inventory_items.filter(archived=False).count()
 
 
 class LocationSerializer(serializers.ModelSerializer):
@@ -95,7 +152,11 @@ class ScheduleSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class InventoryItemSerializer(serializers.ModelSerializer):
+class InventoryItemSerializer(CostPrivacyMixin, serializers.ModelSerializer):
+    cost_fields = ("stock_value", "avg_cost")
+
+    locations = serializers.SerializerMethodField()
+    location_quantity = serializers.SerializerMethodField()
     current_stock = serializers.SerializerMethodField()
     total_stock = serializers.SerializerMethodField()
     status = serializers.SerializerMethodField()
@@ -123,6 +184,7 @@ class InventoryItemSerializer(serializers.ModelSerializer):
             "last_count_at", "next_count_due", "last_received_at",
             "current_stock", "total_stock", "status", "suggested_order",
             "stock_value", "avg_cost", "balance_count", "menu_links",
+            "locations", "location_quantity",
             "created_at", "updated_at",
         ]
         read_only_fields = [
@@ -130,6 +192,28 @@ class InventoryItemSerializer(serializers.ModelSerializer):
             "status", "suggested_order", "stock_value", "avg_cost",
             "balance_count", "last_count_at", "next_count_due", "last_received_at",
         ]
+
+    def get_locations(self, obj):
+        """Where the stock is right now (one row per location holding stock)."""
+        rows = [
+            {
+                "location": b.location_id,
+                "location_name": b.location.name if hasattr(b, "location") and b.location else "",
+                "on_hand": str(Decimal(b.on_hand).quantize(Decimal("0.000001"))),
+            }
+            for b in self._balance(obj).values()
+            if b.on_hand
+        ]
+        rows.sort(key=lambda r: r["location_name"])
+        return rows
+
+    def get_location_quantity(self, obj):
+        """Stock at the location the list is filtered by, when there is one."""
+        location_id = self.context.get("location_id")
+        if not location_id:
+            return None
+        balance = self._balance(obj).get(int(location_id))
+        return str(balance.on_hand) if balance else "0"
 
     def get_menu_links(self, obj):
         return [
@@ -160,6 +244,9 @@ class InventoryItemSerializer(serializers.ModelSerializer):
         return unit.code
 
     def get_status(self, obj):
+        annotated = getattr(obj, "stock_state", None)
+        if annotated:
+            return annotated
         return stock_status(obj, Decimal(self.get_total_stock(obj)))
 
     def get_suggested_order(self, obj):
@@ -213,46 +300,111 @@ class InventoryItemCreateSerializer(serializers.ModelSerializer):
             "opening_quantity", "opening_unit_cost",
         ]
         read_only_fields = ["id"]
+        extra_kwargs = {"category": {"required": False, "allow_null": True}}
+
+    def validate(self, attrs):
+        merchant = self.context["merchant"]
+
+        name = (attrs.get("name") or "").strip()
+        if not name:
+            raise serializers.ValidationError({"name": "Give the item a name."})
+        attrs["name"] = name
+
+        for field in ("category", "default_location", "primary_supplier", "count_schedule"):
+            _merchant_owned(attrs.get(field), merchant, field)
+        for field in ("base_unit", "preferred_display_unit"):
+            unit = attrs.get(field)
+            if unit is not None and unit.merchant_id not in (None, merchant.id):
+                raise serializers.ValidationError({field: "Not found."})
+        base, display = attrs.get("base_unit"), attrs.get("preferred_display_unit")
+        if base and display and base.kind != display.kind:
+            raise serializers.ValidationError(
+                {"preferred_display_unit": "Choose a unit of the same kind as how you count it."}
+            )
+
+        if attrs.get("category") is None:
+            # The short "Add Stock Item" form does not ask for a category.
+            attrs["category"] = (
+                InventoryCategory.objects.filter(merchant=merchant, name="Other").first()
+                or InventoryCategory.objects.filter(merchant=merchant).order_by("display_order").first()
+            )
+            if attrs["category"] is None:
+                raise serializers.ValidationError({"category": "Choose a category."})
+
+        for field in ("par_level", "reorder_point", "critical_level", "purchase_unit_conversion"):
+            value = attrs.get(field)
+            if value is not None and value < 0:
+                raise serializers.ValidationError({field: "Cannot be negative."})
+        if attrs.get("purchase_unit_conversion") == 0:
+            raise serializers.ValidationError({"purchase_unit_conversion": "Pack size must be more than 0."})
+
+        opening = attrs.get("opening_quantity")
+        if opening is not None and opening < 0:
+            raise serializers.ValidationError({"opening_quantity": "Cannot be negative."})
+        if opening and opening > 0 and not attrs.get("default_location"):
+            raise serializers.ValidationError(
+                {"default_location": "Choose where it is stored so the starting stock has a place."}
+            )
+        cost = attrs.get("opening_unit_cost")
+        if cost is not None and cost < 0:
+            raise serializers.ValidationError({"opening_unit_cost": "Cost cannot be negative."})
+
+        _check_unique_codes(merchant, sku=attrs.get("sku", ""), barcode=attrs.get("barcode", ""))
+        return attrs
 
     def create(self, validated_data):
         opening_qty = validated_data.pop("opening_quantity", None)
         opening_cost = validated_data.pop("opening_unit_cost", None)
         merchant = self.context["merchant"]
 
-        item = InventoryItem.objects.create(merchant=merchant, **validated_data)
-
-        if opening_qty and opening_qty > 0 and validated_data.get("default_location"):
-            InventoryMovementService.opening_balance(
-                merchant=merchant,
-                item=item,
-                location=validated_data["default_location"],
-                opening_qty=opening_qty,
-                unit_cost=opening_cost,
-                performed_by=self.context.get("user"),
-                idempotency_key=f"item-create-{item.id}",
-            )
+        with transaction.atomic():
+            item = InventoryItem.objects.create(merchant=merchant, **validated_data)
+            if opening_qty and opening_qty > 0 and validated_data.get("default_location"):
+                InventoryMovementService.opening_balance(
+                    merchant=merchant,
+                    item=item,
+                    location=validated_data["default_location"],
+                    opening_qty=opening_qty,
+                    unit_cost=opening_cost,
+                    performed_by=self.context.get("user"),
+                    idempotency_key=f"item-create-{item.id}",
+                )
         return item
 
 
-class MovementSerializer(serializers.ModelSerializer):
+class MovementSerializer(CostPrivacyMixin, serializers.ModelSerializer):
+    cost_fields = ("unit_cost",)
+
     item = serializers.CharField(source="inventory_item.name", read_only=True)
+    item_id = serializers.IntegerField(source="inventory_item_id", read_only=True)
     location_name = serializers.CharField(source="location.name", read_only=True)
     unit_code = serializers.CharField(source="inventory_item.base_unit.code", read_only=True)
     performed_by_name = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
+    is_reversed = serializers.SerializerMethodField()
 
     class Meta:
         model = InventoryMovement
         fields = [
-            "id", "movement_type", "item", "location_name", "quantity_change", "unit_code",
-            "source_type", "source_id", "reason", "note",
+            "id", "movement_type", "item", "item_id", "location_name", "quantity_change",
+            "unit_code", "source_type", "source_id", "reason", "note",
             "balance_before", "balance_after", "unit_cost",
-            "performed_by_name", "created_at",
+            "performed_by_name", "approved_by_name", "reversal_of", "is_reversed", "created_at",
         ]
 
     def get_performed_by_name(self, obj):
-        if not obj.performed_by:
+        return _person(obj.performed_by, obj.actor_label)
+
+    def get_approved_by_name(self, obj):
+        if not obj.approved_by or obj.approved_by_id == obj.performed_by_id:
             return ""
-        return obj.performed_by.get_full_name() or obj.performed_by.email
+        return _person(obj.approved_by)
+
+    def get_is_reversed(self, obj):
+        reversed_ids = self.context.get("reversed_ids")
+        if reversed_ids is not None:
+            return obj.id in reversed_ids
+        return obj.reversals.exists()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -260,25 +412,35 @@ class MovementSerializer(serializers.ModelSerializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class WasteRecordSerializer(serializers.ModelSerializer):
+class WasteRecordSerializer(CostPrivacyMixin, serializers.ModelSerializer):
+    cost_fields = ("per_unit_cost",)
+
     item_name = serializers.CharField(source="inventory_item.name", read_only=True)
     location_name = serializers.CharField(source="location.name", read_only=True)
     unit_code = serializers.CharField(source="inventory_item.base_unit.code", read_only=True)
+    reason_label = serializers.CharField(source="get_reason_display", read_only=True)
     performed_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = InventoryWasteRecord
         fields = [
             "id", "inventory_item", "item_name", "location", "location_name",
-            "quantity", "unit_code", "reason", "custom_reason", "note",
+            "quantity", "unit_code", "reason", "reason_label", "custom_reason", "note",
             "per_unit_cost", "performed_by_name", "created_at",
         ]
         read_only_fields = ["per_unit_cost", "created_at"]
 
     def get_performed_by_name(self, obj):
-        if not obj.performed_by:
-            return ""
-        return obj.performed_by.get_full_name() or obj.performed_by.email
+        return _person(obj.performed_by, obj.performed_by_label)
+
+    def validate(self, attrs):
+        merchant = self.context.get("merchant")
+        if merchant is not None:
+            _merchant_owned(attrs.get("inventory_item"), merchant, "inventory_item")
+            _merchant_owned(attrs.get("location"), merchant, "location")
+        if attrs.get("quantity") is not None and attrs["quantity"] <= 0:
+            raise serializers.ValidationError({"quantity": "Enter how much was wasted."})
+        return attrs
 
     def create(self, validated_data):
         merchant = self.context["merchant"]
@@ -310,24 +472,37 @@ class AdjustmentSerializer(serializers.ModelSerializer):
     location_name = serializers.CharField(source="location.name", read_only=True)
     unit_code = serializers.CharField(source="inventory_item.base_unit.code", read_only=True)
     performed_by_name = serializers.SerializerMethodField()
+    approved_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = InventoryAdjustment
         fields = [
             "id", "inventory_item", "item_name", "location", "location_name",
-            "quantity_delta", "unit_code", "reason", "note",
-            "approved", "approved_by", "performed_by_name", "created_at",
+            "quantity_delta", "unit_code", "reason", "note", "status",
+            "approved", "approved_by", "approved_by_name", "decided_at",
+            "performed_by_name", "created_at",
         ]
-        read_only_fields = ["approved", "approved_by", "created_at"]
+        read_only_fields = ["status", "approved", "approved_by", "decided_at", "created_at"]
 
     def get_performed_by_name(self, obj):
-        if not obj.performed_by:
-            return ""
-        return obj.performed_by.get_full_name() or obj.performed_by.email
+        return _person(obj.performed_by, obj.performed_by_label)
+
+    def get_approved_by_name(self, obj):
+        return _person(obj.approved_by) if obj.approved_by else ""
+
+    def validate(self, attrs):
+        merchant = self.context.get("merchant")
+        if merchant is not None:
+            _merchant_owned(attrs.get("inventory_item"), merchant, "inventory_item")
+            _merchant_owned(attrs.get("location"), merchant, "location")
+        if not (attrs.get("reason") or "").strip():
+            raise serializers.ValidationError({"reason": "Say why the stock needs fixing."})
+        return attrs
 
     def create(self, validated_data):
         merchant = self.context["merchant"]
         user = self.context["user"]
+        requires_approval = bool(self.context.get("requires_approval"))
         adjustment = InventoryMovementService.manual_adjustment(
             merchant=merchant,
             item=validated_data["inventory_item"],
@@ -336,28 +511,37 @@ class AdjustmentSerializer(serializers.ModelSerializer):
             reason=validated_data["reason"],
             note=validated_data.get("note", ""),
             performed_by=user,
-            approved_by=user,
+            approved_by=None if requires_approval else user,
             idempotency_key=self.context.get("idempotency_key"),
+            requires_approval=requires_approval,
         )
         return adjustment
 
 
-class ReceivingLineSerializer(serializers.ModelSerializer):
+class ReceivingLineSerializer(CostPrivacyMixin, serializers.ModelSerializer):
+    cost_fields = ("unit_cost", "line_total")
+
     item_name = serializers.CharField(source="inventory_item.name", read_only=True)
+    unit_code = serializers.CharField(source="inventory_item.base_unit.code", read_only=True)
 
     class Meta:
         model = InventoryReceivingLine
         fields = [
             "id", "inventory_item", "item_name", "purchase_unit_label",
-            "quantity_purchased", "base_quantity", "unit_cost", "line_total",
+            "quantity_purchased", "base_quantity", "unit_code", "unit_cost", "line_total",
         ]
 
 
-class ReceivingSerializer(serializers.ModelSerializer):
+class ReceivingSerializer(CostPrivacyMixin, serializers.ModelSerializer):
+    cost_fields = ("total_value",)
+
     supplier_name = serializers.SerializerMethodField()
     location_name = serializers.CharField(source="location.name", read_only=True)
     received_by_name = serializers.SerializerMethodField()
-    lines = ReceivingLineSerializer(many=True, read_only=True)
+    lines = serializers.SerializerMethodField()
+
+    def get_lines(self, obj):
+        return ReceivingLineSerializer(obj.lines.all(), many=True, context=self.context).data
 
     class Meta:
         model = InventoryReceiving
@@ -386,45 +570,74 @@ class ReceivingCreateSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id"]
 
+    def validate(self, attrs):
+        merchant = self.context["merchant"]
+        _merchant_owned(attrs.get("location"), merchant, "location")
+        _merchant_owned(attrs.get("supplier"), merchant, "supplier")
+        _merchant_owned(attrs.get("purchase_order"), merchant, "purchase_order")
+        if not attrs.get("lines"):
+            raise serializers.ValidationError({"lines": "Add at least one item that arrived."})
+        return attrs
+
+    @staticmethod
+    def _line_decimal(line, key, label):
+        try:
+            return to_decimal(line.get(key))
+        except ValueError:
+            raise serializers.ValidationError({"lines": f"{label} must be a number."})
+
     def create(self, validated_data):
         merchant = self.context["merchant"]
         user = self.context["user"]
+        idempotency_key = (self.context.get("idempotency_key") or "").strip()[:128]
         lines_data = validated_data.pop("lines", [])
         location = validated_data["location"]
-        try:
-            validate_merchant(location, merchant, "location")
-            supplier = validated_data.get("supplier")
-            if supplier:
-                validate_merchant(supplier, merchant, "supplier")
-        except PermissionError as exc:
-            raise serializers.ValidationError(str(exc))
+        supplier = validated_data.get("supplier")
+
+        if idempotency_key:
+            existing = InventoryReceiving.objects.filter(
+                merchant=merchant, idempotency_key=idempotency_key
+            ).first()
+            if existing:
+                return existing
 
         with transaction.atomic():
             receiving = InventoryReceiving.objects.create(
                 merchant=merchant,
                 received_by=user,
-                receipt_number=f"RCV-{InventoryReceiving.objects.filter(merchant=merchant).count() + 1:04d}",
+                receipt_number=allocate_document_number(merchant, "receipt"),
+                idempotency_key=idempotency_key,
                 **validated_data,
             )
             total = Decimal("0")
-            for line in lines_data:
+            for index, line in enumerate(lines_data):
+                if not isinstance(line, dict):
+                    raise serializers.ValidationError({"lines": "Each line needs an item and amount."})
                 item = InventoryItem.objects.filter(
-                    merchant=merchant, id=line.get("item_id")
+                    merchant=merchant, id=line.get("item_id"), archived=False
                 ).first()
                 if not item:
-                    raise serializers.ValidationError(f"Unknown item {line.get('item_id')}")
-                qty = Decimal(str(line.get("quantity", 0)))
-                if qty <= 0:
-                    raise serializers.ValidationError("Receiving quantity must be positive.")
+                    raise serializers.ValidationError({"lines": "One of the items was not found."})
+                qty = self._line_decimal(line, "quantity", "Amount")
+                if qty is None or qty <= 0:
+                    raise serializers.ValidationError({"lines": f"Enter how much {item.name} arrived."})
                 label = line.get("purchase_unit_label") or item.purchase_unit_label or ""
-                conversion = line.get("purchase_unit_conversion")
-                if conversion is None:
+                if "purchase_unit_conversion" in line:
+                    # Sent explicitly: a pack size, or empty/null meaning the
+                    # amount is already in the unit the item is counted in.
+                    conversion = self._line_decimal(line, "purchase_unit_conversion", "Pack size")
+                    if conversion is None:
+                        conversion = Decimal("1")
+                        label = ""
+                else:
                     conversion = item.purchase_unit_conversion
-                if conversion is not None:
-                    conversion = Decimal(str(conversion))
-                unit_cost_line = None
-                if line.get("unit_cost") not in (None, ""):
-                    unit_cost_line = Decimal(str(line["unit_cost"]))
+                if conversion is not None and conversion <= 0:
+                    raise serializers.ValidationError({"lines": "Pack size must be more than 0."})
+                if not conversion:
+                    label = ""
+                unit_cost_line = self._line_decimal(line, "unit_cost", "Cost")
+                if unit_cost_line is not None and unit_cost_line < 0:
+                    raise serializers.ValidationError({"lines": "Cost cannot be negative."})
                 line_total = (qty * (unit_cost_line or 0)).quantize(Decimal("0.01"))
                 total += line_total
                 base_qty = base_quantity_for_purchase(item, qty, conversion)
@@ -446,12 +659,12 @@ class ReceivingCreateSerializer(serializers.ModelSerializer):
                     purchase_unit_label=label,
                     purchase_unit_conversion=conversion,
                     unit_cost=unit_cost_line,
-                    reason=f"Receiving RCV-{receiving.receipt_number}",
+                    reason=f"Receiving {receiving.receipt_number}",
                     note=supplier.name if supplier else "",
                     source_type="RECEIVING",
                     source_id=receiving.id,
                     performed_by=user,
-                    idempotency_key=None,
+                    idempotency_key=f"receiving-{receiving.id}-line-{index}",
                 )
                 item.last_received_at = timezone.now().date()
                 item.save(update_fields=["last_received_at", "updated_at"])
@@ -496,6 +709,11 @@ class TransferCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ["id"]
 
     def create(self, validated_data):
+        """Create a move. With context ``complete`` the stock moves right away.
+
+        Completing in the same transaction means a move that fails (e.g. not
+        enough stock at the source) leaves nothing behind.
+        """
         merchant = self.context["merchant"]
         user = self.context["user"]
         lines_data = validated_data.pop("lines", [])
@@ -503,7 +721,9 @@ class TransferCreateSerializer(serializers.ModelSerializer):
                 validated_data["to_location"].merchant_id != merchant.id:
             raise serializers.ValidationError("Both locations must belong to your business.")
         if validated_data["from_location"].id == validated_data["to_location"].id:
-            raise serializers.ValidationError("Source and destination locations must differ.")
+            raise serializers.ValidationError("Choose two different places to move between.")
+        if not lines_data:
+            raise serializers.ValidationError("Add at least one item to move.")
 
         with transaction.atomic():
             transfer = InventoryTransfer.objects.create(
@@ -513,15 +733,32 @@ class TransferCreateSerializer(serializers.ModelSerializer):
                 **validated_data,
             )
             for line in lines_data:
-                item = InventoryItem.objects.filter(merchant=merchant, id=line.get("item_id")).first()
+                if not isinstance(line, dict):
+                    raise serializers.ValidationError("Each line needs an item and amount.")
+                item = InventoryItem.objects.filter(
+                    merchant=merchant, id=line.get("item_id"), archived=False
+                ).first()
                 if not item:
-                    raise serializers.ValidationError(f"Unknown item {line.get('item_id')}")
-                qty = Decimal(str(line.get("quantity", 0)))
-                if qty <= 0:
-                    raise serializers.ValidationError("Transfer quantity must be positive.")
+                    raise serializers.ValidationError("One of the items was not found.")
+                try:
+                    qty = to_decimal(line.get("quantity"))
+                except ValueError:
+                    raise serializers.ValidationError("Amount must be a number.")
+                if qty is None or qty <= 0:
+                    raise serializers.ValidationError(f"Enter how much {item.name} to move.")
                 InventoryTransferLine.objects.create(
                     transfer=transfer, inventory_item=item, quantity=qty
                 )
+            if self.context.get("complete"):
+                try:
+                    InventoryMovementService.transfer(
+                        merchant=merchant,
+                        transfer=transfer,
+                        performed_by=user,
+                        idempotency_key=f"transfer-{transfer.id}",
+                    )
+                except ValueError as exc:
+                    raise serializers.ValidationError(str(exc))
         return transfer
 
 
@@ -544,6 +781,49 @@ class CountLineSerializer(serializers.ModelSerializer):
         ]
 
 
+class StockCountSummarySerializer(serializers.ModelSerializer):
+    """List view: no lines, counts come from annotations when present."""
+
+    location_name = serializers.SerializerMethodField()
+    started_by_name = serializers.SerializerMethodField()
+    submitted_by_name = serializers.SerializerMethodField()
+    line_count = serializers.SerializerMethodField()
+    counted_count = serializers.SerializerMethodField()
+    difference_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StockCount
+        fields = [
+            "id", "name", "count_type", "location", "location_name", "status",
+            "started_at", "submitted_at", "approved_at", "started_by_name",
+            "submitted_by_name", "note", "created_at",
+            "line_count", "counted_count", "difference_count",
+        ]
+
+    def get_location_name(self, obj):
+        return obj.location.name if obj.location else "All locations"
+
+    def get_started_by_name(self, obj):
+        return _person(obj.started_by)
+
+    def get_submitted_by_name(self, obj):
+        return _person(obj.submitted_by)
+
+    def get_line_count(self, obj):
+        value = getattr(obj, "n_lines", None)
+        return value if value is not None else obj.lines.count()
+
+    def get_counted_count(self, obj):
+        value = getattr(obj, "n_counted", None)
+        return value if value is not None else obj.lines.filter(physical_quantity__isnull=False).count()
+
+    def get_difference_count(self, obj):
+        value = getattr(obj, "n_different", None)
+        if value is not None:
+            return value
+        return obj.lines.exclude(difference__isnull=True).exclude(difference=0).count()
+
+
 class StockCountSerializer(serializers.ModelSerializer):
     started_by_name = serializers.SerializerMethodField()
     submitted_by_name = serializers.SerializerMethodField()
@@ -563,13 +843,13 @@ class StockCountSerializer(serializers.ModelSerializer):
         ]
 
     def get_started_by_name(self, obj):
-        return obj.started_by.get_full_name() if obj.started_by else ""
+        return _person(obj.started_by)
 
     def get_submitted_by_name(self, obj):
-        return obj.submitted_by.get_full_name() if obj.submitted_by else ""
+        return _person(obj.submitted_by)
 
     def get_approved_by_name(self, obj):
-        return obj.approved_by.get_full_name() if obj.approved_by else ""
+        return _person(obj.approved_by)
 
     def get_location_name(self, obj):
         return obj.location.name if obj.location else "All locations"
@@ -604,7 +884,9 @@ class CountUpsertSerializer(serializers.Serializer):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-class SupplierItemSerializer(serializers.ModelSerializer):
+class SupplierItemSerializer(CostPrivacyMixin, serializers.ModelSerializer):
+    cost_fields = ("latest_unit_cost",)
+
     item_name = serializers.CharField(source="inventory_item.name", read_only=True)
 
     class Meta:
@@ -617,7 +899,10 @@ class SupplierItemSerializer(serializers.ModelSerializer):
 
 
 class SupplierSerializer(serializers.ModelSerializer):
-    item_mappings = SupplierItemSerializer(many=True, read_only=True)
+    item_mappings = serializers.SerializerMethodField()
+
+    def get_item_mappings(self, obj):
+        return SupplierItemSerializer(obj.item_mappings.all(), many=True, context=self.context).data
 
     class Meta:
         model = Supplier
@@ -646,7 +931,9 @@ class POReceiveSerializer(serializers.Serializer):
     idempotency_key = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
 
-class PurchaseOrderLineSerializer(serializers.ModelSerializer):
+class PurchaseOrderLineSerializer(CostPrivacyMixin, serializers.ModelSerializer):
+    cost_fields = ("unit_cost", "line_total")
+
     item_name = serializers.CharField(source="inventory_item.name", read_only=True)
     remaining = serializers.SerializerMethodField()
 
@@ -662,13 +949,18 @@ class PurchaseOrderLineSerializer(serializers.ModelSerializer):
         return str(obj.quantity - obj.received_quantity)
 
 
-class PurchaseOrderSerializer(serializers.ModelSerializer):
+class PurchaseOrderSerializer(CostPrivacyMixin, serializers.ModelSerializer):
+    cost_fields = ("total_amount",)
+
     supplier_name = serializers.CharField(source="supplier.name", read_only=True)
     delivery_location_name = serializers.CharField(
         source="delivery_location.name", read_only=True
     )
     created_by_name = serializers.SerializerMethodField()
-    lines = PurchaseOrderLineSerializer(many=True, read_only=True)
+    lines = serializers.SerializerMethodField()
+
+    def get_lines(self, obj):
+        return PurchaseOrderLineSerializer(obj.lines.all(), many=True, context=self.context).data
 
     class Meta:
         model = PurchaseOrder
@@ -690,21 +982,35 @@ class PurchaseOrderSerializer(serializers.ModelSerializer):
 
 
 class OverviewSerializer(serializers.Serializer):
-    inventory_value = serializers.DecimalField(max_digits=20, decimal_places=2)
+    inventory_value = serializers.DecimalField(max_digits=20, decimal_places=2, allow_null=True)
+    total_items = serializers.IntegerField()
     low_stock_count = serializers.IntegerField()
+    very_low_count = serializers.IntegerField()
     out_of_stock_count = serializers.IntegerField()
     overstock_count = serializers.IntegerField()
+    attention_total = serializers.IntegerField()
     counts_due = serializers.IntegerField()
     open_purchase_orders = serializers.IntegerField()
+    counts_waiting_review = serializers.IntegerField()
+    corrections_waiting = serializers.IntegerField()
     needs_attention = serializers.ListField()
     recent_movements = serializers.ListField()
     counts_due_list = serializers.ListField()
 
     @classmethod
-    def build(cls, merchant):
-        data = merchant_overview(merchant)
-        data["inventory_value"] = data["inventory_value"].quantize(Decimal("0.01"))
+    def build(cls, merchant, include_cost=False):
+        from .models import AdjustmentStatus, CountStatus
+
+        data = merchant_overview(merchant, include_cost=include_cost)
+        if data["inventory_value"] is not None:
+            data["inventory_value"] = data["inventory_value"].quantize(Decimal("0.01"))
         data["counts_due_list"] = next_count_overview(merchant)
+        data["counts_waiting_review"] = StockCount.objects.filter(
+            merchant=merchant, status=CountStatus.SUBMITTED
+        ).count()
+        data["corrections_waiting"] = InventoryAdjustment.objects.filter(
+            merchant=merchant, status=AdjustmentStatus.PENDING
+        ).count()
         return cls(data).data
 
 

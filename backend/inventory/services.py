@@ -15,15 +15,21 @@ Guarantees:
 
 from __future__ import annotations
 
+import contextvars
 import uuid
+from contextlib import contextmanager
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F, Max, Q, Sum
+from django.db.models import (
+    Case, CharField, Count, DecimalField, Exists, F, OuterRef, Q, Subquery, Sum, Value, When,
+)
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 
 from .models import (
+    AdjustmentStatus,
     AnItemType,
     CountStatus,
     DEFAULT_CATEGORIES,
@@ -56,6 +62,32 @@ from .models import (
 )
 
 ZERO = Decimal("0")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Acting staff member (staff mode)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_ACTOR_LABEL: contextvars.ContextVar[str] = contextvars.ContextVar(
+    "inventory_actor_label", default=""
+)
+
+
+@contextmanager
+def actor_context(label: str):
+    """Tag every movement/document created inside with the acting staff name.
+
+    Staff mode runs on the owner's login, so `performed_by` is the owner
+    user; this label records which POS worker actually did it.
+    """
+    token = _ACTOR_LABEL.set(label or "")
+    try:
+        yield
+    finally:
+        _ACTOR_LABEL.reset(token)
+
+
+def current_actor_label() -> str:
+    return _ACTOR_LABEL.get()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Unit helpers
@@ -333,6 +365,7 @@ class InventoryMovementService:
             unit_cost=unit_cost,
             idempotency_key=idempotency_key,
             reversal_of=reversal_of,
+            actor_label=current_actor_label(),
         )
         return movement
 
@@ -393,9 +426,24 @@ class InventoryMovementService:
     @transaction.atomic
     def record_waste(*, merchant, item, location, quantity, reason, custom_reason="",
                      note="", performed_by=None, idempotency_key=None):
+        validate_merchant(location, merchant, "location")
+        validate_merchant(item, merchant, "inventory_item")
         qty = to_decimal(quantity)
-        if qty <= 0:
+        if qty is None or qty <= 0:
             raise ValueError("Waste quantity must be positive.")
+
+        if idempotency_key:
+            # A retried request must not leave a second waste record behind.
+            existing = InventoryMovement.objects.filter(
+                merchant=merchant, idempotency_key=idempotency_key,
+                source_type=MovementSource.WASTE_RECORD,
+            ).first()
+            if existing:
+                record = InventoryWasteRecord.objects.filter(
+                    merchant=merchant, id=existing.source_id
+                ).first()
+                if record:
+                    return record
 
         waste = InventoryWasteRecord.objects.create(
             merchant=merchant,
@@ -406,6 +454,7 @@ class InventoryMovementService:
             custom_reason=custom_reason,
             note=note,
             performed_by=performed_by,
+            performed_by_label=current_actor_label(),
         )
         balance = InventoryBalance.objects.filter(
             merchant=merchant, inventory_item=item, location=location
@@ -440,10 +489,25 @@ class InventoryMovementService:
     @staticmethod
     @transaction.atomic
     def manual_adjustment(*, merchant, item, location, quantity_delta, reason, note="",
-                          performed_by=None, approved_by=None, idempotency_key=None):
+                          performed_by=None, approved_by=None, idempotency_key=None,
+                          requires_approval=False):
+        """Correct stock outside a count.
+
+        With ``requires_approval`` the adjustment is saved as PENDING and stock
+        is NOT touched until ``approve_adjustment``; otherwise it applies now.
+        """
+        validate_merchant(location, merchant, "location")
+        validate_merchant(item, merchant, "inventory_item")
         delta = to_decimal(quantity_delta)
-        if delta == 0:
+        if delta is None or delta == 0:
             raise ValueError("Adjustment quantity cannot be zero.")
+
+        if idempotency_key:
+            existing = InventoryAdjustment.objects.filter(
+                merchant=merchant, idempotency_key=idempotency_key
+            ).first()
+            if existing:
+                return existing
 
         adjustment = InventoryAdjustment.objects.create(
             merchant=merchant,
@@ -453,9 +517,25 @@ class InventoryMovementService:
             reason=reason,
             note=note,
             performed_by=performed_by,
-            approved=True,
-            approved_by=approved_by,
+            performed_by_label=current_actor_label(),
+            status=AdjustmentStatus.PENDING if requires_approval else AdjustmentStatus.APPROVED,
+            approved=not requires_approval,
+            approved_by=None if requires_approval else approved_by,
+            decided_at=None if requires_approval else timezone.now(),
+            idempotency_key=idempotency_key or "",
         )
+        if requires_approval:
+            InventoryAuditLog.objects.create(
+                merchant=merchant,
+                user=performed_by,
+                action=InventoryAuditLog.ACTION_ADJUSTMENT_REQUESTED,
+                entity_type="adjustment",
+                entity_id=str(adjustment.id),
+                metadata={"item": item.id, "location": location.id, "delta": str(delta),
+                          "reason": reason, "staff": current_actor_label()},
+            )
+            return adjustment
+
         movement = InventoryMovementService.apply_change(
             merchant=merchant,
             location=location,
@@ -479,6 +559,68 @@ class InventoryMovementService:
             metadata={"item": item.id, "location": location.id, "delta": str(delta), "reason": reason},
         )
         return adjustment
+
+    @staticmethod
+    def approve_adjustment(*, merchant, adjustment, approved_by=None):
+        """PENDING → APPROVED, applying the stock change exactly once."""
+        validate_merchant(adjustment, merchant, "adjustment")
+        with transaction.atomic():
+            locked = InventoryAdjustment.objects.select_for_update().get(pk=adjustment.pk)
+            if locked.status == AdjustmentStatus.APPROVED:
+                return locked
+            if locked.status != AdjustmentStatus.PENDING:
+                raise ValueError("Only a waiting correction can be approved.")
+            InventoryMovementService.apply_change(
+                merchant=merchant,
+                location=locked.location,
+                inventory_item=locked.inventory_item,
+                quantity_change=locked.quantity_delta,
+                movement_type=MovementType.MANUAL_ADJUSTMENT,
+                source_type=MovementSource.ADJUSTMENT,
+                source_id=locked.id,
+                reason=locked.reason,
+                note=locked.note,
+                performed_by=locked.performed_by,
+                approved_by=approved_by,
+                idempotency_key=f"adjustment-approve-{locked.id}",
+            )
+            locked.status = AdjustmentStatus.APPROVED
+            locked.approved = True
+            locked.approved_by = approved_by
+            locked.decided_at = timezone.now()
+            locked.save(update_fields=["status", "approved", "approved_by", "decided_at"])
+            InventoryAuditLog.objects.create(
+                merchant=merchant,
+                user=approved_by,
+                action=InventoryAuditLog.ACTION_ADJUSTMENT_APPROVED,
+                entity_type="adjustment",
+                entity_id=str(locked.id),
+                metadata={"delta": str(locked.quantity_delta)},
+            )
+        return locked
+
+    @staticmethod
+    def reject_adjustment(*, merchant, adjustment, rejected_by=None):
+        validate_merchant(adjustment, merchant, "adjustment")
+        with transaction.atomic():
+            locked = InventoryAdjustment.objects.select_for_update().get(pk=adjustment.pk)
+            if locked.status == AdjustmentStatus.REJECTED:
+                return locked
+            if locked.status != AdjustmentStatus.PENDING:
+                raise ValueError("Only a waiting correction can be rejected.")
+            locked.status = AdjustmentStatus.REJECTED
+            locked.approved = False
+            locked.approved_by = rejected_by
+            locked.decided_at = timezone.now()
+            locked.save(update_fields=["status", "approved", "approved_by", "decided_at"])
+            InventoryAuditLog.objects.create(
+                merchant=merchant,
+                user=rejected_by,
+                action=InventoryAuditLog.ACTION_ADJUSTMENT_REJECTED,
+                entity_type="adjustment",
+                entity_id=str(locked.id),
+            )
+        return locked
 
     @staticmethod
     def transfer(*, merchant, transfer: InventoryTransfer, performed_by=None,
@@ -551,23 +693,74 @@ class InventoryMovementService:
     @staticmethod
     def reverse(*, merchant, movement: InventoryMovement, performed_by=None,
                 reason="Reversal"):
-        """Correct an incorrect entry with a REVERSAL movement. History preserved."""
+        """Correct an incorrect entry with a REVERSAL movement. History preserved.
+
+        A change can be undone once. An undo cannot itself be undone (record
+        the correction again instead). Undoing one side of a stock move also
+        undoes its other side, so an undo never creates or loses stock.
+        """
         if movement.merchant_id != merchant.id:
             raise PermissionError("Cross-merchant reversal blocked.")
-        return InventoryMovementService.apply_change(
-            merchant=merchant,
-            location=movement.location,
-            inventory_item=movement.inventory_item,
-            quantity_change=-movement.quantity_change,
-            movement_type=MovementType.REVERSAL,
-            source_type=MovementSource.REVERSAL,
-            source_id=movement.id,
-            reason=reason,
-            note=f"Reversing movement #{movement.id} ({movement.movement_type})",
-            performed_by=performed_by,
-            reversal_of=movement,
-            idempotency_key=f"reversal-{movement.id}-{uuid.uuid4()}",
-        )
+        if movement.movement_type == MovementType.REVERSAL:
+            raise ValueError("This entry is already an undo and cannot be undone again.")
+
+        with transaction.atomic():
+            locked = InventoryMovement.objects.select_for_update().get(pk=movement.pk)
+            if locked.reversals.exists():
+                raise ValueError("This change was already undone.")
+            targets = [locked]
+            if locked.movement_type in (MovementType.TRANSFER_IN, MovementType.TRANSFER_OUT):
+                pair_type = (
+                    MovementType.TRANSFER_OUT
+                    if locked.movement_type == MovementType.TRANSFER_IN
+                    else MovementType.TRANSFER_IN
+                )
+                pair = (
+                    InventoryMovement.objects.select_for_update()
+                    .filter(
+                        merchant=merchant,
+                        source_type=locked.source_type,
+                        source_id=locked.source_id,
+                        inventory_item_id=locked.inventory_item_id,
+                        movement_type=pair_type,
+                        quantity_change=-locked.quantity_change,
+                        reversals__isnull=True,
+                    )
+                    .order_by("id")
+                    .first()
+                )
+                if pair is not None:
+                    targets.append(pair)
+            # Take stock back from the destination before returning it to the
+            # source, so the negative-stock rule sees real availability.
+            targets.sort(key=lambda m: -m.quantity_change)
+            result = None
+            for target in targets:
+                reversal = InventoryMovementService.apply_change(
+                    merchant=merchant,
+                    location=target.location,
+                    inventory_item=target.inventory_item,
+                    quantity_change=-target.quantity_change,
+                    movement_type=MovementType.REVERSAL,
+                    source_type=MovementSource.REVERSAL,
+                    source_id=target.id,
+                    reason=reason,
+                    note=f"Reversing movement #{target.id} ({target.movement_type})",
+                    performed_by=performed_by,
+                    reversal_of=target,
+                    idempotency_key=f"reversal-{target.id}",
+                )
+                if target.pk == locked.pk:
+                    result = reversal
+            InventoryAuditLog.objects.create(
+                merchant=merchant,
+                user=performed_by,
+                action=InventoryAuditLog.ACTION_REVERSAL,
+                entity_type="movement",
+                entity_id=str(locked.id),
+                metadata={"reversed": [t.id for t in targets], "staff": current_actor_label()},
+            )
+        return result
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -587,6 +780,12 @@ class StockCountService:
         qs = InventoryItem.objects.filter(merchant=merchant, active=True, archived=False)
         if item_ids:
             qs = qs.filter(id__in=item_ids)
+        elif location is not None:
+            # Counting one place: items usually kept there or with stock there.
+            held = InventoryBalance.objects.filter(
+                merchant=merchant, inventory_item=OuterRef("pk"), location=location
+            )
+            qs = qs.filter(Q(default_location=location) | Exists(held))
         if category_ids:
             qs = qs.filter(category_id__in=category_ids)
         if item_type:
@@ -643,6 +842,60 @@ class StockCountService:
             entity_type="stock_count",
             entity_id=str(count.id),
             metadata={"lines": count.lines.count()},
+        )
+        return count
+
+    @staticmethod
+    @transaction.atomic
+    def create_count_from_lines(*, merchant, name, lines, count_type="Imported Count",
+                                started_by=None, note="") -> StockCount:
+        """Draft count with explicit (item, location, physical) lines.
+
+        Used by CSV/PDF "Physical Stock Count" imports. Book quantities are
+        snapshotted now; nothing touches stock until the count is submitted
+        and approved through the normal workflow (COUNT_RECONCILIATION).
+        """
+        count = StockCount.objects.create(
+            merchant=merchant,
+            name=name,
+            count_type=count_type,
+            location=None,
+            status=CountStatus.IN_PROGRESS,
+            started_at=timezone.now(),
+            started_by=started_by,
+            note=note,
+        )
+        seen = set()
+        for item, location, physical in lines:
+            validate_merchant(item, merchant, "count line item")
+            validate_merchant(location, merchant, "count line location")
+            if (item.id, location.id) in seen:
+                raise ValueError(f"{item.name} is listed twice for {location.name}.")
+            seen.add((item.id, location.id))
+            balance = InventoryBalance.objects.filter(
+                merchant=merchant, inventory_item=item, location=location
+            ).first()
+            book = balance.on_hand if balance else ZERO
+            physical = to_decimal(physical)
+            if physical is None or physical < 0:
+                raise ValueError(f"Counted quantity for {item.name} cannot be negative.")
+            physical = physical.quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP)
+            StockCountLine.objects.create(
+                stock_count=count,
+                inventory_item=item,
+                location=location,
+                book_quantity=book,
+                physical_quantity=physical,
+                difference=(physical - book).quantize(Decimal("0.000001"), rounding=ROUND_HALF_UP),
+                previous_count_at=item.last_count_at,
+            )
+        InventoryAuditLog.objects.create(
+            merchant=merchant,
+            user=started_by,
+            action=InventoryAuditLog.ACTION_COUNT_STARTED,
+            entity_type="stock_count",
+            entity_id=str(count.id),
+            metadata={"lines": len(seen), "source": "import"},
         )
         return count
 
@@ -795,19 +1048,49 @@ class StockCountService:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+_DOC_SEQ = {
+    # kind: (settings field, prefix, model, number field)
+    "receipt": ("receipt_seq", "RCV", InventoryReceiving, "receipt_number"),
+    "po": ("po_seq", "PO", PurchaseOrder, "po_number"),
+}
+
+
+def _existing_max_number(merchant, kind) -> int:
+    """Highest number already issued (for merchants predating the sequence)."""
+    _, prefix, model, number_field = _DOC_SEQ[kind]
+    highest = 0
+    for number in model.objects.filter(merchant=merchant).values_list(number_field, flat=True):
+        if number and number.startswith(f"{prefix}-"):
+            try:
+                highest = max(highest, int(number.rsplit("-", 1)[1]))
+            except ValueError:
+                continue
+    return max(highest, model.objects.filter(merchant=merchant).count())
+
+
+def allocate_document_number(merchant, kind: str) -> str:
+    """Next receipt/PO number, safe under concurrency.
+
+    The merchant's InventorySettings row is locked with select_for_update, so
+    two simultaneous deliveries can never be given the same number (unlike
+    count()+1).
+    """
+    field_name, prefix, _, _ = _DOC_SEQ[kind]
+    InventorySettings.for_merchant(merchant)
+    with transaction.atomic():
+        row = InventorySettings.objects.select_for_update().get(merchant=merchant)
+        seq = getattr(row, field_name) or _existing_max_number(merchant, kind)
+        seq += 1
+        setattr(row, field_name, seq)
+        row.save(update_fields=[field_name, "updated_at"])
+    return f"{prefix}-{seq:04d}"
+
+
 def next_po_number(merchant) -> str:
-    last = (
-        PurchaseOrder.objects.filter(merchant=merchant)
-        .order_by("-id")
-        .values_list("po_number", flat=True)
-        .first()
-    )
-    if last and last.startswith("PO-"):
-        try:
-            return f"PO-{int(last.split('-')[1]) + 1:04d}"
-        except (ValueError, IndexError):
-            pass
-    return "PO-0001"
+    """Preview of the next PO number (does not reserve it)."""
+    row = InventorySettings.for_merchant(merchant)
+    seq = row.po_seq or _existing_max_number(merchant, "po")
+    return f"PO-{seq + 1:04d}"
 
 
 class PurchaseOrderService:
@@ -819,7 +1102,7 @@ class PurchaseOrderService:
         validate_merchant(delivery_location, merchant, "delivery location")
         po = PurchaseOrder.objects.create(
             merchant=merchant,
-            po_number=next_po_number(merchant),
+            po_number=allocate_document_number(merchant, "po"),
             supplier=supplier,
             status=OrderStatus.SENT,
             delivery_location=delivery_location,
@@ -921,7 +1204,7 @@ class PurchaseOrderService:
                 if receiving is None:
                     receiving = InventoryReceiving.objects.create(
                         merchant=merchant,
-                        receipt_number=f"RCV-{next_receipt_seq(merchant)}",
+                        receipt_number=allocate_document_number(merchant, "receipt"),
                         supplier=po_locked.supplier,
                         purchase_order=po_locked,
                         location=location,
@@ -987,53 +1270,171 @@ class PurchaseOrderService:
         return po_locked
 
 
-def next_receipt_seq(merchant) -> int:
-    return InventoryReceiving.objects.filter(merchant=merchant).count() + 1
+# ─────────────────────────────────────────────────────────────────────────────
+# Item removal
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def remove_item(*, merchant, item, performed_by=None, clear_stock=False):
+    """Delete a stock item added by mistake, without ever deleting history.
+
+    * No stock history at all (e.g. a duplicate added a minute ago with no
+      starting stock) → the item is truly deleted.
+    * Has history, no stock left → archived: hidden everywhere, history kept.
+    * Has stock left → refused unless ``clear_stock``, which first removes
+      the remaining stock with a recorded correction per location
+      (MANUAL_ADJUSTMENT through the movement service), then archives.
+
+    Returns "deleted" or "archived".
+    """
+    validate_merchant(item, merchant, "inventory_item")
+    with transaction.atomic():
+        locked = InventoryItem.objects.select_for_update().get(pk=item.pk)
+        has_history = (
+            InventoryMovement.objects.filter(merchant=merchant, inventory_item=locked).exists()
+            or InventoryReceivingLine.objects.filter(inventory_item=locked).exists()
+            or InventoryTransferLine.objects.filter(inventory_item=locked).exists()
+            or PurchaseOrderLine.objects.filter(inventory_item=locked).exists()
+            or StockCountLine.objects.filter(inventory_item=locked).exists()
+            or InventoryWasteRecord.objects.filter(inventory_item=locked).exists()
+            or InventoryAdjustment.objects.filter(inventory_item=locked).exists()
+        )
+        name = locked.name
+        if not has_history:
+            locked.delete()
+            InventoryAuditLog.objects.create(
+                merchant=merchant, user=performed_by,
+                action=InventoryAuditLog.ACTION_ITEM_DELETED,
+                entity_type="item", entity_id=str(item.pk),
+                metadata={"name": name, "staff": current_actor_label()},
+            )
+            return "deleted"
+
+        balances = list(
+            InventoryBalance.objects.filter(merchant=merchant, inventory_item=locked, on_hand__gt=0)
+            .select_related("location")
+        )
+        if balances and not clear_stock:
+            total = sum((b.on_hand for b in balances), ZERO)
+            raise StockRemainingError(total, locked.base_unit.code)
+        for balance in balances:
+            InventoryMovementService.manual_adjustment(
+                merchant=merchant,
+                item=locked,
+                location=balance.location,
+                quantity_delta=-balance.on_hand,
+                reason="Item removed",
+                note=f"Remaining stock cleared when {name} was removed.",
+                performed_by=performed_by,
+                approved_by=performed_by,
+                idempotency_key=f"item-remove-{locked.id}-{balance.location_id}-{uuid.uuid4()}",
+            )
+        locked.archived = True
+        locked.active = False
+        locked.save(update_fields=["archived", "active", "updated_at"])
+        InventoryAuditLog.objects.create(
+            merchant=merchant, user=performed_by,
+            action=InventoryAuditLog.ACTION_ITEM_ARCHIVED,
+            entity_type="item", entity_id=str(locked.pk),
+            metadata={"name": name, "stock_cleared": bool(balances),
+                      "staff": current_actor_label()},
+        )
+        return "archived"
+
+
+class StockRemainingError(ValueError):
+    def __init__(self, quantity, unit):
+        self.quantity = quantity
+        self.unit = unit
+        super().__init__("This item still has stock.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Overview / aggregates
 # ─────────────────────────────────────────────────────────────────────────────
 
+_QTY = DecimalField(max_digits=24, decimal_places=6)
 
-def merchant_overview(merchant):
-    balances = list(
-        InventoryBalance.objects.filter(merchant=merchant).select_related(
-            "inventory_item", "location"
-        )
+
+def with_stock_totals(qs, merchant):
+    """Annotate items with ``total_on_hand`` and ``stock_state`` in SQL.
+
+    ``stock_state`` mirrors ``stock_status()`` exactly, so the Stock page can
+    filter by status and still paginate in the database instead of loading
+    every item and balance into Python.
+    """
+    total = (
+        InventoryBalance.objects.filter(merchant=merchant, inventory_item=OuterRef("pk"))
+        .values("inventory_item")
+        .annotate(t=Sum("on_hand"))
+        .values("t")[:1]
     )
-    by_item: dict[int, Decimal] = {}
-    for b in balances:
-        by_item[b.inventory_item_id] = by_item.get(b.inventory_item_id, ZERO) + b.on_hand
-
-    items = list(
-        InventoryItem.objects.filter(merchant=merchant, active=True, archived=False)
-        .select_related("category", "default_location", "primary_supplier", "count_schedule")
-        .prefetch_related("balances")
+    qs = qs.annotate(
+        total_on_hand=Coalesce(Subquery(total, output_field=_QTY), Value(ZERO), output_field=_QTY),
+    ).annotate(
+        effective_critical=Coalesce(
+            F("critical_level"),
+            F("reorder_point") / Value(Decimal("2")),
+            Value(ZERO),
+            output_field=_QTY,
+        ),
+    ).annotate(
+        stock_state=Case(
+            When(total_on_hand__lte=0, then=Value("OUT")),
+            When(
+                par_level__isnull=True, reorder_point__isnull=True, critical_level__isnull=True,
+                then=Value("HEALTHY"),
+            ),
+            When(
+                par_level__isnull=False,
+                total_on_hand__gt=F("par_level") * Value(Decimal("1.5")),
+                then=Value("OVERSTOCK"),
+            ),
+            When(
+                effective_critical__gt=0,
+                total_on_hand__lte=F("effective_critical"),
+                then=Value("CRITICAL"),
+            ),
+            When(
+                reorder_point__isnull=False,
+                total_on_hand__lte=F("reorder_point"),
+                then=Value("LOW"),
+            ),
+            default=Value("HEALTHY"),
+            output_field=CharField(),
+        ),
     )
+    return qs
 
-    inventory_value = ZERO
-    item_rows = []
-    for item in items:
-        on_hand = by_item.get(item.id, ZERO)
-        # Weighted-average valuation: value = Σ(on_hand × avg_cost) per location.
-        value = ZERO
-        for b in balances:
-            if b.inventory_item_id == item.id:
-                value += b.on_hand * b.avg_cost
-                value = value.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
-        inventory_value += value
-        status = stock_status(item, on_hand)
-        item_rows.append({
-            "item": item,
-            "on_hand": on_hand,
-            "value": value,
-            "status": status,
-        })
 
-    low = [r for r in item_rows if r["status"] in ("LOW", "CRITICAL")]
-    out = [r for r in item_rows if r["status"] == "OUT"]
-    overstock = [r for r in item_rows if r["status"] == "OVERSTOCK"]
+def items_stored_at(qs, merchant, location_id):
+    """Items usually kept at, or currently holding stock at, a location."""
+    held = InventoryBalance.objects.filter(
+        merchant=merchant, inventory_item=OuterRef("pk"), location_id=location_id, on_hand__gt=0
+    )
+    return qs.filter(Q(default_location_id=location_id) | Exists(held))
+
+
+ATTENTION_ORDER = {"OUT": 0, "CRITICAL": 1, "LOW": 2}
+
+
+def merchant_overview(merchant, include_cost=True, attention_limit=20):
+    items = with_stock_totals(
+        InventoryItem.objects.filter(merchant=merchant, active=True, archived=False),
+        merchant,
+    )
+    state_counts = {
+        row["stock_state"]: row["n"]
+        for row in items.order_by().values("stock_state").annotate(n=Count("id"))
+    }
+
+    inventory_value = None
+    if include_cost:
+        inventory_value = ZERO
+        for on_hand, avg_cost in InventoryBalance.objects.filter(
+            merchant=merchant, inventory_item__archived=False
+        ).values_list("on_hand", "avg_cost"):
+            inventory_value += on_hand * avg_cost
 
     today = timezone.now().date()
     counts_due = items_due_for_count(merchant, ref_date=today)
@@ -1045,26 +1446,27 @@ def merchant_overview(merchant):
         ).count()
     )
 
+    attention_items = list(
+        items.filter(stock_state__in=list(ATTENTION_ORDER))
+        .select_related("category", "default_location", "base_unit", "preferred_display_unit")
+    )
+    attention_items.sort(key=lambda i: (ATTENTION_ORDER[i.stock_state], i.name.lower()))
     needs_attention = [
         {
-            "id": r["item"].id,
-            "name": r["item"].name,
-            "category": r["item"].category.name if r["item"].category else "",
-            "location": r["item"].default_location.name if r["item"].default_location else "",
-            "available": r["on_hand"],
-            "unit": r["item"].base_unit.code,
-            "status": r["status"],
-            "par": r["item"].par_level,
-            "reorder_point": r["item"].reorder_point,
-            "next_count_due": r["item"].next_count_due,
-            "suggested_order": suggested_order_qty(r["item"], r["on_hand"]),
+            "id": item.id,
+            "name": item.name,
+            "category": item.category.name if item.category else "",
+            "location": item.default_location.name if item.default_location else "",
+            "available": item.total_on_hand,
+            "unit": item.base_unit.code,
+            "status": item.stock_state,
+            "par": item.par_level,
+            "reorder_point": item.reorder_point,
+            "next_count_due": item.next_count_due,
+            "suggested_order": suggested_order_qty(item, item.total_on_hand),
         }
-        for r in item_rows
-        if r["status"] in ("LOW", "CRITICAL", "OUT")
+        for item in attention_items[:attention_limit]
     ]
-    needs_attention.sort(
-        key=lambda x: (x["status"] != "CRITICAL", x["status"] != "OUT", str(x["suggested_order"]))
-    )
 
     recent = list(
         InventoryMovement.objects.filter(merchant=merchant)
@@ -1074,9 +1476,12 @@ def merchant_overview(merchant):
 
     return {
         "inventory_value": inventory_value,
-        "low_stock_count": len(low),
-        "out_of_stock_count": len(out),
-        "overstock_count": len(overstock),
+        "total_items": sum(state_counts.values()),
+        "low_stock_count": state_counts.get("LOW", 0) + state_counts.get("CRITICAL", 0),
+        "very_low_count": state_counts.get("CRITICAL", 0),
+        "out_of_stock_count": state_counts.get("OUT", 0),
+        "overstock_count": state_counts.get("OVERSTOCK", 0),
+        "attention_total": len(attention_items),
         "counts_due": counts_due,
         "open_purchase_orders": open_po,
         "needs_attention": needs_attention,
@@ -1088,8 +1493,10 @@ def merchant_overview(merchant):
                 "item": m.inventory_item.name,
                 "location": m.location.name,
                 "reason": m.reason,
-                "performed_by": m.performed_by.get_full_name() or m.performed_by.email
-                if m.performed_by else "",
+                "performed_by": m.actor_label or (
+                    (m.performed_by.get_full_name() or m.performed_by.email)
+                    if m.performed_by else ""
+                ),
                 "created_at": m.created_at,
             }
             for m in recent

@@ -107,6 +107,27 @@ class ScheduleScope(models.TextChoices):
     LOCATION = "LOCATION", "Location"
 
 
+class AdjustmentStatus(models.TextChoices):
+    PENDING = "PENDING", "Pending"
+    APPROVED = "APPROVED", "Approved"
+    REJECTED = "REJECTED", "Rejected"
+
+
+class ImportStatus(models.TextChoices):
+    VALIDATING = "VALIDATING", "Validating"
+    READY = "READY", "Ready to review"
+    IMPORTING = "IMPORTING", "Importing"
+    COMPLETED = "COMPLETED", "Completed"
+    FAILED = "FAILED", "Failed"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+
+class ImportMode(models.TextChoices):
+    NEW_ITEMS = "NEW_ITEMS", "New stock items"
+    UPDATE_ITEMS = "UPDATE_ITEMS", "Update item details"
+    STOCK_COUNT = "STOCK_COUNT", "Physical stock count"
+
+
 class WasteReason(models.TextChoices):
     SPOILED = "SPOILED", "Spoiled"
     EXPIRED = "EXPIRED", "Expired"
@@ -524,6 +545,10 @@ class InventoryMovement(models.Model):
         blank=True,
         related_name="approved_inventory_movements",
     )
+    actor_label = models.CharField(
+        max_length=120, blank=True, default="",
+        help_text="Staff member (POS worker in staff mode) who recorded it, if not the owner.",
+    )
 
     balance_before = models.DecimalField(max_digits=24, decimal_places=6, default=0)
     balance_after = models.DecimalField(max_digits=24, decimal_places=6, default=0)
@@ -638,11 +663,23 @@ class InventoryAdjustment(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="inventory_adjustments",
     )
+    performed_by_label = models.CharField(
+        max_length=120, blank=True, default="",
+        help_text="Staff member (POS worker) who requested it, when not the account owner.",
+    )
+    # A PENDING adjustment has NOT touched stock. Stock changes only when it
+    # becomes APPROVED (see InventoryMovementService.approve_adjustment).
+    status = models.CharField(
+        max_length=20, choices=AdjustmentStatus.choices, default=AdjustmentStatus.APPROVED,
+        db_index=True,
+    )
     approved = models.BooleanField(default=True)
     approved_by = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="approved_inventory_adjustments",
     )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    idempotency_key = models.CharField(max_length=128, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -679,6 +716,7 @@ class InventoryWasteRecord(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
         related_name="inventory_waste_records",
     )
+    performed_by_label = models.CharField(max_length=120, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -721,11 +759,22 @@ class InventoryReceiving(models.Model):
         related_name="inventory_receivings",
     )
     received_at = models.DateTimeField(default=timezone.now)
+    idempotency_key = models.CharField(
+        max_length=128, blank=True, default="",
+        help_text="Client key so a retried 'Add to Stock' never records the delivery twice.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = "inventory_receivings"
         ordering = ["-received_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["merchant", "idempotency_key"],
+                condition=~models.Q(idempotency_key=""),
+                name="uniq_inventory_receiving_idem_key",
+            ),
+        ]
 
     def __str__(self):
         return f"Receiving {self.receipt_number or self.id}"
@@ -1081,6 +1130,10 @@ class InventorySettings(models.Model):
         help_text="Reject movements that would take on-hand below zero.",
     )
     update_items_last_received = models.BooleanField(default=True)
+    # Document number sequences. Allocated under select_for_update on this row
+    # (services.allocate_document_number) so concurrent requests never collide.
+    receipt_seq = models.PositiveIntegerField(default=0)
+    po_seq = models.PositiveIntegerField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -1114,6 +1167,13 @@ class InventoryAuditLog(models.Model):
     ACTION_SUPPLIER_EDIT = "supplier_edit"
     ACTION_SETTINGS_UPDATED = "settings_updated"
     ACTION_REVERSAL = "reversal"
+    ACTION_ITEM_DELETED = "item_deleted"
+    ACTION_ITEM_ARCHIVED = "item_archived"
+    ACTION_ADJUSTMENT_REQUESTED = "adjustment_requested"
+    ACTION_ADJUSTMENT_APPROVED = "adjustment_approved"
+    ACTION_ADJUSTMENT_REJECTED = "adjustment_rejected"
+    ACTION_IMPORT = "import"
+    ACTION_EXPORT = "export"
 
     ACTION_CHOICES = [
         (ACTION_ITEM_CREATED, "Item Created"),
@@ -1133,6 +1193,13 @@ class InventoryAuditLog(models.Model):
         (ACTION_SUPPLIER_EDIT, "Supplier Edit"),
         (ACTION_SETTINGS_UPDATED, "Settings Updated"),
         (ACTION_REVERSAL, "Reversal"),
+        (ACTION_ITEM_DELETED, "Item Deleted"),
+        (ACTION_ITEM_ARCHIVED, "Item Archived"),
+        (ACTION_ADJUSTMENT_REQUESTED, "Adjustment Requested"),
+        (ACTION_ADJUSTMENT_APPROVED, "Adjustment Approved"),
+        (ACTION_ADJUSTMENT_REJECTED, "Adjustment Rejected"),
+        (ACTION_IMPORT, "Import"),
+        (ACTION_EXPORT, "Export"),
     ]
 
     merchant = models.ForeignKey(
@@ -1159,6 +1226,72 @@ class InventoryAuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.action}] {self.entity_type} {self.entity_id}"
+
+
+class InventoryImportSession(models.Model):
+    """One CSV/PDF import: upload → validate → review → commit.
+
+    Uploading never changes stock. Parsed rows live in `rows` only while the
+    session awaits review; on completion they are replaced by a compact
+    per-row outcome list (enough for the result CSV), so the uploaded file's
+    contents are not kept forever. The file itself is never stored.
+    """
+
+    FILE_CSV = "CSV"
+    FILE_PDF = "PDF"
+    FILE_TYPE_CHOICES = [(FILE_CSV, "CSV"), (FILE_PDF, "PDF")]
+
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="inventory_import_sessions",
+    )
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="inventory_import_sessions",
+    )
+    file_name = models.CharField(max_length=255)
+    file_type = models.CharField(max_length=10, choices=FILE_TYPE_CHOICES)
+    file_hash = models.CharField(max_length=64, db_index=True)
+    import_mode = models.CharField(max_length=20, choices=ImportMode.choices)
+    status = models.CharField(
+        max_length=20, choices=ImportStatus.choices, default=ImportStatus.VALIDATING, db_index=True
+    )
+    extraction_method = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="csv | pdf_text | pdf_ai — how rows were read from the file.",
+    )
+    location = models.ForeignKey(
+        InventoryLocation, on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+        help_text="Fallback location for rows that do not name one.",
+    )
+    rows = models.JSONField(default=list, blank=True)
+    summary = models.JSONField(default=dict, blank=True)
+    rows_total = models.PositiveIntegerField(default=0)
+    rows_imported = models.PositiveIntegerField(default=0)
+    rows_skipped = models.PositiveIntegerField(default=0)
+    rows_failed = models.PositiveIntegerField(default=0)
+    stock_count = models.ForeignKey(
+        StockCount, on_delete=models.SET_NULL, null=True, blank=True, related_name="import_sessions",
+        help_text="Draft count created by a STOCK_COUNT import (stock changes only when it is approved).",
+    )
+    duplicate_of = models.ForeignKey(
+        "self", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
+    error = models.CharField(max_length=500, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "inventory_import_sessions"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["merchant", "file_hash"], name="inv_import_merchant_hash_idx"),
+        ]
+
+    def __str__(self):
+        return f"Import {self.file_name} ({self.status})"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
