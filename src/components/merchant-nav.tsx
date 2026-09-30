@@ -11,6 +11,8 @@ interface NavItem {
   label: string;
   icon: LucideIcon;
   section?: string;
+  disabled?: boolean;
+  badge?: string;
 }
 
 interface MerchantNavProps {
@@ -41,8 +43,8 @@ export function MerchantNav({ navItems, onSignOut, onLinkClick, bell }: Merchant
       </div>
 
       {/* Nav links */}
-      <nav className="flex flex-1 flex-col gap-1">
-        {navItems.map(({ to, label, icon: Icon, section }) => {
+      <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-1">
+        {navItems.map(({ to, label, icon: Icon, section, disabled, badge }) => {
           const isActive =
             to === "/merchant/"
               ? pathname === "/merchant" || pathname === "/merchant/"
@@ -58,19 +60,36 @@ export function MerchantNav({ navItems, onSignOut, onLinkClick, bell }: Merchant
                   {section}
                 </p>
               )}
-              <Link
-                to={to as any}
-                onClick={onLinkClick}
-                className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
-                  isActive
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                {label}
-              </Link>
+              {disabled ? (
+                <button
+                  type="button"
+                  aria-disabled="true"
+                  title={`${label} — ${badge ?? "Coming soon"}`}
+                  className="flex w-full cursor-not-allowed items-center gap-3 rounded-xl px-3 py-2 text-sm text-muted-foreground/50"
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">{label}</span>
+                  {badge && (
+                    <span className="ml-auto shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {badge}
+                    </span>
+                  )}
+                </button>
+              ) : (
+                <Link
+                  to={to as any}
+                  onClick={onLinkClick}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-2 text-sm transition-colors",
+                    isActive
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                  )}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {label}
+                </Link>
+              )}
             </div>
           );
         })}

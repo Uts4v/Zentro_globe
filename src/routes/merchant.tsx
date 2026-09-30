@@ -63,7 +63,7 @@ const navItems = [
   { to: "/merchant/loyalty", label: "Loyalty", icon: Trophy, section: "Customers" },
   { to: "/merchant/offers", label: "Offers", icon: TicketPercent, section: "Customers" },
   { to: "/merchant/redeem", label: "Redeem Offer", icon: ScanLine, section: "Customers" },
-  { to: "/merchant/ai", label: "AI Assistant", icon: Bot, section: "Tools" },
+  { to: "/merchant/ai", label: "AI Assistant", icon: Bot, section: "Tools", disabled: true, badge: "Soon" },
   { to: "/merchant/settings", label: "Settings", icon: Settings, section: "Account" },
   { to: "/merchant/store", label: "Storefront", icon: Store, section: "Account" },
 ];
@@ -81,7 +81,7 @@ function MerchantLayout() {
   return (
     <div className="flex min-h-dvh bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-background lg:flex">
+      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col overflow-hidden border-r border-border bg-background lg:flex">
         <MerchantNav
           navItems={navItems}
           onSignOut={handleSignOut}
@@ -94,7 +94,7 @@ function MerchantLayout() {
         <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileOpen(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <aside
-            className="absolute bottom-0 left-0 top-0 flex w-64 flex-col bg-background shadow-2xl"
+            className="absolute bottom-0 left-0 top-0 flex w-64 flex-col overflow-hidden bg-background shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
             <MerchantNav
