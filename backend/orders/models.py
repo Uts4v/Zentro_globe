@@ -189,6 +189,14 @@ class Order(models.Model):
     )
     total_amount    = models.DecimalField(max_digits=10, decimal_places=2)
     points_earned   = models.IntegerField(default=0)
+    loyalty_spend_rate = models.DecimalField(
+        max_digits=10, decimal_places=4, null=True, blank=True,
+        help_text=(
+            "Spend points per unit of currency this order earns on its eligible "
+            "paid lines (0 = item points only). Null on orders created before it "
+            "was recorded. See loyalty.earning."
+        ),
+    )
     loyalty_awarded = models.BooleanField(default=False)
     is_reward_order = models.BooleanField(default=False)
     notes           = models.TextField(blank=True)
