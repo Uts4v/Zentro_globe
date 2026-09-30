@@ -892,6 +892,8 @@ def confirm_punch_proof(request):
         order_type=Order.ORDER_TYPE_PUNCH_REDEMPTION,
         total_amount=0,
         points_earned=0,
+        loyalty_spend_rate=0,
+        is_reward_order=True,
         notes=f"Punch card reward: {card.punch_card.reward_text}",
         punch_card_redemption=card,
     )
@@ -901,6 +903,9 @@ def confirm_punch_proof(request):
         price=0,
         quantity=1,
         subtotal=0,
+        # The free product is a real line for KDS/receipts, but a reward line:
+        # it never earns points, punches or order count (loyalty.earning).
+        is_promotion_reward=True,
     )
     # Reward orders are free, but priced through the same engine so they carry
     # the same pricing snapshot as every other order.
@@ -1009,6 +1014,8 @@ def redeem_reward(request, pk):
         order_type=Order.ORDER_TYPE_REWARD_REDEMPTION,
         total_amount=0,
         points_earned=0,
+        loyalty_spend_rate=0,
+        is_reward_order=True,
         notes=f"Reward redemption: {reward.name} (code {code})",
         reward_redemption=redemption,
         # Points are deducted HERE (not at completion), so mark the order as
@@ -1021,6 +1028,7 @@ def redeem_reward(request, pk):
         price=0,
         quantity=1,
         subtotal=0,
+        is_promotion_reward=True,
     )
     # Reward orders are free, but priced through the same engine so they carry
     # the same pricing snapshot as every other order.

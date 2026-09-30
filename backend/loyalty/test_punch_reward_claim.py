@@ -21,8 +21,8 @@ from loyalty.models import (
     Mission,
     PunchCardEvent,
 )
-from merchants.models import MerchantProfile
-from orders.models import Order
+from merchants.models import MenuItem, MerchantProfile
+from orders.models import Order, OrderItem
 
 
 class PunchRewardClaimTests(TestCase):
@@ -56,18 +56,32 @@ class PunchRewardClaimTests(TestCase):
         self.customer_client = APIClient()
         self.customer_client.force_authenticate(self.customer_user)
 
+        # Loyalty is earned from paid order lines, so regular orders need one.
+        self.coffee = MenuItem.objects.create(
+            merchant=self.merchant, name="Coffee", price=100, is_available=True,
+            loyalty_reward=True, points_per_item=1,
+        )
+
         # Two regular completed orders fill the card.
         for _ in range(2):
-            order = Order.objects.create(
-                customer=self.customer, merchant=self.merchant,
-                status=Order.STATUS_CONFIRMED, total_amount=100, subtotal=100,
-            )
-            self._complete_via_dashboard(order)
+            self._complete_via_dashboard(self._paid_order())
 
         self.completed_card = CustomerPunchCard.objects.get(
             customer=self.customer, punch_card=self.template, is_completed=True,
         )
         self.baseline = self._progress()
+
+    def _paid_order(self):
+        order = Order.objects.create(
+            customer=self.customer, merchant=self.merchant,
+            status=Order.STATUS_CONFIRMED, total_amount=100, subtotal=100,
+        )
+        OrderItem.objects.create(
+            order=order, menu_item=self.coffee, name="Coffee", price=100,
+            list_unit_price=100, quantity=1, subtotal=100,
+            taxable_amount=100, total_amount=100,
+        )
+        return order
 
     def _complete_via_dashboard(self, order):
         if order.status == Order.STATUS_PENDING:
@@ -149,10 +163,7 @@ class PunchRewardClaimTests(TestCase):
     def test_next_regular_order_still_punches_the_new_card(self):
         claim = self._claim()
         self._complete_via_dashboard(claim)
-        order = Order.objects.create(
-            customer=self.customer, merchant=self.merchant,
-            status=Order.STATUS_CONFIRMED, total_amount=100, subtotal=100,
-        )
+        order = self._paid_order()
         self._complete_via_dashboard(order)
         self.assertEqual(self._next_card().current_stamps, 1)
         self.assertEqual(self._progress()["order_count"], self.baseline["order_count"] + 1)

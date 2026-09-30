@@ -6,6 +6,7 @@ from django.db import IntegrityError
 from django.utils import timezone
 
 from datetime import timedelta
+from decimal import Decimal
 from django.db.models import Q
 from accounts.models import CustomerProfile
 
@@ -34,6 +35,7 @@ from loyalty.services import (
     get_or_create_wallet, award_wallet_points, deduct_wallet_points, refund_wallet_points,
     update_wallet_streak, join_merchant,
 )
+from loyalty.earning import estimate_points
 from notifications.services import send_notification
 from notifications.models import Notification
 from inventory.order_stock import safe_deduct_stock_for_order, safe_restore_stock_for_order
@@ -215,25 +217,45 @@ def _refund_reward_redemption_points(order: Order):
 
 
 def _counts_toward_loyalty(order: Order) -> bool:
-    """Claiming a punch card's free reward is not a new visit.
+    """Whether the order has eligible PAID lines (a reward never earns a reward).
 
-    The claim order stays in history (and on the card's REDEEMED event), but
-    it must not earn points, punch the next card, bump the order count or
-    visit streak, or advance missions.
+    Reward/comp orders (punch-card claims, reward redemptions, staff comps)
+    and orders made only of reward or free lines stay in history, but they
+    must not earn points, punch a card, bump the order count or visit
+    streak, or advance missions. See loyalty.earning.
     """
-    return order.order_type != Order.ORDER_TYPE_PUNCH_REDEMPTION
+    from loyalty.earning import compute_loyalty_earning
+
+    return compute_loyalty_earning(order).qualifies
 
 
 def _award_loyalty(order: Order):
+    from loyalty.earning import compute_loyalty_earning
+
     customer = order.customer
     wallet   = get_or_create_wallet(customer, order.merchant)
-    counts   = _counts_toward_loyalty(order)
+    earning  = compute_loyalty_earning(order)
+    counts   = earning.qualifies
+
+    # The award is calculated from the lines as they are now (rewards and
+    # discounts applied after the order was placed included), so the stored
+    # figure always matches what was actually credited.
+    update_fields = []
+    if order.points_earned != earning.points:
+        order.points_earned = earning.points
+        update_fields.append("points_earned")
+    if earning.reward_only and not order.is_reward_order:
+        # Only reward/free goods: record it as a reward fulfilment.
+        order.is_reward_order = True
+        update_fields.append("is_reward_order")
+    if update_fields:
+        order.save(update_fields=[*update_fields, "updated_at"])
 
     old_balance = wallet.points_balance
 
-    if counts and order.points_earned > 0:
+    if counts and earning.points > 0:
         award_wallet_points(
-            wallet, order.points_earned,
+            wallet, earning.points,
             transaction_type="EARNED",
             description=f"Points earned for Order #{order.id}",
             order=order,
@@ -337,7 +359,7 @@ def _award_loyalty(order: Order):
                     merchant_id=order.merchant.id,
                 ))
 
-    _update_mission_progress(customer, order, wallet, streak_incremented)
+    _update_mission_progress(customer, order, wallet, streak_incremented, earning.eligible_amount)
 
 
 def _should_restart_mission(cm):
@@ -355,8 +377,14 @@ def _should_restart_mission(cm):
     return False
 
 
-def _update_mission_progress(customer, order, wallet, streak_incremented):
+def _update_mission_progress(customer, order, wallet, streak_incremented, eligible_amount=None):
+    """Advance missions. Spend missions count only eligible PAID goods."""
     from loyalty.services import award_wallet_points as award_pts
+
+    if eligible_amount is None:
+        from loyalty.earning import compute_loyalty_earning
+
+        eligible_amount = compute_loyalty_earning(order).eligible_amount
 
     missions = Mission.objects.filter(
         is_active=True,
@@ -379,7 +407,7 @@ def _update_mission_progress(customer, order, wallet, streak_incremented):
                 continue
 
         if mission.mission_type == "spend_amount":
-            cm.current_count += int(order.subtotal)
+            cm.current_count += int(eligible_amount)
         else:
             cm.current_count += 1
 
@@ -560,7 +588,9 @@ def create_order(request):
         customer=customer,
         merchant=merchant,
         **pricing_order_fields(pricing_ctx, pricing, merchant),
-        points_earned=sum(p.points for p in priced),
+        # Reward lines (offer free items, BOGO rewards) never earn.
+        points_earned=estimate_points(priced),
+        loyalty_spend_rate=Decimal("0"),
         notes=data.get("notes", ""),
         status=Order.STATUS_PENDING,
         order_type=Order.ORDER_TYPE_REGULAR,
@@ -689,6 +719,7 @@ def guest_create_order(request):
         merchant=merchant,
         **pricing_order_fields(pricing_ctx, pricing, merchant),
         points_earned=0,  # Guest orders don't earn points
+        loyalty_spend_rate=Decimal("0"),
         notes=data.get("notes", ""),
         status=Order.STATUS_PENDING,
         order_type=Order.ORDER_TYPE_REGULAR,
@@ -826,7 +857,7 @@ def preview_order(request):
         "service_charge": breakdown["charge_total"],
         "prices_include_tax": breakdown["prices_include_tax"],
         "total_amount": breakdown["grand_total"],
-        "points_earned": sum(p.points for p in priced),
+        "points_earned": estimate_points(priced),
         "lines": lines,
         "pricing": breakdown,
         "offer": offer,
@@ -1300,7 +1331,7 @@ def add_items_to_order(request, pk):
     # Re-price the whole bill: tax, charges and any attached discount are
     # recalculated (and the discount re-validated) for the new basket.
     pricing = reprice_order(order)
-    order.points_earned += sum(p.points for p in priced)
+    order.points_earned += estimate_points(priced, order.loyalty_spend_rate)
     order.version += 1
     order.save(update_fields=["points_earned", "version", "updated_at"])
 

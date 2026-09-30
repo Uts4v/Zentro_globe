@@ -73,6 +73,15 @@ def _report_money(value):
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
+def _loyalty_spend_rate(merchant) -> Decimal:
+    """Spend points per unit of currency (LoyaltyRules.points_per_npr), or 0."""
+    try:
+        rate = merchant.loyalty_rules.points_per_npr
+    except Exception:
+        return Decimal("0")
+    return Decimal(str(rate)) if rate and rate > 0 else Decimal("0")
+
+
 def _get_merchant(request):
     try:
         return request.user.merchant_profile
@@ -1491,16 +1500,12 @@ def create_pos_order(request):
         priced = price_request_lines(merchant, items_data, staff_comp=is_staff_comp)
     except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-    points_earned = sum(p.points for p in priced)
-    goods_subtotal = sum((p.item_fields["subtotal"] for p in priced), Decimal("0"))
-
-    # Apply spend-based points from LoyaltyRules (points_per_npr)
-    try:
-        rules = merchant.loyalty_rules
-        if rules.points_per_npr > 0:
-            points_earned += int(goods_subtotal * rules.points_per_npr)
-    except Exception:
-        pass
+    # Item points + spend points (LoyaltyRules.points_per_npr) on paid lines.
+    # The award at completion recalculates from the final lines, so rewards
+    # applied later never earn either (loyalty.earning).
+    from loyalty.earning import estimate_points
+    spend_rate = _loyalty_spend_rate(merchant)
+    points_earned = estimate_points(priced, spend_rate)
 
     # Determine order type and source
     customer = None
@@ -1565,6 +1570,7 @@ def create_pos_order(request):
                 merchant=merchant,
                 **pricing_order_fields(pricing_ctx, pricing, merchant),
                 points_earned=points_earned,
+        loyalty_spend_rate=spend_rate,
                 notes=data.get("notes", ""),
                 status=Order.STATUS_CONFIRMED,  # POS orders go directly to confirmed
                 order_type=order_type,
@@ -4293,13 +4299,9 @@ def table_order(request, token):
         merchant, priced, fulfillment_type="dine_in", order_type="dine_in",
     )
 
-    points_earned = sum(p.points for p in priced)
-    try:
-        rules = merchant.loyalty_rules
-        if rules.points_per_npr > 0:
-            points_earned += int(pricing.subtotal * rules.points_per_npr)
-    except Exception:
-        pass
+    from loyalty.earning import estimate_points
+    spend_rate = _loyalty_spend_rate(merchant)
+    points_earned = estimate_points(priced, spend_rate)
 
     order = Order.objects.create(
         customer=customer,
@@ -4313,6 +4315,7 @@ def table_order(request, token):
         table_number_snapshot=table.table_number,
         notes=notes,
         points_earned=points_earned,
+        loyalty_spend_rate=spend_rate,
         guest_name_snapshot=customer_name,
         **pricing_order_fields(pricing_ctx, pricing, merchant),
     )
@@ -4395,15 +4398,13 @@ def assign_customer_to_order(request):
     from loyalty.services import join_merchant
     join_merchant(customer, merchant)
 
-    # Recalculate points_earned from order items if not yet awarded
-    if not order.loyalty_awarded and order.customer is None:
-        points_earned = 0
-        for oi in order.items.select_related("menu_item").all():
-            if oi.menu_item and oi.menu_item.loyalty_reward:
-                points_earned += oi.menu_item.points_per_item * oi.quantity
-        order.points_earned = points_earned
-
+    # Recalculate points_earned from the order's eligible paid lines if not
+    # yet awarded (reward/free lines never earn — loyalty.earning).
+    recalc = not order.loyalty_awarded and order.customer is None
     order.customer = customer
+    if recalc:
+        from loyalty.earning import compute_loyalty_earning
+        order.points_earned = compute_loyalty_earning(order).points
     order.save(update_fields=["customer", "points_earned", "updated_at"])
 
     # If the order is already completed and loyalty hasn't been awarded yet,
