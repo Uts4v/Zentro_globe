@@ -3,11 +3,16 @@ inventory/urls.py — mounted at /api/inventory/
 """
 
 from django.urls import path
-from . import views
+from . import views, views_io
 
 urlpatterns = [
     path("", views.inventory_root_view, name="inventory-root"),
     path("overview/", views.overview, name="inventory-overview"),
+
+    # Staff mode (POS worker using the dashboard on a shared device)
+    path("staff/workers/", views.staff_workers_view, name="inventory-staff-workers"),
+    path("staff/session/", views.staff_session_start_view, name="inventory-staff-session"),
+    path("staff/session/end/", views.staff_session_end_view, name="inventory-staff-session-end"),
 
     # Reference data
     path("categories/", views.categories_view, name="inventory-categories"),
@@ -30,6 +35,8 @@ urlpatterns = [
     # Waste / Adjustments
     path("waste/", views.waste_view, name="inventory-waste"),
     path("adjustments/", views.adjustments_view, name="inventory-adjustments"),
+    path("adjustments/<int:pk>/<str:decision>/", views.adjustment_decision_view,
+         name="inventory-adjustment-decision"),
 
     # Receiving
     path("receiving/", views.receiving_view, name="inventory-receiving"),
@@ -62,4 +69,13 @@ urlpatterns = [
 
     # Settings
     path("settings/", views.settings_view, name="inventory-settings"),
+
+    # Import / export
+    path("import/template/", views_io.import_template_view, name="inventory-import-template"),
+    path("import/", views_io.import_sessions_view, name="inventory-import"),
+    path("import/<int:pk>/", views_io.import_session_detail_view, name="inventory-import-detail"),
+    path("import/<int:pk>/review/", views_io.import_review_view, name="inventory-import-review"),
+    path("import/<int:pk>/commit/", views_io.import_commit_view, name="inventory-import-commit"),
+    path("import/<int:pk>/report.csv", views_io.import_report_view, name="inventory-import-report"),
+    path("exports/<str:report>.<str:fmt>", views_io.export_view, name="inventory-export"),
 ]

@@ -216,7 +216,8 @@ def _no_model_available(reasons: list[str]) -> MenuScanError:
     return MenuScanError("Gemini could not process this file.", status_code=502)
 
 
-def extract_menu(data: bytes, mime_type: str) -> tuple[str, bool, str]:
+def extract_menu(data: bytes, mime_type: str, *, prompt: str | None = None,
+                 schema: dict | None = None) -> tuple[str, bool, str]:
     """
     Send the menu to Gemini. Returns ``(json_text, truncated, model_used)``.
 
@@ -237,14 +238,14 @@ def extract_menu(data: bytes, mime_type: str) -> tuple[str, bool, str]:
             "role": "user",
             "parts": [
                 {"inline_data": {"mime_type": mime_type, "data": base64.b64encode(data).decode()}},
-                {"text": EXTRACTION_PROMPT},
+                {"text": prompt or EXTRACTION_PROMPT},
             ],
         }],
         "generationConfig": {
             "temperature": 0,
             "maxOutputTokens": getattr(settings, "AI_MENU_SCANNER_MAX_OUTPUT_TOKENS", 65536),
             "responseMimeType": "application/json",
-            "responseSchema": RESPONSE_SCHEMA,
+            "responseSchema": schema or RESPONSE_SCHEMA,
         },
     }
 
