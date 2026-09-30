@@ -23,7 +23,12 @@ export interface PublicOffer {
   description: string;
   terms: string;
   image_url: string;
+  /** Full sentence, e.g. "Buy 1 Pizza, get Coke free". */
   summary: string;
+  /** Short badge label, e.g. "20% OFF", "BUY 1 GET 1 FREE". */
+  badge: string;
+  /** The benefit split into short lines for "What you get". */
+  what_you_get: string[];
   conditions: string[];
   benefit_kind: BenefitKind;
   merchant: OfferMerchant;
@@ -52,10 +57,20 @@ export interface OfferClaim {
   uses_remaining: number;
   claimed_at: string;
   expires_at: string | null;
+  /** Latest confirmed use, for the used-voucher receipt. */
+  last_use: {
+    used_at: string;
+    discount_amount: string | null;
+    /** Set only when the order is the customer's own. */
+    order_id: number | null;
+  } | null;
   offer: {
     id: number;
     title: string;
+    description: string;
     summary: string;
+    badge: string;
+    what_you_get: string[];
     conditions: string[];
     terms: string;
     image_url: string;

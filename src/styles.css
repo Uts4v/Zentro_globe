@@ -54,6 +54,15 @@
   --color-butter: var(--butter);
   --color-butter-soft: var(--butter-soft);
   --color-butter-strong: var(--butter-strong);
+  --color-gold: var(--gold);
+  --color-gold-soft: var(--gold-soft);
+  --color-oat: var(--oat);
+
+  /* ── Offers / voucher ticket (always light paper, readable in both themes) ── */
+  --color-ticket: var(--ticket-bg);
+  --color-ticket-ink: var(--ticket-ink);
+  --color-ticket-muted: var(--ticket-muted);
+  --color-ticket-line: var(--ticket-line);
 
   /* ── Semantic states ───────────────────────────────── */
   --color-success: var(--success);
@@ -96,6 +105,17 @@
   --butter: #f3d98b;
   --butter-strong: #d6a925;
   --butter-soft: #fbf1d9;
+
+  /* Luxury accent: muted champagne gold. Signals "special"; use sparingly. */
+  --gold: #d7b04a;
+  --gold-soft: #f3d98b;
+  --oat: #f3e7d5; /* Oat Cream */
+
+  /* Claimed voucher ticket */
+  --ticket-bg: #fffaf0;
+  --ticket-ink: #0f3d3a;
+  --ticket-muted: #74746f;
+  --ticket-line: rgba(215, 176, 74, 0.55);
 
   /* Backgrounds / surfaces */
   --background: #fbf7ef; /* Warm Ivory */
@@ -253,6 +273,16 @@
   --butter-strong: #f2dfa4;
   --butter-soft: rgba(232, 206, 133, 0.16);
 
+  --gold: #d9b95e;
+  --gold-soft: rgba(217, 185, 94, 0.18);
+  --oat: #213839;
+
+  /* The ticket stays paper-light in dark mode (the QR needs a light ground). */
+  --ticket-bg: #f7f0e1;
+  --ticket-ink: #0f3d3a;
+  --ticket-muted: #6b6a64;
+  --ticket-line: rgba(215, 176, 74, 0.7);
+
   /* Semantic states */
   --success: #899a60;
   --warning: #c99a54;
@@ -336,6 +366,33 @@
 @utility no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Fades the right edge of a horizontal scroller to hint there is more. */
+@utility edge-fade-x {
+  mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 32px), transparent);
+}
+
+/* Very low-opacity paper grain for the voucher ticket (never under the QR). */
+@utility ticket-paper {
+  background-color: var(--ticket-bg);
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(15, 61, 58, 0.045) 1px, transparent 0),
+    radial-gradient(120% 90% at 100% 0%, rgba(215, 176, 74, 0.1), transparent 55%);
+  background-size:
+    14px 14px,
+    100% 100%;
+}
+
+/* Wide customer shell: the sidebar carries the logo on desktop. */
+@media (min-width: 1024px) {
+  .zentro-wide .zentro-topbar-logo {
+    display: none;
+  }
 }
 
 @utility card-shadow {

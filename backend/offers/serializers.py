@@ -11,6 +11,7 @@ from .models import (
     PromotionCondition,
     PromotionTarget,
     VoucherClaim,
+    VoucherRedemption,
 )
 
 B = PromotionBenefit
@@ -66,6 +67,46 @@ def describe_benefit(campaign) -> str:
     return f"Buy {x} {qual}, get {qty}{rewards or 'an item'} {free}"
 
 
+def _pct(value) -> str:
+    return f"{Decimal(value).normalize():f}"
+
+
+def describe_badge(campaign) -> str:
+    """Short label for the offer badge ("20% OFF", "BUY 1 GET 1 FREE"). Display only."""
+    benefit = getattr(campaign, "benefit", None)
+    if benefit is None:
+        return ""
+    if benefit.kind == B.KIND_PERCENT:
+        return f"{_pct(benefit.value)}% OFF"
+    if benefit.kind == B.KIND_AMOUNT:
+        return f"{_money(campaign.merchant, benefit.value)} OFF"
+    free = benefit.reward_discount_percent >= 100
+    qty = benefit.reward_quantity
+    if benefit.kind == B.KIND_FREE_ITEM:
+        if free:
+            return "FREE ITEM" if qty == 1 else f"{qty} FREE ITEMS"
+        return f"{_pct(benefit.reward_discount_percent)}% OFF ITEM"
+    condition = next((c for c in campaign.conditions.all()), None)
+    x = condition.quantity if condition else 1
+    reward = "FREE" if free else f"{_pct(benefit.reward_discount_percent)}% OFF"
+    return f"BUY {x} GET {qty} {reward}"
+
+
+def describe_reward_lines(campaign) -> list[str]:
+    """The "What you get" list: the benefit split into short lines. Display only."""
+    benefit = getattr(campaign, "benefit", None)
+    if benefit is None:
+        return []
+    if benefit.kind != B.KIND_BXGY:
+        return [describe_benefit(campaign)]
+    condition = next((c for c in campaign.conditions.all()), None)
+    x = condition.quantity if condition else 1
+    qual = _target_names(campaign, PromotionTarget.ROLE_QUALIFYING, limit=3) or "qualifying items"
+    rewards = _target_names(campaign, PromotionTarget.ROLE_BENEFIT, limit=3) or "an item"
+    free = "free" if benefit.reward_discount_percent >= 100 else f"at {_pct(benefit.reward_discount_percent)}% off"
+    return [f"Buy {x} × {qual}", f"Get {benefit.reward_quantity} × {rewards} {free}"]
+
+
 def describe_conditions(campaign) -> list[str]:
     m = campaign.merchant
     out = []
@@ -111,16 +152,24 @@ class PublicOfferSerializer(serializers.ModelSerializer):
     remaining = serializers.SerializerMethodField()
     my_claim_id = serializers.SerializerMethodField()
     benefit_kind = serializers.CharField(source="benefit.kind", read_only=True)
+    badge = serializers.SerializerMethodField()
+    what_you_get = serializers.SerializerMethodField()
 
     class Meta:
         model = PromotionCampaign
         fields = [
-            "id", "title", "description", "terms", "image_url", "summary", "conditions",
+            "id", "title", "description", "terms", "image_url", "summary", "badge", "what_you_get", "conditions",
             "benefit_kind", "merchant", "distance_km", "starts_at", "ends_at", "remaining", "my_claim_id",
         ]
 
     def get_summary(self, obj):
         return describe_benefit(obj)
+
+    def get_badge(self, obj):
+        return describe_badge(obj)
+
+    def get_what_you_get(self, obj):
+        return describe_reward_lines(obj)
 
     def get_conditions(self, obj):
         return describe_conditions(obj)
@@ -150,13 +199,30 @@ class ClaimSerializer(serializers.ModelSerializer):
     needs_bill_amount = serializers.SerializerMethodField()
     bill_label = serializers.SerializerMethodField()
     store_pin_enabled = serializers.SerializerMethodField()
+    last_use = serializers.SerializerMethodField()
 
     class Meta:
         model = VoucherClaim
         fields = [
             "id", "code", "qr_payload", "status", "tab", "uses_allowed", "uses_count", "uses_remaining",
             "claimed_at", "expires_at", "offer", "needs_bill_amount", "bill_label", "store_pin_enabled",
+            "last_use",
         ]
+
+    def get_last_use(self, obj):
+        """The latest applied redemption, for the used-voucher receipt (read only)."""
+        applied = [r for r in obj.redemptions.all() if r.status == VoucherRedemption.STATUS_APPLIED]
+        if not applied:
+            return None
+        red = max(applied, key=lambda r: r.created_at)
+        order = red.order
+        # Link the order only when it is the customer's own (a POS sale may belong to no one).
+        own_order = order is not None and order.customer_id is not None and order.customer_id == obj.customer_id
+        return {
+            "used_at": red.created_at,
+            "discount_amount": str(red.discount_amount) if red.discount_amount is not None else None,
+            "order_id": order.pk if own_order else None,
+        }
 
     def get_needs_bill_amount(self, obj):
         from .engine import needs_bill_amount
@@ -180,7 +246,10 @@ class ClaimSerializer(serializers.ModelSerializer):
         return {
             "id": campaign.id,
             "title": campaign.title,
+            "description": campaign.description,
             "summary": describe_benefit(campaign),
+            "badge": describe_badge(campaign),
+            "what_you_get": describe_reward_lines(campaign),
             "conditions": describe_conditions(campaign),
             "terms": campaign.terms,
             "image_url": campaign.image_url,

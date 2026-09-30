@@ -13,7 +13,7 @@ from decimal import Decimal
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import Exists, F, OuterRef, Prefetch, Q, Sum
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -140,7 +140,13 @@ def offer_list(request):
 
     q = (params.get("q") or "").strip()[:80]
     if q:
-        qs = qs.filter(Q(title__icontains=q) | Q(description__icontains=q) | Q(merchant__business_name__icontains=q))
+        qs = qs.filter(
+            Q(title__icontains=q)
+            | Q(description__icontains=q)
+            | Q(merchant__business_name__icontains=q)
+            | Q(merchant__primary_category__name__icontains=q)
+            | Exists(PromotionTarget.objects.filter(campaign=OuterRef("pk"), menu_item__name__icontains=q))
+        )
     category = (params.get("category") or "").strip()
     if category:
         qs = qs.filter(Q(merchant__primary_category__slug=category) | Q(merchant__primary_category__parent__slug=category))
@@ -303,7 +309,10 @@ def _claims_qs():
     return VoucherClaim.objects.select_related(
         "campaign", "campaign__benefit", "campaign__merchant", "campaign__merchant__primary_category",
         "campaign__merchant__offer_redemption_pin",
-    ).prefetch_related(*(f"campaign__{p}" for p in CAMPAIGN_PREFETCH))
+    ).prefetch_related(
+        *(f"campaign__{p}" for p in CAMPAIGN_PREFETCH),
+        Prefetch("redemptions", queryset=VoucherRedemption.objects.select_related("order")),
+    )
 
 
 def parse_bill_amount(raw):
