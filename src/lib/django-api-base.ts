@@ -1,4 +1,10 @@
 import { staffSession } from "@/lib/staff-session";
+import {
+  isGatewayError,
+  noteServerReachable,
+  noteServerUnreachable,
+  setConnectivityProbe,
+} from "@/lib/connectivity";
 // src/lib/django-api-base.ts
 // Shared helpers for talking to the Django loyalty backend.
 
@@ -40,11 +46,32 @@ export const tokenStore = {
   },
 };
 
+// Sent like any other API call (same headers, so the same CORS rules apply):
+// the health check answers 200 signed in and 401 otherwise, and either one
+// shows the server is back.
+setConnectivityProbe(() => {
+  const access = tokenStore.getAccess();
+  return fetch(apiUrl("/pos/health/"), {
+    cache: "no-store",
+    headers: access ? { Authorization: `Bearer ${access}` } : {},
+  });
+});
+
 export async function djangoFetch<T>(
   url: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const res = await fetch(url, { cache: "no-store", ...options });
+  let res: Response;
+  try {
+    res = await fetch(url, { cache: "no-store", ...options });
+  } catch (err) {
+    // No answer at all (offline, DNS, dead uplink). A cancelled request says
+    // nothing about the server.
+    if ((err as { name?: string } | null)?.name !== "AbortError") noteServerUnreachable();
+    throw err;
+  }
+  if (isGatewayError(res.status)) noteServerUnreachable();
+  else noteServerReachable();
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {

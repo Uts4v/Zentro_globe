@@ -1484,6 +1484,34 @@ def create_pos_order(request):
         return Response({"error": "Order must contain at least one item."},
                         status=status.HTTP_400_BAD_REQUEST)
 
+    # Idempotency comes before every other check: a device resending an order
+    # the server already has (the reply was lost, or it was queued offline)
+    # must get that order back even if the shift has since closed or the menu
+    # has changed — otherwise the resend fails and the device never learns the
+    # order went through.
+    client_mutation_id = data.get("client_mutation_id")
+    if client_mutation_id:
+        from orders.serializers import OrderSerializer
+        existing = ProcessedClientMutation.objects.filter(
+            merchant=merchant,
+            client_mutation_id=client_mutation_id,
+            entity_type="order",
+        ).first()
+        existing_order = None
+        if existing and existing.server_object_id:
+            existing_order = Order.objects.filter(
+                id=existing.server_object_id, merchant=merchant,
+            ).first()
+        if existing_order is None:
+            # The mutation log can be cleared from the Conflicts screen while a
+            # device still has this order queued; the order row itself is the
+            # lasting record.
+            existing_order = Order.objects.filter(
+                merchant=merchant, client_mutation_id=client_mutation_id,
+            ).first()
+        if existing_order is not None:
+            return Response(OrderSerializer(existing_order, context={"request": request}).data)
+
     # Validate shift if shift management is enabled
     shift = None
     if merchant.shift_management_enabled:
@@ -1593,21 +1621,6 @@ def create_pos_order(request):
     source = data.get("source", "pos_online")
     if source not in ("pos_online", "pos_offline"):
         source = "pos_online"
-
-    client_mutation_id = data.get("client_mutation_id")
-    if client_mutation_id:
-        existing = ProcessedClientMutation.objects.filter(
-            merchant=merchant,
-            client_mutation_id=client_mutation_id,
-        ).first()
-        if existing:
-            # Idempotent — return existing order
-            try:
-                existing_order = Order.objects.get(id=existing.server_object_id)
-                from orders.serializers import OrderSerializer
-                return Response(OrderSerializer(existing_order, context={"request": request}).data)
-            except Order.DoesNotExist:
-                pass
 
     # Generate sequential KOT number per merchant per day (resets at midnight).
     # Lock the merchant row so two devices can't compute the same count+1.
@@ -1743,9 +1756,15 @@ def update_order_status_uuid(request):
         return Response({"error": f"Invalid status: {new_status}."},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        order = Order.objects.select_for_update().get(uuid=order_id, merchant=merchant)
-    except Order.DoesNotExist:
+    # An order taken offline is known to the device by its client mutation id
+    # until it has synced, so accept either (same as create_payment).
+    order = (
+        Order.objects.select_for_update()
+        .filter(merchant=merchant)
+        .filter(Q(uuid=order_id) | Q(client_mutation_id=order_id))
+        .first()
+    )
+    if not order:
         return Response({"error": "Order not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
@@ -3231,7 +3250,9 @@ def receipt_data(request, order_id):
         "payment_method": order.payment_method,
 
         "is_offline_receipt": order.source == "pos_offline",
-        "sync_status": "synced" if order.source != "pos_offline" else "pending",
+        # Anything this endpoint can return is on the server, i.e. synced —
+        # including orders that were first taken offline.
+        "sync_status": "synced",
     })
 
 

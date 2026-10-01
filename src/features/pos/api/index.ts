@@ -474,6 +474,8 @@ export interface PosOrder {
     quantity: number;
     subtotal: string;
     special_instructions?: string;
+    /** Variant/modifier picks as snapshotted on the order line. */
+    options?: Array<{ group_name: string; option_name: string; kind?: string }>;
   }>;
   cancellation_reason: string;
   cancelled_by: string;

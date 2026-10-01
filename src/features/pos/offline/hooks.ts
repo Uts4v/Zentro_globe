@@ -1,27 +1,29 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useSyncExternalStore } from "react";
+import { isOnline, subscribeConnectivity } from "@/lib/connectivity";
 import {
   startBackgroundSync,
   stopBackgroundSync,
   processSyncQueue,
   getSyncStatus,
+  subscribeSync,
+  getSyncRevision,
 } from "./sync";
 import { offlineOrders, OfflineOrder } from "./db";
 
+/**
+ * False while the POS has to work on its own: the device has no network, or
+ * it has one but the server is not answering.
+ */
 export function useOnlineStatus() {
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  return useSyncExternalStore(subscribeConnectivity, isOnline, () => true);
+}
 
-  useEffect(() => {
-    const onOnline = () => setIsOnline(true);
-    const onOffline = () => setIsOnline(false);
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    return () => {
-      window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
-    };
-  }, []);
-
-  return isOnline;
+/**
+ * Changes whenever new work is queued or a sync pass finishes — the moments
+ * at which anything listing unsynced work is out of date.
+ */
+export function useSyncRevision() {
+  return useSyncExternalStore(subscribeSync, getSyncRevision, () => 0);
 }
 
 /**
@@ -34,7 +36,8 @@ export function useOnlineStatus() {
  * showing up twice while the orders list is still on a stale fetch.
  */
 export function usePendingOfflineOrders() {
-  const isOnline = useOnlineStatus();
+  const online = useOnlineStatus();
+  const syncRevision = useSyncRevision();
   const [orders, setOrders] = useState<OfflineOrder[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
 
@@ -48,7 +51,7 @@ export function usePendingOfflineOrders() {
     return () => {
       cancelled = true;
     };
-  }, [reloadKey, isOnline]);
+  }, [reloadKey, online, syncRevision]);
 
   return { orders, reload };
 }
@@ -58,22 +61,25 @@ export function useSyncStatus() {
     pending: 0,
     failed: 0,
     isSyncing: false,
+    needsSignIn: false,
   });
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
-
-  useEffect(() => {
-    getSyncStatus().then(setStatus);
-  }, [refreshKey]);
-
-  // Auto-refresh every 5 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      getSyncStatus().then(setStatus);
-    }, 5000);
-    return () => clearInterval(interval);
+  const refresh = useCallback(() => {
+    getSyncStatus()
+      .then(setStatus)
+      .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    refresh();
+    const unsubscribe = subscribeSync(refresh);
+    // Another tab can change the queue too, so keep a slow poll as well.
+    const interval = setInterval(refresh, 5000);
+    return () => {
+      unsubscribe();
+      clearInterval(interval);
+    };
+  }, [refresh]);
 
   return { ...status, refresh };
 }
@@ -85,7 +91,7 @@ export function useBackgroundSync() {
   }, []);
 
   const syncNow = useCallback(() => {
-    return processSyncQueue();
+    return processSyncQueue({ force: true });
   }, []);
 
   return { syncNow };

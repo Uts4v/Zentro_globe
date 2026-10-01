@@ -48,6 +48,15 @@ import { paymentMethodLabel } from "@/lib/payment-methods";
 import { toast } from "sonner";
 import { offlineOrders, cachedServerOrders, type OfflineOrder } from "../offline/db";
 import { enqueueMutation } from "../offline/sync";
+import { useOnlineStatus, useSyncRevision } from "../offline/hooks";
+import {
+  billFromOfflineOrder,
+  kotFromOrder,
+  offlineOrderPaid,
+  orderNumber,
+  receiptFromOrder,
+} from "../offline/documents";
+import { isOnline as serverReachable } from "@/lib/connectivity";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-warning/10 text-warning",
@@ -58,6 +67,17 @@ const STATUS_COLORS: Record<string, string> = {
   completed: "bg-muted text-muted-foreground",
   cancelled: "bg-destructive/10 text-destructive",
 };
+
+const NEEDS_CONNECTION = "Needs a connection — not available offline";
+
+/**
+ * An order that so far exists only on this device. Once it has synced it comes
+ * back from the server with a real id (and still `source: "pos_offline"`), and
+ * is then an ordinary server order.
+ */
+function isLocalOrder(order: PosOrder) {
+  return order.source === "pos_offline" && order.id <= 0;
+}
 
 // Payment can still be collected unless the order is already settled or void.
 function canCollectPayment(order: PosOrder) {
@@ -95,16 +115,16 @@ function offlineOrderToPosOrder(off: OfflineOrder): PosOrder {
     order_type: "dine_in",
     source: "pos_offline",
     fulfillment_type: off.fulfillment_type || "takeaway",
-    subtotal: String(off.total),
+    subtotal: off.bill?.subtotal ?? String(off.total),
     discount_type: "none",
     discount_value: "0.00",
-    discount_amount: "0.00",
-    tax_amount: "0.00",
-    tax_breakdown: [],
-    service_charge: "0.00",
+    discount_amount: off.bill?.discount_amount ?? "0.00",
+    tax_amount: off.bill?.tax_amount ?? "0.00",
+    tax_breakdown: off.bill?.tax_breakdown ?? [],
+    service_charge: off.bill?.service_charge ?? "0.00",
     total_amount: String(off.total),
     points_earned: 0,
-    payment_status: off.bill ? "paid" : "unpaid",
+    payment_status: offlineOrderPaid(off) ? "paid" : "unpaid",
     payment_method: off.bill?.payment_method || "cash",
     notes: off.notes || "",
     items: (off.cart_snapshot || []).map((item, idx) => ({
@@ -153,33 +173,26 @@ export default function OrderDetailScreen({
     quantity?: number;
   } | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  // Why the server refused an order taken on this device, by its local id.
+  const [syncErrors, setSyncErrors] = useState<Record<string, string>>({});
+  const isOffline = !useOnlineStatus();
+  const syncRevision = useSyncRevision();
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
+  const merchant = usePosStore((s) => s.merchant);
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
+  // Reload when the connection changes and whenever a sync pass finishes:
+  // orders taken here turn into server orders at that moment.
   useEffect(() => {
     loadOrders();
-    const handleOnline = () => {
-      setIsOffline(false);
-      loadOrders();
-    };
-    const handleOffline = () => {
-      setIsOffline(true);
-    };
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
+  }, [isOffline, syncRevision]);
 
   async function loadOrders() {
     setLoading(true);
     let serverList: PosOrder[] = [];
-    const online = navigator.onLine;
+    const online = serverReachable();
 
     if (online) {
       try {
@@ -193,19 +206,31 @@ export default function OrderDetailScreen({
     }
 
     try {
-      const pendingOffline = await offlineOrders.getAll();
-      const offlineList = pendingOffline
+      // A synced order is on the server (and in its list) under its own id,
+      // so only the ones still waiting are shown from this device.
+      const captured = await offlineOrders.getAll();
+      const waiting = captured
         .filter((o) => o.status !== "synced")
-        .map(offlineOrderToPosOrder);
+        .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      const serverUuidOf = new Map(captured.map((o) => [o.id, o.server_order_uuid]));
+      setSyncErrors(
+        Object.fromEntries(
+          waiting.filter((o) => o.status === "failed").map((o) => [o.id, o.sync_error || ""]),
+        ),
+      );
 
-      const serverUuids = new Set(serverList.map((o) => o.uuid));
-      const filteredOffline = offlineList.filter((o) => !serverUuids.has(o.uuid));
-
-      const merged = [...filteredOffline, ...serverList];
+      const merged = [...waiting.map(offlineOrderToPosOrder), ...serverList];
       setOrders(merged);
 
       setSelectedOrder((prev) => {
-        if (prev) return merged.find((o) => o.uuid === prev.uuid) ?? prev;
+        if (prev) {
+          // An order open on screen while it syncs carries on as the server's copy.
+          return (
+            merged.find((o) => o.uuid === prev.uuid) ??
+            merged.find((o) => o.uuid === serverUuidOf.get(prev.uuid)) ??
+            prev
+          );
+        }
         return (orderId && merged.find((o) => o.id === orderId)) || null;
       });
     } catch {
@@ -218,21 +243,31 @@ export default function OrderDetailScreen({
     }
   }
 
+  /**
+   * The bill and the kitchen ticket normally come from the server. Offline —
+   * or for an order that only exists on this device — they are built here from
+   * what is saved, so both can always be printed.
+   */
   async function handleViewReceipt(order: PosOrder) {
     setLoadingReceipt(true);
     try {
-      if (order.source === "pos_offline") {
-        const off = await offlineOrders.get(order.uuid);
-        if (off?.bill) {
-          setReceiptData(off.bill);
-          setLoadingReceipt(false);
-          return;
-        }
+      const local = isLocalOrder(order) ? await offlineOrders.get(order.uuid) : undefined;
+      if (local) {
+        setReceiptData(billFromOfflineOrder(local, merchant));
+        return;
       }
-      const data = await posReceiptData(String(order.uuid));
-      setReceiptData(data);
+      if (!serverReachable()) {
+        setReceiptData(receiptFromOrder(order, merchant));
+        return;
+      }
+      try {
+        setReceiptData(await posReceiptData(String(order.uuid)));
+      } catch (err: any) {
+        if (!serverReachable()) setReceiptData(receiptFromOrder(order, merchant));
+        else toast.error(err?.message || "Could not load the receipt.");
+      }
     } catch {
-      // ignore
+      toast.error("Could not open the bill.");
     } finally {
       setLoadingReceipt(false);
     }
@@ -241,22 +276,27 @@ export default function OrderDetailScreen({
   async function handlePrintKOT(order: PosOrder) {
     setLoadingReceipt(true);
     try {
-      if (order.source === "pos_offline") {
-        const off = await offlineOrders.get(order.uuid);
-        if (off?.kot) {
-          printKOT({
-            ...off.kot,
-            kotNumber: off.kot.kotNumber ?? null,
-            customerName: off.kot.customerName ?? null,
-          });
-          setLoadingReceipt(false);
-          return;
-        }
+      const local = isLocalOrder(order) ? await offlineOrders.get(order.uuid) : undefined;
+      if (local?.kot) {
+        printKOT({
+          ...local.kot,
+          kotNumber: local.kot.kotNumber ?? null,
+          customerName: local.kot.customerName ?? null,
+        });
+        return;
       }
-      const data = await posReceiptData(String(order.uuid));
-      printKOT(kotTicketFromReceipt(data));
+      if (local || !serverReachable()) {
+        printKOT(kotFromOrder(order, merchant));
+        return;
+      }
+      try {
+        printKOT(kotTicketFromReceipt(await posReceiptData(String(order.uuid))));
+      } catch (err: any) {
+        if (!serverReachable()) printKOT(kotFromOrder(order, merchant));
+        else toast.error(err?.message || "Could not load the KOT.");
+      }
     } catch {
-      // ignore
+      toast.error("Could not print the KOT.");
     } finally {
       setLoadingReceipt(false);
     }
@@ -264,82 +304,72 @@ export default function OrderDetailScreen({
 
   async function handleStatusChange(order: PosOrder, newStatus: string) {
     setStatusLoading(true);
-    const online = navigator.onLine;
-    const isOfflineOrder = order.source === "pos_offline";
+    const local = isLocalOrder(order);
 
-    if (!online || isOfflineOrder) {
-      try {
-        if (isOfflineOrder) {
-          await offlineOrders.updateStatus(order.uuid, newStatus);
-        } else {
-          cachedServerOrders.updateStatus(order.uuid, newStatus);
-          await enqueueMutation(
-            "order_status",
-            "/pos/order/status/",
-            "POST",
-            {
-              order_id: order.uuid,
-              status: newStatus,
-              worker_id: currentWorker?.id,
-              device_id: device?.id,
-            },
-            `status-${order.uuid}-${Date.now()}`
-          );
-        }
-
-        setOrders((prev) =>
-          prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o))
-        );
-        setSelectedOrder((prev) =>
-          prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev
-        );
-        toast.success(`Order marked as ${newStatus} (Saved offline)`);
-      } catch (err: any) {
-        toast.error("Failed to update status offline: " + (err?.message || "Unknown error"));
-      } finally {
-        setStatusLoading(false);
-      }
-      return;
-    }
+    /**
+     * Record the change on this device and queue it for the server. An order
+     * that has not synced yet is queued under its local id; the sync engine
+     * sends it after the order itself and points it at the server's order.
+     */
+    const saveForLater = async () => {
+      if (local) await offlineOrders.updateStatus(order.uuid, newStatus);
+      else cachedServerOrders.updateStatus(order.uuid, newStatus);
+      await enqueueMutation(
+        "order_status",
+        "/pos/order/status/",
+        "POST",
+        {
+          order_id: order.uuid,
+          status: newStatus,
+          worker_id: currentWorker?.id,
+          device_id: device?.id,
+        },
+        `status-${order.uuid}-${Date.now()}`,
+      );
+      setOrders((prev) =>
+        prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o)),
+      );
+      setSelectedOrder((prev) =>
+        prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev,
+      );
+      toast.success(`Order marked as ${newStatus} (Saved offline)`);
+    };
 
     try {
-      const updatedOrder = await posUpdateOrderStatus(
-        String(order.uuid),
-        newStatus,
-        currentWorker?.id,
-        device?.id,
-      );
-      setOrders((prev) => prev.map((o) => (o.uuid === order.uuid ? { ...o, ...updatedOrder } : o)));
-      setSelectedOrder((prev) => (prev?.uuid === order.uuid ? { ...prev, ...updatedOrder } : prev));
-      cachedServerOrders.updateStatus(order.uuid, newStatus);
-      toast.success(`Order marked as ${newStatus}`);
-    } catch (err: any) {
-      if (!navigator.onLine) {
+      if (local || !serverReachable()) {
         try {
-          await enqueueMutation(
-            "order_status",
-            "/pos/order/status/",
-            "POST",
-            {
-              order_id: order.uuid,
-              status: newStatus,
-              worker_id: currentWorker?.id,
-              device_id: device?.id,
-            },
-            `status-${order.uuid}-${Date.now()}`
-          );
-          setOrders((prev) =>
-            prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o))
-          );
-          setSelectedOrder((prev) =>
-            prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev
-          );
-          toast.success(`Order marked as ${newStatus} (Saved offline)`);
-        } catch {
-          toast.error("Network failed and could not save offline.");
+          await saveForLater();
+        } catch (err: any) {
+          toast.error("Failed to update status offline: " + (err?.message || "Unknown error"));
         }
-      } else {
-        toast.error(err?.message || "Failed to update order status.");
+        return;
+      }
+
+      try {
+        const updatedOrder = await posUpdateOrderStatus(
+          String(order.uuid),
+          newStatus,
+          currentWorker?.id,
+          device?.id,
+        );
+        setOrders((prev) =>
+          prev.map((o) => (o.uuid === order.uuid ? { ...o, ...updatedOrder } : o)),
+        );
+        setSelectedOrder((prev) =>
+          prev?.uuid === order.uuid ? { ...prev, ...updatedOrder } : prev,
+        );
+        cachedServerOrders.updateStatus(order.uuid, newStatus);
+        toast.success(`Order marked as ${newStatus}`);
+      } catch (err: any) {
+        if (!serverReachable()) {
+          try {
+            await saveForLater();
+          } catch {
+            toast.error("Network failed and could not save offline.");
+          }
+        } else {
+          toast.error(err?.message || "Failed to update order status.");
+        }
       }
     } finally {
       setStatusLoading(false);
@@ -438,14 +468,17 @@ export default function OrderDetailScreen({
           <div className="mb-4 flex items-start justify-between">
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-xl font-bold text-foreground">
-                  Order {order.id && order.id > 0 ? `#${order.id}` : `#OFF-${order.uuid.slice(0, 6).toUpperCase()}`}
-                </h2>
-                {order.source === "pos_offline" && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
-                    ⚡ Offline / Pending Sync
-                  </span>
-                )}
+                <h2 className="text-xl font-bold text-foreground">Order {orderNumber(order)}</h2>
+                {isLocalOrder(order) &&
+                  (order.uuid in syncErrors ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-bold text-destructive">
+                      Sync failed
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                      ⚡ Offline / Pending Sync
+                    </span>
+                  ))}
                 {order.kot_number && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2.5 py-0.5 text-xs font-extrabold text-ember">
                     <Ticket className="h-3 w-3" />
@@ -465,6 +498,17 @@ export default function OrderDetailScreen({
               {order.status.toUpperCase()}
             </span>
           </div>
+
+          {isLocalOrder(order) && order.uuid in syncErrors && (
+            <div className="mb-4 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+              <p className="font-semibold">The server did not accept this order.</p>
+              {syncErrors[order.uuid] && <p className="mt-0.5">{syncErrors[order.uuid]}</p>}
+              <p className="mt-0.5">
+                It is still saved on this device. Use Retry in the sync bar once the problem is
+                fixed, or re-enter the order.
+              </p>
+            </div>
+          )}
 
           {/* Info grid */}
           <div className="mb-4 grid grid-cols-2 gap-3 text-sm">
@@ -514,9 +558,10 @@ export default function OrderDetailScreen({
                     <p className="text-sm font-bold text-ink">
                       {formatCurrency(Number(item.subtotal), currencySymbol)}
                     </p>
-                    {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && (
+                    {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && !isLocalOrder(order) && (
                       <button
                         type="button"
+                        disabled={isOffline}
                         onClick={() => {
                           setSelectedMinusItem({
                             name: item.name,
@@ -525,8 +570,8 @@ export default function OrderDetailScreen({
                           });
                           setShowMinusStock(true);
                         }}
-                        title="Minus stock for this item"
-                        className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+                        title={isOffline ? NEEDS_CONNECTION : "Minus stock for this item"}
+                        className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         <PackageMinus className="h-3.5 w-3.5" />
                         <span>Minus Stock</span>
@@ -564,11 +609,15 @@ export default function OrderDetailScreen({
 
           {/* Actions */}
           <div className="mt-6 space-y-3">
-            {/* Add Items button, only while the bill is still open and unpaid. */}
-            {canAddItems(order) && (
+            {/* Add Items button, only while the bill is still open and unpaid.
+                The server prices the added lines, so it needs a connection and
+                an order the server already has. */}
+            {canAddItems(order) && !isLocalOrder(order) && (
               <button
                 onClick={() => setShowAddItems(true)}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink/30 py-2.5 text-sm font-bold text-ink hover:bg-ink/5"
+                disabled={isOffline}
+                title={isOffline ? NEEDS_CONNECTION : undefined}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-ink/30 py-2.5 text-sm font-bold text-ink hover:bg-ink/5 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <Plus className="h-4 w-4" />
                 Add Items to This Order
@@ -576,14 +625,16 @@ export default function OrderDetailScreen({
             )}
 
             {/* Minus Stock button for Dine-In orders */}
-            {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && (
+            {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && !isLocalOrder(order) && (
               <button
                 type="button"
+                disabled={isOffline}
+                title={isOffline ? NEEDS_CONNECTION : undefined}
                 onClick={() => {
                   setSelectedMinusItem(null);
                   setShowMinusStock(true);
                 }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 py-3 text-sm font-bold text-destructive transition-colors hover:bg-destructive/20 shadow-sm"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 py-3 text-sm font-bold text-destructive transition-colors hover:bg-destructive/20 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <PackageMinus className="h-4 w-4" />
                 Minus Stock
@@ -626,7 +677,7 @@ export default function OrderDetailScreen({
             )}
 
             <div className="flex gap-3">
-              {order.kot_number && (
+              {(order.kot_number || isLocalOrder(order)) && (
                 <button
                   onClick={() => handlePrintKOT(order)}
                   disabled={loadingReceipt}
@@ -650,12 +701,14 @@ export default function OrderDetailScreen({
                 ) : (
                   <ReceiptIcon className="h-4 w-4" />
                 )}
-                View Receipt
+                {order.payment_status === "paid" ? "View Receipt" : "View Bill"}
               </button>
-              {order.payment_status === "paid" && (
+              {order.payment_status === "paid" && !isLocalOrder(order) && (
                 <button
                   onClick={() => setShowRefund(true)}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/30 py-3 text-sm font-medium text-destructive hover:bg-destructive/10"
+                  disabled={isOffline}
+                  title={isOffline ? NEEDS_CONNECTION : undefined}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/30 py-3 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <RotateCcw className="h-4 w-4" />
                   Refund
@@ -818,7 +871,8 @@ export default function OrderDetailScreen({
               );
             })
             .map((order) => {
-              const isOfflineOrder = order.source === "pos_offline";
+              const isOfflineOrder = isLocalOrder(order);
+              const syncFailed = isOfflineOrder && order.uuid in syncErrors;
               return (
                 <button
                   key={order.uuid || order.id}
@@ -829,13 +883,18 @@ export default function OrderDetailScreen({
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-bold text-foreground">
-                          {order.id && order.id > 0 ? `#${order.id}` : `OFF-${order.uuid.slice(0, 6).toUpperCase()}`}
+                          {orderNumber(order)}
                         </span>
-                        {isOfflineOrder && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
-                            ⚡ Pending Sync
-                          </span>
-                        )}
+                        {isOfflineOrder &&
+                          (syncFailed ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-bold text-destructive">
+                              Sync failed
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                              ⚡ Pending Sync
+                            </span>
+                          ))}
                         {order.kot_number && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
                             <Ticket className="h-2.5 w-2.5" />
