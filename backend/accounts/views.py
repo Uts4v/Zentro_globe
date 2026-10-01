@@ -99,7 +99,13 @@ def _create_merchant_profile(user: User, store_name: str) -> None:
     from merchants.models import MerchantProfile
     import re
 
-    base_slug = re.sub(r"[^a-z0-9]+", "-", store_name.lower()).strip("-")
+    clean_name = (store_name or "").strip()
+    if not clean_name:
+        clean_name = f"{user.first_name}'s Store" if user.first_name else "My Store"
+
+    base_slug = re.sub(r"[^a-z0-9]+", "-", clean_name.lower()).strip("-")
+    if not base_slug:
+        base_slug = "store"
     slug = base_slug
     idx = 1
     while MerchantProfile.objects.filter(slug=slug).exists():
@@ -111,7 +117,7 @@ def _create_merchant_profile(user: User, store_name: str) -> None:
 
     MerchantProfile.objects.create(
         user=user,
-        business_name=store_name,
+        business_name=clean_name,
         slug=slug,
         is_approved=is_approved,
         onboarding_complete=False,
@@ -610,7 +616,14 @@ def google_auth(request):
         if role == "customer":
             _create_customer_profile(user, google_name or email)
         else:
-            _create_merchant_profile(user, data["store_name"].strip())
+            store_name = (data.get("store_name") or "").strip()
+            if not store_name:
+                store_name = (
+                    f"{google_name}'s Store".strip()
+                    if google_name
+                    else (f"{name_parts[0]}'s Store".strip() if name_parts[0] else "My Store")
+                )
+            _create_merchant_profile(user, store_name)
 
     else:
         # ── Existing account — link Google if not already linked ────────────
@@ -641,6 +654,9 @@ def google_auth(request):
 
         if role == "customer" and not hasattr(user, "customer_profile"):
             _create_customer_profile(user, google_name or _resolve_full_name(user))
+        elif role == "merchant" and not hasattr(user, "merchant_profile"):
+            store_name = (data.get("store_name") or "").strip() or f"{user.first_name}'s Store"
+            _create_merchant_profile(user, store_name)
 
     return Response(_auth_payload(user, google_name or _resolve_full_name(user)))
 

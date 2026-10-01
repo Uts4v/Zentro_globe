@@ -2,6 +2,7 @@ from django.urls import reverse
 from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
+from unittest.mock import patch
 from .models import User, OtpCode
 from .serializers import sign_phone_token
 
@@ -209,14 +210,73 @@ class GoogleAuthConfigTests(TestCase):
     def setUp(self):
         self.client = APIClient()
 
-    def test_google_returns_503_when_not_configured(self):
+    def test_merchant_google_returns_503_without_store_name(self):
         resp = self.client.post(
             reverse("auth-google"),
-            {"id_token": "not-a-real-token", "role": "customer"},
+            {"id_token": "not-a-real-token", "role": "merchant"},
             format="json",
         )
         self.assertEqual(resp.status_code, 503)
         self.assertIn("not configured", str(resp.data).lower())
+
+
+@override_settings(GOOGLE_OAUTH_CLIENT_IDS=["test-client-id"])
+class GoogleAuthFlowTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+
+    @patch("google.oauth2.id_token.verify_oauth2_token")
+    def test_new_merchant_google_auth_without_store_name(self, mock_verify):
+        mock_verify.return_value = {
+            "aud": "test-client-id",
+            "email": "newmerchant@example.com",
+            "email_verified": True,
+            "sub": "google-sub-123",
+            "name": "Jane Doe",
+            "picture": "https://example.com/avatar.png",
+        }
+        resp = self.client.post(
+            reverse("auth-google"),
+            {"id_token": "valid-token", "role": "merchant"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["role"], "merchant")
+        user = User.objects.get(email="newmerchant@example.com")
+        self.assertEqual(user.role, "merchant")
+        self.assertTrue(hasattr(user, "merchant_profile"))
+        self.assertEqual(user.merchant_profile.business_name, "Jane Doe's Store")
+
+    @patch("google.oauth2.id_token.verify_oauth2_token")
+    def test_existing_merchant_google_auth_login_without_store_name(self, mock_verify):
+        from merchants.models import MerchantProfile
+        user = User.objects.create_user(
+            username="existingmerchant",
+            email="existing@example.com",
+            role="merchant",
+        )
+        MerchantProfile.objects.create(
+            user=user,
+            business_name="Custom Coffee Roastery",
+            slug="custom-coffee-roastery",
+        )
+        mock_verify.return_value = {
+            "aud": "test-client-id",
+            "email": "existing@example.com",
+            "email_verified": True,
+            "sub": "google-sub-456",
+            "name": "Coffee Master",
+        }
+        resp = self.client.post(
+            reverse("auth-google"),
+            {"id_token": "valid-token", "role": "merchant"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.data["role"], "merchant")
+        user.refresh_from_db()
+        self.assertEqual(user.google_sub, "google-sub-456")
+        self.assertEqual(user.merchant_profile.business_name, "Custom Coffee Roastery")
 
 
 class ChangePasswordTests(TestCase):

@@ -1,4 +1,4 @@
-﻿// routes/auth.merchant.signup.tsx — Merchant sign-up only
+// routes/auth.merchant.signup.tsx — Merchant sign-up only
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -28,13 +28,9 @@ function MerchantSignup() {
 
   const handleGoogleToken = async (idToken: string) => {
     setError(null);
-    if (!storeName.trim()) {
-      setError("Enter your store name before signing up with Google.");
-      return;
-    }
     const { error: err } = await googleAuth(idToken, {
       role: "merchant",
-      store_name: storeName,
+      store_name: storeName.trim() || undefined,
     });
     if (err) {
       setError(err);

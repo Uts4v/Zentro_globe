@@ -411,8 +411,4 @@ class GoogleAuthSerializer(serializers.Serializer):
         else:
             data["phone_verified"] = False
 
-        if role == "merchant" and not data.get("store_name", "").strip():
-            raise serializers.ValidationError(
-                {"store_name": "Store name is required for merchant accounts."}
-            )
         return data
