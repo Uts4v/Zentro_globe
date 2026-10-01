@@ -86,6 +86,21 @@ class Base(TestCase):
         cls.cashier = worker("Sita", ShiftWorker.ROLE_CASHIER)
         cls.waiter = worker("Hari", ShiftWorker.ROLE_WAITER)
         cls.manager = worker("Maya", ShiftWorker.ROLE_MANAGER)
+        # Inventory capabilities come from the employee's central role (pos.rbac).
+        cls.stock_helper = worker("Gita", ShiftWorker.ROLE_CASHIER)
+        cls.give_role(cls.stock_helper, "Stock Helper",
+                      ["inventory.view", "inventory.count", "inventory.waste"])
+        cls.give_role(cls.waiter, "Runner", ["inventory.view", "inventory.transfer"])
+
+    @classmethod
+    def give_role(cls, worker, name, codes):
+        from pos import rbac
+        from pos.models import StaffRole
+
+        role = StaffRole.objects.create(merchant=worker.merchant, name=name)
+        rbac.set_role_permissions(role, codes)
+        rbac.assign_role(worker, role)
+        return role
 
     def setUp(self):
         self.client = APIClient()
@@ -153,11 +168,17 @@ class PermissionTests(Base):
                                 {"worker_id": str(self.cashier.id), "pin": "9999"}, format="json")
         self.assertEqual(resp.status_code, 401)
 
+    def test_default_cashier_has_no_inventory_access(self):
+        self.item(qty="10")
+        staff = self.staff(self.cashier)
+        self.assertEqual(staff.get("/api/inventory/items/").status_code, 403)
+        self.assertEqual(staff.get("/api/inventory/").status_code, 403)
+
     def test_cashier_limits_enforced_server_side(self):
         rice = self.item(qty="10", cost="100")
-        staff = self.staff(self.cashier)
+        staff = self.staff(self.stock_helper)
         root = staff.get("/api/inventory/").data
-        self.assertEqual(root["role"], "cashier")
+        self.assertEqual(root["role"], "custom")
         self.assertFalse(root["permissions"][InvPerm.VIEW_COST])
         # Can see stock (without costs), count and record waste.
         items = staff.get("/api/inventory/items/").data["results"]
@@ -168,7 +189,7 @@ class PermissionTests(Base):
         }, format="json")
         self.assertEqual(resp.status_code, 201, resp.data)
         self.assertEqual(InventoryMovement.objects.get(movement_type=MovementType.EXPLICIT_WASTE).actor_label,
-                         "Sita")
+                         "Gita")
         # Everything else is refused by the backend, not just hidden.
         forbidden = [
             ("post", "/api/inventory/adjustments/", {"inventory_item": rice.id, "location": self.kitchen.id,
@@ -230,7 +251,7 @@ class PermissionTests(Base):
         self.assertEqual(client.get("/api/inventory/items/").status_code, 403)
 
     def test_leaving_staff_mode_needs_owner_password_or_manager_pin(self):
-        staff = self.staff(self.cashier)
+        staff = self.staff(self.stock_helper)
         self.assertEqual(staff.post("/api/inventory/staff/session/end/", {"password": "nope"},
                                     format="json").status_code, 401)
         self.assertEqual(staff.post("/api/inventory/staff/session/end/",
@@ -255,7 +276,7 @@ class PermissionTests(Base):
         settings_obj.require_count_approval = False
         settings_obj.save()
         rice = self.item(qty="10")
-        staff = self.staff(self.cashier)
+        staff = self.staff(self.stock_helper)
         count = staff.post("/api/inventory/counts/", {"name": "Kitchen", "location": self.kitchen.id},
                            format="json").data
         line = count["lines"][0]
@@ -886,18 +907,17 @@ class ExportTests(Base):
         self.item("Chicken Breast", qty="18", cost="480")
         report = build_report("current-stock", self.merchant, {}, include_cost=False)
         self.assertNotIn("stock_value", [c.key for c in report.visible_columns])
-        roles = {**InvPerm.ROLE_DEFAULTS, "manager": [p for p in InvPerm.ROLE_DEFAULTS["manager"]
-                                                      if p != InvPerm.VIEW_COST]}
-        with mock.patch.object(InvPerm, "ROLE_DEFAULTS", roles):
-            staff = self.staff(self.manager)
-            body = b"".join(staff.get("/api/inventory/exports/current-stock.csv").streaming_content)
-            self.assertNotIn(b"Stock Value", body)
-            self.assertNotIn(b"480", body)
-            waste = b"".join(staff.get("/api/inventory/exports/waste.csv").streaming_content)
-            self.assertNotIn(b"Cost", waste)
-            pdf = staff.get("/api/inventory/exports/full.pdf").content
-            doc = pymupdf.open(stream=pdf, filetype="pdf")
-            self.assertNotIn("Inventory value", "".join(p.get_text() for p in doc))
+        # A role that may see inventory reports but not costs.
+        self.give_role(self.manager, "Stock Lead", ["inventory.view", "inventory.manage", "reports.view"])
+        staff = self.staff(self.manager)
+        body = b"".join(staff.get("/api/inventory/exports/current-stock.csv").streaming_content)
+        self.assertNotIn(b"Stock Value", body)
+        self.assertNotIn(b"480", body)
+        waste = b"".join(staff.get("/api/inventory/exports/waste.csv").streaming_content)
+        self.assertNotIn(b"Cost", waste)
+        pdf = staff.get("/api/inventory/exports/full.pdf").content
+        doc = pymupdf.open(stream=pdf, filetype="pdf")
+        self.assertNotIn("Inventory value", "".join(p.get_text() for p in doc))
 
     def test_filtered_export(self):
         self.item("Kitchen Rice", qty="5")

@@ -8,9 +8,11 @@ Reuses Zentro's existing identities — no new permission framework:
   * A POS ShiftWorker can use the dashboard in "staff mode" on a shared
     device: the owner session starts a short-lived, signed staff session by
     verifying the worker's PIN (ShiftWorker.verify_pin, with its lockout).
-    Requests then carry the ``X-Inventory-Staff`` header and are evaluated
-    with the worker's role. This is the "ShiftWorker-level mapping" the V1
-    module documented as its future extension.
+    Requests then carry the staff token and are evaluated with the worker's
+    ROLE from Zentro's central RBAC (pos.rbac). There is no separate
+    inventory role system: ``ROLE_PERMISSION_MAP`` below translates the
+    central permissions (inventory.view, inventory.count, …) into the
+    inventory capabilities the endpoints check.
 
 Every endpoint enforces its capability server-side (see ``inventory_perm``
 in views.py). The UI only hides what the backend would refuse anyway.
@@ -20,7 +22,6 @@ owner access.
 
 from dataclasses import dataclass, field
 
-from django.core import signing
 from rest_framework import permissions
 
 
@@ -48,38 +49,34 @@ class InvPerm:
         PURCHASE, TRANSFER, VIEW_REPORTS, MANAGE_SETTINGS, IMPORT,
     ]
 
-    _FRONTLINE = [VIEW, COUNT, SUBMIT_COUNT, RECORD_WASTE]
-
-    # Role defaults. Owner/admin: everything (settings, costs, audit, import).
-    # Manager: deliveries, corrections, suppliers, reports, history, costs.
-    # Kitchen/bar staff: stock, counting, waste, moving stock.
-    # Cashier: stock, counting, waste.
-    ROLE_DEFAULTS = {
-        "owner": ALL,
-        "admin": ALL,
-        "manager": [
-            VIEW, VIEW_COST, MANAGE_ITEMS, COUNT, SUBMIT_COUNT, APPROVE_COUNT,
-            RECEIVE, ADJUST, RECORD_WASTE, MANAGE_SUPPLIERS, PURCHASE, TRANSFER,
-            VIEW_REPORTS,
-        ],
-        "kitchen": _FRONTLINE + [TRANSFER],
-        "bar": _FRONTLINE + [TRANSFER],
-        "staff": _FRONTLINE + [TRANSFER],
-        "cashier": _FRONTLINE,
+    # Central role permission (pos.rbac) → inventory capabilities it grants.
+    ROLE_PERMISSION_MAP = {
+        "inventory.view": [VIEW],
+        "inventory.count": [VIEW, COUNT, SUBMIT_COUNT],
+        "inventory.receive": [VIEW, RECEIVE],
+        "inventory.transfer": [VIEW, TRANSFER],
+        "inventory.waste": [VIEW, RECORD_WASTE],
+        "inventory.adjust": [VIEW, ADJUST, APPROVE_COUNT],
+        "inventory.manage": [VIEW, MANAGE_ITEMS, MANAGE_SUPPLIERS, PURCHASE, VIEW_REPORTS],
+        "inventory.costs": [VIEW_COST],
+        "reports.view": [VIEW_REPORTS],
+        "settings.manage": [MANAGE_SETTINGS, IMPORT],
     }
 
-    # ShiftWorker.role → inventory role
-    WORKER_ROLE_MAP = {
-        "admin": "admin",
-        "manager": "manager",
-        "waiter": "staff",
-        "cashier": "cashier",
-    }
+    @classmethod
+    def for_role_permissions(cls, codes, is_admin=False) -> frozenset:
+        """Inventory capabilities for a role's central permissions."""
+        if is_admin:
+            return frozenset(cls.ALL)
+        granted = set()
+        for code in codes:
+            granted.update(cls.ROLE_PERMISSION_MAP.get(code, ()))
+        if not any(code.startswith("inventory.") for code in codes):
+            # Reports/settings alone do not open the inventory module.
+            return frozenset()
+        return frozenset(granted)
 
 
-STAFF_HEADER = "HTTP_X_INVENTORY_STAFF"
-STAFF_SALT = "inventory.staff-session"
-STAFF_SESSION_MAX_AGE = 12 * 60 * 60  # one working day
 
 
 @dataclass
@@ -113,23 +110,9 @@ def user_merchant(user):
 
 
 def issue_staff_token(worker) -> str:
-    return signing.dumps(
-        {"w": str(worker.id), "m": worker.merchant_id}, salt=STAFF_SALT, compress=True
-    )
+    from pos import rbac
 
-
-def _worker_from_token(token: str, merchant):
-    from pos.models import ShiftWorker
-
-    try:
-        data = signing.loads(token, salt=STAFF_SALT, max_age=STAFF_SESSION_MAX_AGE)
-    except signing.BadSignature:
-        return None
-    if data.get("m") != merchant.id:
-        return None
-    return ShiftWorker.objects.filter(
-        id=data.get("w"), merchant=merchant, is_active=True
-    ).first()
+    return rbac.issue_staff_token(worker)
 
 
 def resolve_access(request) -> InventoryAccess:
@@ -153,19 +136,24 @@ def resolve_access(request) -> InventoryAccess:
             access.error = "No merchant profile."
         else:
             access.merchant = merchant
-            token = request.META.get(STAFF_HEADER, "")
+            from pos import rbac
+
+            token = rbac.staff_token_from(request)
             if token:
-                worker = _worker_from_token(token, merchant)
+                worker = rbac.worker_from_token(token, merchant)
                 if worker is None:
                     access.error = "Your staff session has ended. Please sign in again."
                 else:
-                    role = InvPerm.WORKER_ROLE_MAP.get(worker.role, "cashier")
+                    role = rbac.worker_role(worker)
                     access.worker = worker
-                    access.role = role
-                    access.perms = frozenset(InvPerm.ROLE_DEFAULTS[role])
+                    access.role = role.system_key or "custom"
+                    access.perms = InvPerm.for_role_permissions(
+                        rbac.role_permissions(role), is_admin=role.is_admin
+                    )
             else:
+                # The merchant account owner is the Admin of their own merchant.
                 access.role = "owner"
-                access.perms = frozenset(InvPerm.ROLE_DEFAULTS["owner"])
+                access.perms = frozenset(InvPerm.ALL)
 
     try:
         request._inventory_access = access

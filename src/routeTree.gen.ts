@@ -43,6 +43,7 @@ import { Route as PosAccountsRouteImport } from './routes/pos.accounts'
 import { Route as OrdersIdRouteImport } from './routes/orders.$id'
 import { Route as OffersMineRouteImport } from './routes/offers.mine'
 import { Route as OffersIdRouteImport } from './routes/offers.$id'
+import { Route as MerchantTeamRouteImport } from './routes/merchant.team'
 import { Route as MerchantTablesRouteImport } from './routes/merchant.tables'
 import { Route as MerchantStoreRouteImport } from './routes/merchant.store'
 import { Route as MerchantSpecialsRouteImport } from './routes/merchant.specials'
@@ -251,6 +252,11 @@ const OffersIdRoute = OffersIdRouteImport.update({
   id: '/offers/$id',
   path: '/offers/$id',
   getParentRoute: () => rootRouteImport,
+} as any)
+const MerchantTeamRoute = MerchantTeamRouteImport.update({
+  id: '/team',
+  path: '/team',
+  getParentRoute: () => MerchantRoute,
 } as any)
 const MerchantTablesRoute = MerchantTablesRouteImport.update({
   id: '/tables',
@@ -488,6 +494,7 @@ export interface FileRoutesByFullPath {
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
+  '/merchant/team': typeof MerchantTeamRoute
   '/offers/$id': typeof OffersIdRoute
   '/offers/mine': typeof OffersMineRoute
   '/orders/$id': typeof OrdersIdRoute
@@ -560,6 +567,7 @@ export interface FileRoutesByTo {
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
+  '/merchant/team': typeof MerchantTeamRoute
   '/offers/$id': typeof OffersIdRoute
   '/offers/mine': typeof OffersMineRoute
   '/orders/$id': typeof OrdersIdRoute
@@ -635,6 +643,7 @@ export interface FileRoutesById {
   '/merchant/specials': typeof MerchantSpecialsRoute
   '/merchant/store': typeof MerchantStoreRoute
   '/merchant/tables': typeof MerchantTablesRoute
+  '/merchant/team': typeof MerchantTeamRoute
   '/offers/$id': typeof OffersIdRoute
   '/offers/mine': typeof OffersMineRoute
   '/orders/$id': typeof OrdersIdRoute
@@ -711,6 +720,7 @@ export interface FileRouteTypes {
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
+    | '/merchant/team'
     | '/offers/$id'
     | '/offers/mine'
     | '/orders/$id'
@@ -783,6 +793,7 @@ export interface FileRouteTypes {
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
+    | '/merchant/team'
     | '/offers/$id'
     | '/offers/mine'
     | '/orders/$id'
@@ -857,6 +868,7 @@ export interface FileRouteTypes {
     | '/merchant/specials'
     | '/merchant/store'
     | '/merchant/tables'
+    | '/merchant/team'
     | '/offers/$id'
     | '/offers/mine'
     | '/orders/$id'
@@ -1159,6 +1171,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/offers/$id'
       preLoaderRoute: typeof OffersIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/merchant/team': {
+      id: '/merchant/team'
+      path: '/team'
+      fullPath: '/merchant/team'
+      preLoaderRoute: typeof MerchantTeamRouteImport
+      parentRoute: typeof MerchantRoute
     }
     '/merchant/tables': {
       id: '/merchant/tables'
@@ -1500,6 +1519,7 @@ interface MerchantRouteChildren {
   MerchantSpecialsRoute: typeof MerchantSpecialsRoute
   MerchantStoreRoute: typeof MerchantStoreRoute
   MerchantTablesRoute: typeof MerchantTablesRoute
+  MerchantTeamRoute: typeof MerchantTeamRoute
   MerchantIndexRoute: typeof MerchantIndexRoute
 }
 
@@ -1521,6 +1541,7 @@ const MerchantRouteChildren: MerchantRouteChildren = {
   MerchantSpecialsRoute: MerchantSpecialsRoute,
   MerchantStoreRoute: MerchantStoreRoute,
   MerchantTablesRoute: MerchantTablesRoute,
+  MerchantTeamRoute: MerchantTeamRoute,
   MerchantIndexRoute: MerchantIndexRoute,
 }
 

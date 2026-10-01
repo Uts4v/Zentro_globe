@@ -7,7 +7,7 @@ must come before the generic <int:pk>/ catch-all.
 """
 
 from django.urls import path
-from . import views
+from . import table_views, views
 
 urlpatterns = [
     # ── Authenticated merchant ────────────────────────────────────────────────
@@ -43,11 +43,17 @@ urlpatterns = [
     path("menu-items/<int:pk>/option-groups/<int:gpk>/options/<int:opk>/", views.menu_item_option_detail, name="menu-item-option-detail"),
 
     # ── Table management ──────────────────────────────────────────────────────
-    path("tables/",                          views.merchant_tables,            name="merchant-tables"),
-    path("tables/generate/",                 views.merchant_tables_generate,   name="merchant-tables-generate"),
-    path("tables/<int:pk>/",                 views.merchant_table_detail,      name="merchant-table-detail"),
-    path("tables/<int:pk>/delete/",          views.merchant_table_delete,      name="merchant-table-delete"),
-    path("tables/<int:pk>/regenerate-qr/",   views.merchant_table_regenerate_qr, name="merchant-table-regenerate-qr"),
+    path("tables/",                          table_views.tables,               name="merchant-tables"),
+    path("tables/generate/",                 table_views.tables_generate,      name="merchant-tables-generate"),
+    path("tables/<int:pk>/",                 table_views.table_detail,         name="merchant-table-detail"),
+    path("tables/<int:pk>/delete/",          table_views.table_delete,         name="merchant-table-delete"),
+    path("tables/<int:pk>/regenerate-qr/",   table_views.table_regenerate_qr,  name="merchant-table-regenerate-qr"),
+
+    # ── Table areas (where customers sit) ─────────────────────────────────────
+    path("table-areas/",                     table_views.table_areas,          name="merchant-table-areas"),
+    path("table-areas/reorder/",             table_views.table_areas_reorder,  name="merchant-table-areas-reorder"),
+    path("table-areas/<int:pk>/",            table_views.table_area_detail,    name="merchant-table-area-detail"),
+    path("table-areas/<int:pk>/tables/",     table_views.table_area_add_tables, name="merchant-table-area-add-tables"),
 
     # ── Public table resolution ───────────────────────────────────────────────
     path("public/tables/<str:public_token>/", views.public_resolve_table_by_token, name="public-resolve-table-by-token"),

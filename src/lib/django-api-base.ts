@@ -1,3 +1,4 @@
+import { staffSession } from "@/lib/staff-session";
 // src/lib/django-api-base.ts
 // Shared helpers for talking to the Django loyalty backend.
 
@@ -71,6 +72,8 @@ export async function djangoFetch<T>(
     err.status = res.status;
     const code = (data as { code?: unknown } | null | undefined)?.code;
     if (typeof code === "string") err.code = code;
+    // The employee's staff session expired: drop it so the device recovers.
+    if (code === "staff_session_ended") staffSession.set(null);
     throw err;
   }
   return data as T;

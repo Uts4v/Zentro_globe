@@ -91,20 +91,48 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  const isAuthError =
+    error?.message?.toLowerCase().includes("authenticated") ||
+    error?.message?.toLowerCase().includes("token") ||
+    (error as any)?.status === 401 ||
+    (error as any)?.status === 403;
+
   return (
     <div className="flex min-h-screen items-center justify-center px-6">
-      <div className="glass max-w-md rounded-3xl p-10 text-center">
-        <h1 className="font-display text-3xl text-ink">Something spilled</h1>
-        <p className="mt-2 text-sm text-muted-foreground">Give it another try.</p>
-        <button
-          onClick={() => {
-            router.invalidate();
-            reset();
-          }}
-          className="mt-6 inline-flex h-11 items-center justify-center rounded-full bg-ink px-6 text-sm font-medium text-primary-foreground"
-        >
-          Try again
-        </button>
+      <div className="glass max-w-md rounded-3xl p-8 text-center border border-border bg-card/90 shadow-xl">
+        <h1 className="font-display text-2xl font-bold text-foreground">Something spilled</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          {error?.message && error.message !== "Failed to fetch"
+            ? error.message
+            : "An unexpected error occurred. You can retry or head back home."}
+        </p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            onClick={() => {
+              router.invalidate();
+              reset();
+            }}
+            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-medium text-primary-foreground hover:opacity-90"
+          >
+            Try again
+          </button>
+          {isAuthError ? (
+            <Link
+              to={"/auth/merchant" as any}
+              className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-background px-5 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Log in again
+            </Link>
+          ) : (
+            <Link
+              to="/"
+              className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-background px-5 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              Back home
+            </Link>
+          )}
+        </div>
       </div>
     </div>
   );

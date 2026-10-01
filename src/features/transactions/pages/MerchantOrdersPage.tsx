@@ -77,13 +77,26 @@ export function MerchantOrdersPage() {
     else setRefreshing(true);
     setError("");
     try {
-      const data = await orderApi.storeOrders();
-      setOrders(data);
-      if (knownOrderIds.current.size === 0) {
-        data.forEach((o) => knownOrderIds.current.add(o.id));
+      if (navigator.onLine) {
+        const data = await orderApi.storeOrders();
+        setOrders(data);
+        try {
+          localStorage.setItem("zentro_merchant_orders_cache", JSON.stringify(data.slice(0, 100)));
+        } catch {}
+        if (knownOrderIds.current.size === 0) {
+          data.forEach((o) => knownOrderIds.current.add(o.id));
+        }
+      } else {
+        const cached = localStorage.getItem("zentro_merchant_orders_cache");
+        if (cached) setOrders(JSON.parse(cached));
       }
     } catch (e: any) {
-      setError(e.message);
+      const cached = localStorage.getItem("zentro_merchant_orders_cache");
+      if (cached) {
+        setOrders(JSON.parse(cached));
+      } else {
+        setError(e.message);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -97,8 +110,12 @@ export function MerchantOrdersPage() {
   useEffect(() => {
     setConnected(true);
     const interval = setInterval(async () => {
+      if (!navigator.onLine) return;
       try {
         const fresh = await orderApi.storeOrders();
+        try {
+          localStorage.setItem("zentro_merchant_orders_cache", JSON.stringify(fresh.slice(0, 100)));
+        } catch {}
 
         setOrders((prev) => {
           const newOnes = fresh.filter((o) => !knownOrderIds.current.has(o.id));
@@ -130,11 +147,40 @@ export function MerchantOrdersPage() {
     const next = NEXT_STATUS[order.status];
     if (!next) return;
     setAdvancing(order.id);
+
+    if (!navigator.onLine) {
+      const updated = { ...order, status: next };
+      setOrders((prev) => {
+        const nextOrders = prev.map((o) => (o.id === order.id ? updated : o));
+        try {
+          localStorage.setItem("zentro_merchant_orders_cache", JSON.stringify(nextOrders));
+        } catch {}
+        return nextOrders;
+      });
+      toast.success(`Order #${order.id} marked as ${ADVANCE_LABEL[next]} (Saved offline)`);
+      setAdvancing(null);
+      return;
+    }
+
     try {
       const updated = await orderApi.updateStatus(order.id, next);
-      setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
+      setOrders((prev) => {
+        const nextOrders = prev.map((o) => (o.id === order.id ? updated : o));
+        try {
+          localStorage.setItem("zentro_merchant_orders_cache", JSON.stringify(nextOrders));
+        } catch {}
+        return nextOrders;
+      });
+      toast.success(`Order #${order.id} updated`);
     } catch (e: any) {
-      setError(e.message);
+      if (!navigator.onLine) {
+        const updated = { ...order, status: next };
+        setOrders((prev) => prev.map((o) => (o.id === order.id ? updated : o)));
+        toast.success(`Order #${order.id} marked as ${ADVANCE_LABEL[next]} (Saved offline)`);
+      } else {
+        setError(e.message);
+        toast.error(e.message);
+      }
     } finally {
       setAdvancing(null);
     }

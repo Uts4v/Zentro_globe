@@ -399,6 +399,10 @@ export interface MerchantTable {
   table_number: number;
   public_token: string;
   is_active: boolean;
+  /** Dining area this table belongs to. */
+  area: number | null;
+  area_name: string;
+  seats: number;
   created_at: string;
   updated_at: string;
 }

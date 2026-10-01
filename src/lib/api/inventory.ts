@@ -2,6 +2,7 @@
 // Zentro Inventory & Stock Management — /api/inventory/*
 import { apiUrl } from "@/lib/django-api-base";
 import { djangoHeaders as authHeaders } from "@/lib/auth";
+import { staffSession } from "@/lib/staff-session";
 
 // ── Types (mirror backend serializers) ────────────────────────────────────────
 
@@ -523,39 +524,11 @@ export class InventoryApiError extends Error {
 
 // ── Staff mode ────────────────────────────────────────────────────────────────
 
-const STAFF_KEY = "zentro.inventory.staff";
-type StaffListener = () => void;
-const staffListeners = new Set<StaffListener>();
-
-export const staffSession = {
-  get(): { token: string; name: string; role: string } | null {
-    try {
-      const raw = localStorage.getItem(STAFF_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  },
-  set(value: { token: string; name: string; role: string } | null) {
-    try {
-      if (value) localStorage.setItem(STAFF_KEY, JSON.stringify(value));
-      else localStorage.removeItem(STAFF_KEY);
-    } catch {
-      /* storage unavailable: staff mode lasts for this page only */
-    }
-    staffListeners.forEach((fn) => fn());
-  },
-  subscribe(fn: StaffListener) {
-    staffListeners.add(fn);
-    return () => staffListeners.delete(fn);
-  },
-};
+export { staffSession };
 
 function headers(json = false): Record<string, string> {
-  const h = { ...(authHeaders(json) as Record<string, string>) };
-  const staff = staffSession.get();
-  if (staff?.token) h["X-Inventory-Staff"] = staff.token;
-  return h;
+  // authHeaders already carries the staff-mode header when an employee is acting.
+  return { ...(authHeaders(json) as Record<string, string>) };
 }
 
 function flattenErrors(data: Record<string, unknown>): string {

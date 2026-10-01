@@ -57,7 +57,16 @@ def _audit(merchant, action, *, user=None, entity_type="", entity_id="", metadat
 
 
 def _worker_has_area_access(worker, area):
-    """Check if a worker is assigned to the given preparation area."""
+    """Check if a worker may use the kitchen screen for this preparation area.
+
+    The ROLE decides whether they can use the kitchen screen at all
+    (kds.access, pos.rbac); the preparation-area assignment decides which
+    station. Managers and admins see every station.
+    """
+    from pos import rbac
+
+    if not rbac.worker_can(worker, "kds.access"):
+        return False
     if worker.role in (ShiftWorker.ROLE_MANAGER, ShiftWorker.ROLE_ADMIN):
         return True
     return StaffPreparationArea.objects.filter(

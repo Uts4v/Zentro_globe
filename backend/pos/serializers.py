@@ -34,37 +34,59 @@ class RegisterDeviceSerializer(serializers.Serializer):
 # ── Worker ─────────────────────────────────────────────────────────────────────
 
 class ShiftWorkerSerializer(serializers.ModelSerializer):
+    """An employee. ``staff_role`` decides what they can do (pos.rbac); the
+    legacy ``role`` and ``can_*`` fields mirror it for older clients."""
+
+    role_name = serializers.SerializerMethodField()
+    permissions = serializers.SerializerMethodField()
+    area_ids = serializers.SerializerMethodField()
+
     class Meta:
         model = ShiftWorker
         fields = [
             "id", "display_name", "role", "is_active",
+            "staff_role", "role_name", "permissions", "area_ids",
             "can_apply_discount", "can_process_refund",
             "can_close_shift", "can_view_reports",
             "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
-        extra_kwargs = {
-            "pin_hash": {"write_only": True},
-        }
+        read_only_fields = fields
+
+    def get_role_name(self, obj):
+        from . import rbac
+
+        return rbac.worker_role(obj).name
+
+    def get_permissions(self, obj):
+        from . import rbac
+
+        return sorted(rbac.worker_permissions(obj))
+
+    def get_area_ids(self, obj):
+        return sorted(a.table_area_id for a in obj.area_assignments.all())
 
 
 class CreateWorkerSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=120)
     pin = serializers.CharField(min_length=4, max_length=8)
-    role = serializers.ChoiceField(
-        choices=ShiftWorker.ROLE_CHOICES,
-        default=ShiftWorker.ROLE_CASHIER,
-    )
-    can_apply_discount = serializers.BooleanField(default=False)
-    can_process_refund = serializers.BooleanField(default=False)
-    can_close_shift = serializers.BooleanField(default=False)
-    can_view_reports = serializers.BooleanField(default=False)
+    # The role decides everything the employee can do. ``role`` (the old
+    # coarse value) is still accepted and mapped to the matching default role.
+    staff_role = serializers.IntegerField(required=False)
+    role = serializers.ChoiceField(choices=ShiftWorker.ROLE_CHOICES, required=False)
+    area_ids = serializers.ListField(child=serializers.IntegerField(), required=False)
+    # Accepted for older clients and ignored: permissions come from the role.
+    can_apply_discount = serializers.BooleanField(required=False)
+    can_process_refund = serializers.BooleanField(required=False)
+    can_close_shift = serializers.BooleanField(required=False)
+    can_view_reports = serializers.BooleanField(required=False)
 
 
 class UpdateWorkerSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=120, required=False)
     pin = serializers.CharField(min_length=4, max_length=8, required=False)
+    staff_role = serializers.IntegerField(required=False)
     role = serializers.ChoiceField(choices=ShiftWorker.ROLE_CHOICES, required=False)
+    area_ids = serializers.ListField(child=serializers.IntegerField(), required=False)
     is_active = serializers.BooleanField(required=False)
     can_apply_discount = serializers.BooleanField(required=False)
     can_process_refund = serializers.BooleanField(required=False)

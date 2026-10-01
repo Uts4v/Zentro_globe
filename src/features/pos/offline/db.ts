@@ -3,7 +3,7 @@
  * Stores orders, payments, and sync queue items.
  */
 
-import type { PosReceiptData } from "../api";
+import type { PosReceiptData, PosOrder } from "../api";
 
 const DB_NAME = "zentro-pos";
 const DB_VERSION = 1;
@@ -21,11 +21,13 @@ export interface OfflineKOTItem {
 
 export interface OfflineKOT {
   merchantName: string;
+  kotNumber?: number | null;
   orderNumber: string;
   createdAt: string | null;
   fulfillmentType: string;
   tableName?: string | null;
   tableNumber?: number | null;
+  customerName?: string | null;
   workerName?: string | null;
   notes?: string;
   items: OfflineKOTItem[];
@@ -51,6 +53,7 @@ export interface OfflineOrder {
   }>;
   total: number;
   status: "pending_sync" | "syncing" | "synced" | "failed";
+  order_status?: string;
   server_order_id?: number;
   /**
    * Ticket printed for the kitchen at capture time. Kept so it can be
@@ -84,7 +87,7 @@ export interface OfflinePayment {
 
 export interface SyncQueueItem {
   id: string;
-  type: "order" | "payment" | "discount" | "credit_sale" | "credit_repayment" | "debit_topup" | "debit_purchase" | "debit_adjustment";
+  type: "order" | "payment" | "discount" | "credit_sale" | "credit_repayment" | "debit_topup" | "debit_purchase" | "debit_adjustment" | "order_status";
   endpoint: string;
   method: "POST" | "PATCH" | "PUT";
   body: Record<string, any>;
@@ -223,6 +226,40 @@ export const offlineOrders = {
       order.status = "failed";
       await put("orders", order);
     }
+  },
+  updateStatus: async (clientId: string, newStatus: string) => {
+    const order = await getById<OfflineOrder>("orders", clientId);
+    if (order) {
+      order.order_status = newStatus;
+      await put("orders", order);
+    }
+  },
+};
+
+// ── Cached Server Orders (Offline Mirror) ───────────────────────────────────
+
+const CACHED_ORDERS_KEY = "zentro_pos_cached_orders";
+
+export const cachedServerOrders = {
+  get: (): PosOrder[] => {
+    try {
+      const raw = localStorage.getItem(CACHED_ORDERS_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+  save: (orders: PosOrder[]): void => {
+    try {
+      localStorage.setItem(CACHED_ORDERS_KEY, JSON.stringify(orders.slice(0, 100)));
+    } catch {}
+  },
+  updateStatus: (uuid: string, status: string): void => {
+    try {
+      const orders = cachedServerOrders.get();
+      const updated = orders.map((o) => (o.uuid === uuid ? { ...o, status } : o));
+      cachedServerOrders.save(updated);
+    } catch {}
   },
 };
 

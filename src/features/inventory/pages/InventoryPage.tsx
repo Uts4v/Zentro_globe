@@ -13,14 +13,12 @@ import {
   LayoutDashboard,
   Package,
   Settings,
-  UserRound,
   type LucideIcon,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ErrorBlock, ListSkeleton, errorMessage } from "@/features/inventory/components/bits";
-import { StaffBanner, StartStaffModeDialog } from "@/features/inventory/components/StaffMode";
 import { copy } from "@/features/inventory/copy";
 import {
   InventoryProvider,
@@ -108,7 +106,6 @@ export function InventoryPage() {
   const search = useSearch({ strict: false }) as Search;
   const navigate = useNavigate();
   const rootQuery = useRootQuery();
-  const [staffOpen, setStaffOpen] = useState(false);
 
   const view: View = VIEWS.includes(search.view as View) ? (search.view as View) : "home";
   const params: NavParams = {
@@ -163,14 +160,7 @@ export function InventoryPage() {
               {copy.nav.title}
             </h1>
           </div>
-          {!root.staff && root.staff_mode_available && (
-            <Button variant="outline" className="h-11" onClick={() => setStaffOpen(true)}>
-              <UserRound className="h-4 w-4" aria-hidden="true" /> {copy.staff.start}
-            </Button>
-          )}
         </div>
-
-        {root.staff && <StaffBanner name={root.staff.name} />}
 
         <nav aria-label={copy.nav.title} className="-mx-1 overflow-x-auto px-1">
           <ul className="flex min-w-max gap-1.5 rounded-2xl border border-border bg-card p-1.5">
@@ -220,7 +210,6 @@ export function InventoryPage() {
           {view === "settings" && <SettingsScreen />}
         </div>
       </div>
-      <StartStaffModeDialog open={staffOpen} onOpenChange={setStaffOpen} />
     </InventoryProvider>
   );
 }

@@ -7,6 +7,7 @@
  * 1 day in dev — we refresh when < 2 min remain).
  */
 
+import { staffHeaders } from "@/lib/staff-session";
 import {
   createContext,
   useContext,
@@ -163,7 +164,8 @@ function secondsUntilExpiry(token: string): number {
 export function djangoHeaders(json = false): HeadersInit {
   const token = tokenStore.getAccess();
   if (!token) throw new Error("Not authenticated — please log in again.");
-  const h: Record<string, string> = { Authorization: `Bearer ${token}` };
+  // In staff mode the server also needs to know which employee is acting.
+  const h: Record<string, string> = { Authorization: `Bearer ${token}`, ...staffHeaders() };
   if (json) h["Content-Type"] = "application/json";
   return h;
 }

@@ -248,7 +248,7 @@ export default function StaffManagementScreen() {
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${ROLE_COLORS[worker.role] || "bg-gray-100 text-gray-700"}`}
                       >
-                        {worker.role}
+                        {worker.role_name || worker.role}
                       </span>
                       {!worker.is_active && (
                         <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">
@@ -287,28 +287,33 @@ export default function StaffManagementScreen() {
                 <PermissionToggle
                   label="Discounts"
                   checked={worker.can_apply_discount}
-                  disabled={!worker.is_active}
-                  onChange={(v) => handleUpdatePermissions(worker, "can_apply_discount", v)}
+                  disabled
+                  onChange={() => undefined}
                 />
                 <PermissionToggle
                   label="Refunds"
                   checked={worker.can_process_refund}
-                  disabled={!worker.is_active}
-                  onChange={(v) => handleUpdatePermissions(worker, "can_process_refund", v)}
+                  disabled
+                  onChange={() => undefined}
                 />
                 <PermissionToggle
                   label="Close Shift"
                   checked={worker.can_close_shift}
-                  disabled={!worker.is_active}
-                  onChange={(v) => handleUpdatePermissions(worker, "can_close_shift", v)}
+                  disabled
+                  onChange={() => undefined}
                 />
                 <PermissionToggle
                   label="View Reports"
                   checked={worker.can_view_reports}
-                  disabled={!worker.is_active}
-                  onChange={(v) => handleUpdatePermissions(worker, "can_view_reports", v)}
+                  disabled
+                  onChange={() => undefined}
                 />
               </div>
+
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                What an employee can do comes from their role. Change roles under Team → Roles &amp;
+                Permissions in the dashboard.
+              </p>
 
               {/* Preparation area access */}
               {ALL_ACCESS_ROLES.includes(worker.role) ? (
@@ -442,28 +447,10 @@ export default function StaffManagementScreen() {
                 <label className="mb-2 block text-xs font-medium text-muted-foreground">
                   Permissions
                 </label>
-                <div className="space-y-2">
-                  <Checkbox
-                    label="Can apply discounts"
-                    checked={newDiscount}
-                    onChange={setNewDiscount}
-                  />
-                  <Checkbox
-                    label="Can process refunds"
-                    checked={newRefund}
-                    onChange={setNewRefund}
-                  />
-                  <Checkbox
-                    label="Can close shifts"
-                    checked={newCloseShift}
-                    onChange={setNewCloseShift}
-                  />
-                  <Checkbox
-                    label="Can view reports"
-                    checked={newViewReports}
-                    onChange={setNewViewReports}
-                  />
-                </div>
+                <p className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
+                  Permissions come from the role you choose. To give a different mix, create a role
+                  under Team → Roles &amp; Permissions in the dashboard.
+                </p>
               </div>
 
               {/* Preparation area access */}

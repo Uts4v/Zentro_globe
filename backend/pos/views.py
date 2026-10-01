@@ -82,6 +82,54 @@ def _loyalty_spend_rate(merchant) -> Decimal:
     return Decimal(str(rate)) if rate and rate > 0 else Decimal("0")
 
 
+def _perm_denied(worker, code):
+    """403 response unless the employee's role allows ``code`` (pos.rbac).
+
+    The one place POS endpoints ask "may this employee do this?". Returns
+    None when allowed, or when no employee is named (the owner session).
+    """
+    from . import rbac
+
+    if worker is None or rbac.worker_can(worker, code):
+        return None
+    return Response(
+        {"error": "You don't have permission to do this. Ask a manager.", "code": "no_permission"},
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _worker_rbac_fields(worker):
+    """Role name, permissions and dining areas for POS clients."""
+    from . import rbac
+
+    areas = rbac.allowed_area_ids(worker)
+    return {
+        "role_name": rbac.worker_role(worker).name,
+        "permissions": sorted(rbac.worker_permissions(worker)),
+        "area_ids": sorted(areas) if areas is not None else None,
+    }
+
+
+def _pos_tables(merchant):
+    """Active tables with their dining area, for the POS table screen."""
+    from merchants.models import MerchantTable
+
+    tables = (
+        MerchantTable.objects.filter(merchant=merchant, is_active=True)
+        .filter(Q(area__isnull=True) | Q(area__is_active=True))
+        .select_related("area")
+        .order_by("area__display_order", "area__name", "table_number")
+    )
+    return [
+        {
+            "id": t.id, "name": t.name, "table_number": t.table_number,
+            "public_token": t.public_token, "seats": t.seats,
+            "area_id": t.area_id, "area_name": t.area.name if t.area_id else "",
+        }
+        for t in tables
+    ]
+
+
 def _get_merchant(request):
     try:
         return request.user.merchant_profile
@@ -506,6 +554,7 @@ def pos_bootstrap(request):
             "can_process_refund": w.can_process_refund,
             "can_close_shift": w.can_close_shift,
             "can_view_reports": w.can_view_reports,
+            **_worker_rbac_fields(w),
         })
 
     # Menu items (carries variant/modifier groups so the grid can open a picker)
@@ -524,11 +573,7 @@ def pos_bootstrap(request):
 
     # Tables
     from merchants.models import MerchantTable
-    tables = MerchantTable.objects.filter(merchant=merchant, is_active=True)
-    tables_data = [
-        {"id": t.id, "name": t.name, "table_number": t.table_number, "public_token": t.public_token}
-        for t in tables
-    ]
+    tables_data = _pos_tables(merchant)
 
     # Recent orders (last 20)
     recent_orders = Order.objects.filter(
@@ -596,6 +641,7 @@ def pos_bootstrap_device(request):
             "can_process_refund": w.can_process_refund,
             "can_close_shift": w.can_close_shift,
             "can_view_reports": w.can_view_reports,
+            **_worker_rbac_fields(w),
         })
 
     # Menu items (carries variant/modifier groups so the grid can open a picker)
@@ -614,11 +660,7 @@ def pos_bootstrap_device(request):
 
     # Tables
     from merchants.models import MerchantTable
-    tables = MerchantTable.objects.filter(merchant=merchant, is_active=True)
-    tables_data = [
-        {"id": t.id, "name": t.name, "table_number": t.table_number, "public_token": t.public_token}
-        for t in tables
-    ]
+    tables_data = _pos_tables(merchant)
 
     # Recent orders (last 20)
     recent_orders = Order.objects.filter(
@@ -803,17 +845,16 @@ def create_worker(request):
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    worker = ShiftWorker.objects.create(
-        merchant=merchant,
-        display_name=ser.validated_data["display_name"],
-        role=ser.validated_data["role"],
-        can_apply_discount=ser.validated_data["can_apply_discount"],
-        can_process_refund=ser.validated_data["can_process_refund"],
-        can_close_shift=ser.validated_data["can_close_shift"],
-        can_view_reports=ser.validated_data["can_view_reports"],
-    )
+    from . import team
+    try:
+        role = team.resolve_role(request, merchant, ser.validated_data)
+    except team.TeamError as exc:
+        return Response({"error": str(exc)}, status=exc.status)
+
+    worker = ShiftWorker(merchant=merchant, display_name=ser.validated_data["display_name"])
     worker.set_pin(ser.validated_data["pin"])
-    worker.save(update_fields=["pin_hash"])
+    worker.save()
+    team.apply_role_and_areas(request, worker, role, ser.validated_data.get("area_ids"))
 
     _audit(merchant, PosAuditLog.ACTION_WORKER_CREATE,
            user=request.user, worker=worker,
@@ -843,12 +884,19 @@ def update_worker(request, worker_id):
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    data = ser.validated_data
+    from . import team
+    data = dict(ser.validated_data)
     pin = data.pop("pin", None)
+    try:
+        role = team.resolve_role(request, merchant, data, worker=worker)
+    except team.TeamError as exc:
+        return Response({"error": str(exc)}, status=exc.status)
 
-    for attr, val in data.items():
-        setattr(worker, attr, val)
+    for attr in ("display_name", "is_active"):
+        if attr in data:
+            setattr(worker, attr, data[attr])
     worker.save()
+    team.apply_role_and_areas(request, worker, role, data.get("area_ids"))
 
     if pin:
         worker.set_pin(pin)
@@ -1090,6 +1138,9 @@ def close_shift(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
+    denied = _perm_denied(worker, "shifts.close")
+    if denied:
+        return denied
 
     # Calculate totals from payments
     payments = PosPayment.objects.filter(
@@ -1457,6 +1508,9 @@ def create_pos_order(request):
         except ShiftWorker.DoesNotExist:
             return Response({"error": "Worker not found."},
                             status=status.HTTP_404_NOT_FOUND)
+        denied = _perm_denied(worker, "orders.create")
+        if denied:
+            return denied
 
     # Validate device
     device = None
@@ -1486,6 +1540,13 @@ def create_pos_order(request):
         except MerchantTable.DoesNotExist:
             return Response({"error": "Table not found."},
                             status=status.HTTP_404_NOT_FOUND)
+        # AREA = where the employee works: no orders on tables outside it.
+        from . import rbac
+        if worker is not None and not rbac.worker_can_use_table(worker, table_instance):
+            return Response(
+                {"error": "This table is not in your area.", "code": "area_restricted"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
     # Determine order type early so staff_comp orders can zero prices
     order_type = data.get("order_type", Order.ORDER_TYPE_REGULAR)
@@ -1701,6 +1762,10 @@ def update_order_status_uuid(request):
                 id=worker_id, merchant=merchant, is_active=True)
         except ShiftWorker.DoesNotExist:
             pass
+    if new_status == Order.STATUS_CANCELLED:
+        denied = _perm_denied(worker, "orders.cancel")
+        if denied:
+            return denied
 
     device = None
     device_id = request.data.get("device_id")
@@ -1831,6 +1896,9 @@ def create_payment(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
+    denied = _perm_denied(worker, "payments.take")
+    if denied:
+        return denied
 
     try:
         device = PosDevice.objects.get(
@@ -2047,6 +2115,9 @@ def create_split_payment(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
+    denied = _perm_denied(worker, "payments.take")
+    if denied:
+        return denied
 
     try:
         device = PosDevice.objects.get(
@@ -2178,11 +2249,9 @@ def apply_discount(request):
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    if not worker.can_apply_discount:
-        return Response(
-            {"error": "This worker does not have permission to apply discounts."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    denied = _perm_denied(worker, "discounts.apply")
+    if denied:
+        return denied
 
     # Block discounts on completed or cancelled orders
     if order.status in (Order.STATUS_COMPLETED, Order.STATUS_CANCELLED):
@@ -2312,11 +2381,9 @@ def remove_discount(request):
         )
     except (ShiftWorker.DoesNotExist, ValueError, DjangoValidationError):
         return Response({"error": "Worker not found."}, status=status.HTTP_404_NOT_FOUND)
-    if not worker.can_apply_discount:
-        return Response(
-            {"error": "This worker does not have permission to change discounts."},
-            status=status.HTTP_403_FORBIDDEN,
-        )
+    denied = _perm_denied(worker, "discounts.apply")
+    if denied:
+        return denied
 
     from orders.pricing import ADJ_MANUAL_DISCOUNT, PricingError, remove_adjustments
     try:
@@ -2493,6 +2560,9 @@ def credit_sale(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
+    denied = _perm_denied(worker, "payments.take")
+    if denied:
+        return denied
 
     amount = ser.validated_data["amount"]
     balance_before = account.current_balance
@@ -2555,6 +2625,9 @@ def credit_repayment(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
+    denied = _perm_denied(worker, "payments.take")
+    if denied:
+        return denied
 
     amount = ser.validated_data["amount"]
     balance_before = account.current_balance
@@ -2643,6 +2716,9 @@ def debit_topup(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
+    denied = _perm_denied(worker, "payments.take")
+    if denied:
+        return denied
 
     amount = ser.validated_data["amount"]
     balance_before = account.balance
@@ -2718,6 +2794,9 @@ def debit_purchase(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
+    denied = _perm_denied(worker, "payments.take")
+    if denied:
+        return denied
 
     amount = ser.validated_data["amount"]
     balance_before = account.balance
@@ -2775,6 +2854,9 @@ def debit_adjustment(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
+    denied = _perm_denied(worker, "payments.take")
+    if denied:
+        return denied
 
     amount = ser.validated_data["amount"]
     balance_before = account.balance
@@ -3717,13 +3799,13 @@ def process_refund(request):
                         status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        worker = ShiftWorker.objects.get(
-            id=worker_id, merchant=merchant, is_active=True,
-            can_process_refund=True,
-        )
-    except ShiftWorker.DoesNotExist:
+        worker = ShiftWorker.objects.get(id=worker_id, merchant=merchant, is_active=True)
+    except (ShiftWorker.DoesNotExist, ValueError, DjangoValidationError):
         return Response({"error": "Worker not found or not authorized for refunds."},
                         status=status.HTTP_403_FORBIDDEN)
+    denied = _perm_denied(worker, "payments.refund")
+    if denied:
+        return denied
 
     if order.payment_status != "paid":
         return Response({"error": "Order is not paid. Only paid orders can be refunded."},

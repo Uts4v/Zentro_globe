@@ -653,12 +653,60 @@ class MenuItem(models.Model):
         return f"{self.name} - {self.merchant.business_name}"
 
 
+class TableArea(models.Model):
+    """Where customers sit: Main Dining, Bar, Rooftop, Conference Hall…
+
+    Merchants name their own areas. This is a DINING area and is unrelated
+    to orders.PreparationArea (where food and drinks are made).
+    """
+
+    merchant = models.ForeignKey(
+        MerchantProfile,
+        on_delete=models.CASCADE,
+        related_name="table_areas",
+    )
+    branch = models.ForeignKey(
+        MerchantProfile,
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name="+",
+        help_text="Reserved for future multi-branch support. Null = the merchant's single location.",
+    )
+    name = models.CharField(max_length=100)
+    display_order = models.PositiveIntegerField(default=0)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "merchant_table_areas"
+        ordering = ["display_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["merchant", "name"],
+                name="unique_table_area_name_per_merchant",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.merchant.business_name})"
+
+
 class MerchantTable(models.Model):
     merchant = models.ForeignKey(
         MerchantProfile,
         on_delete=models.CASCADE,
         related_name="tables",
     )
+    # The QR (public_token) belongs to the TABLE, never to the area: moving
+    # or renaming a table or its area must not change the token.
+    area = models.ForeignKey(
+        TableArea,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="tables",
+    )
+    seats = models.PositiveSmallIntegerField(default=4)
     name = models.CharField(
         max_length=100,
         help_text="User-facing label, e.g. 'Table 4', 'Patio A', 'VIP Lounge'",

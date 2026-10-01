@@ -10,7 +10,7 @@ import DiscountModal from "./DiscountModal";
 import RedeemOfferModal from "./RedeemOfferModal";
 import IncomingOrdersPanel from "./IncomingOrdersPanel";
 import WaiterCallPanel from "./WaiterCallPanel";
-import { Loader2, AlertTriangle } from "lucide-react";
+import { Loader2, AlertTriangle, Armchair, ArrowLeft, ShoppingBag } from "lucide-react";
 
 export default function PosOrderScreen() {
   const bootstrap = usePosStore((s) => s.bootstrap);
@@ -168,20 +168,46 @@ function MobileCartButton({
 
   const count = cart.reduce((sum, item) => sum + item.quantity, 0);
   const grandTotal = usePosCartPricing().totalValue;
-
-  if (count === 0) return null;
+  const fulfillmentType = usePosStore((s) => s.fulfillmentType);
+  const tables = usePosStore((s) => s.tables);
+  const selectedTableId = usePosStore((s) => s.selectedTableId);
+  const pickTable = fulfillmentType === "dine-in" && tables.length > 0;
+  const tableName = tables.find((t) => t.id === selectedTableId)?.name;
 
   return (
     <>
-      {/* Floating button — visible on mobile only */}
+      {/* Floating button — on tablets and phones the order panel (order type,
+          table, cart) lives in a drawer. It is always reachable, even with an
+          empty cart, so a table can be chosen before adding items. */}
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-3 rounded-full bg-ink px-5 py-3 text-white shadow-2xl xl:hidden"
+        aria-label={
+          count > 0 ? "Open current order" : pickTable ? "Choose table" : "Open current order"
+        }
+        className="fixed bottom-6 right-6 z-40 flex min-h-[48px] items-center gap-3 rounded-full bg-ink px-5 py-3 text-white shadow-2xl xl:hidden"
       >
-        <span className="grid h-6 w-6 place-items-center rounded-full bg-primary-foreground/20 text-xs font-bold">
-          {count}
-        </span>
-        <span className="text-sm font-bold">{formatCurrency(grandTotal, currencySymbol)}</span>
+        {count > 0 ? (
+          <>
+            <span className="grid h-6 w-6 place-items-center rounded-full bg-primary-foreground/20 text-xs font-bold">
+              {count}
+            </span>
+            <span className="text-sm font-bold">{formatCurrency(grandTotal, currencySymbol)}</span>
+          </>
+        ) : (
+          !pickTable && (
+            <>
+              <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+              <span className="text-sm font-bold">Order</span>
+            </>
+          )
+        )}
+        {pickTable && (
+          <span className="flex items-center gap-1.5 text-sm font-bold">
+            <Armchair className="h-4 w-4" aria-hidden="true" />
+            {tableName ?? "Choose table"}
+          </span>
+        )}
       </button>
 
       {/* Mobile cart drawer */}
@@ -193,21 +219,32 @@ function MobileCartButton({
           />
           <div className="absolute bottom-0 left-0 right-0 top-0 flex">
             <div className="flex-1" onClick={() => setOpen(false)} />
-            <div className="h-full min-h-0 w-80 max-w-full">
-              <CartPanel
-                onCheckout={() => {
-                  setOpen(false);
-                  onCheckout();
-                }}
-                onDiscount={() => {
-                  setOpen(false);
-                  onDiscount();
-                }}
-                onRedeemOffer={() => {
-                  setOpen(false);
-                  onRedeemOffer();
-                }}
-              />
+            <div className="flex h-full min-h-0 w-[26rem] max-w-full flex-col bg-background">
+              {/* On a phone the drawer fills the screen, so it needs its own way back. */}
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="flex min-h-[48px] shrink-0 items-center gap-2 border-b border-l border-border px-4 text-sm font-semibold text-foreground hover:bg-mist"
+              >
+                <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+                Back to menu
+              </button>
+              <div className="min-h-0 flex-1">
+                <CartPanel
+                  onCheckout={() => {
+                    setOpen(false);
+                    onCheckout();
+                  }}
+                  onDiscount={() => {
+                    setOpen(false);
+                    onDiscount();
+                  }}
+                  onRedeemOffer={() => {
+                    setOpen(false);
+                    onRedeemOffer();
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>

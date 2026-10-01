@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import { precacheAndRoute, cleanupOutdatedCaches } from "workbox-precaching";
-import { registerRoute } from "workbox-routing";
+import { registerRoute, setCatchHandler } from "workbox-routing";
 import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 import { clientsClaim } from "workbox-core";
@@ -77,12 +77,60 @@ registerRoute(
   ({ request }) => request.mode === "navigate",
   new NetworkFirst({
     cacheName: "zentro-navigations-v1",
-    networkTimeoutSeconds: 3,
+    networkTimeoutSeconds: 10,
     plugins: [
-      new ExpirationPlugin({ maxEntries: 10 }),
+      new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
     ],
   })
 );
+
+// Graceful fallback for navigation requests when network and cache both miss
+setCatchHandler(async ({ request }) => {
+  if (request.mode === "navigate") {
+    // Try to return any previously cached navigation page (like /pos or /)
+    const navCache = await caches.open("zentro-navigations-v1");
+    const cachedKeys = await navCache.keys();
+    for (const key of cachedKeys) {
+      if (key.url.includes("/pos")) {
+        const match = await navCache.match(key);
+        if (match) return match;
+      }
+    }
+    const rootMatch = await navCache.match("/");
+    if (rootMatch) return rootMatch;
+
+    // Self-contained offline HTML page so Safari never shows the fatal 'no-response' error
+    return new Response(
+      `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline · Zentro</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0c0d0e; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; text-align: center; padding: 24px; box-sizing: border-box; }
+    .card { max-width: 360px; padding: 32px 24px; border-radius: 24px; background: #16181a; border: 1px solid #282a2d; box-shadow: 0 12px 30px rgba(0,0,0,0.5); }
+    h1 { font-size: 1.5rem; margin: 0 0 10px; color: #FA6A4A; }
+    p { color: #9da3ae; font-size: 0.95rem; line-height: 1.5; margin: 0 0 24px; }
+    button { background: #FA6A4A; color: #fff; border: none; padding: 12px 28px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; cursor: pointer; transition: opacity 0.2s; }
+    button:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>You're Offline</h1>
+    <p>Connection lost or server is taking a moment to respond. Reconnect to Wi-Fi and tap reload.</p>
+    <button onclick="window.location.reload()">Reload Page</button>
+  </div>
+</body>
+</html>`,
+      {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      }
+    );
+  }
+  return Response.error();
+});
 
 // ── Push events ───────────────────────────────────────────────────────────────
 self.addEventListener("push", (event) => {

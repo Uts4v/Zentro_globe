@@ -40,10 +40,14 @@ import {
   X,
   Ticket,
   PackageMinus,
+  WifiOff,
 } from "lucide-react";
 import CustomerSearchModal from "./CustomerSearchModal";
 import MinusStockModal from "./MinusStockModal";
 import { paymentMethodLabel } from "@/lib/payment-methods";
+import { toast } from "sonner";
+import { offlineOrders, cachedServerOrders, type OfflineOrder } from "../offline/db";
+import { enqueueMutation } from "../offline/sync";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-warning/10 text-warning",
@@ -78,6 +82,53 @@ function canAddItems(order: PosOrder) {
   );
 }
 
+function offlineOrderToPosOrder(off: OfflineOrder): PosOrder {
+  return {
+    id: off.server_order_id && off.server_order_id > 0 ? off.server_order_id : -1,
+    uuid: off.id,
+    customer: off.customer_id ?? null,
+    customer_name: off.customer_id ? `Customer #${off.customer_id}` : "Walk-in Guest",
+    merchant: off.merchant_id,
+    merchant_id: off.merchant_id,
+    merchant_name: off.kot?.merchantName || "Zentro",
+    status: off.order_status || "confirmed",
+    order_type: "dine_in",
+    source: "pos_offline",
+    fulfillment_type: off.fulfillment_type || "takeaway",
+    subtotal: String(off.total),
+    discount_type: "none",
+    discount_value: "0.00",
+    discount_amount: "0.00",
+    tax_amount: "0.00",
+    tax_breakdown: [],
+    service_charge: "0.00",
+    total_amount: String(off.total),
+    points_earned: 0,
+    payment_status: off.bill ? "paid" : "unpaid",
+    payment_method: off.bill?.payment_method || "cash",
+    notes: off.notes || "",
+    items: (off.cart_snapshot || []).map((item, idx) => ({
+      id: idx + 1,
+      menu_item: off.items?.[idx]?.menu_item_id ?? null,
+      name: item.name,
+      price: String(item.price),
+      quantity: item.quantity,
+      subtotal: String(item.subtotal),
+    })),
+    cancellation_reason: "",
+    cancelled_by: "",
+    kot_number: null,
+    table_id: off.table_id ?? null,
+    table_name_snapshot: off.kot?.tableName || (off.table_id ? `Table ${off.table_id}` : ""),
+    table_number_snapshot: off.kot?.tableNumber ?? null,
+    processed_by_worker: off.worker_id,
+    worker_name: off.kot?.workerName || "Staff",
+    version: 1,
+    created_at: off.created_at,
+    updated_at: off.created_at,
+  };
+}
+
 export default function OrderDetailScreen({
   orderId,
   onBack,
@@ -102,6 +153,7 @@ export default function OrderDetailScreen({
     quantity?: number;
   } | null>(null);
   const [statusLoading, setStatusLoading] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
   const posSettings = usePosStore((s) => s.posSettings);
@@ -109,21 +161,58 @@ export default function OrderDetailScreen({
 
   useEffect(() => {
     loadOrders();
+    const handleOnline = () => {
+      setIsOffline(false);
+      loadOrders();
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+    };
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, []);
 
   async function loadOrders() {
     setLoading(true);
+    let serverList: PosOrder[] = [];
+    const online = navigator.onLine;
+
+    if (online) {
+      try {
+        serverList = await posListOrders();
+        cachedServerOrders.save(serverList);
+      } catch {
+        serverList = cachedServerOrders.get();
+      }
+    } else {
+      serverList = cachedServerOrders.get();
+    }
+
     try {
-      const data = await posListOrders();
-      setOrders(data);
-      // Keep an open order in sync with the server (e.g. after a payment);
-      // otherwise select the requested order, if any.
+      const pendingOffline = await offlineOrders.getAll();
+      const offlineList = pendingOffline
+        .filter((o) => o.status !== "synced")
+        .map(offlineOrderToPosOrder);
+
+      const serverUuids = new Set(serverList.map((o) => o.uuid));
+      const filteredOffline = offlineList.filter((o) => !serverUuids.has(o.uuid));
+
+      const merged = [...filteredOffline, ...serverList];
+      setOrders(merged);
+
       setSelectedOrder((prev) => {
-        if (prev) return data.find((o) => o.uuid === prev.uuid) ?? prev;
-        return (orderId && data.find((o) => o.id === orderId)) || null;
+        if (prev) return merged.find((o) => o.uuid === prev.uuid) ?? prev;
+        return (orderId && merged.find((o) => o.id === orderId)) || null;
       });
     } catch {
-      // ignore
+      setOrders(serverList);
+      if (serverList.length > 0 && !selectedOrder && orderId) {
+        setSelectedOrder(serverList.find((o) => o.id === orderId) || null);
+      }
     } finally {
       setLoading(false);
     }
@@ -132,6 +221,14 @@ export default function OrderDetailScreen({
   async function handleViewReceipt(order: PosOrder) {
     setLoadingReceipt(true);
     try {
+      if (order.source === "pos_offline") {
+        const off = await offlineOrders.get(order.uuid);
+        if (off?.bill) {
+          setReceiptData(off.bill);
+          setLoadingReceipt(false);
+          return;
+        }
+      }
       const data = await posReceiptData(String(order.uuid));
       setReceiptData(data);
     } catch {
@@ -144,6 +241,18 @@ export default function OrderDetailScreen({
   async function handlePrintKOT(order: PosOrder) {
     setLoadingReceipt(true);
     try {
+      if (order.source === "pos_offline") {
+        const off = await offlineOrders.get(order.uuid);
+        if (off?.kot) {
+          printKOT({
+            ...off.kot,
+            kotNumber: off.kot.kotNumber ?? null,
+            customerName: off.kot.customerName ?? null,
+          });
+          setLoadingReceipt(false);
+          return;
+        }
+      }
       const data = await posReceiptData(String(order.uuid));
       printKOT(kotTicketFromReceipt(data));
     } catch {
@@ -155,6 +264,44 @@ export default function OrderDetailScreen({
 
   async function handleStatusChange(order: PosOrder, newStatus: string) {
     setStatusLoading(true);
+    const online = navigator.onLine;
+    const isOfflineOrder = order.source === "pos_offline";
+
+    if (!online || isOfflineOrder) {
+      try {
+        if (isOfflineOrder) {
+          await offlineOrders.updateStatus(order.uuid, newStatus);
+        } else {
+          cachedServerOrders.updateStatus(order.uuid, newStatus);
+          await enqueueMutation(
+            "order_status",
+            "/pos/order/status/",
+            "POST",
+            {
+              order_id: order.uuid,
+              status: newStatus,
+              worker_id: currentWorker?.id,
+              device_id: device?.id,
+            },
+            `status-${order.uuid}-${Date.now()}`
+          );
+        }
+
+        setOrders((prev) =>
+          prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o))
+        );
+        setSelectedOrder((prev) =>
+          prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev
+        );
+        toast.success(`Order marked as ${newStatus} (Saved offline)`);
+      } catch (err: any) {
+        toast.error("Failed to update status offline: " + (err?.message || "Unknown error"));
+      } finally {
+        setStatusLoading(false);
+      }
+      return;
+    }
+
     try {
       const updatedOrder = await posUpdateOrderStatus(
         String(order.uuid),
@@ -164,14 +311,35 @@ export default function OrderDetailScreen({
       );
       setOrders((prev) => prev.map((o) => (o.uuid === order.uuid ? { ...o, ...updatedOrder } : o)));
       setSelectedOrder((prev) => (prev?.uuid === order.uuid ? { ...prev, ...updatedOrder } : prev));
+      cachedServerOrders.updateStatus(order.uuid, newStatus);
+      toast.success(`Order marked as ${newStatus}`);
     } catch (err: any) {
-      // Backend saves status before audit log, so a 500 from audit
-      // means the status WAS updated. Always refresh to get truth.
-      const updated = await posListOrders();
-      setOrders(updated);
-      if (orderId || selectedOrder) {
-        const refreshed = updated.find((o) => o.id === (selectedOrder?.id ?? orderId));
-        setSelectedOrder(refreshed ?? null);
+      if (!navigator.onLine) {
+        try {
+          await enqueueMutation(
+            "order_status",
+            "/pos/order/status/",
+            "POST",
+            {
+              order_id: order.uuid,
+              status: newStatus,
+              worker_id: currentWorker?.id,
+              device_id: device?.id,
+            },
+            `status-${order.uuid}-${Date.now()}`
+          );
+          setOrders((prev) =>
+            prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o))
+          );
+          setSelectedOrder((prev) =>
+            prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev
+          );
+          toast.success(`Order marked as ${newStatus} (Saved offline)`);
+        } catch {
+          toast.error("Network failed and could not save offline.");
+        }
+      } else {
+        toast.error(err?.message || "Failed to update order status.");
       }
     } finally {
       setStatusLoading(false);
@@ -269,8 +437,15 @@ export default function OrderDetailScreen({
           {/* Header */}
           <div className="mb-4 flex items-start justify-between">
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-xl font-bold text-foreground">Order #{order.id}</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-xl font-bold text-foreground">
+                  Order {order.id && order.id > 0 ? `#${order.id}` : `#OFF-${order.uuid.slice(0, 6).toUpperCase()}`}
+                </h2>
+                {order.source === "pos_offline" && (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                    ⚡ Offline / Pending Sync
+                  </span>
+                )}
                 {order.kot_number && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2.5 py-0.5 text-xs font-extrabold text-ember">
                     <Ticket className="h-3 w-3" />
@@ -586,7 +761,15 @@ export default function OrderDetailScreen({
   return (
     <div className="mx-auto max-w-4xl p-4 lg:p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-foreground">Orders</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-xl font-bold text-foreground">Orders</h1>
+          {isOffline && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-3 py-1 text-xs font-bold text-amber-600 dark:text-amber-400 border border-amber-500/30">
+              <WifiOff className="h-3.5 w-3.5" />
+              Offline Mode
+            </span>
+          )}
+        </div>
         <button
           onClick={loadOrders}
           className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
@@ -595,6 +778,15 @@ export default function OrderDetailScreen({
           Refresh
         </button>
       </div>
+
+      {isOffline && (
+        <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
+          <WifiOff className="h-4 w-4 shrink-0 text-amber-500" />
+          <span>
+            Operating offline. Orders created or updated locally will auto-sync when connection is restored.
+          </span>
+        </div>
+      )}
 
       <div className="relative mb-4">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -619,51 +811,65 @@ export default function OrderDetailScreen({
             .filter((o) => {
               if (!search) return true;
               const q = search.toLowerCase();
-              return String(o.id).includes(q) || (o.customer_name ?? "").toLowerCase().includes(q);
+              return (
+                String(o.id).includes(q) ||
+                (o.uuid ?? "").toLowerCase().includes(q) ||
+                (o.customer_name ?? "").toLowerCase().includes(q)
+              );
             })
-            .map((order) => (
-              <button
-                key={order.id}
-                onClick={() => setSelectedOrder(order)}
-                className="w-full rounded-2xl border border-border bg-card p-4 text-left transition-shadow hover:shadow-sm"
-              >
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-foreground">#{order.id}</span>
-                      {order.kot_number && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
-                          <Ticket className="h-2.5 w-2.5" />
-                          KOT {String(order.kot_number).padStart(3, "0")}
+            .map((order) => {
+              const isOfflineOrder = order.source === "pos_offline";
+              return (
+                <button
+                  key={order.uuid || order.id}
+                  onClick={() => setSelectedOrder(order)}
+                  className="w-full rounded-2xl border border-border bg-card p-4 text-left transition-shadow hover:shadow-sm"
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-foreground">
+                          {order.id && order.id > 0 ? `#${order.id}` : `OFF-${order.uuid.slice(0, 6).toUpperCase()}`}
                         </span>
-                      )}
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                          STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
-                        }`}
-                      >
-                        {order.status.toUpperCase()}
-                      </span>
-                      {canCollectPayment(order) && (
-                        <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-bold text-warning">
-                          {order.payment_status === "partially_paid" ? "PART PAID" : "UNPAID"}
+                        {isOfflineOrder && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                            ⚡ Pending Sync
+                          </span>
+                        )}
+                        {order.kot_number && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
+                            <Ticket className="h-2.5 w-2.5" />
+                            KOT {String(order.kot_number).padStart(3, "0")}
+                          </span>
+                        )}
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                            STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
+                          }`}
+                        >
+                          {order.status.toUpperCase()}
                         </span>
-                      )}
+                        {canCollectPayment(order) && (
+                          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-bold text-warning">
+                            {order.payment_status === "partially_paid" ? "PART PAID" : "UNPAID"}
+                          </span>
+                        )}
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {order.customer_name || "Walk-in"} · {order.items.length} item(s) —{" "}
+                        {formatCurrency(Number(order.total_amount), currencySymbol)}
+                      </p>
                     </div>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      {order.customer_name || "Walk-in"} · {order.items.length} item(s) —{" "}
-                      {formatCurrency(Number(order.total_amount), currencySymbol)}
-                    </p>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(order.created_at).toLocaleTimeString("en-MY", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(order.created_at).toLocaleTimeString("en-MY", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-              </button>
-            ))}
+                </button>
+              );
+            })}
         </div>
       )}
     </div>

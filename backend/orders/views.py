@@ -1047,6 +1047,14 @@ def update_order_status(request, pk):
             {"error": f"Invalid status. Choose from: {', '.join(dict(Order.STATUS_CHOICES).keys())}"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    if new_status == Order.STATUS_CANCELLED:
+        # An employee in staff mode needs the "cancel orders" permission.
+        from pos import rbac
+        if not rbac.actor_can(request, "orders.cancel", merchant):
+            return Response(
+                {"error": "You don't have permission to cancel orders. Ask a manager.", "code": "no_permission"},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
     # Validate status transition
     if not order.can_transition_to(new_status):

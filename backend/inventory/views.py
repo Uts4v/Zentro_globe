@@ -278,9 +278,9 @@ def staff_workers_view(request):
             "id": str(w.id),
             "name": w.display_name,
             "role": w.role,
-            "inventory_role": InvPerm.WORKER_ROLE_MAP.get(w.role, "cashier"),
+            "inventory_role": w.staff_role.name if w.staff_role_id else w.role,
         }
-        for w in workers
+        for w in workers.select_related("staff_role")
     ])
 
 
@@ -304,14 +304,17 @@ def staff_session_start_view(request):
         if worker.locked_until and worker.locked_until > timezone.now():
             return _bad("Too many wrong PINs. Try again in 15 minutes.", status=429)
         return _bad("That PIN is not right. Please try again.", status=401)
-    role = InvPerm.WORKER_ROLE_MAP.get(worker.role, "cashier")
+    from pos import rbac
+
+    role = rbac.worker_role(worker)
+    granted = InvPerm.for_role_permissions(rbac.role_permissions(role), is_admin=role.is_admin)
     _audit(request, "settings_updated", "staff_session", worker.id, event="staff_mode_started",
            worker=worker.display_name)
     return Response({
         "token": issue_staff_token(worker),
         "staff": {"id": str(worker.id), "name": worker.display_name, "role": worker.role},
-        "role": role,
-        "permissions": {p: p in InvPerm.ROLE_DEFAULTS[role] for p in InvPerm.ALL},
+        "role": role.system_key or "custom",
+        "permissions": {p: p in granted for p in InvPerm.ALL},
     })
 
 

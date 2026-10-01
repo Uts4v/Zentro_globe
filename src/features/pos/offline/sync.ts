@@ -64,10 +64,14 @@ async function processItem(item: SyncQueueItem): Promise<boolean> {
       const serverUuid = String(response.uuid || serverId);
       await offlineOrders.markSynced(item.client_mutation_id, serverId);
 
-      // Link any pending payments waiting for this order
+      // Link any pending payments or status updates waiting for this order
       const allPending = await syncQueue.getPending();
       for (const p of allPending) {
         if (p.type === "payment" && p.body && (p.body.order_id === item.client_mutation_id || !p.body.order_id)) {
+          p.body.order_id = serverUuid;
+          await syncQueue.add(p);
+        }
+        if (p.type === "order_status" && p.body && p.body.order_id === item.client_mutation_id) {
           p.body.order_id = serverUuid;
           await syncQueue.add(p);
         }

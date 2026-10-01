@@ -5,8 +5,18 @@ pos/urls.py — mounted at /api/pos/
 from django.urls import path
 from . import views
 from . import reporting_views
+from . import team
 
 urlpatterns = [
+    # Team: staff mode, roles & permissions, employees
+    path("staff/me/", team.staff_me, name="pos-staff-me"),
+    path("staff/workers/", team.staff_workers, name="pos-staff-workers"),
+    path("staff/session/", team.staff_session_start, name="pos-staff-session"),
+    path("staff/session/end/", team.staff_session_end, name="pos-staff-session-end"),
+    path("roles/", team.roles, name="pos-roles"),
+    path("roles/<int:pk>/", team.role_detail, name="pos-role-detail"),
+    path("workers/team/", team.team_workers, name="pos-team-workers"),
+    path("workers/team/<uuid:worker_id>/", team.team_worker_detail, name="pos-team-worker-detail"),
     # Health
     path("health/", views.health_check, name="pos-health"),
 

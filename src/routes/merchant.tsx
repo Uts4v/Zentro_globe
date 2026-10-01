@@ -1,5 +1,12 @@
 ﻿// src/routes/merchant.tsx
-import { createFileRoute, Link, Outlet, useNavigate, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useNavigate,
+  redirect,
+  useRouterState,
+} from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { requireMerchant } from "@/lib/merchant-auth-guard";
@@ -25,7 +32,10 @@ import {
   Settings,
   FileType,
   Package,
+  UsersRound,
 } from "lucide-react";
+import { NoAccess, useAccess, type Perm } from "@/features/team/access";
+import { StaffBanner, StartStaffModeButton } from "@/features/team/StaffMode";
 import { MerchantNav } from "@/components/merchant-nav";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
 import { ChatWidget } from "@/features/ai/components/ChatWidget";
@@ -47,31 +57,176 @@ export const Route = createFileRoute("/merchant")({
   component: MerchantLayout,
 });
 
-const navItems = [
-  { to: "/merchant/", label: "Overview", icon: LayoutDashboard, section: "Dashboard" },
-  { to: "/merchant/analytics", label: "Analytics", icon: BarChart3, section: "Dashboard" },
-  { to: "/merchant/reports", label: "Reports", icon: FileText, section: "Dashboard" },
-  { to: "/merchant/orders", label: "Orders", icon: ShoppingBag, section: "Operations" },
-  { to: "/merchant/inventory", label: "Inventory", icon: Package, section: "Operations" },
-  { to: "/merchant/preparation", label: "Preparation", icon: ChefHat, section: "Operations" },
-  { to: "/merchant/tables", label: "Tables & QR", icon: QrCode, section: "Operations" },
-  { to: "/pos", label: "POS Terminal", icon: Monitor, section: "Operations" },
-  { to: "/merchant/menu", label: "Menu", icon: UtensilsCrossed, section: "Products" },
-  { to: "/merchant/pdf-menu", label: "PDF Menu", icon: FileType, section: "Products" },
-  { to: "/merchant/specials", label: "Today's Special", icon: Sparkles, section: "Products" },
-  { to: "/merchant/customers", label: "Customers", icon: Users, section: "Customers" },
-  { to: "/merchant/loyalty", label: "Loyalty", icon: Trophy, section: "Customers" },
-  { to: "/merchant/offers", label: "Offers", icon: TicketPercent, section: "Customers" },
-  { to: "/merchant/redeem", label: "Redeem Offer", icon: ScanLine, section: "Customers" },
-  { to: "/merchant/ai", label: "AI Assistant", icon: Bot, section: "Tools", disabled: true, badge: "Soon" },
-  { to: "/merchant/settings", label: "Settings", icon: Settings, section: "Account" },
-  { to: "/merchant/store", label: "Storefront", icon: Store, section: "Account" },
+// `perm` is what an employee's role needs to see the page (any one of them).
+// The owner (Admin) sees everything; the server enforces the same rules.
+const INVENTORY_PERMS = [
+  "inventory.view",
+  "inventory.count",
+  "inventory.receive",
+  "inventory.transfer",
+  "inventory.waste",
+  "inventory.adjust",
+  "inventory.manage",
 ];
+const navItems: {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  section: string;
+  perm: Perm;
+  disabled?: boolean;
+  badge?: string;
+}[] = [
+  {
+    to: "/merchant/",
+    label: "Overview",
+    icon: LayoutDashboard,
+    section: "Dashboard",
+    perm: "reports.view",
+  },
+  {
+    to: "/merchant/analytics",
+    label: "Analytics",
+    icon: BarChart3,
+    section: "Dashboard",
+    perm: "reports.view",
+  },
+  {
+    to: "/merchant/reports",
+    label: "Reports",
+    icon: FileText,
+    section: "Dashboard",
+    perm: "reports.view",
+  },
+  {
+    to: "/merchant/orders",
+    label: "Orders",
+    icon: ShoppingBag,
+    section: "Operations",
+    perm: ["orders.create", "pos.access"],
+  },
+  {
+    to: "/merchant/inventory",
+    label: "Inventory",
+    icon: Package,
+    section: "Operations",
+    perm: INVENTORY_PERMS,
+  },
+  {
+    to: "/merchant/preparation",
+    label: "Preparation",
+    icon: ChefHat,
+    section: "Operations",
+    perm: "kds.access",
+  },
+  {
+    to: "/merchant/tables",
+    label: "Tables & Areas",
+    icon: QrCode,
+    section: "Operations",
+    perm: ["tables.view", "tables.manage"],
+  },
+  { to: "/pos", label: "POS Terminal", icon: Monitor, section: "Operations", perm: "pos.access" },
+  {
+    to: "/merchant/menu",
+    label: "Menu",
+    icon: UtensilsCrossed,
+    section: "Products",
+    perm: "menu.manage",
+  },
+  {
+    to: "/merchant/pdf-menu",
+    label: "PDF Menu",
+    icon: FileType,
+    section: "Products",
+    perm: "menu.manage",
+  },
+  {
+    to: "/merchant/specials",
+    label: "Today's Special",
+    icon: Sparkles,
+    section: "Products",
+    perm: "menu.manage",
+  },
+  {
+    to: "/merchant/customers",
+    label: "Customers",
+    icon: Users,
+    section: "Customers",
+    perm: "customers.manage",
+  },
+  {
+    to: "/merchant/loyalty",
+    label: "Loyalty",
+    icon: Trophy,
+    section: "Customers",
+    perm: "customers.manage",
+  },
+  {
+    to: "/merchant/offers",
+    label: "Offers",
+    icon: TicketPercent,
+    section: "Customers",
+    perm: "customers.manage",
+  },
+  {
+    to: "/merchant/redeem",
+    label: "Redeem Offer",
+    icon: ScanLine,
+    section: "Customers",
+    perm: ["pos.access", "customers.manage"],
+  },
+  {
+    to: "/merchant/team",
+    label: "Team",
+    icon: UsersRound,
+    section: "Team",
+    perm: ["staff.manage", "roles.manage"],
+  },
+  {
+    to: "/merchant/ai",
+    label: "AI Assistant",
+    icon: Bot,
+    section: "Tools",
+    perm: "reports.view",
+    disabled: true,
+    badge: "Soon",
+  },
+  {
+    to: "/merchant/settings",
+    label: "Settings",
+    icon: Settings,
+    section: "Account",
+    perm: "settings.manage",
+  },
+  {
+    to: "/merchant/store",
+    label: "Storefront",
+    icon: Store,
+    section: "Account",
+    perm: "settings.manage",
+  },
+];
+
+function matchNav(pathname: string) {
+  const path = pathname.replace(/\/$/, "") || "/merchant";
+  if (path === "/merchant") return navItems[0];
+  return navItems
+    .filter((n) => n.to !== "/merchant/" && path.startsWith(n.to.replace(/\/$/, "")))
+    .sort((a, b) => b.to.length - a.to.length)[0];
+}
 
 function MerchantLayout() {
   const { merchantProfile, signOut } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const { access, can, isStaff, isLoading } = useAccess();
+
+  // Employees see only what their role allows; the owner sees everything.
+  const visibleNav = access ? navItems.filter((n) => can(n.perm)) : isLoading ? [] : navItems;
+  const current = matchNav(pathname);
+  const blocked = Boolean(access && current && !can(current.perm));
 
   async function handleSignOut() {
     await signOut();
@@ -83,7 +238,7 @@ function MerchantLayout() {
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col overflow-hidden border-r border-border bg-background lg:flex">
         <MerchantNav
-          navItems={navItems}
+          navItems={visibleNav}
           onSignOut={handleSignOut}
           bell={<MerchantNotificationBell />}
         />
@@ -98,7 +253,7 @@ function MerchantLayout() {
             onClick={(e) => e.stopPropagation()}
           >
             <MerchantNav
-              navItems={navItems}
+              navItems={visibleNav}
               onSignOut={handleSignOut}
               onLinkClick={() => setMobileOpen(false)}
             />
@@ -139,12 +294,30 @@ function MerchantLayout() {
           </div>
         </header>
 
+        {isStaff && access?.worker && (
+          <StaffBanner name={access.worker.name} role={access.role.name} />
+        )}
+        {access && !isStaff && access.staff_mode_available && (
+          <div className="flex justify-end px-4 pt-3 lg:px-8">
+            <StartStaffModeButton />
+          </div>
+        )}
+
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-          <Outlet />
+          {blocked ? (
+            <NoAccess
+              links={visibleNav
+                .filter((n) => !n.disabled)
+                .slice(0, 4)
+                .map((n) => ({ to: n.to, label: n.label }))}
+            />
+          ) : (
+            <Outlet />
+          )}
         </main>
       </div>
-      <ChatWidget />
+      {!isStaff && <ChatWidget />}
     </div>
   );
 }

@@ -101,10 +101,28 @@ class ShiftWorker(models.Model):
         max_length=255,
         help_text="SHA-256 hash of the worker PIN",
     )
+    # Legacy coarse role, kept in sync from `staff_role` (pos.rbac) for code
+    # that still reads it. `staff_role` is the source of truth.
     role = models.CharField(
         max_length=50, choices=ROLE_CHOICES, default=ROLE_CASHIER,
     )
+    # ROLE = what the employee can do. One role per employee (per location).
+    staff_role = models.ForeignKey(
+        "pos.StaffRole",
+        on_delete=models.PROTECT,
+        null=True, blank=True,
+        related_name="workers",
+    )
+    # AREA = which dining areas the employee works in. Empty = all areas.
+    table_areas = models.ManyToManyField(
+        "merchants.TableArea",
+        through="pos.StaffAreaAssignment",
+        related_name="workers",
+        blank=True,
+    )
     is_active = models.BooleanField(default=True)
+    # Mirrors of the role's permissions (pos.rbac.sync_legacy_flags), kept so
+    # existing POS clients keep reading them. Never set these directly.
     can_apply_discount = models.BooleanField(default=False)
     can_process_refund = models.BooleanField(default=False)
     can_close_shift = models.BooleanField(default=False)
@@ -403,6 +421,15 @@ class PosAuditLog(models.Model):
     ACTION_SYNC_RESOLVE = "sync_resolve"
     ACTION_REPORT_GENERATE = "report_generate"
     ACTION_MERCHANT_LOGIN = "merchant_login"
+    ACTION_ROLE_CREATE = "role_create"
+    ACTION_ROLE_UPDATE = "role_update"
+    ACTION_ROLE_DEACTIVATE = "role_deactivate"
+    ACTION_WORKER_ROLE_CHANGE = "worker_role_change"
+    ACTION_WORKER_AREAS_CHANGE = "worker_areas_change"
+    ACTION_TABLE_AREA_CREATE = "table_area_create"
+    ACTION_TABLE_AREA_UPDATE = "table_area_update"
+    ACTION_TABLE_MOVE = "table_move"
+    ACTION_STAFF_MODE = "staff_mode"
 
     ACTION_CHOICES = [
         (ACTION_DEVICE_REGISTER, "Device Register"),
@@ -431,6 +458,15 @@ class PosAuditLog(models.Model):
         (ACTION_SYNC_RESOLVE, "Sync Resolve"),
         (ACTION_REPORT_GENERATE, "Report Generate"),
         (ACTION_MERCHANT_LOGIN, "Merchant Login"),
+        (ACTION_ROLE_CREATE, "Role Create"),
+        (ACTION_ROLE_UPDATE, "Role Update"),
+        (ACTION_ROLE_DEACTIVATE, "Role Deactivate"),
+        (ACTION_WORKER_ROLE_CHANGE, "Worker Role Change"),
+        (ACTION_WORKER_AREAS_CHANGE, "Worker Areas Change"),
+        (ACTION_TABLE_AREA_CREATE, "Table Area Create"),
+        (ACTION_TABLE_AREA_UPDATE, "Table Area Update"),
+        (ACTION_TABLE_MOVE, "Table Move"),
+        (ACTION_STAFF_MODE, "Staff Mode"),
     ]
 
     id = models.BigAutoField(primary_key=True)
@@ -818,6 +854,80 @@ class StaffPreparationArea(models.Model):
 
     def __str__(self):
         return f"{self.worker.display_name} → {self.preparation_area.name}"
+
+
+# ═════════════════════════════════════════════════════════════════════════════════
+# ROLES & PERMISSIONS (simple RBAC — see pos/rbac.py)
+# ═════════════════════════════════════════════════════════════════════════════════
+
+class StaffRole(models.Model):
+    """What an employee can do. Each merchant gets the default roles
+    (Admin, Manager, Cashier, Server, Kitchen, Inventory) and may add custom
+    ones. Permissions are plain allow rows — no inheritance, no overrides.
+    """
+
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="staff_roles",
+    )
+    name = models.CharField(max_length=60)
+    description = models.CharField(max_length=200, blank=True, default="")
+    system_key = models.CharField(
+        max_length=20, blank=True, default="",
+        help_text="admin/manager/cashier/server/kitchen/inventory for default roles; blank for custom roles.",
+    )
+    is_system = models.BooleanField(default=False)
+    is_admin = models.BooleanField(
+        default=False,
+        help_text="Protected full-access role. Always passes every permission inside its own merchant.",
+    )
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "pos_staff_roles"
+        ordering = ["-is_admin", "-is_system", "name"]
+        constraints = [
+            models.UniqueConstraint(fields=["merchant", "name"], name="unique_staff_role_name_per_merchant"),
+        ]
+
+    def __str__(self):
+        return f"{self.name} ({self.merchant.business_name})"
+
+
+class StaffRolePermission(models.Model):
+    role = models.ForeignKey(StaffRole, on_delete=models.CASCADE, related_name="permissions")
+    permission_code = models.CharField(max_length=40)
+    allowed = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "pos_staff_role_permissions"
+        constraints = [
+            models.UniqueConstraint(fields=["role", "permission_code"], name="unique_role_permission"),
+        ]
+
+    def __str__(self):
+        return f"{self.role.name}: {self.permission_code}={'allow' if self.allowed else 'deny'}"
+
+
+class StaffAreaAssignment(models.Model):
+    """Which dining areas an employee works in. Not a permission."""
+
+    worker = models.ForeignKey(ShiftWorker, on_delete=models.CASCADE, related_name="area_assignments")
+    table_area = models.ForeignKey(
+        "merchants.TableArea", on_delete=models.CASCADE, related_name="staff_assignments",
+    )
+
+    class Meta:
+        db_table = "pos_staff_area_assignments"
+        constraints = [
+            models.UniqueConstraint(fields=["worker", "table_area"], name="unique_worker_table_area"),
+        ]
+
+    def __str__(self):
+        return f"{self.worker.display_name} → {self.table_area.name}"
 
 
 # ═════════════════════════════════════════════════════════════════════════════════

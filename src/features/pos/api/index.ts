@@ -1,9 +1,11 @@
 import { apiUrl, djangoFetch, tokenStore } from "@/lib/django-api-base";
 import type { MenuOptionGroup, MenuSelection } from "@/lib/api/types";
+import { staffHeaders } from "@/lib/staff-session";
 
 const headers = () => ({
   Authorization: `Bearer ${tokenStore.getAccess()}`,
   "Content-Type": "application/json",
+  ...staffHeaders(),
 });
 
 // ── Health ────────────────────────────────────────────────────────────────────
@@ -409,6 +411,12 @@ export interface ShiftWorker {
   can_process_refund: boolean;
   can_close_shift: boolean;
   can_view_reports: boolean;
+  /** Role and what it allows (server-authoritative; flags above mirror it). */
+  staff_role?: number | null;
+  role_name?: string;
+  permissions?: string[];
+  /** Dining areas this employee works in; null/undefined = all areas. */
+  area_ids?: number[] | null;
 }
 
 export interface CashShift {
@@ -667,6 +675,17 @@ export interface PosMenuSnapshot {
   >;
 }
 
+export interface PosTable {
+  id: number;
+  name: string;
+  table_number: number;
+  public_token: string;
+  /** Dining area (where customers sit). Older servers may not send these. */
+  seats?: number;
+  area_id?: number | null;
+  area_name?: string;
+}
+
 export interface PosBootstrapResponse {
   merchant: {
     id: number;
@@ -677,12 +696,7 @@ export interface PosBootstrapResponse {
   device: PosDevice;
   workers: ShiftWorker[];
   menu: PosMenuSnapshot;
-  tables: Array<{
-    id: number;
-    name: string;
-    table_number: number;
-    public_token: string;
-  }>;
+  tables: PosTable[];
   active_shift: CashShift | null;
   pos_settings: PosSettings;
   recent_orders: PosOrder[];

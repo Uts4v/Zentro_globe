@@ -7,6 +7,7 @@ import {
   PosOrder,
   PosReceiptData,
   PosSettings,
+  PosTable,
   ShiftWorker,
   CashShift,
   PosMenuSnapshot,
@@ -102,7 +103,7 @@ interface PosState {
   posSettings: PosSettings | null;
   currentWorker: ShiftWorker | null;
   incomingOrders: PosOrder[];
-  tables: Array<{ id: number; name: string; table_number: number; public_token: string }>;
+  tables: PosTable[];
 
   cart: PosOrderItem[];
   cartNotes: string;
