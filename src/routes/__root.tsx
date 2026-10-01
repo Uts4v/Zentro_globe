@@ -228,7 +228,7 @@ function GlobalNotificationToasts() {
       wsUrl.searchParams.set("token", token);
       const ws = new WebSocket(wsUrl);
 
-      ws.onopen = () => {};
+      ws.onopen = () => { };
 
       ws.onmessage = (event) => {
         try {
@@ -247,7 +247,7 @@ function GlobalNotificationToasts() {
         // Notification WebSocket error — will retry on next mount
       };
 
-      ws.onclose = () => {};
+      ws.onclose = () => { };
 
       return ws;
     };

@@ -104,6 +104,11 @@ interface PosState {
   currentWorker: ShiftWorker | null;
   incomingOrders: PosOrder[];
   tables: PosTable[];
+  /**
+   * Set when the POS is showing data saved on this device because the server
+   * could not be reached (ISO time the data was saved). Null = live data.
+   */
+  savedDataFrom: string | null;
 
   cart: PosOrderItem[];
   cartNotes: string;
@@ -138,7 +143,8 @@ interface PosState {
 
   setRecentOrders: (orders: PosOrder[]) => void;
 
-  bootstrap: (resp: PosBootstrapResponse) => void;
+  /** `savedAt` marks data loaded from this device's saved copy, not the server. */
+  bootstrap: (resp: PosBootstrapResponse, opts?: { savedAt?: string }) => void;
   reset: () => void;
 }
 
@@ -153,6 +159,7 @@ const initialState = {
   currentWorker: null,
   incomingOrders: [],
   tables: [],
+  savedDataFrom: null,
   cart: [],
   cartNotes: "",
   pendingDiscount: null,
@@ -283,7 +290,7 @@ export const usePosStore = create<PosState>((set) => ({
 
   setRecentOrders: (orders) => set({ recentOrders: orders }),
 
-  bootstrap: (resp) => {
+  bootstrap: (resp, opts) => {
     // Restore worker from localStorage (validated against server data)
     const savedWorkerId = localStorage.getItem("pos_worker_id");
     const savedWorkerJson = localStorage.getItem("pos_worker");
@@ -292,9 +299,13 @@ export const usePosStore = create<PosState>((set) => ({
     if (savedWorkerId && savedWorkerJson) {
       try {
         const parsed = JSON.parse(savedWorkerJson) as ShiftWorker;
-        // Validate worker still exists and is active
-        const serverWorker = resp.workers.find((w) => w.id === savedWorkerId && w.is_active);
-        restoredWorker = serverWorker ?? null;
+        // Validate the worker still exists and is active. The list only ever
+        // contains active employees; older servers did not send `is_active`,
+        // so only an explicit `false` counts as inactive.
+        const serverWorker = resp.workers.find(
+          (w) => w.id === savedWorkerId && w.is_active !== false,
+        );
+        restoredWorker = serverWorker ? { ...parsed, ...serverWorker } : null;
       } catch {
         restoredWorker = null;
       }
@@ -314,10 +325,15 @@ export const usePosStore = create<PosState>((set) => ({
       localStorage.removeItem("pos_active_shift");
     }
 
-    try {
-      localStorage.setItem("pos_bootstrap_cache", JSON.stringify(resp));
-    } catch {
-      // quota or private browsing
+    // Fresh data from the server becomes the saved copy for when the network
+    // is down. Data that came FROM the saved copy must not overwrite it.
+    if (!opts?.savedAt) {
+      try {
+        localStorage.setItem("pos_bootstrap_cache", JSON.stringify(resp));
+        localStorage.setItem("pos_bootstrap_cache_at", new Date().toISOString());
+      } catch {
+        // quota or private browsing
+      }
     }
 
     set({
@@ -332,6 +348,7 @@ export const usePosStore = create<PosState>((set) => ({
       incomingOrders: resp.incoming_orders || [],
       tables: resp.tables || [],
       currentWorker: restoredWorker,
+      savedDataFrom: opts?.savedAt ?? null,
     });
   },
 
@@ -342,3 +359,29 @@ export const usePosStore = create<PosState>((set) => ({
     set(initialState);
   },
 }));
+
+// ── Saved copy for when the server cannot be reached ─────────────────────────
+
+/** The bootstrap data saved on this device, with the time it was saved. */
+export function loadSavedBootstrap(): { data: PosBootstrapResponse; savedAt: string } | null {
+  try {
+    const raw = localStorage.getItem("pos_bootstrap_cache");
+    if (!raw) return null;
+    return {
+      data: JSON.parse(raw) as PosBootstrapResponse,
+      savedAt: localStorage.getItem("pos_bootstrap_cache_at") || new Date(0).toISOString(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when a request failed because the server could not be reached (offline,
+ * DNS, timeout). A response from the server — even an error — is NOT a
+ * connection problem, and must never be papered over with saved data.
+ */
+export function isConnectionError(err: unknown): boolean {
+  if (typeof navigator !== "undefined" && !navigator.onLine) return true;
+  return typeof (err as { status?: unknown } | null)?.status !== "number";
+}

@@ -175,10 +175,10 @@ export function djangoHeaders(json = false): HeadersInit {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser]                       = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [merchantProfile, setMerchantProfile] = useState<MerchantProfile | null>(null);
-  const [loading, setLoading]                 = useState(true);
-  const refreshTimerRef                       = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Fetch /api/auth/me/ ────────────────────────────────────────────────────
 
@@ -473,14 +473,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     const refresh = tokenStore.getRefresh();
-    const access  = tokenStore.getAccess();
+    const access = tokenStore.getAccess();
     // Best-effort blacklist — don't throw if it fails
     if (refresh && access) {
       djangoFetch(apiUrl("/auth/logout/"), {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
         body: JSON.stringify({ refresh }),
-      }).catch(() => {});
+      }).catch(() => { });
     }
     tokenStore.clear();
     useStore.getState().resetSession();

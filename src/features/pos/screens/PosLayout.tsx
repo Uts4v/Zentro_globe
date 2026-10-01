@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
-import { usePosStore } from "../store";
+import { usePosStore, loadSavedBootstrap, isConnectionError } from "../store";
 import WorkerPinPad from "./WorkerPinPad";
 import ShiftOpenScreen from "./ShiftOpenScreen";
 import ShiftCloseScreen from "./ShiftCloseScreen";
@@ -28,7 +28,7 @@ import {
   Menu,
 } from "lucide-react";
 import { posListWorkers, posAuthorizeDevice, posBootstrap, posDeviceBootstrap } from "../api";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
 
@@ -117,15 +117,17 @@ export default function PosLayout() {
         const deviceId = localStorage.getItem("pos_device_id");
         const deviceToken = localStorage.getItem("pos_device_token");
 
-        // Offline check: load cached snapshot immediately if offline
-        const cachedBootstrap = localStorage.getItem("pos_bootstrap_cache");
-        if (!navigator.onLine && cachedBootstrap) {
-          try {
-            bootstrap(JSON.parse(cachedBootstrap));
-            setInitializing(false);
-            return;
-          } catch {}
-        }
+        // The copy saved on this device is used ONLY when the server cannot be
+        // reached, and the POS then says so (see the banner below). A server
+        // error is never hidden behind saved data.
+        const saved = loadSavedBootstrap();
+        const showSaved = () => {
+          if (!saved) return false;
+          bootstrap(saved.data, { savedAt: saved.savedAt });
+          setInitializing(false);
+          return true;
+        };
+        if (!navigator.onLine && showSaved()) return;
 
         if (deviceId && deviceToken) {
           try {
@@ -133,29 +135,17 @@ export default function PosLayout() {
             bootstrap(resp);
             setInitializing(false);
             return;
-          } catch (err: any) {
-            // If network request failed or we are offline, restore from cache without clearing device
-            if (cachedBootstrap && (!navigator.onLine || !err?.response)) {
-              try {
-                bootstrap(JSON.parse(cachedBootstrap));
-                setInitializing(false);
-                return;
-              } catch {}
-            }
-            // Device token may be stale — try JWT-based bootstrap as fallback
+          } catch (err: unknown) {
+            if (isConnectionError(err) && showSaved()) return;
+            // The server answered (e.g. the device token is stale) — try the
+            // signed-in account instead.
             try {
               const resp = await posBootstrap(deviceId);
               bootstrap(resp);
               setInitializing(false);
               return;
-            } catch (jwtErr: any) {
-              if (cachedBootstrap && (!navigator.onLine || !jwtErr?.response)) {
-                try {
-                  bootstrap(JSON.parse(cachedBootstrap));
-                  setInitializing(false);
-                  return;
-                } catch {}
-              }
+            } catch (jwtErr: unknown) {
+              if (isConnectionError(jwtErr) && showSaved()) return;
               // Both failed with server responses — clear device and re-authorize
               localStorage.removeItem("pos_device_id");
               localStorage.removeItem("pos_device_token");
@@ -186,6 +176,43 @@ export default function PosLayout() {
 
   // Start background sync
   useBackgroundSync();
+
+  // Replace saved data with live data as soon as the server is reachable.
+  const savedDataFrom = usePosStore((s) => s.savedDataFrom);
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshFromServer = useCallback(async () => {
+    const deviceId = localStorage.getItem("pos_device_id");
+    if (!deviceId) return;
+    setRefreshing(true);
+    const deviceToken = localStorage.getItem("pos_device_token");
+    try {
+      let resp;
+      try {
+        if (!deviceToken) throw new Error("no device token");
+        resp = await posDeviceBootstrap(deviceId, deviceToken);
+      } catch {
+        resp = await posBootstrap(deviceId);
+      }
+      bootstrap(resp);
+    } catch {
+      // still unreachable — keep the saved data and the banner
+    } finally {
+      setRefreshing(false);
+    }
+  }, [bootstrap]);
+
+  useEffect(() => {
+    if (!savedDataFrom) return;
+    if (navigator.onLine) refreshFromServer();
+    const timer = setInterval(() => {
+      if (navigator.onLine) refreshFromServer();
+    }, 30000);
+    window.addEventListener("online", refreshFromServer);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("online", refreshFromServer);
+    };
+  }, [savedDataFrom, refreshFromServer]);
 
   useEffect(() => {
     const onOnline = () => setIsOnline(true);
@@ -566,6 +593,27 @@ export default function PosLayout() {
           </div>
         )}
 
+        {savedDataFrom && (
+          <div
+            role="status"
+            className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
+          >
+            <span>
+              <strong>Can&apos;t reach the server.</strong> Showing data saved on this device
+              {savedLabel(savedDataFrom)}. New tables, menu changes and customer orders may be
+              missing. Orders you take are saved here and sent when the connection is back.
+            </span>
+            <button
+              type="button"
+              onClick={refreshFromServer}
+              disabled={refreshing}
+              className="inline-flex min-h-[40px] items-center rounded-lg border border-amber-300 bg-white px-3 font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+            >
+              {refreshing ? "Trying…" : "Try again"}
+            </button>
+          </div>
+        )}
+
         {/* Page content */}
         <main className="min-h-0 flex-1 overflow-y-auto">
           {/* If on order page and no active shift, show shift open screen */}
@@ -580,4 +628,15 @@ export default function PosLayout() {
       </div>
     </div>
   );
+}
+
+/** " at 2:35 PM" / " on Oct 1, 2:35 PM" — when the saved data was last updated. */
+function savedLabel(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime()) || d.getTime() === 0) return "";
+  const sameDay = d.toDateString() === new Date().toDateString();
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return sameDay
+    ? ` at ${time}`
+    : ` on ${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}, ${time}`;
 }

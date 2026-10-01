@@ -554,6 +554,7 @@ def pos_bootstrap(request):
             "can_process_refund": w.can_process_refund,
             "can_close_shift": w.can_close_shift,
             "can_view_reports": w.can_view_reports,
+            "is_active": w.is_active,
             **_worker_rbac_fields(w),
         })
 
@@ -641,6 +642,7 @@ def pos_bootstrap_device(request):
             "can_process_refund": w.can_process_refund,
             "can_close_shift": w.can_close_shift,
             "can_view_reports": w.can_view_reports,
+            "is_active": w.is_active,
             **_worker_rbac_fields(w),
         })
 

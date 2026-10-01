@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { usePosStore } from "../store";
+import { usePosStore, isConnectionError } from "../store";
+import { enqueueMutation } from "../offline/sync";
+import { cachedServerOrders } from "../offline/db";
+import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import {
   posListOrders,
@@ -43,6 +46,7 @@ export default function IncomingOrdersPanel() {
   const incomingOrders = usePosStore((s) => s.incomingOrders);
   const setIncomingOrders = usePosStore((s) => s.setIncomingOrders);
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const device = usePosStore((s) => s.device);
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
   const [loading, setLoading] = useState(false);
@@ -93,33 +97,75 @@ export default function IncomingOrdersPanel() {
     return () => clearInterval(interval);
   }, [fetchOrders]);
 
-  async function handleAccept(order: PosOrder) {
-    if (!currentWorker) return;
+  /**
+   * Change an incoming order's status. With no connection the change is saved
+   * on this device and sent when the connection is back (same as the order
+   * detail screen). Returns the order as it now stands, or null if it failed.
+   */
+  async function changeStatus(
+    order: PosOrder,
+    status: string,
+    done: string,
+  ): Promise<Partial<PosOrder> | null> {
+    if (!currentWorker) {
+      toast.error("Enter your PIN first.");
+      return null;
+    }
+    const saveForLater = async () => {
+      cachedServerOrders.updateStatus(order.uuid, status);
+      await enqueueMutation(
+        "order_status",
+        "/pos/order/status/",
+        "POST",
+        {
+          order_id: order.uuid,
+          status,
+          worker_id: currentWorker.id,
+          device_id: device?.id,
+        },
+        `status-${order.uuid}-${Date.now()}`,
+      );
+      toast.success(`${done} — saved here, will be sent when the connection is back.`);
+      return { status };
+    };
     try {
-      await posUpdateOrderStatus(order.uuid, "confirmed", currentWorker.id);
-      setIncomingOrders(incomingOrders.filter((o) => o.uuid !== order.uuid));
-    } catch {
+      if (!navigator.onLine) return await saveForLater();
+      const updated = await posUpdateOrderStatus(order.uuid, status, currentWorker.id, device?.id);
+      toast.success(done);
+      return updated;
+    } catch (err: unknown) {
+      if (isConnectionError(err)) {
+        try {
+          return await saveForLater();
+        } catch {
+          toast.error("No connection, and the change could not be saved. Try again.");
+          return null;
+        }
+      }
+      toast.error(err instanceof Error && err.message ? err.message : "Could not update the order.");
       fetchOrders();
+      return null;
+    }
+  }
+
+  async function handleAccept(order: PosOrder) {
+    if (await changeStatus(order, "confirmed", `Order #${order.id} accepted`)) {
+      setIncomingOrders(incomingOrders.filter((o) => o.uuid !== order.uuid));
     }
   }
 
   async function handleReject(order: PosOrder) {
-    if (!currentWorker) return;
-    try {
-      await posUpdateOrderStatus(order.uuid, "cancelled", currentWorker.id);
+    if (await changeStatus(order, "cancelled", `Order #${order.id} rejected`)) {
       setIncomingOrders(incomingOrders.filter((o) => o.uuid !== order.uuid));
-    } catch {
-      fetchOrders();
     }
   }
 
   async function handleMarkReady(order: PosOrder) {
-    if (!currentWorker) return;
-    try {
-      const updated = await posUpdateOrderStatus(order.uuid, "ready", currentWorker.id);
-      setIncomingOrders(incomingOrders.map((o) => o.uuid === order.uuid ? { ...o, ...updated } : o));
-    } catch {
-      fetchOrders();
+    const updated = await changeStatus(order, "ready", `Order #${order.id} marked ready`);
+    if (updated) {
+      setIncomingOrders(
+        incomingOrders.map((o) => (o.uuid === order.uuid ? { ...o, ...updated } : o)),
+      );
     }
   }
 

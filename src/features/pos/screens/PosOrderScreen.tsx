@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { usePosStore } from "../store";
+import { usePosStore, loadSavedBootstrap, isConnectionError } from "../store";
 import { posBootstrap } from "../api";
 import { formatCurrency } from "@/lib/currency";
 import { usePosCartPricing } from "../pricing";
@@ -38,28 +38,25 @@ export default function PosOrderScreen() {
           return;
         }
 
-        const cachedBootstrap = localStorage.getItem("pos_bootstrap_cache");
-        if (!navigator.onLine && cachedBootstrap) {
-          try {
-            bootstrap(JSON.parse(cachedBootstrap));
-            setLoading(false);
-            return;
-          } catch {}
+        // Saved data is only for when the server cannot be reached.
+        const saved = loadSavedBootstrap();
+        if (!navigator.onLine && saved) {
+          bootstrap(saved.data, { savedAt: saved.savedAt });
+          setLoading(false);
+          return;
         }
 
         const resp = await posBootstrap(deviceId);
         bootstrap(resp);
         setLoading(false);
-      } catch (err: any) {
-        const cachedBootstrap = localStorage.getItem("pos_bootstrap_cache");
-        if (cachedBootstrap) {
-          try {
-            bootstrap(JSON.parse(cachedBootstrap));
-            setLoading(false);
-            return;
-          } catch {}
+      } catch (err: unknown) {
+        const saved = loadSavedBootstrap();
+        if (saved && isConnectionError(err)) {
+          bootstrap(saved.data, { savedAt: saved.savedAt });
+          setLoading(false);
+          return;
         }
-        setError(err?.message || "Failed to initialize POS");
+        setError(err instanceof Error ? err.message : "Failed to initialize POS");
         setLoading(false);
       }
     }
