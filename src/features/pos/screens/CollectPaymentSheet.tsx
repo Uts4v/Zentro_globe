@@ -12,6 +12,17 @@ import {
 } from "../api";
 import Receipt from "../printing/Receipt";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
+import { isOfflineCapableMethod } from "../offline/tenders";
+import { enqueueMutation } from "../offline/sync";
+import { useOnlineStatus } from "../offline/hooks";
+import { offlineOrders, offlinePayments, cachedServerOrders } from "../offline/db";
+import {
+  billFromOfflineOrder,
+  orderNumber,
+  receiptFromOrder,
+  receiptPayment,
+} from "../offline/documents";
+import { isOnline as serverReachable } from "@/lib/connectivity";
 import {
   X,
   Banknote,
@@ -64,36 +75,47 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
   const [selectedDebitAccount, setSelectedDebitAccount] = useState<string>("");
   const [reference, setReference] = useState("");
   const [qrConfirmed, setQrConfirmed] = useState(false);
+  // One id for this payment however it is sent, so a payment that reached
+  // the server just before the connection dropped is not recorded twice
+  // when it is queued and sent again.
+  const [paymentMutationId] = useState<string>(() => safeUuid());
+  const isOnline = useOnlineStatus();
+  // An order still waiting to sync has no server record to pay against, so
+  // its payment is queued behind it even when the connection is up.
+  const localOnly = order.source === "pos_offline" && order.id <= 0;
+  const queued = !isOnline || localOnly;
 
   useEffect(() => {
-    if (method === "debit" && debitAccounts.length === 0) {
+    if (method === "debit" && !queued && debitAccounts.length === 0) {
       posListDebitAccounts()
         .then(setDebitAccounts)
         .catch(() => {});
     }
-  }, [method]);
+  }, [method, queued]);
 
-  // Mirrors PaymentSheet: only offer tenders this merchant accepts, and never
-  // offer QR without a real image behind it.
+  // Mirrors PaymentSheet: only offer tenders this merchant accepts, never
+  // offer QR without a real image behind it, and when the payment has to be
+  // queued only offer tenders that can be recorded without the server.
   const availableMethods = useMemo(() => {
     const configured = posSettings?.payment_methods;
-    if (configured && configured.length > 0) {
-      return configured.map((option) => ({
-        key: option.key,
-        label: option.label,
-        requiresReference: option.requires_reference,
-        isQr: option.is_qr,
-        icon: METHOD_ICONS[option.key] ?? Banknote,
-      }));
-    }
-    return PAYMENT_METHODS.map((pm) => ({
-      key: pm.key,
-      label: pm.label,
-      requiresReference: pm.key !== "cash" && pm.key !== "debit",
-      isQr: pm.key === "bank_qr",
-      icon: pm.icon,
-    }));
-  }, [posSettings?.payment_methods]);
+    const base =
+      configured && configured.length > 0
+        ? configured.map((option) => ({
+            key: option.key,
+            label: option.label,
+            requiresReference: option.requires_reference,
+            isQr: option.is_qr,
+            icon: METHOD_ICONS[option.key] ?? Banknote,
+          }))
+        : PAYMENT_METHODS.map((pm) => ({
+            key: pm.key,
+            label: pm.label,
+            requiresReference: pm.key !== "cash" && pm.key !== "debit",
+            isQr: pm.key === "bank_qr",
+            icon: pm.icon,
+          }));
+    return queued ? base.filter((m) => isOfflineCapableMethod(m.key)) : base;
+  }, [posSettings?.payment_methods, queued]);
 
   const qr = posSettings?.payment_qr ?? null;
   const activeMethod = availableMethods.find((m) => m.key === method);
@@ -145,6 +167,88 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
       : undefined;
   }
 
+  /**
+   * Record the payment on this device and queue it for the server, then show
+   * the paid bill built from what is saved here.
+   */
+  async function payOffline(shiftId: string) {
+    if (!merchant || !currentWorker || !device) return;
+    if (!isOfflineCapableMethod(method)) {
+      setError(
+        `${PAYMENT_METHOD_LABELS[method] || method} cannot be recorded without a connection. Please use Cash, bank QR or mobile wallet.`,
+      );
+      return;
+    }
+    try {
+      const orderRef = String(order.uuid);
+      const createdAt = new Date().toISOString();
+      const amount = roundMoney(total);
+      const changeAmount = method === "cash" ? roundMoney(change) : 0;
+      const externalReference = reference.trim();
+
+      await offlinePayments.save({
+        id: paymentMutationId,
+        order_id: orderRef,
+        payment_method: method,
+        amount,
+        change_amount: changeAmount,
+        external_reference: externalReference || undefined,
+        shift_id: shiftId,
+        worker_id: currentWorker.id,
+        device_id: device.id,
+        status: "pending_sync",
+        created_at: createdAt,
+      });
+      await enqueueMutation(
+        "payment",
+        "/pos/payment/create/",
+        "POST",
+        {
+          order_id: orderRef,
+          shift_id: shiftId,
+          worker_id: currentWorker.id,
+          device_id: device.id,
+          payment_method: method,
+          amount,
+          change_amount: changeAmount,
+          external_reference: externalReference || undefined,
+          client_mutation_id: paymentMutationId,
+          client_created_at: createdAt,
+        },
+        paymentMutationId,
+      );
+
+      const paid = {
+        payments: [receiptPayment(method, String(amount), String(changeAmount), externalReference)],
+        total_paid: String(method === "cash" ? roundMoney(cashAmount) : amount),
+        change: String(changeAmount),
+        payment_status: "paid",
+        payment_method: method,
+        // The server completes an order when it is paid in full.
+        status: order.status === "cancelled" ? order.status : "completed",
+        is_offline_receipt: true,
+        sync_status: "pending",
+      };
+
+      const captured = await offlineOrders.get(orderRef);
+      if (captured) {
+        // Taken on this device: its saved bill is the record of the payment.
+        const bill = { ...billFromOfflineOrder(captured, merchant), ...paid };
+        await offlineOrders.save({ ...captured, bill, order_status: paid.status });
+        setReceiptData(bill);
+      } else {
+        cachedServerOrders.update(orderRef, {
+          payment_status: paid.payment_status,
+          payment_method: paid.payment_method,
+          status: paid.status,
+        });
+        setReceiptData({ ...receiptFromOrder(order, merchant), ...paid, type: "receipt" });
+      }
+    } catch (err: any) {
+      setError(err?.message || "Could not save the payment on this device.");
+    }
+  }
+
   async function handleSubmit() {
     if (!canSubmit || !merchant || !currentWorker || !device) return;
     if (!activeShift) {
@@ -156,19 +260,31 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
     setError(null);
 
     try {
-      await posCreatePayment({
-        order_id: String(order.uuid),
-        shift_id: activeShift.id,
-        worker_id: currentWorker.id,
-        device_id: device.id,
-        payment_method: method,
-        amount: roundMoney(total),
-        change_amount: method === "cash" ? roundMoney(change) : 0,
-        debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
-        // Recorded for the merchant's own reconciliation; never required.
-        external_reference: reference.trim() || undefined,
-        client_mutation_id: safeUuid(),
-      });
+      if (localOnly || !serverReachable()) {
+        await payOffline(activeShift.id);
+        return;
+      }
+
+      try {
+        await posCreatePayment({
+          order_id: String(order.uuid),
+          shift_id: activeShift.id,
+          worker_id: currentWorker.id,
+          device_id: device.id,
+          payment_method: method,
+          amount: roundMoney(total),
+          change_amount: method === "cash" ? roundMoney(change) : 0,
+          debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
+          // Recorded for the merchant's own reconciliation; never required.
+          external_reference: reference.trim() || undefined,
+          client_mutation_id: paymentMutationId,
+        });
+      } catch (err: any) {
+        // The server never answered: keep the payment here rather than lose it.
+        if (!serverReachable()) await payOffline(activeShift.id);
+        else setError(err?.message || "Payment failed. Please try again.");
+        return;
+      }
 
       setLoadingReceipt(true);
       try {
@@ -179,8 +295,6 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
       } finally {
         setLoadingReceipt(false);
       }
-    } catch (err: any) {
-      setError(err?.message || "Payment failed. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -225,6 +339,11 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
               <p className="text-sm font-bold text-green-800">Payment successful</p>
               {method === "cash" && change > 0 && (
                 <p className="text-xs text-green-600">Change to give: {formatCurrency(change, currencySymbol)}</p>
+              )}
+              {receiptData?.is_offline_receipt && receiptData.sync_status !== "synced" && (
+                <p className="text-xs text-green-600">
+                  Saved on this device — it is sent when the connection is back
+                </p>
               )}
             </div>
           </div>
@@ -273,7 +392,7 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
       <div className="relative w-full max-w-lg rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h3 id="collect-payment-title" className="text-base font-bold text-foreground">
-            Collect Payment — Order #{order.id}
+            Collect Payment — Order {orderNumber(order)}
           </h3>
           <button
             aria-label="Close"

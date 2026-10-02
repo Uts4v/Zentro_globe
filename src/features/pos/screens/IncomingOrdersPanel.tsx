@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { usePosStore, isConnectionError } from "../store";
 import { enqueueMutation } from "../offline/sync";
 import { cachedServerOrders } from "../offline/db";
+import { useOnlineStatus } from "../offline/hooks";
+import { isOnline as serverReachable } from "@/lib/connectivity";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import {
@@ -49,6 +51,8 @@ export default function IncomingOrdersPanel() {
   const device = usePosStore((s) => s.device);
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
+  // Accepting and rejecting are queued offline; finding a customer is not possible.
+  const offline = !useOnlineStatus();
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
@@ -66,6 +70,9 @@ export default function IncomingOrdersPanel() {
     setLoading(true);
     try {
       const data = await posListOrders();
+      // Keep the saved copy current, so the Orders screen has today's orders
+      // to show if the connection drops before anyone opens it.
+      cachedServerOrders.save(data);
       const incoming = data.filter(
         (o) =>
           ["customer_app", "table_qr"].includes(o.source) &&
@@ -129,7 +136,7 @@ export default function IncomingOrdersPanel() {
       return { status };
     };
     try {
-      if (!navigator.onLine) return await saveForLater();
+      if (!serverReachable()) return await saveForLater();
       const updated = await posUpdateOrderStatus(order.uuid, status, currentWorker.id, device?.id);
       toast.success(done);
       return updated;
@@ -407,7 +414,9 @@ export default function IncomingOrdersPanel() {
                   {!hasCustomer && !isLinking && (
                     <button
                       onClick={() => setLinkingOrderId(order.id)}
-                      className="flex items-center justify-center gap-1 rounded-lg border border-ink/30 bg-ink/5 px-3 py-2 text-xs font-bold text-ink hover:bg-ink/10"
+                      disabled={offline}
+                      title={offline ? "Needs a connection — not available offline" : undefined}
+                      className="flex items-center justify-center gap-1 rounded-lg border border-ink/30 bg-ink/5 px-3 py-2 text-xs font-bold text-ink hover:bg-ink/10 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
                       Link Customer
@@ -435,7 +444,9 @@ export default function IncomingOrdersPanel() {
                   {!hasCustomer && !isLinking && (
                     <button
                       onClick={() => setLinkingOrderId(order.id)}
-                      className="flex items-center justify-center gap-1 rounded-lg border border-ink/30 bg-ink/5 px-3 py-2 text-xs font-bold text-ink hover:bg-ink/10"
+                      disabled={offline}
+                      title={offline ? "Needs a connection — not available offline" : undefined}
+                      className="flex items-center justify-center gap-1 rounded-lg border border-ink/30 bg-ink/5 px-3 py-2 text-xs font-bold text-ink hover:bg-ink/10 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       <UserPlus className="h-3.5 w-3.5" />
                       Link Customer

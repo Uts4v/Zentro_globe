@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { cartKey } from "@/lib/menu-utils";
+import { isGatewayError } from "@/lib/connectivity";
 import type { MenuSelection } from "@/lib/api/types";
 import {
   PosBootstrapResponse,
@@ -198,6 +199,21 @@ export const usePosStore = create<PosState>((set, get) => ({
     } else {
       localStorage.removeItem("pos_active_shift");
     }
+    // The saved copy is what the POS starts from with no connection. Left
+    // alone it would still hold the shift as of the last bootstrap: reopening
+    // offline would lose a shift opened since (and with it the order screen),
+    // or bring back one that has been closed.
+    try {
+      const raw = localStorage.getItem("pos_bootstrap_cache");
+      if (raw) {
+        localStorage.setItem(
+          "pos_bootstrap_cache",
+          JSON.stringify({ ...JSON.parse(raw), active_shift: s }),
+        );
+      }
+    } catch {
+      // quota or private browsing
+    }
     set({ activeShift: s });
   },
   setPosSettings: (s) => set({ posSettings: s }),
@@ -385,5 +401,7 @@ export const usePosStore = create<PosState>((set, get) => ({
  */
 export function isConnectionError(err: unknown): boolean {
   if (typeof navigator !== "undefined" && !navigator.onLine) return true;
-  return typeof (err as { status?: unknown } | null)?.status !== "number";
+  const status = (err as { status?: unknown } | null)?.status;
+  // A proxy's "bad gateway" is the proxy talking, not the server.
+  return typeof status !== "number" || isGatewayError(status);
 }

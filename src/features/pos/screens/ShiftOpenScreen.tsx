@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
 import { posOpenShift, posGetLastClosedShift, CashShift } from "../api";
-import { Wallet, Loader2, ArrowRight, AlertTriangle } from "lucide-react";
+import { useOnlineStatus } from "../offline/hooks";
+import { Wallet, Loader2, ArrowRight, AlertTriangle, WifiOff } from "lucide-react";
 
 interface ShiftOpenProps {
   onShiftOpened: (shift: CashShift) => void;
@@ -15,6 +16,7 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
   const currentWorker = usePosStore((s) => s.currentWorker);
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
+  const isOnline = useOnlineStatus();
   const [openingCash, setOpeningCash] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,7 +32,8 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
   const cash = parseFloat(openingCash) || 0;
   const expectedCash = lastClosed ? Number(lastClosed.closing_cash) : null;
   const cashMismatch = expectedCash !== null && openingCash !== "" && cash !== expectedCash;
-  const canSubmit = cash >= 0 && !loading && device && currentWorker;
+  // A shift is opened by the server, so it cannot be started offline.
+  const canSubmit = cash >= 0 && !loading && device && currentWorker && isOnline;
 
   async function handleSubmit() {
     if (!canSubmit || !device || !currentWorker) return;
@@ -115,6 +118,14 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
         {currentWorker && (
           <div className="mb-4 rounded-xl bg-muted/50 px-4 py-2.5 text-center text-xs text-muted-foreground">
             Opening as <span className="font-medium text-foreground">{currentWorker.display_name}</span>
+          </div>
+        )}
+
+        {!isOnline && (
+          <div className="mb-4 flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-700">
+            <WifiOff className="h-4 w-4 shrink-0" />
+            A shift can only be opened with a connection. Orders can be taken offline once a shift
+            is open.
           </div>
         )}
 

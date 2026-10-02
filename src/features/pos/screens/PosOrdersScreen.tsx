@@ -17,6 +17,7 @@ import { usePendingOfflineOrders, useOnlineStatus } from "../offline/hooks";
 import { printKOT, type KOTTicketData } from "../printing/kot-markup";
 import { tableLabel } from "../printing/table-label";
 import { OfflineKOT, OfflineOrder } from "../offline/db";
+import { offlineOrderPaid } from "../offline/documents";
 import Receipt from "../printing/Receipt";
 
 /**
@@ -305,7 +306,7 @@ function OfflineOrderCard({
   const reference = order.kot?.orderNumber ?? order.id.slice(0, 8).toUpperCase();
   const table = tableLabel(order.kot?.tableName, order.kot?.tableNumber);
   const time = order.kot?.createdAt ?? order.created_at;
-  const paid = order.status === "synced" || Boolean(order.bill);
+  const paid = order.status === "synced" || offlineOrderPaid(order);
   const failed = order.status === "failed";
 
   return (

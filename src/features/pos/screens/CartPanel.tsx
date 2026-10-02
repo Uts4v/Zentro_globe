@@ -30,6 +30,7 @@ import ProductDetailSheet, {
 } from "@/features/catalog/components/ProductDetailSheet";
 import type { MenuItemSelectable } from "@/lib/api/types";
 import MinusStockModal from "./MinusStockModal";
+import { useOnlineStatus } from "../offline/hooks";
 
 interface CartPanelProps {
   onCheckout: () => void;
@@ -62,6 +63,10 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
   const pendingOffer = usePosStore((s) => s.pendingOffer);
   const setPendingOffer = usePosStore((s) => s.setPendingOffer);
   usePendingOfferRefresh();
+  // Customers, discounts, offers, staff comps and stock all live on the
+  // server, so those controls are switched off while it cannot be reached.
+  const offline = !useOnlineStatus();
+  const offlineTitle = offline ? "Needs a connection — not available offline" : undefined;
 
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
@@ -382,7 +387,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               <div className="flex shrink-0 flex-col gap-1">
                 <button
                   onClick={() => setShowCustomerSearch(true)}
-                  className="text-right text-xs font-semibold text-ember hover:underline"
+                  disabled={offline}
+                  title={offlineTitle}
+                  className="text-right text-xs font-semibold text-ember hover:underline disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:no-underline"
                 >
                   Change
                 </button>
@@ -400,7 +407,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
           ) : (
             <button
               onClick={() => setShowCustomerSearch(true)}
-              className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-[var(--shadow-card)] transition-all hover:border-ember/50 hover:bg-ember-soft/30"
+              disabled={offline}
+              title={offlineTitle}
+              className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-[var(--shadow-card)] transition-all hover:border-ember/50 hover:bg-ember-soft/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-card"
             >
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mist">
                 <User className="h-4 w-4 text-muted-foreground" />
@@ -546,8 +555,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                             });
                             setShowMinusStock(true);
                           }}
-                          title="Minus stock for this item"
-                          className="flex h-9 items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+                          disabled={offline}
+                          title={offlineTitle ?? "Minus stock for this item"}
+                          className="flex h-9 items-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                         >
                           <PackageMinus className="h-3.5 w-3.5" />
                           <span>Minus Stock</span>
@@ -645,7 +655,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
         ) : (
           <button
             onClick={onDiscount}
-            className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-ember"
+            disabled={offline}
+            title={offlineTitle}
+            className="flex w-full items-center justify-between rounded-lg px-1 py-0.5 text-[13px] text-muted-foreground transition-colors hover:text-ember disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:text-muted-foreground"
           >
             <span className="flex items-center gap-1.5">
               <Percent className="h-3.5 w-3.5" />
@@ -702,7 +714,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
           {posSettings?.discounts_enabled && (
             <button
               onClick={onDiscount}
-              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+              disabled={offline}
+              title={offlineTitle}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Percent className="h-3.5 w-3.5" />
               Apply Discount
@@ -710,7 +724,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
           )}
           <button
             onClick={onRedeemOffer}
-            className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+            disabled={offline}
+            title={offlineTitle}
+            className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Ticket className="h-3.5 w-3.5" />
             Redeem Offer
@@ -718,7 +734,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
           {!isEmpty && (
             <button
               onClick={() => setShowFreeConfirm(true)}
-              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-dashed border-success/40 bg-success/10 px-2 text-xs font-medium text-success transition-colors hover:bg-success/20"
+              disabled={offline}
+              title={offlineTitle}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-dashed border-success/40 bg-success/10 px-2 text-xs font-medium text-success transition-colors hover:bg-success/20 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Gift className="h-3.5 w-3.5" />
               Staff Free
@@ -731,7 +749,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                 setSelectedMinusStockItem(null);
                 setShowMinusStock(true);
               }}
-              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 shadow-sm"
+              disabled={offline}
+              title={offlineTitle}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-destructive/30 bg-destructive/10 px-2 text-xs font-semibold text-destructive transition-colors hover:bg-destructive/20 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
             >
               <PackageMinus className="h-3.5 w-3.5" />
               Minus Stock

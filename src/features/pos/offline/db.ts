@@ -55,8 +55,15 @@ export interface OfflineOrder {
   status: "pending_sync" | "syncing" | "synced" | "failed";
   order_status?: string;
   server_order_id?: number;
+<<<<<<< HEAD
   /** Why the last sync attempt was rejected, so the orders screen can say so. */
   last_error?: string;
+=======
+  /** The server's uuid for this order, known once it has synced. */
+  server_order_uuid?: string;
+  /** Why the server refused this order, when `status` is "failed". */
+  sync_error?: string;
+>>>>>>> 50f934b5775682c039223eb87daeeff4a765564f
   /**
    * Ticket printed for the kitchen at capture time. Kept so it can be
    * reprinted after the sheet closes — nothing else retains the modifier and
@@ -66,7 +73,8 @@ export interface OfflineOrder {
   /**
    * The bill as captured on this device. The server only has the order once it
    * syncs, so this is the only way to show or print a paper bill for an order
-   * taken while offline. Omitted for order-only captures, which are unpaid.
+   * taken while offline. Its `payment_status` says whether it has been paid:
+   * an order placed without payment carries an unpaid bill.
    */
   bill?: PosReceiptData;
   created_at: string;
@@ -103,6 +111,12 @@ export interface SyncQueueItem {
   attempts: number;
   last_error?: string;
   next_retry_at?: number;
+  /**
+   * The server refused this exact request, so sending it again unchanged will
+   * not help. It stays queued (nothing is thrown away) but is only retried
+   * when staff ask for it.
+   */
+  needs_attention?: boolean;
   created_at: string;
 }
 
@@ -219,12 +233,17 @@ export const offlineOrders = {
     const all = await getAll<OfflineOrder>("orders");
     return all.filter((o) => o.status === "pending_sync" || o.status === "failed");
   },
-  markSynced: async (clientId: string, serverId: number) => {
+  markSynced: async (clientId: string, serverId: number, serverUuid?: string) => {
     const order = await getById<OfflineOrder>("orders", clientId);
     if (order) {
       order.status = "synced";
       order.server_order_id = serverId;
+<<<<<<< HEAD
       delete order.last_error;
+=======
+      if (serverUuid) order.server_order_uuid = serverUuid;
+      delete order.sync_error;
+>>>>>>> 50f934b5775682c039223eb87daeeff4a765564f
       await put("orders", order);
     }
   },
@@ -232,7 +251,11 @@ export const offlineOrders = {
     const order = await getById<OfflineOrder>("orders", clientId);
     if (order) {
       order.status = "failed";
+<<<<<<< HEAD
       order.last_error = error;
+=======
+      order.sync_error = error;
+>>>>>>> 50f934b5775682c039223eb87daeeff4a765564f
       await put("orders", order);
     }
   },
@@ -263,12 +286,14 @@ export const cachedServerOrders = {
       localStorage.setItem(CACHED_ORDERS_KEY, JSON.stringify(orders.slice(0, 100)));
     } catch {}
   },
-  updateStatus: (uuid: string, status: string): void => {
+  update: (uuid: string, changes: Partial<PosOrder>): void => {
     try {
       const orders = cachedServerOrders.get();
-      const updated = orders.map((o) => (o.uuid === uuid ? { ...o, status } : o));
-      cachedServerOrders.save(updated);
+      cachedServerOrders.save(orders.map((o) => (o.uuid === uuid ? { ...o, ...changes } : o)));
     } catch {}
+  },
+  updateStatus: (uuid: string, status: string): void => {
+    cachedServerOrders.update(uuid, { status });
   },
 };
 
@@ -311,6 +336,7 @@ export const syncQueue = {
   get: (id: string) => getById<SyncQueueItem>("sync_queue", id),
   add: (item: SyncQueueItem) => put("sync_queue", item),
   remove: (id: string) => remove("sync_queue", id),
+<<<<<<< HEAD
   getPending: async () => {
     const all = await getAll<SyncQueueItem>("sync_queue");
     return all.filter((s) => s.status === "pending" || s.status === "failed");
@@ -337,23 +363,17 @@ export const syncQueue = {
     return stuck.length;
   },
   markSyncing: async (id: string) => {
+=======
+  /**
+   * Everything not yet on the server. An item is removed the moment it syncs,
+   * so that is the whole queue — including items left at "syncing" by a page
+   * that was closed mid-request, which would otherwise never be sent again.
+   */
+  getPending: () => getAll<SyncQueueItem>("sync_queue"),
+  update: async (id: string, changes: Partial<SyncQueueItem>) => {
+>>>>>>> 50f934b5775682c039223eb87daeeff4a765564f
     const item = await getById<SyncQueueItem>("sync_queue", id);
-    if (item) {
-      item.status = "syncing";
-      item.attempts += 1;
-      await put("sync_queue", item);
-    }
-  },
-  markFailed: async (id: string, error: string, nextRetryAt?: number) => {
-    const item = await getById<SyncQueueItem>("sync_queue", id);
-    if (item) {
-      item.status = "failed";
-      item.last_error = error;
-      if (nextRetryAt) {
-        item.next_retry_at = nextRetryAt;
-      }
-      await put("sync_queue", item);
-    }
+    if (item) await put("sync_queue", { ...item, ...changes });
   },
   markDead: async (id: string, error: string) => {
     const item = await getById<SyncQueueItem>("sync_queue", id);

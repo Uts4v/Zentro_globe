@@ -12,6 +12,8 @@ import {
   ShiftSummary,
 } from "../api";
 import CashMovementModal from "./CashMovementModal";
+import { processSyncQueue } from "../offline/sync";
+import { syncQueue } from "../offline/db";
 import {
   Wallet,
   Loader2,
@@ -25,11 +27,13 @@ import {
 
 interface ShiftCloseProps {
   onShiftClosed: (shift: CashShift) => void;
+  /** Leave without closing — e.g. the shift cannot be closed while offline. */
+  onCancel?: () => void;
 }
 
 const QUICK_CASH = [0, 50, 100, 200, 500];
 
-export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
+export default function ShiftCloseScreen({ onShiftClosed, onCancel }: ShiftCloseProps) {
   const activeShift = usePosStore((s) => s.activeShift);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const posSettings = usePosStore((s) => s.posSettings);
@@ -47,14 +51,21 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
   useEffect(() => {
     if (activeShift) {
       setSummaryLoading(true);
-      Promise.all([
-        posListCashMovements(activeShift.id).catch(() => []),
-        posShiftSummary(activeShift.id).catch(() => null),
-      ]).then(([movementsData, summaryData]) => {
-        setMovements(movementsData);
-        setSummary(summaryData);
-        setSummaryLoading(false);
-      });
+      // Sales taken offline belong to this shift's totals: send them first so
+      // the expected cash below includes them.
+      processSyncQueue({ force: true })
+        .catch(() => null)
+        .then(() =>
+          Promise.all([
+            posListCashMovements(activeShift.id).catch(() => []),
+            posShiftSummary(activeShift.id).catch(() => null),
+          ]),
+        )
+        .then(([movementsData, summaryData]) => {
+          setMovements(movementsData);
+          setSummary(summaryData);
+          setSummaryLoading(false);
+        });
     }
   }, [activeShift?.id]);
 
@@ -84,6 +95,18 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
     setError(null);
 
     try {
+      // An order queued on this device names this shift; once the shift is
+      // closed the server would refuse it. Items the server has already
+      // refused cannot be helped by waiting, so they do not hold the shift.
+      await processSyncQueue({ force: true });
+      const waiting = (await syncQueue.getPending()).filter((item) => !item.needs_attention);
+      if (waiting.length > 0) {
+        setError(
+          `${waiting.length} change(s) saved on this device have not reached the server yet. Reconnect and let them sync before closing the shift.`,
+        );
+        return;
+      }
+
       const result = await posCloseShift(activeShift.id, currentWorker.id, cash);
       setClosedShiftId(result.id);
       onShiftClosed(result);
@@ -327,6 +350,15 @@ export default function ShiftCloseScreen({ onShiftClosed }: ShiftCloseProps) {
             </>
           )}
         </button>
+        {onCancel && (
+          <button
+            onClick={onCancel}
+            disabled={loading}
+            className="mt-3 flex min-h-[44px] w-full items-center justify-center rounded-2xl border border-border text-sm font-bold text-foreground hover:bg-muted disabled:opacity-40"
+          >
+            Back to POS
+          </button>
+        )}
       </div>
 
       {/* Cash Movement Modal */}

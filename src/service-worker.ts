@@ -4,6 +4,7 @@ import { registerRoute, setCatchHandler } from "workbox-routing";
 import { CacheFirst, NetworkFirst, StaleWhileRevalidate } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 import { clientsClaim } from "workbox-core";
+import { NAVIGATION_CACHE, STATIC_CACHE } from "./features/pwa/cache-names";
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -19,9 +20,12 @@ clientsClaim();
 registerRoute(
   ({ request }) => request.destination === "style" || request.destination === "script" || request.destination === "worker",
   new CacheFirst({
-    cacheName: "zentro-static-v1",
+    cacheName: STATIC_CACHE,
     plugins: [
-      new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 }),
+      // The build has a few hundred chunks. A smaller limit evicts the POS's
+      // own scripts once other pages have been used, and then the POS cannot
+      // be reopened offline.
+      new ExpirationPlugin({ maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 }),
     ],
   })
 );
@@ -76,7 +80,7 @@ registerRoute(
 registerRoute(
   ({ request }) => request.mode === "navigate",
   new NetworkFirst({
-    cacheName: "zentro-navigations-v1",
+    cacheName: NAVIGATION_CACHE,
     networkTimeoutSeconds: 10,
     plugins: [
       new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
@@ -88,7 +92,7 @@ registerRoute(
 setCatchHandler(async ({ request }) => {
   if (request.mode === "navigate") {
     // Try to return any previously cached navigation page (like /pos or /)
-    const navCache = await caches.open("zentro-navigations-v1");
+    const navCache = await caches.open(NAVIGATION_CACHE);
     const cachedKeys = await navCache.keys();
     for (const key of cachedKeys) {
       if (key.url.includes("/pos")) {

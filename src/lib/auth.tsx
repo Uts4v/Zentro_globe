@@ -18,6 +18,7 @@ import {
   type ReactNode,
 } from "react";
 import { apiUrl, tokenStore, djangoFetch } from "@/lib/django-api-base";
+import { decodeJwt, refreshAccessToken, secondsUntilExpiry } from "@/lib/auth-tokens";
 import { useStore } from "@/lib/store";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -144,21 +145,28 @@ type AuthContextType = {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Decode JWT payload without verification (verification is server-side). */
-function decodeJwt(token: string): Record<string, any> | null {
-  try {
-    const b64 = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
-    return JSON.parse(atob(b64));
-  } catch {
-    return null;
-  }
-}
+/** How long to wait before retrying a refresh the server did not answer. */
+const REFRESH_RETRY_MS = 30000;
 
-/** Returns seconds until the token expires (negative = already expired). */
-function secondsUntilExpiry(token: string): number {
+/** The signed-in user as described by the access token's own claims. */
+function userFromToken(token: string): AuthUser | null {
   const payload = decodeJwt(token);
-  if (!payload?.exp) return -1;
-  return payload.exp - Math.floor(Date.now() / 1000);
+  if (!payload) return null;
+  const fullName = payload.full_name || payload.name || "";
+  const nameParts = fullName.trim().split(/\s+/);
+  const firstName = payload.first_name || nameParts[0] || "";
+  const lastName = payload.last_name || nameParts.slice(1).join(" ") || "";
+  return {
+    id: Number(payload.user_id || payload.id || 0),
+    email: String(payload.email || ""),
+    first_name: String(firstName),
+    last_name: String(lastName),
+    role: (payload.role === "merchant" ? "merchant" : "customer") as Role,
+    phone: String(payload.phone || ""),
+    avatar_url: String(payload.avatar_url || ""),
+    customer_profile: null,
+    has_usable_password: payload.has_usable_password,
+  };
 }
 
 export function djangoHeaders(json = false): HeadersInit {
@@ -179,6 +187,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [merchantProfile, setMerchantProfile] = useState<MerchantProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The app was opened offline, so the full profile still has to be fetched
+  // once a refresh gets through.
+  const profilePendingRef = useRef(false);
 
   // ── Fetch /api/auth/me/ ────────────────────────────────────────────────────
 
@@ -207,25 +218,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setMerchantProfile(null);
       } else {
         // For rate limit (429) or temporary server errors, retain user session from valid token
-        const payload = decodeJwt(token);
-        if (payload && secondsUntilExpiry(token) > 0) {
-          const fullName = payload.full_name || payload.name || "";
-          const nameParts = fullName.trim().split(/\s+/);
-          const firstName = payload.first_name || nameParts[0] || "";
-          const lastName = payload.last_name || nameParts.slice(1).join(" ") || "";
-          const fallbackUser: AuthUser = {
-            id: Number(payload.user_id || payload.id || 0),
-            email: String(payload.email || ""),
-            first_name: String(firstName),
-            last_name: String(lastName),
-            role: (payload.role === "merchant" ? "merchant" : "customer") as Role,
-            phone: String(payload.phone || ""),
-            avatar_url: String(payload.avatar_url || ""),
-            customer_profile: null,
-            has_usable_password: payload.has_usable_password,
-          };
-          setUser((prev) => prev || fallbackUser);
-        }
+        const fallbackUser = secondsUntilExpiry(token) > 0 ? userFromToken(token) : null;
+        if (fallbackUser) setUser((prev) => prev || fallbackUser);
       }
     }
   }, []);
@@ -238,64 +232,70 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Refresh 2 minutes before expiry, or immediately if < 2 min remain
     const delay = Math.max((secs - 120) * 1000, 0);
     refreshTimerRef.current = setTimeout(async () => {
-      const refresh = tokenStore.getRefresh();
-      if (!refresh) return;
-      try {
-        const res = await djangoFetch<{ access: string; refresh?: string }>(
-          apiUrl("/auth/token/refresh/"),
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refresh }),
-          }
+      if (!tokenStore.getRefresh()) return;
+      const outcome = await refreshAccessToken();
+      const fresh = tokenStore.getAccess();
+      if (outcome === "refreshed" && fresh) {
+        scheduleRefresh(fresh);
+        if (profilePendingRef.current) {
+          profilePendingRef.current = false;
+          void fetchMe();
+        }
+      } else if (outcome === "unreachable") {
+        // No answer is not a refusal. Signing out here would throw the POS to
+        // the login page mid-service and strand every order waiting to sync,
+        // so keep the session and ask again once the server can be reached.
+        refreshTimerRef.current = setTimeout(
+          () => scheduleRefresh(tokenStore.getAccess() ?? accessToken),
+          REFRESH_RETRY_MS,
         );
-        tokenStore.set(res.access, res.refresh ?? refresh);
-        scheduleRefresh(res.access);
-      } catch {
+      } else {
         tokenStore.clear();
         setUser(null);
         setMerchantProfile(null);
       }
     }, delay);
-  }, []);
+  }, [fetchMe]);
 
   // ── Initialise from localStorage on mount ─────────────────────────────────
 
   useEffect(() => {
+    const stopRefresh = () => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    };
     const access = tokenStore.getAccess();
     if (!access || secondsUntilExpiry(access) < 0) {
       // Try refresh first before giving up
-      const refresh = tokenStore.getRefresh();
-      if (refresh) {
-        djangoFetch<{ access: string; refresh?: string }>(
-          apiUrl("/auth/token/refresh/"),
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refresh }),
-          }
-        )
-          .then((res) => {
-            tokenStore.set(res.access, res.refresh ?? refresh);
-            scheduleRefresh(res.access);
-            return fetchMe();
-          })
-          .catch(() => {
-            tokenStore.clear();
-          })
-          .finally(() => setLoading(false));
-      } else {
+      if (!tokenStore.getRefresh()) {
         setLoading(false);
+        return;
       }
-      return;
+      refreshAccessToken()
+        .then((outcome) => {
+          const fresh = tokenStore.getAccess();
+          if (outcome === "refreshed" && fresh) {
+            scheduleRefresh(fresh);
+            return fetchMe();
+          }
+          if (outcome === "unreachable") {
+            // Opened without a connection: stay signed in as the saved user
+            // and refresh as soon as the server answers.
+            const savedUser = access ? userFromToken(access) : null;
+            if (savedUser) setUser((prev) => prev || savedUser);
+            profilePendingRef.current = true;
+            scheduleRefresh(access ?? "");
+            return;
+          }
+          tokenStore.clear();
+        })
+        .finally(() => setLoading(false));
+      return stopRefresh;
     }
 
     scheduleRefresh(access);
     fetchMe().finally(() => setLoading(false));
 
-    return () => {
-      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    };
+    return stopRefresh;
   }, [fetchMe, scheduleRefresh]);
 
   // ── Sign up ────────────────────────────────────────────────────────────────

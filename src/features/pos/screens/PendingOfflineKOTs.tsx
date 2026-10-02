@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Printer, Ticket } from "lucide-react";
 import { offlineOrders, OfflineKOT } from "../offline/db";
 import { printKOT, type KOTTicketData } from "../printing/kot-markup";
 import { tableLabel } from "../printing/table-label";
-import { useOnlineStatus } from "../offline/hooks";
+import { useOnlineStatus, useSyncRevision } from "../offline/hooks";
 import { formatCurrency } from "@/lib/currency";
 import { usePosStore } from "../store";
 
@@ -46,6 +46,7 @@ function toTicketData(kot: OfflineKOT, merchantLogoUrl?: string | null): KOTTick
  */
 export default function PendingOfflineKOTs() {
   const isOnline = useOnlineStatus();
+  const syncRevision = useSyncRevision();
   const currencySymbol = usePosStore((s) => s.posSettings?.currency_symbol) || "Rs";
   const merchantLogoUrl = usePosStore((s) => s.merchant?.logo_url);
   const [orders, setOrders] = useState<Array<{ id: string; total: number; kot: OfflineKOT }>>([]);
@@ -62,7 +63,7 @@ export default function PendingOfflineKOTs() {
 
   useEffect(() => {
     load();
-  }, [load, isOnline]);
+  }, [load, isOnline, syncRevision]);
 
   if (orders.length === 0) return null;
 

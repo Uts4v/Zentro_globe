@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { usePosStore } from "../store";
+import { usePosStore, isConnectionError } from "../store";
 import { posWorkerLogin, ShiftWorker } from "../api";
 import { Lock, User, Delete, Loader2, UserPlus, Keyboard } from "lucide-react";
 
@@ -27,7 +27,11 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
       const result = await posWorkerLogin(selectedWorker.id, pin);
       onLoggedIn(result.worker);
     } catch (err: any) {
-      setError(err?.message || "Invalid PIN. Please try again.");
+      setError(
+        isConnectionError(err)
+          ? "No connection — a PIN can only be checked by the server. Try again when it is back."
+          : err?.message || "Invalid PIN. Please try again.",
+      );
       setPin("");
     } finally {
       setLoading(false);
