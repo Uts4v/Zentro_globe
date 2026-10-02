@@ -1,4 +1,4 @@
-﻿// routes/auth.login.tsx — Customer sign-in only
+// routes/auth.login.tsx — Customer sign-in only
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -145,6 +145,13 @@ function CustomerLogin() {
         className="mt-3 block text-center text-xs text-muted-foreground hover:text-ink hover:underline"
       >
         Are you a business? → Merchant sign in
+      </Link>
+
+      <Link
+        to="/pos"
+        className="mt-2 block text-center text-xs text-muted-foreground hover:text-ink hover:underline"
+      >
+        Staff member? → POS Staff sign in
       </Link>
     </div>
   );

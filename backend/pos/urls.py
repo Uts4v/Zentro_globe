@@ -22,6 +22,7 @@ urlpatterns = [
 
     # POS Login & Bootstrap (Phase 4)
     path("auth/login/", views.pos_login, name="pos-login"),
+    path("auth/staff-login/", views.pos_staff_login, name="pos-staff-login"),
     path("auth/device/authorize/", views.pos_device_authorize, name="pos-device-authorize"),
     path("auth/bootstrap/", views.pos_bootstrap, name="pos-bootstrap"),
     path("auth/device-bootstrap/", views.pos_bootstrap_device, name="pos-device-bootstrap"),

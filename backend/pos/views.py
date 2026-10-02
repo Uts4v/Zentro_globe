@@ -37,7 +37,7 @@ from .serializers import (
     PosDeviceSerializer, RegisterDeviceSerializer,
     PosLoginSerializer, PosDeviceRegisterSerializer, PosBootstrapSerializer,
     ShiftWorkerSerializer, CreateWorkerSerializer, UpdateWorkerSerializer,
-    WorkerLoginSerializer,
+    WorkerLoginSerializer, StaffLoginSerializer,
     CashShiftSerializer, OpenShiftSerializer, CloseShiftSerializer,
     StaffShiftSerializer, OpenStaffShiftSerializer, CloseStaffShiftSerializer,
     PosPaymentSerializer, CreatePaymentSerializer, CreateSplitPaymentSerializer,
@@ -82,7 +82,7 @@ def _loyalty_spend_rate(merchant) -> Decimal:
     return Decimal(str(rate)) if rate and rate > 0 else Decimal("0")
 
 
-def _perm_denied(worker, code):
+def _perm_denied(worker, code, request=None):
     """403 response unless the employee's role allows ``code`` (pos.rbac).
 
     The one place POS endpoints ask "may this employee do this?". Returns
@@ -90,10 +90,13 @@ def _perm_denied(worker, code):
     """
     from . import rbac
 
+    if worker is None and request is not None:
+        worker = getattr(request, "worker", None) or rbac.request_worker(request)
+
     if worker is None or rbac.worker_can(worker, code):
         return None
     return Response(
-        {"error": "You don't have permission to do this. Ask a manager.", "code": "no_permission"},
+        {"error": "You don't have permission to do this. Ask a manager.", "code": "no_permission", "required_permission": code},
         status=status.HTTP_403_FORBIDDEN,
     )
 
@@ -104,6 +107,9 @@ def _worker_rbac_fields(worker):
 
     areas = rbac.allowed_area_ids(worker)
     return {
+        "staff_code": worker.staff_code,
+        "phone": worker.phone,
+        "email": worker.email,
         "role_name": rbac.worker_role(worker).name,
         "permissions": sorted(rbac.worker_permissions(worker)),
         "area_ids": sorted(areas) if areas is not None else None,
@@ -543,7 +549,7 @@ def pos_bootstrap(request):
     device.save(update_fields=["last_seen_at", "updated_at"])
 
     # Workers
-    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True)
+    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True, is_deleted=False)
     workers_data = []
     for w in workers:
         workers_data.append({
@@ -631,7 +637,7 @@ def pos_bootstrap_device(request):
     merchant = request.pos_merchant
 
     # Workers
-    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True)
+    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True, is_deleted=False)
     workers_data = []
     for w in workers:
         workers_data.append({
@@ -915,6 +921,8 @@ def update_worker(request, worker_id):
 @permission_classes([IsPosDevice])
 @throttle_classes([ScopedRateThrottle])
 def worker_login(request):
+    from . import rbac
+
     merchant = request.pos_merchant
     if not _require_pos(merchant):
         return Response(
@@ -926,17 +934,38 @@ def worker_login(request):
     if not ser.is_valid():
         return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        worker = ShiftWorker.objects.get(
-            id=ser.validated_data["worker_id"],
+    data = ser.validated_data
+    worker = None
+    if data.get("worker_id"):
+        try:
+            worker = ShiftWorker.objects.get(
+                id=data["worker_id"],
+                merchant=merchant,
+                is_active=True,
+                is_deleted=False,
+            )
+        except ShiftWorker.DoesNotExist:
+            worker = None
+    elif data.get("staff_code"):
+        code = data["staff_code"].strip()
+        worker = ShiftWorker.objects.filter(
             merchant=merchant,
+            staff_code__iexact=code,
             is_active=True,
-        )
-    except ShiftWorker.DoesNotExist:
-        return Response({"error": "Worker not found."},
-                        status=status.HTTP_404_NOT_FOUND)
+            is_deleted=False,
+        ).first()
 
-    if not worker.verify_pin(ser.validated_data["pin"]):
+    if not worker:
+        return Response({"error": "Worker not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Check pos.access permission
+    if not rbac.worker_can(worker, "pos.access"):
+        return Response(
+            {"error": "You do not have permission to access the POS terminal.", "code": "pos_access_denied"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    if not worker.verify_pin(data["pin"]):
         remaining = 5 - worker.failed_pin_attempts
         return Response(
             {"error": f"Invalid PIN. {remaining} attempts remaining."},
@@ -947,13 +976,148 @@ def worker_login(request):
            worker=worker, user=request.user,
            entity_type="shift_worker", entity_id=worker.id)
 
+    token = rbac.issue_staff_token(worker)
+
     return Response({
+        "token": token,
         "worker": ShiftWorkerSerializer(worker).data,
+        "permissions": sorted(rbac.worker_permissions(worker)),
         "message": "Login successful",
     })
 
 
 worker_login.throttle_scope = "pin"
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
+def pos_staff_login(request):
+    """
+    Staff login on POS using Staff Code / PIN (or worker_id + PIN).
+    Does NOT require merchant owner credentials.
+    """
+    from merchants.models import MerchantProfile
+    from . import rbac
+
+    ser = StaffLoginSerializer(data=request.data)
+    if not ser.is_valid():
+        return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    data = ser.validated_data
+    staff_code = data.get("staff_code", "").strip()
+    worker_id = data.get("worker_id")
+    pin = data.get("pin", "")
+    store = data.get("store", "").strip()
+
+    merchant = None
+    device = None
+
+    # 1. From device headers if present
+    device_id = request.headers.get("X-Pos-Device-Id") or request.data.get("device_id")
+    device_token = request.headers.get("X-Pos-Device-Token") or request.data.get("device_token")
+    if device_id and device_token:
+        try:
+            d = PosDevice.objects.select_related("merchant").get(id=device_id, is_active=True)
+            if d.verify_token(device_token):
+                device = d
+                merchant = d.merchant
+        except Exception:
+            pass
+
+    # 2. From store if specified
+    if not merchant and store:
+        merchant = MerchantProfile.objects.filter(
+            Q(slug__iexact=store) | Q(business_name__iexact=store)
+        ).first()
+        if not merchant and store.isdigit():
+            merchant = MerchantProfile.objects.filter(id=int(store)).first()
+        if not merchant:
+            return Response({"error": f"Store '{store}' not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    worker = None
+    if worker_id:
+        qs = ShiftWorker.objects.select_related("merchant", "staff_role").filter(id=worker_id, is_deleted=False)
+        if merchant:
+            qs = qs.filter(merchant=merchant)
+        worker = qs.first()
+    elif staff_code:
+        qs = ShiftWorker.objects.select_related("merchant", "staff_role").filter(staff_code__iexact=staff_code, is_deleted=False)
+        if merchant:
+            qs = qs.filter(merchant=merchant)
+        candidates = list(qs)
+        if len(candidates) == 1:
+            worker = candidates[0]
+            merchant = worker.merchant
+        elif len(candidates) > 1:
+            return Response(
+                {"error": "Multiple stores have this staff code. Please specify your store name or slug.", "code": "store_required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    if not worker:
+        return Response({"error": "Staff member not found. Check your Staff Code."}, status=status.HTTP_404_NOT_FOUND)
+
+    merchant = worker.merchant
+    if not merchant.pos_enabled:
+        return Response({"error": "POS is not enabled for this business."}, status=status.HTTP_403_FORBIDDEN)
+
+    if not worker.is_active:
+        return Response({"error": "This staff account is deactivated. Contact your administrator."}, status=status.HTTP_403_FORBIDDEN)
+
+    # Granular permission check: Access POS
+    if not rbac.worker_can(worker, "pos.access"):
+        return Response(
+            {"error": "You do not have permission to access the POS terminal. Contact your manager.", "code": "pos_access_denied"},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    # Verify PIN
+    if not worker.verify_pin(pin):
+        remaining = max(0, 5 - worker.failed_pin_attempts)
+        if worker.locked_until and worker.locked_until > timezone.now():
+            return Response({"error": "Too many wrong PINs. Try again in 15 minutes."}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+        return Response({"error": f"Invalid PIN. {remaining} attempt(s) remaining."}, status=status.HTTP_401_UNAUTHORIZED)
+
+    # Auto-register or update device if needed
+    device_token_raw = None
+    if not device:
+        platform = request.data.get("platform") or "web"
+        user_agent = request.META.get("HTTP_USER_AGENT", "")[:200]
+        device, device_token_raw = PosDevice.register(
+            merchant=merchant,
+            name=f"POS-{worker.display_name[:20]}-{platform}",
+            platform=platform,
+            user_agent=user_agent,
+        )
+
+    token = rbac.issue_staff_token(worker)
+
+    _audit(merchant, PosAuditLog.ACTION_WORKER_LOGIN,
+           worker=worker, user=merchant.user,
+           entity_type="shift_worker", entity_id=worker.id)
+
+    return Response({
+        "token": token,
+        "worker": ShiftWorkerSerializer(worker).data,
+        "permissions": sorted(rbac.worker_permissions(worker)),
+        "merchant": {
+            "id": merchant.id,
+            "business_name": merchant.business_name,
+            "slug": merchant.slug,
+            "logo_url": merchant.logo_url,
+            "pos_enabled": merchant.pos_enabled,
+            "currency_code": merchant.currency_code,
+            "currency_symbol": merchant.currency_symbol,
+            "discounts_enabled": merchant.discounts_enabled,
+        },
+        "device": PosDeviceSerializer(device).data if device else None,
+        "device_token": device_token_raw,
+        "message": "Login successful",
+    })
+
+
+pos_staff_login.throttle_scope = "pin"
 
 
 @api_view(["POST"])
@@ -1140,7 +1304,7 @@ def close_shift(request):
     except ShiftWorker.DoesNotExist:
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
-    denied = _perm_denied(worker, "shifts.close")
+    denied = _perm_denied(worker, "shifts.close", request)
     if denied:
         return denied
 
@@ -1533,14 +1697,17 @@ def create_pos_order(request):
     if worker_id:
         try:
             worker = ShiftWorker.objects.get(
-                id=worker_id, merchant=merchant, is_active=True,
+                id=worker_id, merchant=merchant, is_active=True, is_deleted=False,
             )
         except ShiftWorker.DoesNotExist:
             return Response({"error": "Worker not found."},
                             status=status.HTTP_404_NOT_FOUND)
-        denied = _perm_denied(worker, "orders.create")
-        if denied:
-            return denied
+    if worker is None:
+        worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+
+    denied = _perm_denied(worker, "orders.create", request)
+    if denied:
+        return denied
 
     # Validate device
     device = None
@@ -1644,9 +1811,11 @@ def create_pos_order(request):
             order = Order.objects.create(
                 customer=customer,
                 merchant=merchant,
+                processed_by_worker=worker,
+                pos_device=device,
                 **pricing_order_fields(pricing_ctx, pricing, merchant),
                 points_earned=points_earned,
-        loyalty_spend_rate=spend_rate,
+                loyalty_spend_rate=spend_rate,
                 notes=data.get("notes", ""),
                 status=Order.STATUS_CONFIRMED,  # POS orders go directly to confirmed
                 order_type=order_type,
@@ -1780,11 +1949,18 @@ def update_order_status_uuid(request):
     if worker_id:
         try:
             worker = ShiftWorker.objects.get(
-                id=worker_id, merchant=merchant, is_active=True)
+                id=worker_id, merchant=merchant, is_active=True, is_deleted=False)
         except ShiftWorker.DoesNotExist:
             pass
+    if worker is None:
+        worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+
     if new_status == Order.STATUS_CANCELLED:
-        denied = _perm_denied(worker, "orders.cancel")
+        denied = _perm_denied(worker, "orders.cancel", request)
+        if denied:
+            return denied
+    else:
+        denied = _perm_denied(worker, "orders.edit", request)
         if denied:
             return denied
 
@@ -1836,6 +2012,11 @@ def pos_orders(request):
             {"error": "POS is not enabled."},
             status=status.HTTP_403_FORBIDDEN,
         )
+
+    worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+    denied = _perm_denied(worker, "orders.view", request)
+    if denied:
+        return denied
 
     qs = Order.objects.filter(merchant=merchant)
 
@@ -1910,14 +2091,19 @@ def create_payment(request):
         return Response({"error": "Shift not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    try:
-        worker = ShiftWorker.objects.get(
-            id=ser.validated_data["worker_id"], merchant=merchant, is_active=True,
-        )
-    except ShiftWorker.DoesNotExist:
-        return Response({"error": "Worker not found."},
-                        status=status.HTTP_404_NOT_FOUND)
-    denied = _perm_denied(worker, "payments.take")
+    worker = None
+    worker_id = ser.validated_data.get("worker_id")
+    if worker_id:
+        try:
+            worker = ShiftWorker.objects.get(
+                id=worker_id, merchant=merchant, is_active=True, is_deleted=False,
+            )
+        except ShiftWorker.DoesNotExist:
+            return Response({"error": "Worker not found."},
+                            status=status.HTTP_404_NOT_FOUND)
+    if worker is None:
+        worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+    denied = _perm_denied(worker, "payments.take", request)
     if denied:
         return denied
 
@@ -2270,7 +2456,9 @@ def apply_discount(request):
         return Response({"error": "Worker not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    denied = _perm_denied(worker, "discounts.apply")
+    if worker is None:
+        worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+    denied = _perm_denied(worker, "discounts.apply", request)
     if denied:
         return denied
 
@@ -2402,7 +2590,9 @@ def remove_discount(request):
         )
     except (ShiftWorker.DoesNotExist, ValueError, DjangoValidationError):
         return Response({"error": "Worker not found."}, status=status.HTTP_404_NOT_FOUND)
-    denied = _perm_denied(worker, "discounts.apply")
+    if worker is None:
+        worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+    denied = _perm_denied(worker, "discounts.apply", request)
     if denied:
         return denied
 
@@ -3821,12 +4011,15 @@ def process_refund(request):
         return Response({"error": "Order has already been refunded."},
                         status=status.HTTP_400_BAD_REQUEST)
 
-    try:
-        worker = ShiftWorker.objects.get(id=worker_id, merchant=merchant, is_active=True)
-    except (ShiftWorker.DoesNotExist, ValueError, DjangoValidationError):
-        return Response({"error": "Worker not found or not authorized for refunds."},
-                        status=status.HTTP_403_FORBIDDEN)
-    denied = _perm_denied(worker, "payments.refund")
+    worker = None
+    if worker_id:
+        try:
+            worker = ShiftWorker.objects.get(id=worker_id, merchant=merchant, is_active=True, is_deleted=False)
+        except (ShiftWorker.DoesNotExist, ValueError, DjangoValidationError):
+            pass
+    if worker is None:
+        worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+    denied = _perm_denied(worker, "payments.refund", request)
     if denied:
         return denied
 

@@ -11,6 +11,7 @@ import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { useBackgroundSync, useOnlineStatus } from "../offline/hooks";
 import { OFFLINE_POS_ROUTES, warmPosOfflineCache } from "../offline/warm-cache";
 import { checkConnectivity } from "@/lib/connectivity";
+import { hasStaffPermission, staffSession } from "@/lib/staff-session";
 import {
   Bell,
   ShoppingCart,
@@ -29,6 +30,8 @@ import {
   LayoutDashboard,
   HandCoins,
   Menu,
+  ShieldAlert,
+  UserCheck,
 } from "lucide-react";
 import { posListWorkers, posAuthorizeDevice, posBootstrap, posDeviceBootstrap } from "../api";
 import { useState, useEffect, useCallback } from "react";
@@ -115,24 +118,38 @@ function PosNav({
   cartCount: number;
   onNavigate?: () => void;
 }) {
+  const canOrder = hasStaffPermission("pos.access") && hasStaffPermission("orders.create");
+  const canViewOrders = hasStaffPermission("orders.view");
+  const canAccounts = hasStaffPermission("payments.take");
+  const canCash = hasStaffPermission("shifts.close");
+  const canReports = hasStaffPermission("reports.view");
+  const canStaff = hasStaffPermission("staff.manage");
+  const canSettings = hasStaffPermission("settings.manage");
+  const session = staffSession.get();
+  const isMerchantAdmin = !session || session.role === "Admin" || session.role === "Owner";
+
   return (
     <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-2 pb-4">
       <NavSection title="Operations">
-        <NavItem
-          to="/pos"
-          label="Order"
-          icon={ShoppingCart}
-          badge={cartCount}
-          active={isOrderPage}
-          onClick={onNavigate}
-        />
-        <NavItem
-          to="/pos/orders"
-          label="Orders"
-          icon={Clock}
-          active={isOrdersPage}
-          onClick={onNavigate}
-        />
+        {canOrder && (
+          <NavItem
+            to="/pos"
+            label="Order"
+            icon={ShoppingCart}
+            badge={cartCount}
+            active={isOrderPage}
+            onClick={onNavigate}
+          />
+        )}
+        {canViewOrders && (
+          <NavItem
+            to="/pos/orders"
+            label="Orders"
+            icon={Clock}
+            active={isOrdersPage}
+            onClick={onNavigate}
+          />
+        )}
         <NavItem
           to="/pos/preparation"
           label="Preparation"
@@ -148,61 +165,80 @@ function PosNav({
           disabled={offline}
         />
       </NavSection>
-      <NavSection title="Money">
-        <NavItem
-          to="/pos/accounts"
-          label="Accounts"
-          icon={CreditCard}
-          onClick={onNavigate}
-          disabled={offline}
-        />
-        <NavItem
-          to="/pos/cash-movements"
-          label="Cash In/Out"
-          icon={HandCoins}
-          onClick={onNavigate}
-          disabled={offline}
-        />
-        <NavItem
-          to="/pos/reports"
-          label="Reports"
-          icon={BarChart3}
-          onClick={onNavigate}
-          disabled={offline}
-        />
-      </NavSection>
-      <NavSection title="Team">
-        <NavItem
-          to="/pos/schedule"
-          label="Schedule"
-          icon={Calendar}
-          onClick={onNavigate}
-          disabled={offline}
-        />
-        <NavItem
-          to="/pos/staff"
-          label="Staff"
-          icon={Users}
-          onClick={onNavigate}
-          disabled={offline}
-        />
-      </NavSection>
-      <NavSection title="Manage">
-        <NavItem
-          to="/merchant"
-          label="Dashboard"
-          icon={LayoutDashboard}
-          onClick={onNavigate}
-          disabled={offline}
-        />
-        <NavItem
-          to="/pos/settings"
-          label="Settings"
-          icon={Settings}
-          onClick={onNavigate}
-          disabled={offline}
-        />
-      </NavSection>
+
+      {(canAccounts || canCash || canReports) && (
+        <NavSection title="Money">
+          {canAccounts && (
+            <NavItem
+              to="/pos/accounts"
+              label="Accounts"
+              icon={CreditCard}
+              onClick={onNavigate}
+              disabled={offline}
+            />
+          )}
+          {canCash && (
+            <NavItem
+              to="/pos/cash-movements"
+              label="Cash In/Out"
+              icon={HandCoins}
+              onClick={onNavigate}
+              disabled={offline}
+            />
+          )}
+          {canReports && (
+            <NavItem
+              to="/pos/reports"
+              label="Reports"
+              icon={BarChart3}
+              onClick={onNavigate}
+              disabled={offline}
+            />
+          )}
+        </NavSection>
+      )}
+
+      {canStaff && (
+        <NavSection title="Team">
+          <NavItem
+            to="/pos/schedule"
+            label="Schedule"
+            icon={Calendar}
+            onClick={onNavigate}
+            disabled={offline}
+          />
+          <NavItem
+            to="/pos/staff"
+            label="Staff"
+            icon={Users}
+            onClick={onNavigate}
+            disabled={offline}
+          />
+        </NavSection>
+      )}
+
+      {(isMerchantAdmin || canSettings) && (
+        <NavSection title="Manage">
+          {isMerchantAdmin && (
+            <NavItem
+              to="/merchant"
+              label="Dashboard"
+              icon={LayoutDashboard}
+              onClick={onNavigate}
+              disabled={offline}
+            />
+          )}
+          {canSettings && (
+            <NavItem
+              to="/pos/settings"
+              label="Settings"
+              icon={Settings}
+              onClick={onNavigate}
+              disabled={offline}
+            />
+          )}
+        </NavSection>
+      )}
     </nav>
   );
 }
@@ -401,10 +437,27 @@ export default function PosLayout() {
     if (savedDataFrom) await refreshFromServer();
   }
 
+  function hasRoutePermission(path: string): boolean {
+    if (path.startsWith("/pos/reports")) return hasStaffPermission("reports.view");
+    if (path.startsWith("/pos/staff") || path.startsWith("/pos/schedule")) return hasStaffPermission("staff.manage");
+    if (path.startsWith("/pos/settings")) return hasStaffPermission("settings.manage");
+    if (path.startsWith("/pos/orders")) return hasStaffPermission("orders.view");
+    if (path.startsWith("/pos/accounts")) return hasStaffPermission("payments.take");
+    if (path.startsWith("/pos/cash-movements")) return hasStaffPermission("shifts.close");
+    if (path === "/pos" || path === "/pos/") return hasStaffPermission("pos.access") && hasStaffPermission("orders.create");
+    return true;
+  }
+
   async function handleSignOut() {
+    staffSession.set(null);
     setCurrentWorker(null);
     await signOut();
     navigate({ to: "/auth/merchant" as any, replace: true });
+  }
+
+  function handleSwitchStaff() {
+    staffSession.set(null);
+    setCurrentWorker(null);
   }
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -506,11 +559,25 @@ export default function PosLayout() {
               <p className="truncate text-sm font-semibold text-foreground">
                 {currentWorker?.display_name ?? "Staff"}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {merchant?.business_name}
-              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-semibold text-primary">
+                  {currentWorker?.role_name || currentWorker?.role || "Staff"}
+                </span>
+                {currentWorker?.staff_code && (
+                  <span className="font-mono text-[10px]">#{currentWorker.staff_code}</span>
+                )}
+              </div>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={handleSwitchStaff}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-1.5 text-xs font-semibold text-foreground transition hover:bg-muted active:scale-[0.98]"
+            title="Switch Staff / Lock Terminal"
+          >
+            <UserCheck className="h-3.5 w-3.5 text-primary" />
+            <span>Switch Staff</span>
+          </button>
           {/* Shift status */}
           {activeShift ? (
             <div className="mt-3 flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2 text-xs font-medium text-green-700">
@@ -650,9 +717,18 @@ export default function PosLayout() {
               </button>
             )}
             {currentWorker && (
-              <div className="grid h-8 w-8 place-items-center rounded-full bg-ink text-xs font-medium text-white">
-                {currentWorker.display_name.charAt(0).toUpperCase()}
-              </div>
+              <button
+                type="button"
+                onClick={handleSwitchStaff}
+                className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-2 py-1 text-xs font-semibold text-foreground hover:bg-muted"
+                title="Switch Staff / Lock Terminal"
+              >
+                <div className="grid h-6 w-6 place-items-center rounded-full bg-ink text-[10px] font-medium text-white">
+                  {currentWorker.display_name.charAt(0).toUpperCase()}
+                </div>
+                <span className="hidden sm:inline">{currentWorker.display_name}</span>
+                <UserCheck className="h-3.5 w-3.5 text-primary" />
+              </button>
             )}
           </div>
         </header>
@@ -738,6 +814,24 @@ export default function PosLayout() {
         <main className="min-h-0 flex-1 overflow-y-auto">
           {blockedOffline ? (
             <OfflineUnavailable />
+          ) : !hasRoutePermission(pathname) ? (
+            <div className="flex h-full items-center justify-center p-6">
+              <div className="max-w-md text-center">
+                <ShieldAlert className="mx-auto mb-3 h-12 w-12 text-amber-500" />
+                <h2 className="text-xl font-bold text-foreground">Access Restricted</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Your staff account ({currentWorker?.display_name}) does not have permission to access this section. Please contact your administrator.
+                </p>
+                <div className="mt-5 flex justify-center gap-3">
+                  <Link
+                    to="/pos"
+                    className="inline-flex min-h-[44px] items-center rounded-xl bg-ink px-5 text-sm font-bold text-white hover:opacity-90"
+                  >
+                    Back to Terminal
+                  </Link>
+                </div>
+              </div>
+            </div>
           ) : isShiftRequiredPage && !activeShift ? (
             /* If on order page and no active shift, show shift open screen */
             <div className="flex h-full items-center justify-center">

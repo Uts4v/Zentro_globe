@@ -47,6 +47,14 @@ const t = {
   noEmployeesHint: "Add the people who work here and choose what each can do.",
   allAreas: "All areas",
   inactive: "Not active",
+  staffCode: "Staff Code",
+  staffCodeHint: "Unique numeric code for POS staff login (e.g. 1001). Leave blank to auto-generate.",
+  phone: "Phone",
+  phoneHint: "Phone number (optional)",
+  email: "Email",
+  emailHint: "Email address (optional)",
+  deleteEmployee: "Delete Employee",
+  deleteEmployeeConfirm: "Are you sure you want to remove this employee? If they have existing shift or order history, they will be archived safely to protect audit records.",
   createRole: "Create Role",
   editRole: "Edit Role",
   roleName: "Role name",
@@ -373,8 +381,12 @@ function EmployeesTab() {
   const rolesQ = useQuery({ queryKey: ["team", "roles"], queryFn: teamApi.roles });
   const areasQ = useQuery({ queryKey: ["tables", "areas"], queryFn: areaApi.list });
   const [editing, setEditing] = useState<Employee | "new" | null>(null);
+  const [deleting, setDeleting] = useState<Employee | null>(null);
   const [d, setD] = useState({
     name: "",
+    staff_code: "",
+    phone: "",
+    email: "",
     pin: "",
     role: 0,
     areas: new Set<number>(),
@@ -402,14 +414,20 @@ function EmployeesTab() {
     if (editing === "new") {
       setD({
         name: "",
+        staff_code: "",
+        phone: "",
+        email: "",
         pin: "",
-        role: roles.find((r) => r.name === "Server")?.id ?? 0,
+        role: roles.find((r) => r.name === "Server" || r.name === "Cashier")?.id ?? roles[0]?.id ?? 0,
         areas: new Set(),
         active: true,
       });
     } else {
       setD({
         name: editing.display_name,
+        staff_code: editing.staff_code ?? "",
+        phone: editing.phone ?? "",
+        email: editing.email ?? "",
         pin: "",
         role: editing.staff_role ?? 0,
         areas: new Set(editing.area_ids),
@@ -429,6 +447,9 @@ function EmployeesTab() {
           display_name: d.name.trim(),
           pin: d.pin,
           staff_role: d.role,
+          staff_code: d.staff_code.trim() || undefined,
+          phone: d.phone.trim() || undefined,
+          email: d.email.trim() || undefined,
           area_ids,
         });
         toast.success(`${d.name.trim()} added.`);
@@ -436,6 +457,9 @@ function EmployeesTab() {
         await teamApi.updateEmployee(editing.id, {
           display_name: d.name.trim(),
           staff_role: d.role,
+          staff_code: d.staff_code.trim(),
+          phone: d.phone.trim(),
+          email: d.email.trim(),
           area_ids,
           is_active: d.active,
           ...(d.pin ? { pin: d.pin } : {}),
@@ -473,31 +497,63 @@ function EmployeesTab() {
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {list.map((e) => (
             <li key={e.id}>
-              <button
-                type="button"
-                onClick={() => setEditing(e)}
-                className={`flex min-h-[84px] w-full items-center gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                  e.is_active ? "" : "opacity-60"
-                }`}
-              >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-semibold text-primary">
-                  {e.display_name.charAt(0).toUpperCase()}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-base font-semibold text-foreground">
-                    {e.display_name}
+              <div className="flex min-h-[96px] w-full items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4 text-left shadow-sm transition hover:border-primary/40">
+                <button
+                  type="button"
+                  onClick={() => setEditing(e)}
+                  className={`flex min-w-0 flex-1 items-center gap-3 text-left focus-visible:outline-none ${
+                    e.is_active ? "" : "opacity-60"
+                  }`}
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-primary/10 text-base font-semibold text-primary">
+                    {e.display_name.charAt(0).toUpperCase()}
                   </span>
-                  <span className="block truncate text-sm text-muted-foreground">
-                    {e.role_name}
-                    {!e.is_active ? ` · ${t.inactive}` : ""}
-                  </span>
-                  {e.area_ids.length > 0 && (
-                    <span className="block truncate text-xs text-muted-foreground">
-                      {e.area_ids.map(areaName).filter(Boolean).join(", ")}
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="truncate text-base font-semibold text-foreground">
+                        {e.display_name}
+                      </span>
+                      <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                        {e.role_name}
+                      </span>
+                      {e.is_active ? (
+                        <span className="rounded-full bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600">
+                          {t.active}
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+                          {t.inactive}
+                        </span>
+                      )}
                     </span>
-                  )}
-                </span>
-              </button>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono font-medium text-foreground">
+                        Code: {e.staff_code || "—"}
+                      </span>
+                      {e.phone && <span>· {e.phone}</span>}
+                      {e.email && <span>· {e.email}</span>}
+                    </div>
+                    {e.area_ids.length > 0 && (
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        Areas: {e.area_ids.map(areaName).filter(Boolean).join(", ")}
+                      </span>
+                    )}
+                  </span>
+                </button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  onClick={(ev) => {
+                    ev.stopPropagation();
+                    setDeleting(e);
+                  }}
+                  aria-label={`${t.deleteEmployee} ${e.display_name}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </li>
           ))}
         </ul>
@@ -525,6 +581,44 @@ function EmployeesTab() {
                 onChange={(e) => setD({ ...d, name: e.target.value })}
               />
             </Field>
+
+            <Field label={t.staffCode} htmlFor="emp-code" hint={t.staffCodeHint}>
+              <input
+                id="emp-code"
+                inputMode="numeric"
+                className={inputCls}
+                maxLength={10}
+                placeholder="e.g. 1001"
+                value={d.staff_code}
+                onChange={(e) => setD({ ...d, staff_code: e.target.value.replace(/\D/g, "") })}
+              />
+            </Field>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label={t.phone} htmlFor="emp-phone" hint={t.phoneHint}>
+                <input
+                  id="emp-phone"
+                  type="tel"
+                  className={inputCls}
+                  maxLength={30}
+                  placeholder="e.g. 9800000000"
+                  value={d.phone}
+                  onChange={(e) => setD({ ...d, phone: e.target.value })}
+                />
+              </Field>
+              <Field label={t.email} htmlFor="emp-email" hint={t.emailHint}>
+                <input
+                  id="emp-email"
+                  type="email"
+                  className={inputCls}
+                  maxLength={120}
+                  placeholder="e.g. staff@zentro.com"
+                  value={d.email}
+                  onChange={(e) => setD({ ...d, email: e.target.value })}
+                />
+              </Field>
+            </div>
+
             <Field label={t.pin} htmlFor="emp-pin" hint={editing === "new" ? t.pinHint : t.pinKeep}>
               <input
                 id="emp-pin"
@@ -592,17 +686,56 @@ function EmployeesTab() {
               </label>
             )}
             {error && <ErrorBlock message={error} />}
-            <Button
-              type="submit"
-              className="h-11 w-full"
-              disabled={busy || !d.name.trim() || !d.role || !pinOk}
-            >
-              {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
-              {t.save}
-            </Button>
+            <div className="flex gap-2">
+              {editing !== "new" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 border-destructive/30 text-destructive hover:bg-destructive/10"
+                  onClick={() => setDeleting(editing)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                type="submit"
+                className="h-11 flex-1"
+                disabled={busy || !d.name.trim() || !d.role || !pinOk}
+              >
+                {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
+                {t.save}
+              </Button>
+            </div>
           </form>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deleting !== null}
+        onOpenChange={(v) => !busy && !v && setDeleting(null)}
+        title={`${t.deleteEmployee} · ${deleting?.display_name ?? ""}`}
+        body={t.deleteEmployeeConfirm}
+        confirmLabel={t.deleteEmployee}
+        danger
+        busy={busy}
+        onConfirm={async () => {
+          if (!deleting) return;
+          setBusy(true);
+          try {
+            await teamApi.deleteEmployee(deleting.id);
+            toast.success(`${deleting.display_name} removed.`);
+            setDeleting(null);
+            if (editing && editing !== "new" && editing.id === deleting.id) {
+              setEditing(null);
+            }
+            await qc.invalidateQueries({ queryKey: ["team"] });
+          } catch (e) {
+            toast.error(errorMessage(e));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
     </div>
   );
 }

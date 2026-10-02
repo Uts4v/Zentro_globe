@@ -171,9 +171,16 @@ function userFromToken(token: string): AuthUser | null {
 
 export function djangoHeaders(json = false): HeadersInit {
   const token = tokenStore.getAccess();
-  if (!token) throw new Error("Not authenticated — please log in again.");
-  // In staff mode the server also needs to know which employee is acting.
-  const h: Record<string, string> = { Authorization: `Bearer ${token}`, ...staffHeaders() };
+  const staff = staffHeaders();
+  if (!token && !staff["X-Zentro-Staff"]) {
+    throw new Error("Not authenticated — please log in again.");
+  }
+  const h: Record<string, string> = { ...staff };
+  if (token) {
+    h["Authorization"] = `Bearer ${token}`;
+  } else if (staff["X-Zentro-Staff"]) {
+    h["Authorization"] = `Staff ${staff["X-Zentro-Staff"]}`;
+  }
   if (json) h["Content-Type"] = "application/json";
   return h;
 }

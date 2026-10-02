@@ -57,6 +57,7 @@ import {
   receiptFromOrder,
 } from "../offline/documents";
 import { isOnline as serverReachable } from "@/lib/connectivity";
+import { hasStaffPermission } from "@/lib/staff-session";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-warning/10 text-warning",
@@ -182,6 +183,10 @@ export default function OrderDetailScreen({
   const merchant = usePosStore((s) => s.merchant);
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
+  const canEditOrders = hasStaffPermission("orders.edit");
+  const canCancelOrders = hasStaffPermission("orders.cancel");
+  const canTakePayments = hasStaffPermission("payments.take");
+  const canRefund = hasStaffPermission("payments.refund");
 
   // Reload when the connection changes and whenever a sync pass finishes:
   // orders taken here turn into server orders at that moment.
@@ -612,7 +617,7 @@ export default function OrderDetailScreen({
             {/* Add Items button, only while the bill is still open and unpaid.
                 The server prices the added lines, so it needs a connection and
                 an order the server already has. */}
-            {canAddItems(order) && !isLocalOrder(order) && (
+            {canAddItems(order) && canEditOrders && !isLocalOrder(order) && (
               <button
                 onClick={() => setShowAddItems(true)}
                 disabled={isOffline}
@@ -642,7 +647,7 @@ export default function OrderDetailScreen({
             )}
 
             {/* Status transition buttons */}
-            {getNextActions(order.status).length > 0 && (
+            {canEditOrders && getNextActions(order.status).length > 0 && (
               <div className="flex gap-2">
                 {getNextActions(order.status).map((action) => {
                   const Icon = action.icon;
@@ -666,7 +671,7 @@ export default function OrderDetailScreen({
             )}
 
             {/* Pay button for unpaid orders */}
-            {canCollectPayment(order) && (
+            {canCollectPayment(order) && canTakePayments && (
               <button
                 onClick={() => setShowCollectPayment(true)}
                 className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground hover:bg-primary-hover"
@@ -703,7 +708,7 @@ export default function OrderDetailScreen({
                 )}
                 {order.payment_status === "paid" ? "View Receipt" : "View Bill"}
               </button>
-              {order.payment_status === "paid" && !isLocalOrder(order) && (
+              {order.payment_status === "paid" && !isLocalOrder(order) && canRefund && (
                 <button
                   onClick={() => setShowRefund(true)}
                   disabled={isOffline}
@@ -712,6 +717,20 @@ export default function OrderDetailScreen({
                 >
                   <RotateCcw className="h-4 w-4" />
                   Refund
+                </button>
+              )}
+              {!["cancelled", "completed", "refunded"].includes(order.status) && canCancelOrders && (
+                <button
+                  onClick={() => {
+                    if (window.confirm("Are you sure you want to cancel this order?")) {
+                      handleStatusChange(order, "cancelled");
+                    }
+                  }}
+                  disabled={statusLoading || isOffline}
+                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/30 py-3 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <XCircle className="h-4 w-4" />
+                  Cancel Order
                 </button>
               )}
             </div>

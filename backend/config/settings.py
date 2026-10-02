@@ -334,11 +334,13 @@ CORS_ALLOW_HEADERS = [
     "x-requested-with",
     "x-pos-device-id",
     "x-pos-device-token",
+    "x-zentro-staff",
 ]
 
 # ── Django REST Framework ─────────────────────────────────────────────────────
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
+        "pos.authentication.StaffTokenAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [

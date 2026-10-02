@@ -31,6 +31,7 @@ import ProductDetailSheet, {
 import type { MenuItemSelectable } from "@/lib/api/types";
 import MinusStockModal from "./MinusStockModal";
 import { useOnlineStatus } from "../offline/hooks";
+import { hasStaffPermission } from "@/lib/staff-session";
 
 interface CartPanelProps {
   onCheckout: () => void;
@@ -43,6 +44,10 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
   const cartNotes = usePosStore((s) => s.cartNotes);
   const fulfillmentType = usePosStore((s) => s.fulfillmentType);
   const posSettings = usePosStore((s) => s.posSettings);
+  const canCreateOrders = hasStaffPermission("orders.create");
+  const canApplyDiscount = hasStaffPermission("discounts.apply");
+  const canManageCustomers = hasStaffPermission("customers.manage");
+  const canManageRewards = hasStaffPermission("rewards.manage");
   const merchant = usePosStore((s) => s.merchant);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
@@ -407,8 +412,8 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
           ) : (
             <button
               onClick={() => setShowCustomerSearch(true)}
-              disabled={offline}
-              title={offlineTitle}
+              disabled={offline || !canManageCustomers}
+              title={!canManageCustomers ? "No permission to manage customers" : offlineTitle}
               className="flex w-full items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 text-left shadow-[var(--shadow-card)] transition-all hover:border-ember/50 hover:bg-ember-soft/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border disabled:hover:bg-card"
             >
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mist">
@@ -652,7 +657,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               -{formatCurrency(pricing.discountValue, currencySymbol)}
             </span>
           </div>
-        ) : (
+        ) : canApplyDiscount ? (
           <button
             onClick={onDiscount}
             disabled={offline}
@@ -665,7 +670,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
             </span>
             <span className="font-medium text-ember">Add</span>
           </button>
-        )}
+        ) : null}
         {pricing.charges.map((charge) => (
           <div
             key={charge.kind}
@@ -711,7 +716,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               {printingBill ? "Printing..." : "Print Bill"}
             </button>
           )}
-          {posSettings?.discounts_enabled && (
+          {posSettings?.discounts_enabled && canApplyDiscount && (
             <button
               onClick={onDiscount}
               disabled={offline}
@@ -722,16 +727,18 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               Apply Discount
             </button>
           )}
-          <button
-            onClick={onRedeemOffer}
-            disabled={offline}
-            title={offlineTitle}
-            className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            <Ticket className="h-3.5 w-3.5" />
-            Redeem Offer
-          </button>
-          {!isEmpty && (
+          {canManageRewards && (
+            <button
+              onClick={onRedeemOffer}
+              disabled={offline}
+              title={offlineTitle}
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Ticket className="h-3.5 w-3.5" />
+              Redeem Offer
+            </button>
+          )}
+          {!isEmpty && canCreateOrders && (
             <button
               onClick={() => setShowFreeConfirm(true)}
               disabled={offline}
@@ -760,11 +767,14 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
         </div>
         <button
           onClick={onCheckout}
-          disabled={isEmpty}
+          disabled={isEmpty || !canCreateOrders}
+          title={!canCreateOrders ? "No permission to create orders" : undefined}
           className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ember text-base font-bold text-white shadow-[var(--shadow-ember)] transition-all hover:brightness-105 active:scale-[0.99] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none"
         >
           <Check className="h-5 w-5" strokeWidth={2.5} />
-          {isEmpty ? (
+          {!canCreateOrders ? (
+            "No permission to create orders"
+          ) : isEmpty ? (
             "Add items to place order"
           ) : (
             <>

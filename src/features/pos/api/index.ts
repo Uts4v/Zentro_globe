@@ -1,12 +1,22 @@
 import { apiUrl, djangoFetch, tokenStore } from "@/lib/django-api-base";
 import type { MenuOptionGroup, MenuSelection } from "@/lib/api/types";
-import { staffHeaders } from "@/lib/staff-session";
+import { staffHeaders, staffSession } from "@/lib/staff-session";
 
-const headers = () => ({
-  Authorization: `Bearer ${tokenStore.getAccess()}`,
-  "Content-Type": "application/json",
-  ...staffHeaders(),
-});
+const headers = () => {
+  const staff = staffSession.get();
+  const bearer = tokenStore.getAccess();
+  const authHeader = bearer
+    ? `Bearer ${bearer}`
+    : staff?.token
+    ? `Staff ${staff.token}`
+    : "";
+
+  return {
+    ...(authHeader ? { Authorization: authHeader } : {}),
+    "Content-Type": "application/json",
+    ...staffHeaders(),
+  };
+};
 
 // ── Health ────────────────────────────────────────────────────────────────────
 export const posHealth = () =>
@@ -89,10 +99,15 @@ export const posCreateWorker = (data: {
   display_name: string;
   pin: string;
   role?: string;
+  staff_code?: string;
+  phone?: string;
+  email?: string;
+  is_active?: boolean;
   can_apply_discount?: boolean;
   can_process_refund?: boolean;
   can_close_shift?: boolean;
   can_view_reports?: boolean;
+  permissions?: string[];
 }) =>
   djangoFetch<ShiftWorker>(apiUrl("/pos/workers/create/"), {
     method: "POST",
@@ -105,11 +120,15 @@ export const posUpdateWorker = (
   data: Partial<{
     display_name: string;
     role: string;
+    staff_code: string;
+    phone: string;
+    email: string;
     is_active: boolean;
     can_apply_discount: boolean;
     can_process_refund: boolean;
     can_close_shift: boolean;
     can_view_reports: boolean;
+    permissions: string[];
   }>,
 ) =>
   djangoFetch<ShiftWorker>(apiUrl(`/pos/workers/${workerId}/update/`), {
@@ -118,17 +137,73 @@ export const posUpdateWorker = (
     body: JSON.stringify(data),
   });
 
-export const posWorkerLogin = (workerId: string, pin: string) => {
+export const posDeleteWorker = (workerId: string) =>
+  djangoFetch<{ message?: string }>(apiUrl(`/pos/workers/team/${workerId}/`), {
+    method: "DELETE",
+    headers: headers(),
+  });
+
+export const posWorkerLogin = (
+  workerIdOrStaffCode: string,
+  pin: string,
+  isStaffCode = false,
+) => {
   const deviceId = localStorage.getItem("pos_device_id") || "";
   const deviceToken = localStorage.getItem("pos_device_token") || "";
-  return djangoFetch<{ worker: ShiftWorker; message: string }>(apiUrl("/pos/worker/login/"), {
+  const payload = isStaffCode
+    ? { staff_code: workerIdOrStaffCode, pin }
+    : { worker_id: workerIdOrStaffCode, pin };
+
+  return djangoFetch<{
+    worker: ShiftWorker;
+    token?: string;
+    permissions?: string[];
+    message: string;
+  }>(apiUrl("/pos/worker/login/"), {
     method: "POST",
     headers: {
       "X-Pos-Device-Id": deviceId,
       "X-Pos-Device-Token": deviceToken,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ worker_id: workerId, pin }),
+    body: JSON.stringify(payload),
+  });
+};
+
+export const posStaffLogin = (payload: {
+  staff_code?: string;
+  worker_id?: string;
+  pin: string;
+  store?: string;
+  platform?: string;
+}) => {
+  const deviceId = localStorage.getItem("pos_device_id") || "";
+  const deviceToken = localStorage.getItem("pos_device_token") || "";
+  return djangoFetch<{
+    token: string;
+    worker: ShiftWorker;
+    permissions: string[];
+    merchant: {
+      id: number;
+      business_name: string;
+      slug: string;
+      logo_url: string;
+      pos_enabled: boolean;
+      currency_code: string;
+      currency_symbol: string;
+      discounts_enabled: boolean;
+    };
+    device?: PosDevice | null;
+    device_token?: string | null;
+    message: string;
+  }>(apiUrl("/pos/auth/staff-login/"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(deviceId ? { "X-Pos-Device-Id": deviceId } : {}),
+      ...(deviceToken ? { "X-Pos-Device-Token": deviceToken } : {}),
+    },
+    body: JSON.stringify(payload),
   });
 };
 
@@ -405,8 +480,12 @@ export interface PosDevice {
 export interface ShiftWorker {
   id: string;
   display_name: string;
+  staff_code?: string;
+  phone?: string;
+  email?: string;
   role: string;
   is_active: boolean;
+  is_deleted?: boolean;
   can_apply_discount: boolean;
   can_process_refund: boolean;
   can_close_shift: boolean;

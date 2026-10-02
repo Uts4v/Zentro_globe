@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { usePosStore } from "../store";
-import { posListWorkers, posCreateWorker, posUpdateWorker, ShiftWorker } from "../api";
+import { posListWorkers, posCreateWorker, posUpdateWorker, posDeleteWorker, ShiftWorker } from "../api";
+import { hasStaffPermission } from "@/lib/staff-session";
 import {
   listPreparationAreas,
   getStaffPreparationAreas,
@@ -20,6 +21,7 @@ import {
   UserX,
   UserCheck,
   ChefHat,
+  Trash2,
 } from "lucide-react";
 
 const ROLES = [
@@ -46,6 +48,9 @@ export default function StaffManagementScreen() {
 
   // Create form
   const [newName, setNewName] = useState("");
+  const [newStaffCode, setNewStaffCode] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newEmail, setNewEmail] = useState("");
   const [newPin, setNewPin] = useState("");
   const [newRole, setNewRole] = useState("cashier");
   const [newDiscount, setNewDiscount] = useState(false);
@@ -53,6 +58,8 @@ export default function StaffManagementScreen() {
   const [newCloseShift, setNewCloseShift] = useState(false);
   const [newViewReports, setNewViewReports] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [deletingWorker, setDeletingWorker] = useState<ShiftWorker | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Preparation areas + per-worker assignments
@@ -125,6 +132,9 @@ export default function StaffManagementScreen() {
         display_name: newName.trim(),
         pin: newPin,
         role: newRole,
+        staff_code: newStaffCode.trim() || undefined,
+        phone: newPhone.trim() || undefined,
+        email: newEmail.trim() || undefined,
         can_apply_discount: newDiscount,
         can_process_refund: newRefund,
         can_close_shift: newCloseShift,
@@ -142,6 +152,20 @@ export default function StaffManagementScreen() {
       setError(err?.message || "Failed to create worker");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function handleDeleteWorker() {
+    if (!deletingWorker) return;
+    setDeleting(true);
+    try {
+      await posDeleteWorker(deletingWorker.id);
+      setDeletingWorker(null);
+      await loadWorkers();
+    } catch (err: any) {
+      alert(err?.message || "Failed to remove staff member");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -165,6 +189,9 @@ export default function StaffManagementScreen() {
 
   function resetForm() {
     setNewName("");
+    setNewStaffCode("");
+    setNewPhone("");
+    setNewEmail("");
     setNewPin("");
     setNewRole("cashier");
     setNewDiscount(false);
@@ -177,6 +204,25 @@ export default function StaffManagementScreen() {
 
   const activeCount = workers.filter((w) => w.is_active).length;
   const currentWorker = usePosStore((s) => s.currentWorker);
+
+  if (currentWorker && !hasStaffPermission("staff.manage")) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <div className="max-w-md text-center">
+          <Shield className="mx-auto mb-3 h-12 w-12 text-destructive" />
+          <h2 className="text-xl font-bold text-foreground">Access Restricted</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            You do not have permission to manage staff. Contact your administrator or manager.
+          </p>
+          <div className="mt-4 flex justify-center">
+            <Link to="/pos" className="rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-white">
+              Back to Terminal
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl p-4 lg:p-6">
@@ -256,9 +302,13 @@ export default function StaffManagementScreen() {
                         </span>
                       )}
                     </div>
-                    <p className="mt-0.5 text-[10px] text-muted-foreground">
-                      ID: {worker.id.slice(0, 8)}...
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-semibold text-foreground">
+                        Code: {worker.staff_code || "—"}
+                      </span>
+                      {worker.phone && <span>· {worker.phone}</span>}
+                      {worker.email && <span>· {worker.email}</span>}
+                    </div>
                   </div>
                 </div>
 
@@ -278,6 +328,14 @@ export default function StaffManagementScreen() {
                     ) : (
                       <UserX className="h-4 w-4" />
                     )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingWorker(worker)}
+                    className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600"
+                    title="Delete Worker"
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
@@ -413,6 +471,49 @@ export default function StaffManagementScreen() {
                 />
               </div>
 
+              {/* Staff Code */}
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Staff Code (e.g. 1001, leave empty to auto-assign)
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={newStaffCode}
+                  onChange={(e) => setNewStaffCode(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                  placeholder="e.g. 1001"
+                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 font-mono text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                />
+              </div>
+
+              {/* Phone & Email */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Phone (optional)
+                  </label>
+                  <input
+                    type="tel"
+                    value={newPhone}
+                    onChange={(e) => setNewPhone(e.target.value)}
+                    placeholder="9800000000"
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Email (optional)
+                  </label>
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="staff@zentro.com"
+                    className="w-full rounded-xl border border-border bg-background px-3 py-2 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                  />
+                </div>
+              </div>
+
               {/* Role */}
               <div>
                 <label className="mb-1 block text-xs font-medium text-muted-foreground">Role</label>
@@ -508,6 +609,48 @@ export default function StaffManagementScreen() {
                 className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-ink py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40"
               >
                 {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Worker"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingWorker && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => !deleting && setDeletingWorker(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-card p-6 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 text-red-600">
+              <Trash2 className="h-6 w-6" />
+            </div>
+            <h3 className="mt-4 text-base font-bold text-foreground">Remove Staff Member</h3>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Are you sure you want to remove{" "}
+              <span className="font-semibold text-foreground">{deletingWorker.display_name}</span>
+              {deletingWorker.staff_code ? ` (Code: ${deletingWorker.staff_code})` : ""}? They will no
+              longer be able to log in or access POS features.
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setDeletingWorker(null)}
+                className="flex-1 rounded-xl border border-border py-2.5 text-sm font-medium text-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={handleDeleteWorker}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-40"
+              >
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
               </button>
             </div>
           </div>

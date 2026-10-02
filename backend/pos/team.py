@@ -69,7 +69,32 @@ def resolve_role(request, merchant, data, worker=None):
     """The role named in a create/update payload (or None to leave unchanged)."""
     roles = rbac.ensure_default_roles(merchant)
     role = None
-    if data.get("staff_role"):
+    # 1. Custom permissions specified directly
+    if "permissions" in data and isinstance(data["permissions"], list):
+        wanted = set(data["permissions"]) & rbac._ALL_SET
+        # Check if an existing role for this merchant has these exact permissions
+        existing_role = None
+        for r in StaffRole.objects.filter(merchant=merchant, is_active=True):
+            if rbac.role_permissions(r) == wanted:
+                existing_role = r
+                break
+        if existing_role:
+            role = existing_role
+        else:
+            worker_name = data.get("display_name") or (worker.display_name if worker else "Staff")
+            base_name = f"{worker_name} (Role)"[:55]
+            role_name = base_name
+            suffix = 1
+            while StaffRole.objects.filter(merchant=merchant, name=role_name, is_active=True).exists():
+                suffix += 1
+                role_name = f"{base_name} {suffix}"[:60]
+            role = StaffRole.objects.create(
+                merchant=merchant,
+                name=role_name,
+                description=f"Custom permissions for {worker_name}",
+            )
+            rbac.set_role_permissions(role, wanted)
+    elif data.get("staff_role"):
         role = StaffRole.objects.filter(merchant=merchant, id=data["staff_role"], is_active=True).first()
         if role is None:
             raise TeamError("Choose a role.")
@@ -114,7 +139,7 @@ def apply_role_and_areas(request, worker, role, area_ids):
 
 def _workers_qs(merchant):
     return (
-        ShiftWorker.objects.filter(merchant=merchant)
+        ShiftWorker.objects.filter(merchant=merchant, is_deleted=False)
         .select_related("staff_role", "merchant")
         .prefetch_related("area_assignments")
         .order_by("-is_active", "display_name")
@@ -139,31 +164,74 @@ def team_workers(request):
         return Response(ser.errors, status=400)
     data = ser.validated_data
     name = data["display_name"].strip()
-    if ShiftWorker.objects.filter(merchant=merchant, display_name__iexact=name, is_active=True).exists():
+    if ShiftWorker.objects.filter(merchant=merchant, display_name__iexact=name, is_active=True, is_deleted=False).exists():
         return Response({"error": f"You already have an employee called “{name}”."}, status=400)
+
+    staff_code = data.get("staff_code", "").strip()
+    if staff_code:
+        if ShiftWorker.objects.filter(merchant=merchant, staff_code__iexact=staff_code, is_deleted=False).exists():
+            return Response({"error": f"Staff code “{staff_code}” is already in use."}, status=400)
+    else:
+        staff_code = ShiftWorker.generate_staff_code(merchant)
+
     try:
         role = resolve_role(request, merchant, data)
     except TeamError as exc:
         return Response({"error": str(exc)}, status=exc.status)
+
     with transaction.atomic():
-        worker = ShiftWorker(merchant=merchant, display_name=name)
+        worker = ShiftWorker(
+            merchant=merchant,
+            display_name=name,
+            staff_code=staff_code,
+            phone=data.get("phone", "").strip(),
+            email=data.get("email", "").strip(),
+            is_active=data.get("is_active", True),
+        )
         worker.set_pin(data["pin"])
         worker.save()
         apply_role_and_areas(request, worker, role, data.get("area_ids"))
     _audit(request, merchant, PosAuditLog.ACTION_WORKER_CREATE, "shift_worker", worker.id,
-           worker=worker, display_name=worker.display_name, role=worker.staff_role.name)
+           worker=worker, display_name=worker.display_name, role=worker.staff_role.name, staff_code=staff_code)
     return Response(ShiftWorkerSerializer(_workers_qs(merchant).get(pk=worker.pk)).data, status=201)
 
 
-@api_view(["PATCH"])
+@api_view(["PATCH", "DELETE"])
 @permission_classes([IsAuthenticated])
 def team_worker_detail(request, worker_id):
     merchant = _merchant(request)
     if merchant is None:
         return _no_merchant()
-    worker = ShiftWorker.objects.filter(merchant=merchant, id=worker_id).first()
+    worker = ShiftWorker.objects.filter(merchant=merchant, id=worker_id, is_deleted=False).first()
     if worker is None:
         return Response({"error": "Employee not found."}, status=404)
+
+    if request.method == "DELETE":
+        # Guard escalation: cannot delete someone who has higher permissions than caller
+        try:
+            _guard_escalation(request, merchant, rbac.worker_permissions(worker))
+        except TeamError as exc:
+            return Response({"error": str(exc)}, status=exc.status)
+
+        # Check if worker has activity (orders, shifts, payments)
+        has_orders = worker.orders.exists()
+        has_shifts = worker.opened_shifts.exists() or worker.closed_shifts.exists()
+        has_payments = worker.payments.exists()
+
+        with transaction.atomic():
+            if has_orders or has_shifts or has_payments:
+                # Soft delete to preserve historical integrity
+                worker.is_active = False
+                worker.is_deleted = True
+                worker.staff_code = f"DEL-{worker.staff_code}-{worker.id.hex[:6]}"[:30]
+                worker.save(update_fields=["is_active", "is_deleted", "staff_code", "updated_at"])
+            else:
+                worker.delete()
+
+        _audit(request, merchant, PosAuditLog.ACTION_WORKER_DELETE if hasattr(PosAuditLog, 'ACTION_WORKER_DELETE') else "worker.delete",
+               "shift_worker", worker_id, employee=worker.display_name)
+        return Response(status=204)
+
     ser = UpdateWorkerSerializer(data=request.data, partial=True)
     if not ser.is_valid():
         return Response(ser.errors, status=400)
@@ -174,9 +242,20 @@ def team_worker_detail(request, worker_id):
         role = resolve_role(request, merchant, data, worker=worker)
     except TeamError as exc:
         return Response({"error": str(exc)}, status=exc.status)
+
+    if "staff_code" in data and data["staff_code"].strip():
+        code = data["staff_code"].strip()
+        if ShiftWorker.objects.filter(merchant=merchant, staff_code__iexact=code, is_deleted=False).exclude(id=worker.id).exists():
+            return Response({"error": f"Staff code “{code}” is already taken."}, status=400)
+        worker.staff_code = code
+
     with transaction.atomic():
         if "display_name" in data:
             worker.display_name = data["display_name"].strip()
+        if "phone" in data:
+            worker.phone = data["phone"].strip()
+        if "email" in data:
+            worker.email = data["email"].strip()
         if "is_active" in data:
             worker.is_active = data["is_active"]
         worker.save()
@@ -367,7 +446,7 @@ def staff_workers(request):
     merchant = _merchant(request)
     if merchant is None:
         return _no_merchant()
-    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True).select_related("staff_role")
+    workers = ShiftWorker.objects.filter(merchant=merchant, is_active=True, is_deleted=False).select_related("staff_role")
     token = rbac.staff_token_from(request)
     rows = []
     for w in workers.order_by("display_name"):
@@ -375,7 +454,13 @@ def staff_workers(request):
         can_unlock = role.is_admin or "staff.manage" in rbac.role_permissions(role)
         if token and not can_unlock:
             continue  # in staff mode only people who can unlock are listed
-        rows.append({"id": str(w.id), "name": w.display_name, "role_name": role.name, "can_unlock": can_unlock})
+        rows.append({
+            "id": str(w.id),
+            "name": w.display_name,
+            "staff_code": w.staff_code,
+            "role_name": role.name,
+            "can_unlock": can_unlock,
+        })
     return Response(rows)
 
 
@@ -388,15 +473,20 @@ def staff_session_start(request):
     if rbac.staff_token_from(request):
         return Response({"error": "Leave staff mode first."}, status=403)
     worker = None
-    if request.data.get("worker_id"):
+    if request.data.get("staff_code"):
+        code = str(request.data.get("staff_code")).strip()
+        worker = ShiftWorker.objects.filter(
+            merchant=merchant, staff_code__iexact=code, is_active=True, is_deleted=False
+        ).first()
+    elif request.data.get("worker_id"):
         try:
             worker = ShiftWorker.objects.filter(
-                merchant=merchant, id=request.data.get("worker_id"), is_active=True
+                merchant=merchant, id=request.data.get("worker_id"), is_active=True, is_deleted=False
             ).first()
         except Exception:
             worker = None
     if worker is None:
-        return Response({"error": "Choose who is using this device."}, status=404)
+        return Response({"error": "Staff member not found."}, status=404)
     if not worker.verify_pin(str(request.data.get("pin") or "")):
         if worker.locked_until and worker.locked_until > timezone.now():
             return Response({"error": "Too many wrong PINs. Try again in 15 minutes."}, status=429)

@@ -44,8 +44,9 @@ class ShiftWorkerSerializer(serializers.ModelSerializer):
     class Meta:
         model = ShiftWorker
         fields = [
-            "id", "display_name", "role", "is_active",
-            "staff_role", "role_name", "permissions", "area_ids",
+            "id", "display_name", "staff_code", "phone", "email",
+            "role", "is_active", "staff_role", "role_name",
+            "permissions", "area_ids",
             "can_apply_discount", "can_process_refund",
             "can_close_shift", "can_view_reports",
             "created_at", "updated_at",
@@ -68,12 +69,17 @@ class ShiftWorkerSerializer(serializers.ModelSerializer):
 
 class CreateWorkerSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=120)
+    staff_code = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True, default="")
+    email = serializers.EmailField(required=False, allow_blank=True, default="")
     pin = serializers.CharField(min_length=4, max_length=8)
     # The role decides everything the employee can do. ``role`` (the old
     # coarse value) is still accepted and mapped to the matching default role.
     staff_role = serializers.IntegerField(required=False)
     role = serializers.ChoiceField(choices=ShiftWorker.ROLE_CHOICES, required=False)
+    permissions = serializers.ListField(child=serializers.CharField(), required=False)
     area_ids = serializers.ListField(child=serializers.IntegerField(), required=False)
+    is_active = serializers.BooleanField(required=False, default=True)
     # Accepted for older clients and ignored: permissions come from the role.
     can_apply_discount = serializers.BooleanField(required=False)
     can_process_refund = serializers.BooleanField(required=False)
@@ -83,9 +89,13 @@ class CreateWorkerSerializer(serializers.Serializer):
 
 class UpdateWorkerSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=120, required=False)
+    staff_code = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    email = serializers.EmailField(required=False, allow_blank=True)
     pin = serializers.CharField(min_length=4, max_length=8, required=False)
     staff_role = serializers.IntegerField(required=False)
     role = serializers.ChoiceField(choices=ShiftWorker.ROLE_CHOICES, required=False)
+    permissions = serializers.ListField(child=serializers.CharField(), required=False)
     area_ids = serializers.ListField(child=serializers.IntegerField(), required=False)
     is_active = serializers.BooleanField(required=False)
     can_apply_discount = serializers.BooleanField(required=False)
@@ -95,8 +105,17 @@ class UpdateWorkerSerializer(serializers.Serializer):
 
 
 class WorkerLoginSerializer(serializers.Serializer):
-    worker_id = serializers.UUIDField()
+    worker_id = serializers.UUIDField(required=False)
+    staff_code = serializers.CharField(max_length=30, required=False, allow_blank=True)
     pin = serializers.CharField(min_length=4, max_length=8)
+    store = serializers.CharField(max_length=100, required=False, allow_blank=True)
+
+
+class StaffLoginSerializer(serializers.Serializer):
+    staff_code = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    worker_id = serializers.UUIDField(required=False)
+    pin = serializers.CharField(min_length=4, max_length=8)
+    store = serializers.CharField(max_length=100, required=False, allow_blank=True)
 
 
 # ── Shift ──────────────────────────────────────────────────────────────────────

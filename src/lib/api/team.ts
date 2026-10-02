@@ -41,8 +41,12 @@ export interface StaffRole {
 export interface Employee {
   id: string;
   display_name: string;
+  staff_code?: string;
+  phone?: string;
+  email?: string;
   role: string;
   is_active: boolean;
+  is_deleted?: boolean;
   staff_role: number | null;
   role_name: string;
   permissions: string[];
@@ -63,6 +67,7 @@ export interface Access {
 export interface StaffPickerWorker {
   id: string;
   name: string;
+  staff_code?: string;
   role_name: string;
   can_unlock: boolean;
 }
@@ -91,8 +96,16 @@ export const areaApi = {
 export const teamApi = {
   me: () => get<Access>("/pos/staff/me/"),
   staffWorkers: () => get<StaffPickerWorker[]>("/pos/staff/workers/"),
-  startStaffSession: (worker_id: string, pin: string) =>
-    send<Access & { token: string }>("/pos/staff/session/", "POST", { worker_id, pin }),
+  startStaffSession: (
+    payloadOrWorkerId: string | { worker_id?: string; staff_code?: string; pin: string },
+    pin?: string,
+  ) => {
+    const payload =
+      typeof payloadOrWorkerId === "string"
+        ? { worker_id: payloadOrWorkerId, pin: pin || "" }
+        : payloadOrWorkerId;
+    return send<Access & { token: string }>("/pos/staff/session/", "POST", payload);
+  },
   endStaffSession: (payload: { password?: string; worker_id?: string; pin?: string }) =>
     send<{ ok: boolean }>("/pos/staff/session/end/", "POST", payload),
 
@@ -113,17 +126,27 @@ export const teamApi = {
   createEmployee: (payload: {
     display_name: string;
     pin: string;
-    staff_role: number;
-    area_ids: number[];
+    staff_code?: string;
+    phone?: string;
+    email?: string;
+    staff_role?: number;
+    area_ids?: number[];
+    is_active?: boolean;
+    permissions?: string[];
   }) => send<Employee>("/pos/workers/team/", "POST", payload),
   updateEmployee: (
     id: string,
     payload: Partial<{
       display_name: string;
       pin: string;
+      staff_code: string;
+      phone: string;
+      email: string;
       staff_role: number;
       area_ids: number[];
       is_active: boolean;
+      permissions: string[];
     }>,
   ) => send<Employee>(`/pos/workers/team/${id}/`, "PATCH", payload),
+  deleteEmployee: (id: string) => send<void>(`/pos/workers/team/${id}/`, "DELETE"),
 };

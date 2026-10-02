@@ -32,9 +32,11 @@ from django.db import transaction
 
 PERMISSION_GROUPS = [
     ("pos", "POS & Orders", [
-        ("pos.access", "Use the POS", "Open the POS and see orders."),
+        ("pos.access", "Use the POS", "Open the POS terminal."),
         ("orders.create", "Create orders", "Start orders, add items and send them."),
+        ("orders.edit", "Edit orders", "Modify order details, items and notes."),
         ("orders.cancel", "Cancel orders", "Cancel an order or remove sent items."),
+        ("orders.view", "View orders & history", "See past orders, history and receipts."),
     ]),
     ("payments", "Payments", [
         ("payments.take", "Take payments", "Accept cash, card and other payments."),
@@ -62,8 +64,9 @@ PERMISSION_GROUPS = [
         ("inventory.manage", "Manage items and suppliers", "Stock items, suppliers, supplier orders and history."),
         ("inventory.costs", "See costs", "See what stock costs and is worth."),
     ]),
-    ("customers", "Customers", [
-        ("customers.manage", "Customers, loyalty and offers", "Manage customers, rewards and offers."),
+    ("customers", "Customers & Loyalty", [
+        ("customers.manage", "Customers & CRM", "Manage customer profiles and account details."),
+        ("rewards.manage", "Manage rewards & loyalty", "Manage points, rewards, punch cards and offers."),
     ]),
     ("reports", "Reports", [
         ("reports.view", "See reports", "Sales, analytics and reports."),
@@ -101,12 +104,12 @@ DEFAULT_ROLES = {
     ROLE_CASHIER: {
         "name": "Cashier",
         "description": "Takes orders and payments at the counter.",
-        "permissions": ("pos.access", "orders.create", "payments.take", "tables.view"),
+        "permissions": ("pos.access", "orders.create", "orders.edit", "orders.view", "payments.take", "tables.view"),
     },
     ROLE_SERVER: {
         "name": "Server",
         "description": "Takes orders at the tables they are assigned to.",
-        "permissions": ("pos.access", "orders.create", "payments.take", "tables.view"),
+        "permissions": ("pos.access", "orders.create", "orders.edit", "orders.view", "payments.take", "tables.view"),
     },
     ROLE_KITCHEN: {
         "name": "Kitchen",

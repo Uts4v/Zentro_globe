@@ -1,4 +1,4 @@
-﻿// routes/auth.merchant.login.tsx — Merchant sign-in only
+// routes/auth.merchant.login.tsx — Merchant sign-in only
 import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -144,6 +144,16 @@ function MerchantLogin() {
       >
         Customer sign in →
       </Link>
+
+      <div className="mt-6 rounded-2xl border border-border/80 bg-muted/30 p-3.5 text-center">
+        <p className="text-xs text-muted-foreground">Staff member working a shift?</p>
+        <Link
+          to="/pos"
+          className="mt-1.5 inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-ink underline-offset-4 hover:underline"
+        >
+          Sign in to POS terminal with Staff Code &amp; PIN →
+        </Link>
+      </div>
     </div>
   );
 }

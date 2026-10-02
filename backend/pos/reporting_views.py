@@ -27,13 +27,22 @@ from .models import PosPayment, PosDiscount, PosCashMovement, ReportHistory
 from .permissions import IsMerchantUser, IsPosEnabled
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+from rest_framework.exceptions import PermissionDenied
 
 def _get_merchant(request):
     try:
-        return request.user.merchant_profile
+        merchant = request.user.merchant_profile
     except (AttributeError, MerchantProfile.DoesNotExist):
         return None
+    worker = getattr(request, "worker", None)
+    if worker is None:
+        from . import rbac
+        worker = rbac.request_worker(request, merchant)
+    if worker:
+        from . import rbac
+        if not rbac.worker_can(worker, "reports.view"):
+            raise PermissionDenied("Permission denied: reports.view is required.")
+    return merchant
 
 
 def _parse_date_param(value, default=None):

@@ -97,6 +97,15 @@ class ShiftWorker(models.Model):
         related_name="shift_workers",
     )
     display_name = models.CharField(max_length=120)
+    staff_code = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Unique staff code for POS login, e.g. 1001",
+    )
+    phone = models.CharField(max_length=30, blank=True, default="", help_text="Contact phone number")
+    email = models.EmailField(blank=True, default="", help_text="Staff email address")
     pin_hash = models.CharField(
         max_length=255,
         help_text="SHA-256 hash of the worker PIN",
@@ -121,6 +130,7 @@ class ShiftWorker(models.Model):
         blank=True,
     )
     is_active = models.BooleanField(default=True)
+    is_deleted = models.BooleanField(default=False)
     # Mirrors of the role's permissions (pos.rbac.sync_legacy_flags), kept so
     # existing POS clients keep reading them. Never set these directly.
     can_apply_discount = models.BooleanField(default=False)
@@ -135,9 +145,30 @@ class ShiftWorker(models.Model):
     class Meta:
         db_table = "pos_workers"
         ordering = ["display_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["merchant", "staff_code"],
+                name="unique_worker_staff_code_per_merchant",
+                condition=models.Q(staff_code__gt=""),
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.display_name} ({self.role})"
+        code_str = f" #{self.staff_code}" if self.staff_code else ""
+        return f"{self.display_name}{code_str} ({self.role})"
+
+    @classmethod
+    def generate_staff_code(cls, merchant) -> str:
+        """Generate the next available numeric staff code for this merchant."""
+        existing_codes = set(
+            cls.objects.filter(merchant=merchant)
+            .exclude(staff_code="")
+            .values_list("staff_code", flat=True)
+        )
+        base = 1001
+        while str(base) in existing_codes:
+            base += 1
+        return str(base)
 
     def set_pin(self, pin: str):
         self.pin_hash = _hash_token(pin)
