@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { ClearCacheNavButton } from "@/components/ClearCacheControl";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import type { LucideIcon } from "lucide-react";
 import type React from "react";
@@ -99,6 +100,10 @@ export function MerchantNav({ navItems, onSignOut, onLinkClick, bell }: Merchant
       <div className="px-2 py-2">
         <ThemeToggle compact />
       </div>
+
+      {/* Clear this browser's saved copy — a POS terminal left on a stale menu
+          has no other way back to live data. */}
+      <ClearCacheNavButton className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground" />
 
       {/* Sign out */}
       <button

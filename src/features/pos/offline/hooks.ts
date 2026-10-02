@@ -60,6 +60,7 @@ export function useSyncStatus() {
   const [status, setStatus] = useState({
     pending: 0,
     failed: 0,
+    dead: 0,
     isSyncing: false,
     needsSignIn: false,
   });

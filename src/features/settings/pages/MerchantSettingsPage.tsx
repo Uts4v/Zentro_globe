@@ -20,6 +20,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/auth/ChangePasswordDialog";
+import { ClearCacheRow } from "@/components/ClearCacheControl";
 
 const TAX_PRESETS: Record<string, Array<{ name: string; rate: number }>> = {
   nepal: [{ name: "VAT", rate: 13 }],
@@ -821,6 +822,19 @@ export function MerchantSettingsPage() {
             </span>
           </span>
         </button>
+      </section>
+
+      {/* ── This browser ───────────────────────────────────────────────── */}
+      <section className="glass-strong rounded-3xl p-6">
+        <h2 className="mb-4 text-sm font-bold text-foreground uppercase tracking-wider">
+          This Browser
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          A POS terminal keeps a copy of your menu, tables and staff so it can keep selling when the
+          internet goes. If a terminal is showing an old menu, or was left signed in by someone
+          else, clear what this browser has saved.
+        </p>
+        <ClearCacheRow />
       </section>
 
       {/* ── Save ──────────────────────────────────────────────────────── */}

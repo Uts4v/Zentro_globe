@@ -3,6 +3,13 @@ import { PosReceiptData } from "../api";
 import { formatCurrency } from "@/lib/currency";
 import { paymentMethodLabel } from "@/lib/payment-methods";
 import { tableLabel } from "./table-label";
+import {
+  LOGO_PX,
+  TICKET_FONT,
+  TICKET_MARGIN,
+  TICKET_WIDTH,
+  type TicketPaper,
+} from "./ticket-style";
 
 function formatDate(iso: string | null) {
   if (!iso) return "-";
@@ -20,7 +27,7 @@ const DIVIDER = "--------------------------------";
 
 interface ReceiptProps {
   data: PosReceiptData;
-  printSize?: "58mm" | "80mm" | "a4";
+  printSize?: TicketPaper;
   showPrintButton?: boolean;
   currencySymbol?: string;
 }
@@ -38,33 +45,41 @@ export default function Receipt({
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 
+    // Type sizes mirror the KOT scale so both documents of a single order read
+    // at the same size on the counter.
+    const baseFont = printSize === "58mm" ? "13px" : printSize === "80mm" ? "14px" : "14px";
+    const width = TICKET_WIDTH[printSize];
+
     const printCSS = `
-      @page { size: ${printSize} auto; margin: 4mm; }
+      @page { size: ${printSize} auto; margin: ${TICKET_MARGIN[printSize]}; }
       * { box-sizing: border-box; }
       body {
-        font-family: "Courier New", "Lucida Console", monospace;
-        font-size: ${printSize === "58mm" ? "10px" : printSize === "80mm" ? "12px" : "12px"};
+        font-family: ${TICKET_FONT};
+        font-size: ${baseFont};
         line-height: 1.3;
         margin: 0; padding: 0;
         color: #000; background: #fff;
-        width: ${printSize === "58mm" ? "48mm" : printSize === "80mm" ? "72mm" : "190mm"};
+        width: ${width};
       }
       .receipt-wrap { width: 100%; }
       .receipt-center { text-align: center; }
       .receipt-bold { font-weight: bold; }
-      .receipt-line { display: flex; justify-content: space-between; width: 100%; }
-      .receipt-divider { border: none; border-top: 1px dashed #000; margin: 4px 0; width: 100%; }
-      .receipt-divider-thick { border: none; border-top: 2px solid #000; margin: 6px 0; width: 100%; }
-      .receipt-item-row { display: flex; justify-content: space-between; }
-      .receipt-total-row { display: flex; justify-content: space-between; font-weight: bold; font-size: 130%; }
-      .receipt-subtext { font-size: 0.85em; color: #444; }
-      .receipt-footer { margin-top: 8px; text-align: center; font-size: 0.9em; }
+      .receipt-line { display: flex; justify-content: space-between; gap: 8px; width: 100%; }
+      .receipt-line > span:last-child { text-align: right; }
+      .receipt-divider { border: none; border-top: 1px dashed #000; margin: 5px 0; width: 100%; }
+      .receipt-divider-thick { border: none; border-top: 2px solid #000; margin: 7px 0; width: 100%; }
+      .receipt-item-row { display: flex; justify-content: space-between; gap: 8px; }
+      .receipt-item-row > span:last-child { text-align: right; white-space: nowrap; }
+      .receipt-total-row { display: flex; justify-content: space-between; gap: 8px; font-weight: bold; font-size: 150%; }
+      .receipt-total-row > span:last-child { text-align: right; white-space: nowrap; }
+      .receipt-subtext { font-size: 0.85em; color: #333; }
+      .receipt-footer { margin-top: 8px; text-align: center; font-size: 0.95em; }
       .receipt-offline-badge {
         display: inline-block; border: 1px solid #000; padding: 1px 4px;
-        font-size: 0.8em; margin-top: 4px;
+        font-size: 0.85em; margin-top: 4px;
       }
       @media print {
-        html, body { width: ${printSize === "58mm" ? "48mm" : printSize === "80mm" ? "72mm" : "190mm"}; }
+        html, body { width: ${width}; }
         .no-print { display: none !important; }
       }
     `;
@@ -107,23 +122,24 @@ export default function Receipt({
             <img
               src={data.merchant.logo_url}
               alt=""
-              className="mx-auto mb-1 h-8 w-8 object-contain"
+              className="mx-auto mb-1 object-contain"
+              style={{ height: LOGO_PX, width: LOGO_PX }}
               crossOrigin="anonymous"
             />
           )}
-          <p className="text-base font-bold tracking-wide">{merchantName}</p>
+          <p className="text-lg font-bold tracking-wide">{merchantName}</p>
           {data.merchant?.address && (
-            <p className="text-xs text-muted-foreground">{data.merchant.address}</p>
+            <p className="text-[13px] text-muted-foreground">{data.merchant.address}</p>
           )}
           {data.merchant?.phone && (
-            <p className="text-xs text-muted-foreground">{data.merchant.phone}</p>
+            <p className="text-[13px] text-muted-foreground">{data.merchant.phone}</p>
           )}
         </div>
 
         <hr className="receipt-divider my-2" />
 
         {/* ── Order info ── */}
-        <div className="space-y-0.5 text-xs">
+        <div className="space-y-0.5 text-[13px]">
           <div className="receipt-line">
             <span>Order</span>
             <span className="receipt-bold">{data.order_number}</span>
@@ -165,14 +181,18 @@ export default function Receipt({
         <hr className="receipt-divider-thick my-2" />
 
         {/* ── Items ── */}
-        <div className="space-y-1 text-xs">
+        <div className="space-y-1">
           {data.items.map((item, i) => (
             <div key={i}>
-              <div className="receipt-item-row">
+              <div className="receipt-item-row text-[15px]">
                 <span className="receipt-bold">
                   {item.quantity}x {item.name}
                 </span>
-                <span>{Number(item.price) === 0 ? "FREE" : formatCurrency(item.subtotal, currencySymbol)}</span>
+                <span>
+                  {Number(item.price) === 0
+                    ? "FREE"
+                    : formatCurrency(item.subtotal, currencySymbol)}
+                </span>
               </div>
               {item.quantity > 1 && Number(item.price) > 0 && (
                 <div className="receipt-subtext text-right">
@@ -186,7 +206,7 @@ export default function Receipt({
         <hr className="receipt-divider my-2" />
 
         {/* ── Totals ── */}
-        <div className="space-y-0.5 text-xs">
+        <div className="space-y-0.5 text-[13px]">
           <div className="receipt-line">
             <span>Subtotal</span>
             <span>{formatCurrency(data.subtotal, currencySymbol)}</span>
@@ -248,8 +268,8 @@ export default function Receipt({
         {data.type === "receipt" && data.payments.length > 0 && (
           <>
             <hr className="receipt-divider my-2" />
-            <div className="space-y-0.5 text-xs">
-              <p className="receipt-bold">Payment</p>
+            <div className="space-y-0.5 text-[13px]">
+              <p className="receipt-bold text-[15px]">Payment</p>
               {data.payments.map((p, i) => (
                 <div key={i} className="receipt-line">
                   <span>{paymentMethodLabel(p.method)}</span>

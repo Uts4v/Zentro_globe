@@ -1,4 +1,5 @@
 import { usePosStore } from "../store";
+import { requestPosRefresh } from "../offline/loader";
 import { useState, useEffect, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
 import { fromPrice } from "@/lib/menu-utils";
@@ -12,6 +13,7 @@ import {
   Star,
   Coffee,
   Check,
+  RefreshCw,
   SlidersHorizontal,
   Command,
   Gift,
@@ -30,13 +32,25 @@ export default function MenuGrid() {
   const menu = usePosStore((s) => s.menu);
   const addItemToCart = usePosStore((s) => s.addItemToCart);
   const posSettings = usePosStore((s) => s.posSettings);
-  const currencySymbol = posSettings?.currency_symbol || "Rs";
+  const savedDataFrom = usePosStore((s) => s.savedDataFrom);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [lastAddedId, setLastAddedId] = useState<number | null>(null);
   const [detailItem, setDetailItem] = useState<PosMenuItem | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const currencySymbol = posSettings?.currency_symbol || "Rs";
+
+  /**
+   * The POS menu only changes when a merchant edits it, so the terminal cannot
+   * know about a new dish on its own. Ask for it: the layout's reload button
+   * re-runs the same bootstrap, and this is the one a cashier is already
+   * looking at.
+   */
+  function requestRefresh() {
+    requestPosRefresh();
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -149,7 +163,16 @@ export default function MenuGrid() {
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-2xl border border-border bg-card py-3.5 pl-12 pr-24 text-[15px] text-foreground shadow-[var(--shadow-card)] placeholder:text-muted-foreground focus:border-ember focus:outline-none focus:ring-2 focus:ring-ember/20"
           />
-          <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5">
+          <div className="absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1">
+            <button
+              type="button"
+              onClick={requestRefresh}
+              title="Load the latest menu from the server"
+              aria-label="Refresh menu"
+              className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
             <span className="hidden items-center gap-1 rounded-lg border border-border bg-mist px-2 py-1 text-xs font-medium text-muted-foreground sm:flex">
               <Command className="h-3 w-3" />
               K
@@ -168,6 +191,12 @@ export default function MenuGrid() {
             </button>
           </div>
         </div>
+        {savedDataFrom && (
+          <p className="mt-2 text-xs text-amber-700">
+            This menu was saved on this device. New dishes and price changes will not appear until
+            the terminal is back online.
+          </p>
+        )}
       </div>
 
       {/* ── Category pills ── */}

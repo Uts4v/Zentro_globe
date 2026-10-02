@@ -57,6 +57,8 @@ export interface OfflineOrder {
   server_order_id?: number;
   /** The server's uuid for this order, known once it has synced. */
   server_order_uuid?: string;
+  /** Why the last sync attempt was rejected, so the orders screen can say so. */
+  last_error?: string;
   /** Why the server refused this order, when `status` is "failed". */
   sync_error?: string;
   /**
@@ -97,7 +99,12 @@ export interface SyncQueueItem {
   method: "POST" | "PATCH" | "PUT";
   body: Record<string, any>;
   client_mutation_id: string;
-  status: "pending" | "syncing" | "failed";
+  /**
+   * `dead` means the automatic retries are spent. It is excluded from
+   * `getPending` so the background loop stops hitting an endpoint that will
+   * never accept this body, and it needs a deliberate retry from the sync bar.
+   */
+  status: "pending" | "syncing" | "failed" | "dead";
   attempts: number;
   last_error?: string;
   next_retry_at?: number;
@@ -229,6 +236,7 @@ export const offlineOrders = {
       order.status = "synced";
       order.server_order_id = serverId;
       if (serverUuid) order.server_order_uuid = serverUuid;
+      delete order.last_error;
       delete order.sync_error;
       await put("orders", order);
     }
@@ -237,6 +245,7 @@ export const offlineOrders = {
     const order = await getById<OfflineOrder>("orders", clientId);
     if (order) {
       order.status = "failed";
+      order.last_error = error;
       order.sync_error = error;
       await put("orders", order);
     }
@@ -302,6 +311,13 @@ export const offlinePayments = {
       await put("payments", payment);
     }
   },
+  markFailed: async (clientId: string) => {
+    const payment = await getById<OfflinePayment>("payments", clientId);
+    if (payment) {
+      payment.status = "failed";
+      await put("payments", payment);
+    }
+  },
 };
 
 // ── Sync Queue ──────────────────────────────────────────────────────────────
@@ -311,15 +327,48 @@ export const syncQueue = {
   get: (id: string) => getById<SyncQueueItem>("sync_queue", id),
   add: (item: SyncQueueItem) => put("sync_queue", item),
   remove: (id: string) => remove("sync_queue", id),
-  /**
-   * Everything not yet on the server. An item is removed the moment it syncs,
-   * so that is the whole queue — including items left at "syncing" by a page
-   * that was closed mid-request, which would otherwise never be sent again.
-   */
   getPending: () => getAll<SyncQueueItem>("sync_queue"),
+  getDead: async () => {
+    const all = await getAll<SyncQueueItem>("sync_queue");
+    return all.filter((s) => s.status === "dead");
+  },
+  recoverInterrupted: async () => {
+    const all = await getAll<SyncQueueItem>("sync_queue");
+    const stuck = all.filter((s) => s.status === "syncing");
+    for (const item of stuck) {
+      await put("sync_queue", { ...item, status: "pending" as const });
+    }
+    return stuck.length;
+  },
+  markSyncing: async (id: string) => {
+    const item = await getById<SyncQueueItem>("sync_queue", id);
+    if (item) {
+      item.status = "syncing";
+      await put("sync_queue", item);
+    }
+  },
+  markFailed: async (id: string, error: string, nextRetryAt?: number) => {
+    const item = await getById<SyncQueueItem>("sync_queue", id);
+    if (item) {
+      item.status = "failed";
+      item.attempts = (item.attempts ?? 0) + 1;
+      item.last_error = error;
+      item.next_retry_at = nextRetryAt;
+      await put("sync_queue", item);
+    }
+  },
   update: async (id: string, changes: Partial<SyncQueueItem>) => {
     const item = await getById<SyncQueueItem>("sync_queue", id);
     if (item) await put("sync_queue", { ...item, ...changes });
+  },
+  markDead: async (id: string, error: string) => {
+    const item = await getById<SyncQueueItem>("sync_queue", id);
+    if (item) {
+      item.status = "dead";
+      item.last_error = error;
+      delete item.next_retry_at;
+      await put("sync_queue", item);
+    }
   },
   clear: () => clearStore("sync_queue"),
 };
@@ -332,5 +381,32 @@ export const menuCache = {
   get: async (merchantId: number) => {
     const item = await getById<any>("menu_cache", merchantId);
     return item?.data ?? null;
+  },
+  clear: () => clearStore("menu_cache"),
+};
+
+// ── Offline data that is not a cache ─────────────────────────────────────────
+
+/**
+ * Orders and payments that have not reached the server.
+ *
+ * These are not cached copies of anything — they are the only record of sales
+ * this terminal has taken, so "clear cache" must never reach them by accident.
+ * Clearing is a separate, explicitly requested action.
+ */
+export const offlineSales = {
+  pendingCount: async (): Promise<number> => {
+    const [orders, payments] = await Promise.all([
+      offlineOrders.getPending(),
+      offlinePayments.getPending(),
+    ]);
+    return orders.length + payments.length;
+  },
+  /**
+   * Discard every unsynced order, payment and queued mutation on this device.
+   * Those sales are then gone for good — the server never saw them.
+   */
+  discardAll: async (): Promise<void> => {
+    await Promise.all([clearStore("orders"), clearStore("payments"), clearStore("sync_queue")]);
   },
 };

@@ -326,8 +326,11 @@ export function startBackgroundSync(intervalMs = 30000) {
     if (isOnline()) syncInBackground();
   });
 
-  // Process immediately if online
-  syncInBackground();
+  syncQueue
+    .recoverInterrupted()
+    .finally(() => {
+      syncInBackground();
+    });
 
   // Then process periodically
   syncInterval = setInterval(syncInBackground, intervalMs);
@@ -347,15 +350,47 @@ export function stopBackgroundSync() {
 export async function getSyncStatus(): Promise<{
   pending: number;
   failed: number;
+  dead: number;
   isSyncing: boolean;
   needsSignIn: boolean;
 }> {
   const queue = await syncQueue.getPending();
   const failed = queue.filter((i) => i.status === "failed").length;
+  const dead = queue.filter((i) => i.status === "dead").length;
   return {
-    pending: queue.length - failed,
+    pending: Math.max(0, queue.length - failed - dead),
     failed,
+    dead,
     isSyncing,
     needsSignIn: needsSignIn && queue.length > 0,
   };
+}
+// ── Retry a specific failed item ────────────────────────────────────────────
+
+export async function retryItem(id: string): Promise<boolean> {
+  const item = await syncQueue.get(id);
+  if (!item || (item.status !== "failed" && item.status !== "dead")) return false;
+  item.status = "pending";
+  item.attempts = 0;
+  delete item.next_retry_at;
+  await syncQueue.add(item);
+  await processSyncQueue();
+  return true;
+}
+
+/**
+ * Put every exhausted item back in the queue with a fresh attempt budget.
+ * Used by the sync bar's "Retry failed" after something the server rejected has
+ * been corrected on this device.
+ */
+export async function retryDead(): Promise<number> {
+  const dead = await syncQueue.getDead();
+  for (const item of dead) {
+    item.status = "pending";
+    item.attempts = 0;
+    delete item.next_retry_at;
+    await syncQueue.add(item);
+  }
+  await processSyncQueue();
+  return dead.length;
 }

@@ -1,20 +1,22 @@
 import { useSyncStatus, useOnlineStatus } from "../offline/hooks";
-import { processSyncQueue } from "../offline/sync";
+import { processSyncQueue, retryDead } from "../offline/sync";
 import { checkConnectivity } from "@/lib/connectivity";
 import { Wifi, WifiOff, AlertCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 
 export default function SyncStatusBar() {
   const isOnline = useOnlineStatus();
-  const { pending, failed, isSyncing, needsSignIn, refresh } = useSyncStatus();
+  const { pending, failed, dead = 0, isSyncing, needsSignIn, refresh } = useSyncStatus();
   const [syncing, setSyncing] = useState(false);
 
-  const waiting = pending + failed;
+  const waiting = pending + failed + dead;
   const hasIssues = waiting > 0;
 
   async function handleSync() {
     setSyncing(true);
     try {
+      // Requeue anything the automatic retries gave up on before this pass
+      await retryDead().catch(() => {});
       // Offline, "Sync now" doubles as "check the connection again".
       await checkConnectivity();
       await processSyncQueue({ force: true });
@@ -32,12 +34,12 @@ export default function SyncStatusBar() {
   const busy = isSyncing || syncing;
   const tone = !isOnline
     ? "bg-warning/10 text-warning"
-    : failed > 0 || needsSignIn
+    : failed > 0 || dead > 0 || needsSignIn
       ? "bg-destructive/10 text-destructive"
       : "bg-info/10 text-info";
   const buttonTone = !isOnline
     ? "bg-warning/15 text-warning hover:bg-warning/25"
-    : failed > 0 || needsSignIn
+    : failed > 0 || dead > 0 || needsSignIn
       ? "bg-destructive/15 text-destructive hover:bg-destructive/25"
       : "bg-info/15 text-info hover:bg-info/25";
 
@@ -63,11 +65,12 @@ export default function SyncStatusBar() {
           <AlertCircle className="h-3.5 w-3.5" />
           <span>Sign in again to sync {waiting} saved change(s)</span>
         </>
-      ) : failed > 0 ? (
+      ) : failed > 0 || dead > 0 ? (
         <>
           <AlertCircle className="h-3.5 w-3.5" />
           <span>
-            {failed} failed, {pending} pending
+            {dead > 0 ? `${dead} could not sync` : `${failed} failed`}
+            {pending > 0 ? `, ${pending} pending` : ""}
           </span>
         </>
       ) : (
@@ -81,7 +84,7 @@ export default function SyncStatusBar() {
           onClick={handleSync}
           className={`ml-auto min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold ${buttonTone}`}
         >
-          {!isOnline ? "Try again" : failed > 0 ? "Retry" : "Sync now"}
+          {!isOnline ? "Try again" : failed > 0 || dead > 0 ? "Retry" : "Sync now"}
         </button>
       )}
     </div>
