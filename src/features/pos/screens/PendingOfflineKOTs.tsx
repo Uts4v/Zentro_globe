@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, ChevronUp, Printer, Ticket } from "lucide-react";
 import { offlineOrders, OfflineKOT } from "../offline/db";
-import { printKOT, KOTTicketData } from "../printing/KOTTicket";
+import { printKOT, type KOTTicketData } from "../printing/kot-markup";
 import { tableLabel } from "../printing/table-label";
 import { useOnlineStatus } from "../offline/hooks";
 import { formatCurrency } from "@/lib/currency";
@@ -10,10 +10,13 @@ import { usePosStore } from "../store";
 /**
  * The stored offline ticket has no KOT number — the server assigns that on
  * sync — so it is filled in as null and `printKOT` simply omits the badge.
+ *
+ * It also stores no logo, so the one from the live merchant is passed in.
  */
-function toTicketData(kot: OfflineKOT): KOTTicketData {
+function toTicketData(kot: OfflineKOT, merchantLogoUrl?: string | null): KOTTicketData {
   return {
     merchantName: kot.merchantName,
+    merchantLogoUrl: merchantLogoUrl ?? null,
     kotNumber: null,
     orderNumber: kot.orderNumber,
     createdAt: kot.createdAt,
@@ -44,6 +47,7 @@ function toTicketData(kot: OfflineKOT): KOTTicketData {
 export default function PendingOfflineKOTs() {
   const isOnline = useOnlineStatus();
   const currencySymbol = usePosStore((s) => s.posSettings?.currency_symbol) || "Rs";
+  const merchantLogoUrl = usePosStore((s) => s.merchant?.logo_url);
   const [orders, setOrders] = useState<Array<{ id: string; total: number; kot: OfflineKOT }>>([]);
   const [open, setOpen] = useState(false);
 
@@ -122,7 +126,7 @@ export default function PendingOfflineKOTs() {
                   </p>
                 </div>
                 <button
-                  onClick={() => printKOT(toTicketData(kot))}
+                  onClick={() => printKOT(toTicketData(kot, merchantLogoUrl))}
                   title={`Reprint KOT ${kot.orderNumber}${tableLabel(kot.tableName, kot.tableNumber) ? ` — Table ${tableLabel(kot.tableName, kot.tableNumber)}` : ""}`}
                   className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-warning/15 text-warning hover:bg-warning/25"
                 >

@@ -14,18 +14,20 @@ import {
   X,
 } from "lucide-react";
 import { usePendingOfflineOrders, useOnlineStatus } from "../offline/hooks";
-import { printKOT, KOTTicketData } from "../printing/KOTTicket";
+import { printKOT, type KOTTicketData } from "../printing/kot-markup";
 import { tableLabel } from "../printing/table-label";
 import { OfflineKOT, OfflineOrder } from "../offline/db";
 import Receipt from "../printing/Receipt";
 
 /**
  * The stored offline ticket has no KOT number — the server assigns that on
- * sync — so `printKOT` simply omits the badge.
+ * sync — so `printKOT` simply omits the badge. It stores no logo either, so
+ * the one from the live merchant is passed in.
  */
-function toTicketData(kot: OfflineKOT): KOTTicketData {
+function toTicketData(kot: OfflineKOT, merchantLogoUrl?: string | null): KOTTicketData {
   return {
     merchantName: kot.merchantName,
+    merchantLogoUrl: merchantLogoUrl ?? null,
     kotNumber: null,
     orderNumber: kot.orderNumber,
     createdAt: kot.createdAt,
@@ -57,6 +59,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function PosOrdersScreen() {
   const activeShift = usePosStore((s) => s.activeShift);
   const currencySymbol = usePosStore((s) => s.posSettings?.currency_symbol) || "Rs";
+  const merchantLogoUrl = usePosStore((s) => s.merchant?.logo_url);
   const isOnline = useOnlineStatus();
   const { orders: offlineOnly, reload: reloadOffline } = usePendingOfflineOrders();
   const [orders, setOrders] = useState<PosOrder[]>([]);
@@ -187,6 +190,7 @@ export default function PosOrdersScreen() {
                   key={order.id}
                   order={order}
                   currencySymbol={currencySymbol}
+                  merchantLogoUrl={merchantLogoUrl}
                   onShowBill={() => setBillOrder(order)}
                 />
               ))}
@@ -290,10 +294,12 @@ export default function PosOrdersScreen() {
 function OfflineOrderCard({
   order,
   currencySymbol,
+  merchantLogoUrl,
   onShowBill,
 }: {
   order: OfflineOrder;
   currencySymbol: string;
+  merchantLogoUrl?: string | null;
   onShowBill: () => void;
 }) {
   const reference = order.kot?.orderNumber ?? order.id.slice(0, 8).toUpperCase();
@@ -382,7 +388,7 @@ function OfflineOrderCard({
         )}
         {order.kot && (
           <button
-            onClick={() => printKOT(toTicketData(order.kot as OfflineKOT))}
+            onClick={() => printKOT(toTicketData(order.kot as OfflineKOT, merchantLogoUrl))}
             className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted"
           >
             <Ticket className="h-3.5 w-3.5" />

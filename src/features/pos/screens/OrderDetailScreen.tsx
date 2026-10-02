@@ -16,7 +16,7 @@ import ProductDetailSheet, {
   type ProductDraft,
 } from "@/features/catalog/components/ProductDetailSheet";
 import Receipt from "../printing/Receipt";
-import { printKOT, kotTicketFromReceipt } from "../printing/KOTTicket";
+import { printKOT, kotTicketFromReceipt } from "../printing/kot-markup";
 import RefundModal from "./RefundModal";
 import CollectPaymentSheet from "./CollectPaymentSheet";
 import {
@@ -157,6 +157,7 @@ export default function OrderDetailScreen({
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
   const posSettings = usePosStore((s) => s.posSettings);
+  const merchantLogoUrl = usePosStore((s) => s.merchant?.logo_url);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   useEffect(() => {
@@ -246,6 +247,7 @@ export default function OrderDetailScreen({
         if (off?.kot) {
           printKOT({
             ...off.kot,
+            merchantLogoUrl: merchantLogoUrl ?? null,
             kotNumber: off.kot.kotNumber ?? null,
             customerName: off.kot.customerName ?? null,
           });
@@ -283,15 +285,15 @@ export default function OrderDetailScreen({
               worker_id: currentWorker?.id,
               device_id: device?.id,
             },
-            `status-${order.uuid}-${Date.now()}`
+            `status-${order.uuid}-${Date.now()}`,
           );
         }
 
         setOrders((prev) =>
-          prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o))
+          prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o)),
         );
         setSelectedOrder((prev) =>
-          prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev
+          prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev,
         );
         toast.success(`Order marked as ${newStatus} (Saved offline)`);
       } catch (err: any) {
@@ -326,13 +328,13 @@ export default function OrderDetailScreen({
               worker_id: currentWorker?.id,
               device_id: device?.id,
             },
-            `status-${order.uuid}-${Date.now()}`
+            `status-${order.uuid}-${Date.now()}`,
           );
           setOrders((prev) =>
-            prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o))
+            prev.map((o) => (o.uuid === order.uuid ? { ...o, status: newStatus } : o)),
           );
           setSelectedOrder((prev) =>
-            prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev
+            prev?.uuid === order.uuid ? { ...prev, status: newStatus } : prev,
           );
           toast.success(`Order marked as ${newStatus} (Saved offline)`);
         } catch {
@@ -346,9 +348,7 @@ export default function OrderDetailScreen({
     }
   }
 
-  function getNextActions(
-    status: string,
-  ): Array<{
+  function getNextActions(status: string): Array<{
     label: string;
     next: string;
     color: string;
@@ -439,7 +439,10 @@ export default function OrderDetailScreen({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-bold text-foreground">
-                  Order {order.id && order.id > 0 ? `#${order.id}` : `#OFF-${order.uuid.slice(0, 6).toUpperCase()}`}
+                  Order{" "}
+                  {order.id && order.id > 0
+                    ? `#${order.id}`
+                    : `#OFF-${order.uuid.slice(0, 6).toUpperCase()}`}
                 </h2>
                 {order.source === "pos_offline" && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2.5 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
@@ -514,24 +517,25 @@ export default function OrderDetailScreen({
                     <p className="text-sm font-bold text-ink">
                       {formatCurrency(Number(item.subtotal), currencySymbol)}
                     </p>
-                    {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedMinusItem({
-                            name: item.name,
-                            menu_item_id: (item as any).menu_item_id ?? null,
-                            quantity: item.quantity,
-                          });
-                          setShowMinusStock(true);
-                        }}
-                        title="Minus stock for this item"
-                        className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
-                      >
-                        <PackageMinus className="h-3.5 w-3.5" />
-                        <span>Minus Stock</span>
-                      </button>
-                    )}
+                    {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) &&
+                      order.status !== "cancelled" && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedMinusItem({
+                              name: item.name,
+                              menu_item_id: (item as any).menu_item_id ?? null,
+                              quantity: item.quantity,
+                            });
+                            setShowMinusStock(true);
+                          }}
+                          title="Minus stock for this item"
+                          className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors"
+                        >
+                          <PackageMinus className="h-3.5 w-3.5" />
+                          <span>Minus Stock</span>
+                        </button>
+                      )}
                   </div>
                 </div>
               ))}
@@ -576,19 +580,20 @@ export default function OrderDetailScreen({
             )}
 
             {/* Minus Stock button for Dine-In orders */}
-            {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedMinusItem(null);
-                  setShowMinusStock(true);
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 py-3 text-sm font-bold text-destructive transition-colors hover:bg-destructive/20 shadow-sm"
-              >
-                <PackageMinus className="h-4 w-4" />
-                Minus Stock
-              </button>
-            )}
+            {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) &&
+              order.status !== "cancelled" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMinusItem(null);
+                    setShowMinusStock(true);
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 py-3 text-sm font-bold text-destructive transition-colors hover:bg-destructive/20 shadow-sm"
+                >
+                  <PackageMinus className="h-4 w-4" />
+                  Minus Stock
+                </button>
+              )}
 
             {/* Status transition buttons */}
             {getNextActions(order.status).length > 0 && (
@@ -783,7 +788,8 @@ export default function OrderDetailScreen({
         <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-300">
           <WifiOff className="h-4 w-4 shrink-0 text-amber-500" />
           <span>
-            Operating offline. Orders created or updated locally will auto-sync when connection is restored.
+            Operating offline. Orders created or updated locally will auto-sync when connection is
+            restored.
           </span>
         </div>
       )}
@@ -829,7 +835,9 @@ export default function OrderDetailScreen({
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-bold text-foreground">
-                          {order.id && order.id > 0 ? `#${order.id}` : `OFF-${order.uuid.slice(0, 6).toUpperCase()}`}
+                          {order.id && order.id > 0
+                            ? `#${order.id}`
+                            : `OFF-${order.uuid.slice(0, 6).toUpperCase()}`}
                         </span>
                         {isOfflineOrder && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
@@ -1158,7 +1166,8 @@ function AddItemsModal({
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
             >
               {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              Add to order · <span className="numeric">{formatCurrency(total, currencySymbol)}</span>
+              Add to order ·{" "}
+              <span className="numeric">{formatCurrency(total, currencySymbol)}</span>
             </button>
           </div>
         )}

@@ -17,7 +17,7 @@ import { orderApi, type Order, type OrderStatus, type FulfillmentType } from "@/
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { playOrderChime } from "@/lib/audio";
-import { printKOT, kotTicketFromOrder } from "@/features/pos/printing/KOTTicket";
+import { printKOT, kotTicketFromOrder } from "@/features/pos/printing/kot-markup";
 
 const NEXT_STATUS: Record<OrderStatus, OrderStatus | null> = {
   pending: "confirmed",
@@ -59,6 +59,9 @@ function isToday(dateStr: string) {
 export function MerchantOrdersPage() {
   const { merchantProfile } = useAuth();
   const sym = merchantProfile?.currency_symbol || "Rs";
+  // The order payload carries the merchant name but not its logo; the signed-in
+  // profile does, so the printed KOT gets the same logo as the receipt.
+  const merchantLogoUrl = merchantProfile?.logo_url;
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -226,9 +229,7 @@ export function MerchantOrdersPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Live queue</p>
-          <h1 className="font-display mt-1 text-3xl text-foreground sm:text-4xl">
-            Today's Orders
-          </h1>
+          <h1 className="font-display mt-1 text-3xl text-foreground sm:text-4xl">Today's Orders</h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 rounded-full bg-mist px-3 py-1.5">
@@ -289,6 +290,7 @@ export function MerchantOrdersPage() {
             cancelling={cancelling === o.id}
             isNew={newOrderIds.has(o.id)}
             sym={sym}
+            merchantLogoUrl={merchantLogoUrl}
           />
         ))}
         {grouped.incoming.length === 0 && <Empty text="No new orders" />}
@@ -305,6 +307,7 @@ export function MerchantOrdersPage() {
             cancelling={cancelling === o.id}
             isNew={false}
             sym={sym}
+            merchantLogoUrl={merchantLogoUrl}
           />
         ))}
         {grouped.active.length === 0 && <Empty text="Nothing brewing" />}
@@ -319,6 +322,7 @@ export function MerchantOrdersPage() {
             cancelling={false}
             isNew={false}
             sym={sym}
+            merchantLogoUrl={merchantLogoUrl}
           />
         ))}
         {grouped.done.length === 0 && <Empty text="Day's just starting" />}
@@ -447,6 +451,7 @@ function OrderCard({
   cancelling,
   isNew,
   sym = "Rs",
+  merchantLogoUrl,
 }: {
   order: Order;
   onAdvance?: () => void;
@@ -455,6 +460,7 @@ function OrderCard({
   cancelling: boolean;
   isNew: boolean;
   sym?: string;
+  merchantLogoUrl?: string | null;
 }) {
   const next = NEXT_STATUS[order.status];
   const mins = Math.floor((Date.now() - new Date(order.created_at).getTime()) / 60_000);
@@ -582,7 +588,11 @@ function OrderCard({
       <div className="mt-3 flex gap-2">
         {order.kot_number && (
           <button
-            onClick={() => printKOT(kotTicketFromOrder(order, "order_items"))}
+            onClick={() =>
+              printKOT(
+                kotTicketFromOrder({ ...order, merchant_logo_url: merchantLogoUrl }, "order_items"),
+              )
+            }
             className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-border px-4 text-xs font-medium text-muted-foreground hover:bg-mist"
           >
             <Ticket className="h-3.5 w-3.5" />

@@ -15,7 +15,8 @@ import { usePosCartPricing } from "../pricing";
 import { posOffersApi } from "@/lib/api/offers";
 import Receipt from "../printing/Receipt";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
-import KOTTicket, { kotTicketFromReceipt, printKOT, KOTTicketData } from "../printing/KOTTicket";
+import KOTTicket from "../printing/KOTTicket";
+import { kotTicketFromReceipt, printKOT, type KOTTicketData } from "../printing/kot-markup";
 import { enqueueMutation } from "../offline/sync";
 import { useOnlineStatus } from "../offline/hooks";
 import { offlineOrders, offlinePayments } from "../offline/db";
@@ -220,8 +221,10 @@ function makeOfflineReceiptData(
   };
 }
 
-const METHOD_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
-  Object.fromEntries(PAYMENT_METHODS.map((pm) => [pm.key, pm.icon]));
+const METHOD_ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string }>
+> = Object.fromEntries(PAYMENT_METHODS.map((pm) => [pm.key, pm.icon]));
 
 export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProps) {
   const cart = usePosStore((s) => s.cart);
@@ -312,10 +315,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
   // Keep the selected tender valid when the merchant's list differs.
   useEffect(() => {
-    if (
-      availableMethods.length > 0 &&
-      !availableMethods.some((m) => m.key === method)
-    ) {
+    if (availableMethods.length > 0 && !availableMethods.some((m) => m.key === method)) {
       setMethod(availableMethods[0].key as PaymentMethod);
     }
   }, [availableMethods, method]);
@@ -395,7 +395,11 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     }
     if (pendingOffer && discountAppliedTo !== uuid) {
       try {
-        await posOffersApi.apply({ order_id: uuid, code: pendingOffer.code, worker_id: currentWorker.id });
+        await posOffersApi.apply({
+          order_id: uuid,
+          code: pendingOffer.code,
+          worker_id: currentWorker.id,
+        });
         setDiscountAppliedTo(uuid);
         serverTotal = null;
       } catch (err: unknown) {
@@ -895,7 +899,11 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
                       printKOT(
                         receiptData.kot_number
                           ? kotTicketFromReceipt(receiptData)
-                          : (placedKot as KOTTicketData),
+                          : // A ticket placed offline stores no logo, so it borrows the live one.
+                            {
+                              ...(placedKot as KOTTicketData),
+                              merchantLogoUrl: merchant?.logo_url ?? null,
+                            },
                       )
                     }
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-6 py-2.5 text-sm font-bold text-white hover:opacity-90"
@@ -1064,9 +1072,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
               <div className="min-w-0 flex-1 text-center sm:text-left">
                 <p className="text-sm font-semibold text-foreground">{qr.name}</p>
                 {qr.account_name && (
-                  <p className="text-xs text-muted-foreground">
-                    {qr.account_name}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{qr.account_name}</p>
                 )}
                 <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
                   {qr.instructions}
@@ -1087,8 +1093,8 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
         {activeMethod?.isQr && !qr && (
           <div className="mx-6 mb-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">
-            This merchant has no payment QR uploaded yet. Add one in settings
-            before taking QR payments.
+            This merchant has no payment QR uploaded yet. Add one in settings before taking QR
+            payments.
           </div>
         )}
 
@@ -1242,4 +1248,3 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     </div>
   );
 }
-
