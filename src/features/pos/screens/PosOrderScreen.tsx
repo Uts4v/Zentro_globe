@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { usePosStore, loadSavedBootstrap, isConnectionError } from "../store";
-import { posBootstrap } from "../api";
+import { usePosStore } from "../store";
+import { loadPosBootstrap } from "../offline/loader";
 import { formatCurrency } from "@/lib/currency";
 import { usePosCartPricing } from "../pricing";
 import MenuGrid from "./MenuGrid";
@@ -27,36 +27,19 @@ export default function PosOrderScreen() {
       return;
     }
 
-    // Bootstrap POS on first load (fallback if PosLayout didn't run)
+    // Fallback for reaching this screen without the layout's bootstrap having
+    // run. Same loader the layout uses, so a till cannot end up with two
+    // different notions of what "the server is unreachable" means.
     async function init() {
+      setLoading(true);
+      setError(null);
       try {
-        setLoading(true);
-        const deviceId = localStorage.getItem("pos_device_id");
-        if (!deviceId) {
-          setError("No device registered. Please log in via the POS login screen.");
-          setLoading(false);
-          return;
-        }
-
-        // Saved data is only for when the server cannot be reached.
-        const saved = loadSavedBootstrap();
-        if (!navigator.onLine && saved) {
-          bootstrap(saved.data, { savedAt: saved.savedAt });
-          setLoading(false);
-          return;
-        }
-
-        const resp = await posBootstrap(deviceId);
-        bootstrap(resp);
-        setLoading(false);
+        const loaded = await loadPosBootstrap();
+        const opts = loaded.source === "saved" ? { savedAt: loaded.savedAt! } : undefined;
+        bootstrap(loaded.data, opts);
       } catch (err: unknown) {
-        const saved = loadSavedBootstrap();
-        if (saved && isConnectionError(err)) {
-          bootstrap(saved.data, { savedAt: saved.savedAt });
-          setLoading(false);
-          return;
-        }
         setError(err instanceof Error ? err.message : "Failed to initialize POS");
+      } finally {
         setLoading(false);
       }
     }

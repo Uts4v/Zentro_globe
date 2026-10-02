@@ -1,6 +1,6 @@
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useAuth } from "@/lib/auth";
-import { usePosStore, loadSavedBootstrap, isConnectionError } from "../store";
+import { usePosStore } from "../store";
 import WorkerPinPad from "./WorkerPinPad";
 import ShiftOpenScreen from "./ShiftOpenScreen";
 import ShiftCloseScreen from "./ShiftCloseScreen";
@@ -8,26 +8,20 @@ import SyncStatusBar from "./SyncStatusBar";
 import PendingOfflineKOTs from "./PendingOfflineKOTs";
 import NotificationBell from "./NotificationBell";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
-import { useBackgroundSync } from "../offline/hooks";
+import { useBackgroundSync, useOnlineStatus } from "../offline/hooks";
+import { isPosPathOfflineSafe, POS_NAV_SECTIONS } from "../offline/permissions";
+import { fetchLiveBootstrap, loadPosBootstrap, POS_REFRESH_EVENT } from "../offline/loader";
+import { ClearCacheNavButton } from "@/components/ClearCacheControl";
 import {
-  ShoppingCart,
-  Clock,
-  Settings,
   LogOut,
   Wifi,
   WifiOff,
   Wallet,
-  CreditCard,
-  BarChart3,
-  AlertTriangle,
-  Calendar,
-  Users,
   Loader2,
-  LayoutDashboard,
-  HandCoins,
   Menu,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
-import { posListWorkers, posAuthorizeDevice, posBootstrap, posDeviceBootstrap } from "../api";
 import { useState, useEffect, useCallback } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
@@ -39,6 +33,8 @@ function NavItem({
   active,
   badge,
   onClick,
+  disabled,
+  disabledReason,
 }: {
   to: string;
   label: string;
@@ -46,24 +42,41 @@ function NavItem({
   active?: boolean;
   badge?: number;
   onClick?: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
+  const shell = `flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm ${
+    disabled
+      ? "cursor-not-allowed text-muted-foreground/40"
+      : active
+      ? "bg-ember-soft font-semibold text-ember transition-colors"
+      : "font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+  }`;
+
+  const badgeNode =
+    badge !== undefined && badge > 0 ? (
+      <span className="ml-auto rounded-full bg-ember px-2 py-0.5 text-xs font-bold text-white">
+        {badge}
+      </span>
+    ) : null;
+
+  // A disabled entry is a plain element, not a link: a keyboard user must not
+  // be able to tab into it and press Enter onto a screen that cannot load.
+  if (disabled) {
+    return (
+      <span aria-disabled="true" title={disabledReason} className={shell}>
+        <Icon className="h-4 w-4" />
+        <span>{label}</span>
+        {badgeNode}
+      </span>
+    );
+  }
+
   return (
-    <Link
-      to={to as any}
-      onClick={onClick}
-      className={`flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm transition-colors ${
-        active
-          ? "bg-ember-soft font-semibold text-ember"
-          : "font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-      }`}
-    >
+    <Link to={to as any} onClick={onClick} className={shell}>
       <Icon className="h-4 w-4" />
       <span>{label}</span>
-      {badge !== undefined && badge > 0 && (
-        <span className="ml-auto rounded-full bg-ember px-2 py-0.5 text-xs font-bold text-white">
-          {badge}
-        </span>
-      )}
+      {badgeNode}
     </Link>
   );
 }
@@ -79,6 +92,47 @@ function NavSection({ title, children }: { title: string; children: React.ReactN
   );
 }
 
+/**
+ * The sidebar, rendered from the shared nav config so the desktop and mobile
+ * drawers can never disagree about what exists or what works offline.
+ */
+function PosNav({
+  isOnline,
+  cartCount,
+  activePath,
+  onNavigate,
+}: {
+  isOnline: boolean;
+  cartCount: number;
+  activePath: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <>
+      {POS_NAV_SECTIONS.map((section) => (
+        <NavSection key={section.title} title={section.title}>
+          {section.items.map((item) => {
+            const active = activePath === item.to || activePath === `${item.to}/`;
+            return (
+              <NavItem
+                key={item.to}
+                to={item.to}
+                label={item.label}
+                icon={item.icon}
+                badge={item.to === "/pos" ? cartCount : item.badge}
+                active={active}
+                onClick={onNavigate}
+                disabled={!isOnline && !isPosPathOfflineSafe(item.to)}
+                disabledReason="Needs an internet connection. Available again once the POS is back online."
+              />
+            );
+          })}
+        </NavSection>
+      ))}
+    </>
+  );
+}
+
 export default function PosLayout() {
   const { signOut } = useAuth();
   const navigate = useNavigate();
@@ -90,18 +144,18 @@ export default function PosLayout() {
   const cart = usePosStore((s) => s.cart);
   const setCurrentWorker = usePosStore((s) => s.setCurrentWorker);
   const setActiveShift = usePosStore((s) => s.setActiveShift);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const resetPos = usePosStore((s) => s.reset);
   const [showShiftClose, setShowShiftClose] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
   const workers = usePosStore((s) => s.workers);
-  const setWorkers = usePosStore((s) => s.setWorkers);
-  const setMerchantStore = usePosStore((s) => s.setMerchant);
-  const setDevice = usePosStore((s) => s.setDevice);
   const bootstrap = usePosStore((s) => s.bootstrap);
+  const isOnline = useOnlineStatus();
 
-  // Initialize POS: try device-token auth first, then fall back to JWT flow
+  // Initialize POS, then keep it current. A terminal left open all day must
+  // show a dish added in the merchant dashboard an hour ago, not the menu as it
+  // was when the till was switched on.
   useEffect(() => {
     if (merchant && device) {
       setInitializing(false);
@@ -109,124 +163,112 @@ export default function PosLayout() {
     }
 
     async function init() {
+      setInitializing(true);
+      setInitError(null);
       try {
-        setInitializing(true);
-        setInitError(null);
-
-        // Step 1: Try device-token bootstrap (no JWT needed — survives refresh)
-        const deviceId = localStorage.getItem("pos_device_id");
-        const deviceToken = localStorage.getItem("pos_device_token");
-
-        // The copy saved on this device is used ONLY when the server cannot be
-        // reached, and the POS then says so (see the banner below). A server
-        // error is never hidden behind saved data.
-        const saved = loadSavedBootstrap();
-        const showSaved = () => {
-          if (!saved) return false;
-          bootstrap(saved.data, { savedAt: saved.savedAt });
-          setInitializing(false);
-          return true;
-        };
-        if (!navigator.onLine && showSaved()) return;
-
-        if (deviceId && deviceToken) {
-          try {
-            const resp = await posDeviceBootstrap(deviceId, deviceToken);
-            bootstrap(resp);
-            setInitializing(false);
-            return;
-          } catch (err: unknown) {
-            if (isConnectionError(err) && showSaved()) return;
-            // The server answered (e.g. the device token is stale) — try the
-            // signed-in account instead.
-            try {
-              const resp = await posBootstrap(deviceId);
-              bootstrap(resp);
-              setInitializing(false);
-              return;
-            } catch (jwtErr: unknown) {
-              if (isConnectionError(jwtErr) && showSaved()) return;
-              // Both failed with server responses — clear device and re-authorize
-              localStorage.removeItem("pos_device_id");
-              localStorage.removeItem("pos_device_token");
-            }
-          }
-        }
-
-        // Step 2: No device or device stale — authorize new one (requires JWT)
-        const platform = navigator.userAgent.includes("Mobile") ? "mobile" : "desktop";
-        const deviceName = `POS-${platform}-${Date.now()}`;
-        const result = await posAuthorizeDevice(deviceName, platform, navigator.userAgent);
-
-        localStorage.setItem("pos_device_id", result.device.id);
-        localStorage.setItem("pos_device_token", result.device_token);
-        setDevice(result.device, result.device_token);
-
-        const resp = await posBootstrap(result.device.id);
-        bootstrap(resp);
-        setInitializing(false);
-      } catch (err: any) {
-        setInitError(err?.message || "Failed to initialize POS");
+        const loaded = await loadPosBootstrap();
+        const opts = loaded.source === "saved" ? { savedAt: loaded.savedAt! } : undefined;
+        bootstrap(loaded.data, opts);
+      } catch (err: unknown) {
+        setInitError(err instanceof Error ? err.message : "Failed to initialize POS");
+      } finally {
         setInitializing(false);
       }
     }
 
     init();
+    // Mount-only on purpose. `merchant` and `device` are read solely to skip a
+    // second bootstrap when the store is already hydrated; listing them would
+    // re-run this and re-place every POS screen on each hydration.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Start background sync
   useBackgroundSync();
 
-  // Replace saved data with live data as soon as the server is reachable.
   const savedDataFrom = usePosStore((s) => s.savedDataFrom);
+  const offlineCacheUnavailable = usePosStore((s) => s.offlineCacheUnavailable);
   const [refreshing, setRefreshing] = useState(false);
+  const lastSyncedAt = usePosStore((s) => s.lastSyncedAt);
+
+  /**
+   * Pull live POS data and replace whatever is on screen.
+   *
+   * Runs on a timer and whenever the tab comes back to the front, because a
+   * terminal is often left open and simply brought forward — with the old
+   * design the saved copy was only ever replaced when the till had *already*
+   * gone offline, so a menu change made during a normal online session never
+   * reached the grid at all.
+   */
   const refreshFromServer = useCallback(async () => {
-    const deviceId = localStorage.getItem("pos_device_id");
-    if (!deviceId) return;
     setRefreshing(true);
-    const deviceToken = localStorage.getItem("pos_device_token");
     try {
-      let resp;
-      try {
-        if (!deviceToken) throw new Error("no device token");
-        resp = await posDeviceBootstrap(deviceId, deviceToken);
-      } catch {
-        resp = await posBootstrap(deviceId);
-      }
-      bootstrap(resp);
+      const data = await fetchLiveBootstrap();
+      bootstrap(data);
     } catch {
-      // still unreachable — keep the saved data and the banner
+      // still unreachable — keep whatever is on screen and the banner
     } finally {
       setRefreshing(false);
     }
   }, [bootstrap]);
 
+  /**
+   * Keep the grid current: every 60s, on reconnect, and whenever the terminal
+   * is brought back to the front.
+   *
+   * The in-flight guard is a local flag rather than the `refreshing` state,
+   * which would tear down and rebuild these listeners every time a request
+   * started. `refreshFromServer` is stable (the store action it calls never
+   * changes), so this effect runs once.
+   */
   useEffect(() => {
-    if (!savedDataFrom) return;
-    if (navigator.onLine) refreshFromServer();
+    let inFlight = false;
+    const guarded = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        await refreshFromServer();
+      } finally {
+        inFlight = false;
+      }
+    };
+
     const timer = setInterval(() => {
-      if (navigator.onLine) refreshFromServer();
-    }, 30000);
-    window.addEventListener("online", refreshFromServer);
+      if (navigator.onLine) guarded();
+    }, 60000);
+    const onOnline = () => guarded();
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && navigator.onLine) guarded();
+    };
+    // The menu grid's own refresh button. Named rather than a callback prop so
+    // the grid stays a plain store consumer and cannot be wired up twice.
+    const onManualRefresh = () => guarded();
+    window.addEventListener("online", onOnline);
+    window.addEventListener(POS_REFRESH_EVENT, onManualRefresh);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearInterval(timer);
-      window.removeEventListener("online", refreshFromServer);
-    };
-  }, [savedDataFrom, refreshFromServer]);
-
-  useEffect(() => {
-    const onOnline = () => setIsOnline(true);
-    const onOffline = () => setIsOnline(false);
-    window.addEventListener("online", onOnline);
-    window.addEventListener("offline", onOffline);
-    return () => {
       window.removeEventListener("online", onOnline);
-      window.removeEventListener("offline", onOffline);
+      window.removeEventListener(POS_REFRESH_EVENT, onManualRefresh);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, []);
+  }, [refreshFromServer]);
+
+  // Only /pos and /pos/orders work with no connection. A cashier who was on
+  // Reports when the connection dropped is moved back to the order screen
+  // rather than left staring at an empty list that cannot reload.
+  useEffect(() => {
+    if (isOnline) return;
+    if (isPosPathOfflineSafe(routerState.location.pathname)) return;
+    navigate({ to: "/pos", replace: true });
+  }, [isOnline, routerState.location.pathname, navigate]);
 
   async function handleSignOut() {
     setCurrentWorker(null);
+    // A shared till must not leave the next cashier with this one's menu,
+    // tables and staff — and no device can be signed in to POS with none of
+    // them being reachable.
+    resetPos();
     await signOut();
     navigate({ to: "/auth/merchant" as any, replace: true });
   }
@@ -349,31 +391,7 @@ export default function PosLayout() {
 
         {/* Nav */}
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-2 pb-4">
-          <NavSection title="Operations">
-            <NavItem
-              to="/pos"
-              label="Order"
-              icon={ShoppingCart}
-              badge={cartCount}
-              active={isOrderPage}
-            />
-            <NavItem to="/pos/orders" label="Orders" icon={Clock} />
-            <NavItem to="/pos/preparation" label="Preparation" icon={AlertTriangle} />
-            <NavItem to="/pos/conflicts" label="Conflicts" icon={AlertTriangle} />
-          </NavSection>
-          <NavSection title="Money">
-            <NavItem to="/pos/accounts" label="Accounts" icon={CreditCard} />
-            <NavItem to="/pos/cash-movements" label="Cash In/Out" icon={HandCoins} />
-            <NavItem to="/pos/reports" label="Reports" icon={BarChart3} />
-          </NavSection>
-          <NavSection title="Team">
-            <NavItem to="/pos/schedule" label="Schedule" icon={Calendar} />
-            <NavItem to="/pos/staff" label="Staff" icon={Users} />
-          </NavSection>
-          <NavSection title="Manage">
-            <NavItem to="/merchant" label="Dashboard" icon={LayoutDashboard} />
-            <NavItem to="/pos/settings" label="Settings" icon={Settings} />
-          </NavSection>
+          <PosNav isOnline={isOnline} cartCount={cartCount} activePath={pathname} />
         </nav>
 
         {/* Footer */}
@@ -390,11 +408,19 @@ export default function PosLayout() {
           <div className="px-1">
             <PendingOfflineKOTs />
           </div>
-          {/* Close / Open shift */}
+          {/* Close / Open shift — both are server writes, so neither can run
+              with no connection. A shift opened before the outage is restored
+              from this device and keeps working offline. */}
           {activeShift ? (
             <button
               onClick={() => setShowShiftClose(true)}
-              className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-50"
+              disabled={!isOnline}
+              title={
+                isOnline
+                  ? undefined
+                  : "Closing a shift needs an internet connection. Close it once you are back online."
+              }
+              className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
             >
               <Wallet className="h-4 w-4" />
               <span>Close Shift</span>
@@ -402,24 +428,58 @@ export default function PosLayout() {
           ) : (
             <button
               onClick={() => navigate({ to: "/pos" })}
-              className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50"
+              disabled={!isOnline}
+              title={
+                isOnline
+                  ? undefined
+                  : "Opening a shift needs an internet connection."
+              }
+              className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
             >
               <Wallet className="h-4 w-4" />
               <span>Open Shift</span>
             </button>
           )}
-          {/* Online / offline */}
-          <div className="flex items-center gap-2 px-4 text-xs text-muted-foreground">
-            {isOnline ? (
-              <>
-                <Wifi className="h-3.5 w-3.5 text-green-500" />
-                <span>Online</span>
-              </>
-            ) : (
-              <>
-                <WifiOff className="h-3.5 w-3.5 text-amber-500" />
-                <span className="text-amber-600">Offline</span>
-              </>
+          {/* Connection state, and when this terminal last pulled live data.
+              "Online" alone is not enough: a cashier needs to be able to see
+              that the grid on screen is minutes old, or hours old. */}
+          <div className="space-y-1 px-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2">
+              {isOnline ? (
+                <>
+                  <Wifi className="h-3.5 w-3.5 text-green-500" />
+                  <span>Online</span>
+                </>
+              ) : (
+                <>
+                  <WifiOff className="h-3.5 w-3.5 text-amber-500" />
+                  <span className="text-amber-600">Offline</span>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => refreshFromServer()}
+                disabled={!isOnline || refreshing}
+                title={
+                  isOnline
+                    ? "Fetch the latest menu, tables and staff from the server"
+                    : "Needs an internet connection"
+                }
+                className="ml-auto inline-flex min-h-[32px] items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
+            </div>
+            {savedDataFrom ? (
+              <p className="text-amber-700">Menu saved {savedLabel(savedDataFrom)}</p>
+            ) : lastSyncedAt ? (
+              <p>Menu updated {savedLabel(lastSyncedAt)}</p>
+            ) : null}
+            {offlineCacheUnavailable && (
+              <p className="text-rose-600">
+                No offline copy saved — no menu if the connection drops.
+              </p>
             )}
           </div>
           <button
@@ -464,7 +524,9 @@ export default function PosLayout() {
             {activeShift && (
               <button
                 onClick={() => setShowShiftClose(true)}
-                className="hidden rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700 sm:block"
+                disabled={!isOnline}
+                title={isOnline ? undefined : "Closing a shift needs an internet connection."}
+                className="hidden rounded-lg bg-amber-100 px-2 py-1 text-xs font-bold text-amber-700 disabled:cursor-not-allowed disabled:opacity-40 sm:block"
               >
                 CLOSE SHIFT
               </button>
@@ -472,7 +534,9 @@ export default function PosLayout() {
             {!activeShift && (
               <button
                 onClick={() => navigate({ to: "/pos" })}
-                className="hidden rounded-lg bg-green-100 px-2 py-1 text-xs font-bold text-green-700 sm:block"
+                disabled={!isOnline}
+                title={isOnline ? undefined : "Opening a shift needs an internet connection."}
+                className="hidden rounded-lg bg-green-100 px-2 py-1 text-xs font-bold text-green-700 disabled:cursor-not-allowed disabled:opacity-40 sm:block"
               >
                 OPEN SHIFT
               </button>
@@ -503,84 +567,16 @@ export default function PosLayout() {
                 <NotificationBell />
               </div>
               <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-2 pb-4">
-                <NavSection title="Operations">
-                  <NavItem
-                    to="/pos"
-                    label="Order"
-                    icon={ShoppingCart}
-                    badge={cartCount}
-                    active={isOrderPage}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                  <NavItem
-                    to="/pos/orders"
-                    label="Orders"
-                    icon={Clock}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                  <NavItem
-                    to="/pos/preparation"
-                    label="Preparation"
-                    icon={AlertTriangle}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                  <NavItem
-                    to="/pos/conflicts"
-                    label="Conflicts"
-                    icon={AlertTriangle}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                </NavSection>
-                <NavSection title="Money">
-                  <NavItem
-                    to="/pos/accounts"
-                    label="Accounts"
-                    icon={CreditCard}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                  <NavItem
-                    to="/pos/cash-movements"
-                    label="Cash In/Out"
-                    icon={HandCoins}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                  <NavItem
-                    to="/pos/reports"
-                    label="Reports"
-                    icon={BarChart3}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                </NavSection>
-                <NavSection title="Team">
-                  <NavItem
-                    to="/pos/schedule"
-                    label="Schedule"
-                    icon={Calendar}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                  <NavItem
-                    to="/pos/staff"
-                    label="Staff"
-                    icon={Users}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                </NavSection>
-                <NavSection title="Manage">
-                  <NavItem
-                    to="/merchant"
-                    label="Dashboard"
-                    icon={LayoutDashboard}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                  <NavItem
-                    to="/pos/settings"
-                    label="Settings"
-                    icon={Settings}
-                    onClick={() => setMobileNavOpen(false)}
-                  />
-                </NavSection>
+                <PosNav
+                  isOnline={isOnline}
+                  cartCount={cartCount}
+                  activePath={pathname}
+                  onNavigate={() => setMobileNavOpen(false)}
+                />
               </nav>
-              <div className="border-t border-border p-3">
+              <div className="space-y-2 border-t border-border p-3">
+                <SyncStatusBar />
+                <PendingOfflineKOTs />
                 <button
                   onClick={handleSignOut}
                   className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -588,8 +584,27 @@ export default function PosLayout() {
                   <LogOut className="h-4 w-4" />
                   <span>Sign out</span>
                 </button>
+                {/* A till stuck on a menu it saved days ago has no other way
+                    back to live data, and a phone terminal has nowhere else
+                    to look for the escape hatch. */}
+                <ClearCacheNavButton className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground" />
               </div>
             </aside>
+          </div>
+        )}
+
+        {/* Offline notice: says exactly what still works, so a cashier does not
+            hunt for a menu change or a report that is greyed out. */}
+        {!isOnline && (
+          <div
+            role="status"
+            className="flex shrink-0 items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-xs font-medium text-amber-900"
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+            <span>
+              <strong>Offline.</strong> Order, Orders, KOT printing, bills and sync are still
+              available — everything else needs a connection.
+            </span>
           </div>
         )}
 

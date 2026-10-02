@@ -12,6 +12,7 @@ import {
   CashShift,
   PosMenuSnapshot,
 } from "./api";
+import { clearAllSavedBootstrap, saveSavedBootstrap } from "./offline/cache";
 
 /**
  * One POS cart line. `key` identifies menu item + selections + instructions so
@@ -109,6 +110,18 @@ interface PosState {
    * could not be reached (ISO time the data was saved). Null = live data.
    */
   savedDataFrom: string | null;
+  /**
+   * Set when the browser refused to save this device's offline copy. The POS
+   * still works online; it just has no menu to fall back on, and a merchant
+   * cannot act on that unless the POS says so.
+   */
+  offlineCacheUnavailable: boolean;
+  /**
+   * When live POS data was last pulled from the server (ISO). Null until the
+   * first successful load, and unchanged while the POS is on its saved copy —
+   * the cashier needs to be able to see how old the grid actually is.
+   */
+  lastSyncedAt: string | null;
 
   cart: PosOrderItem[];
   cartNotes: string;
@@ -160,6 +173,8 @@ const initialState = {
   incomingOrders: [],
   tables: [],
   savedDataFrom: null,
+  offlineCacheUnavailable: false,
+  lastSyncedAt: null,
   cart: [],
   cartNotes: "",
   pendingDiscount: null,
@@ -170,7 +185,7 @@ const initialState = {
   recentOrders: [],
 };
 
-export const usePosStore = create<PosState>((set) => ({
+export const usePosStore = create<PosState>((set, get) => ({
   ...initialState,
 
   setMerchant: (m) => set({ merchant: m }),
@@ -326,14 +341,11 @@ export const usePosStore = create<PosState>((set) => ({
     }
 
     // Fresh data from the server becomes the saved copy for when the network
-    // is down. Data that came FROM the saved copy must not overwrite it.
+    // is down. Data that came FROM the saved copy must not overwrite it, or the
+    // till would overwrite a good copy with itself every time it goes offline.
+    let cacheUnavailable = false;
     if (!opts?.savedAt) {
-      try {
-        localStorage.setItem("pos_bootstrap_cache", JSON.stringify(resp));
-        localStorage.setItem("pos_bootstrap_cache_at", new Date().toISOString());
-      } catch {
-        // quota or private browsing
-      }
+      cacheUnavailable = !saveSavedBootstrap(resp.merchant?.id, resp);
     }
 
     set({
@@ -349,6 +361,8 @@ export const usePosStore = create<PosState>((set) => ({
       tables: resp.tables || [],
       currentWorker: restoredWorker,
       savedDataFrom: opts?.savedAt ?? null,
+      offlineCacheUnavailable: cacheUnavailable,
+      lastSyncedAt: opts?.savedAt ? get().lastSyncedAt : new Date().toISOString(),
     });
   },
 
@@ -356,25 +370,13 @@ export const usePosStore = create<PosState>((set) => ({
     localStorage.removeItem("pos_worker_id");
     localStorage.removeItem("pos_worker");
     localStorage.removeItem("pos_active_shift");
+    // A shared till must not hand the next cashier the last one's menu.
+    clearAllSavedBootstrap();
     set(initialState);
   },
 }));
 
 // ── Saved copy for when the server cannot be reached ─────────────────────────
-
-/** The bootstrap data saved on this device, with the time it was saved. */
-export function loadSavedBootstrap(): { data: PosBootstrapResponse; savedAt: string } | null {
-  try {
-    const raw = localStorage.getItem("pos_bootstrap_cache");
-    if (!raw) return null;
-    return {
-      data: JSON.parse(raw) as PosBootstrapResponse,
-      savedAt: localStorage.getItem("pos_bootstrap_cache_at") || new Date(0).toISOString(),
-    };
-  } catch {
-    return null;
-  }
-}
 
 /**
  * True when a request failed because the server could not be reached (offline,

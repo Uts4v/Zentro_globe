@@ -55,6 +55,8 @@ export interface OfflineOrder {
   status: "pending_sync" | "syncing" | "synced" | "failed";
   order_status?: string;
   server_order_id?: number;
+  /** Why the last sync attempt was rejected, so the orders screen can say so. */
+  last_error?: string;
   /**
    * Ticket printed for the kitchen at capture time. Kept so it can be
    * reprinted after the sheet closes — nothing else retains the modifier and
@@ -92,7 +94,12 @@ export interface SyncQueueItem {
   method: "POST" | "PATCH" | "PUT";
   body: Record<string, any>;
   client_mutation_id: string;
-  status: "pending" | "syncing" | "failed";
+  /**
+   * `dead` means the automatic retries are spent. It is excluded from
+   * `getPending` so the background loop stops hitting an endpoint that will
+   * never accept this body, and it needs a deliberate retry from the sync bar.
+   */
+  status: "pending" | "syncing" | "failed" | "dead";
   attempts: number;
   last_error?: string;
   next_retry_at?: number;
@@ -217,6 +224,7 @@ export const offlineOrders = {
     if (order) {
       order.status = "synced";
       order.server_order_id = serverId;
+      delete order.last_error;
       await put("orders", order);
     }
   },
@@ -224,6 +232,7 @@ export const offlineOrders = {
     const order = await getById<OfflineOrder>("orders", clientId);
     if (order) {
       order.status = "failed";
+      order.last_error = error;
       await put("orders", order);
     }
   },
@@ -286,6 +295,13 @@ export const offlinePayments = {
       await put("payments", payment);
     }
   },
+  markFailed: async (clientId: string) => {
+    const payment = await getById<OfflinePayment>("payments", clientId);
+    if (payment) {
+      payment.status = "failed";
+      await put("payments", payment);
+    }
+  },
 };
 
 // ── Sync Queue ──────────────────────────────────────────────────────────────
@@ -298,6 +314,27 @@ export const syncQueue = {
   getPending: async () => {
     const all = await getAll<SyncQueueItem>("sync_queue");
     return all.filter((s) => s.status === "pending" || s.status === "failed");
+  },
+  getDead: async () => {
+    const all = await getAll<SyncQueueItem>("sync_queue");
+    return all.filter((s) => s.status === "dead");
+  },
+  /**
+   * Return items left `syncing` by a closed tab to `pending`.
+   *
+   * `processItem` marks an item `syncing` before the request goes out. If the
+   * tab is closed, crashes or reloads mid-flight, nothing ever moves it back —
+   * and `getPending` skips it, so that order or payment is never sent again.
+   * Must run before the first `processSyncQueue` of a session. Replaying is
+   * safe: the server treats `client_mutation_id` as an idempotency key.
+   */
+  recoverInterrupted: async () => {
+    const all = await getAll<SyncQueueItem>("sync_queue");
+    const stuck = all.filter((s) => s.status === "syncing");
+    for (const item of stuck) {
+      await put("sync_queue", { ...item, status: "pending" as const });
+    }
+    return stuck.length;
   },
   markSyncing: async (id: string) => {
     const item = await getById<SyncQueueItem>("sync_queue", id);
@@ -318,6 +355,15 @@ export const syncQueue = {
       await put("sync_queue", item);
     }
   },
+  markDead: async (id: string, error: string) => {
+    const item = await getById<SyncQueueItem>("sync_queue", id);
+    if (item) {
+      item.status = "dead";
+      item.last_error = error;
+      delete item.next_retry_at;
+      await put("sync_queue", item);
+    }
+  },
   clear: () => clearStore("sync_queue"),
 };
 
@@ -329,5 +375,32 @@ export const menuCache = {
   get: async (merchantId: number) => {
     const item = await getById<any>("menu_cache", merchantId);
     return item?.data ?? null;
+  },
+  clear: () => clearStore("menu_cache"),
+};
+
+// ── Offline data that is not a cache ─────────────────────────────────────────
+
+/**
+ * Orders and payments that have not reached the server.
+ *
+ * These are not cached copies of anything — they are the only record of sales
+ * this terminal has taken, so "clear cache" must never reach them by accident.
+ * Clearing is a separate, explicitly requested action.
+ */
+export const offlineSales = {
+  pendingCount: async (): Promise<number> => {
+    const [orders, payments] = await Promise.all([
+      offlineOrders.getPending(),
+      offlinePayments.getPending(),
+    ]);
+    return orders.length + payments.length;
+  },
+  /**
+   * Discard every unsynced order, payment and queued mutation on this device.
+   * Those sales are then gone for good — the server never saw them.
+   */
+  discardAll: async (): Promise<void> => {
+    await Promise.all([clearStore("orders"), clearStore("payments"), clearStore("sync_queue")]);
   },
 };

@@ -83,15 +83,28 @@ async function processItem(item: SyncQueueItem): Promise<boolean> {
 
     return true;
   } catch (error: any) {
-    // Exponential backoff with jitter (max 5 minutes)
-    const delay = Math.min(300000, RETRY_DELAY_MS * Math.pow(2, item.attempts)) + Math.floor(Math.random() * 500);
-    const nextRetry = Date.now() + delay;
+    const message = error?.message || "Sync failed";
+
+    // Reflect the failure on the stored order/payment as well. The queue item
+    // carrying the error is invisible on the Orders screen, so without this an
+    // order whose sync was permanently rejected sits there reading
+    // "AWAITING SYNC" forever.
+    if (item.type === "order") {
+      await offlineOrders.markFailed(item.client_mutation_id, message).catch(() => {});
+    } else if (item.type === "payment") {
+      await offlinePayments.markFailed(item.client_mutation_id).catch(() => {});
+    }
 
     if (item.attempts >= MAX_RETRIES) {
-      await syncQueue.markFailed(item.id, error?.message || "Max retries exceeded", nextRetry);
-    } else {
-      await syncQueue.markFailed(item.id, error?.message || "Sync failed", nextRetry);
+      // Retries are spent. Stop sending it: a rejected body will be rejected
+      // again, and retrying every 30s would hammer the endpoint forever.
+      await syncQueue.markDead(item.id, message);
+      return false;
     }
+
+    // Exponential backoff with jitter (max 5 minutes)
+    const delay = Math.min(300000, RETRY_DELAY_MS * Math.pow(2, item.attempts)) + Math.floor(Math.random() * 500);
+    await syncQueue.markFailed(item.id, message, Date.now() + delay);
     return false;
   }
 }
@@ -158,10 +171,19 @@ export function startBackgroundSync(intervalMs = 30000) {
   window.addEventListener("online", handleOnline);
   window.addEventListener("offline", handleOffline);
 
-  // Process immediately if online
-  if (navigator.onLine) {
-    processSyncQueue();
-  }
+  // A previous session may have died mid-request, leaving items stuck in
+  // `syncing` that getPending would otherwise skip forever. Requeue them
+  // before the first pass of this session.
+  syncQueue
+    .recoverInterrupted()
+    .then(() => {
+      if (navigator.onLine) {
+        processSyncQueue();
+      }
+    })
+    .catch(() => {
+      if (navigator.onLine) processSyncQueue();
+    });
 
   // Then process periodically
   syncInterval = setInterval(() => {
@@ -185,12 +207,15 @@ export function stopBackgroundSync() {
 export async function getSyncStatus(): Promise<{
   pending: number;
   failed: number;
+  dead: number;
   isSyncing: boolean;
 }> {
   const pending = await syncQueue.getPending();
+  const dead = await syncQueue.getDead();
   return {
     pending: pending.filter((i) => i.status === "pending").length,
     failed: pending.filter((i) => i.status === "failed").length,
+    dead: dead.length,
     isSyncing,
   };
 }
@@ -199,9 +224,28 @@ export async function getSyncStatus(): Promise<{
 
 export async function retryItem(id: string): Promise<boolean> {
   const item = await syncQueue.get(id);
-  if (!item || item.status !== "failed") return false;
+  if (!item || (item.status !== "failed" && item.status !== "dead")) return false;
   item.status = "pending";
   item.attempts = 0;
+  delete item.next_retry_at;
   await syncQueue.add(item);
-  return processSyncQueue().then(() => true);
+  await processSyncQueue();
+  return true;
+}
+
+/**
+ * Put every exhausted item back in the queue with a fresh attempt budget.
+ * Used by the sync bar's "Retry failed" after something the server rejected has
+ * been corrected on this device.
+ */
+export async function retryDead(): Promise<number> {
+  const dead = await syncQueue.getDead();
+  for (const item of dead) {
+    item.status = "pending";
+    item.attempts = 0;
+    delete item.next_retry_at;
+    await syncQueue.add(item);
+  }
+  await processSyncQueue();
+  return dead.length;
 }
