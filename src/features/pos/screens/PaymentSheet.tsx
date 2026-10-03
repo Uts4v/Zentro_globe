@@ -722,8 +722,16 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     }
   }
 
-  // ── Dine-in order placed success ──
-  if (isDineIn && orderPlaced) {
+  // ── Order placed, nothing left to collect in this sheet ──
+  //
+  // An offline order has no receipt to collect against and no server to send
+  // the ticket to, so this sheet becomes the cashier's only chance to print it.
+  // Gating on `isDineIn` alone left a takeaway order — the common case, and the
+  // one most likely to be taken with the connection down — falling through to
+  // the payment form with the cart already cleared: no Print KOT, no "saved on
+  // this device" notice. Online takeaway is deliberately excluded, because that
+  // order still has to be paid for in this sheet.
+  if (orderPlaced && (isDineIn || placedOffline)) {
     return (
       <div
         role="dialog"

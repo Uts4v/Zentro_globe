@@ -16,6 +16,7 @@ Media:
   POST /api/media/upload/          — upload an image file, get back a URL
 """
 
+import logging
 import os
 import secrets
 from datetime import timedelta
@@ -57,6 +58,9 @@ from .serializers import (
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
+
+
+logger = logging.getLogger("accounts.views")
 
 
 def _resolve_full_name(user: User, fallback: str = "") -> str:
@@ -561,7 +565,20 @@ def google_auth(request):
             google_requests.Request(),
             audience=client_ids if len(client_ids) > 1 else client_ids[0],
         )
+    except ValueError as e:
+        # The overwhelmingly common cause is a frontend/backend client-id mismatch:
+        # the credential is minted for VITE_GOOGLE_CLIENT_ID while the server only
+        # trusts GOOGLE_OAUTH_CLIENT_IDS. Say so explicitly instead of a generic 400.
+        logger.warning("Google ID token rejected (%s): %s", type(e).__name__, e)
+        return Response(
+            {
+                "error": "Google sign-in is not accepted by this server.",
+                "detail": str(e),
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     except Exception:
+        logger.exception("Google ID token could not be verified")
         return Response(
             {"error": "The Google token could not be verified."},
             status=status.HTTP_400_BAD_REQUEST,

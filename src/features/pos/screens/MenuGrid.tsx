@@ -84,6 +84,19 @@ export default function MenuGrid() {
     return showUnavailable || item.is_available;
   }
 
+  /**
+   * The items the server filed under `cat`.
+   *
+   * The server groups by `item.category or "Uncategorized"` but still sends the
+   * raw `category` on each entry, so a dish saved with no category arrives with
+   * `category: ""` while its section is keyed "Uncategorized". Matching the
+   * section key against the raw field therefore matched nothing and those
+   * dishes were never painted — read the bucket the server actually built.
+   */
+  function itemsInSection(cat: string) {
+    return (menu?.categories[cat] ?? []).filter(isVisible);
+  }
+
   function matchesSearch(item: PosMenuItem) {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -239,7 +252,7 @@ export default function MenuGrid() {
         ) : (
           <div className="space-y-8">
             {sections.map((cat) => {
-              const items = allItems.filter((item) => isVisible(item) && item.category === cat);
+              const items = itemsInSection(cat);
               if (items.length === 0) return null;
               return (
                 <section key={cat}>
@@ -261,10 +274,7 @@ export default function MenuGrid() {
                 </section>
               );
             })}
-            {sections.every(
-              (cat) =>
-                allItems.filter((item) => isVisible(item) && item.category === cat).length === 0,
-            ) && (
+            {sections.every((cat) => itemsInSection(cat).length === 0) && (
               <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
                 <Coffee className="mb-3 h-10 w-10 opacity-40" />
                 <p className="text-sm">No items found</p>

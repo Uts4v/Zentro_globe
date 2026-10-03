@@ -219,9 +219,20 @@ export function kotPrintDocument(ticket: KOTTicketData, paper: TicketPaper): str
   }; color: #000; background: #fff; }
   @media print { html, body { width: ${TICKET_WIDTH[paper]}; } .no-print { display: none !important; } }
 </style>
-</head><body>${kotMarkup(ticket, paper)}</body></html>`;
+</head><body><div class="no-print" style="padding: 8px; text-align: center; border-bottom: 1px solid #ccc; margin-bottom: 8px;">
+  <button autofocus onclick="window.print(); window.close();" style="padding: 8px 16px; font-size: 14px; cursor: pointer; background: #1a1a1a; color: white; border: none; border-radius: 8px;">Print KOT</button>
+</div>${kotMarkup(ticket, paper)}</body></html>`;
 }
 
+/**
+ * Open the KOT in its own window, ready to print.
+ *
+ * The window carries its own "Print KOT" button rather than printing on open.
+ * A KOT goes to a shared thermal printer behind the counter, and unlike the
+ * customer receipt — which auto-prints because it is a by-product of taking
+ * payment — a mis-fired ticket means a wasted re-print for the kitchen. Making
+ * the cashier confirm is the same trade the draft bill makes.
+ */
 export function printKOT(ticket: KOTTicketData, printSize: TicketPaper = "58mm") {
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
