@@ -81,13 +81,15 @@ function CafeImage({ store, className }: { store: DiscoveryItem; className: stri
     return (
       <div
         className={className}
-        style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }}
+        style={{
+          backgroundImage: `url(${src})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
       />
     );
   }
-  return (
-    <div className={`${className} grid place-items-center bg-mist text-4xl`}>☕</div>
-  );
+  return <div className={`${className} grid place-items-center bg-mist text-4xl`}>☕</div>;
 }
 
 function RatingBadge({ store }: { store: DiscoveryItem }) {
@@ -138,7 +140,9 @@ function FeaturedCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => v
       <div className="flex flex-1 flex-col justify-between gap-5 p-6">
         <div className="space-y-2">
           <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <h2 className="font-display text-3xl leading-tight text-foreground">{store.business_name}</h2>
+            <h2 className="font-display text-3xl leading-tight text-foreground">
+              {store.business_name}
+            </h2>
             <RatingBadge store={store} />
           </div>
           {(store.address || store.distance_km !== null) && (
@@ -159,10 +163,14 @@ function FeaturedCard({ store, onOpen }: { store: DiscoveryItem; onOpen: () => v
             <GlowPoints store={store} />
             <span
               className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
-                store.is_open ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700" : "bg-mist text-muted-foreground"
+                store.is_open
+                  ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700"
+                  : "bg-mist text-muted-foreground"
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${store.is_open ? "bg-emerald-500" : "bg-muted-foreground"}`} />
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${store.is_open ? "bg-emerald-500" : "bg-muted-foreground"}`}
+              />
               {store.is_open ? "Open Now" : "Closed"}
             </span>
           </div>
@@ -206,7 +214,9 @@ function CafeGridCard({
       <div className="flex min-w-0 flex-1 flex-col justify-between py-0.5">
         <div className="space-y-1">
           <div className="flex items-baseline justify-between gap-2">
-            <p className="truncate font-display text-lg leading-tight text-foreground">{store.business_name}</p>
+            <p className="truncate font-display text-lg leading-tight text-foreground">
+              {store.business_name}
+            </p>
             <RatingBadge store={store} />
           </div>
           {(store.address || store.distance_km !== null) && (
@@ -227,10 +237,14 @@ function CafeGridCard({
             <GlowPoints store={store} />
             <span
               className={`inline-flex w-fit items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                store.is_open ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700" : "bg-mist text-muted-foreground"
+                store.is_open
+                  ? "bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700"
+                  : "bg-mist text-muted-foreground"
               }`}
             >
-              <span className={`h-1.5 w-1.5 rounded-full ${store.is_open ? "bg-emerald-500" : "bg-muted-foreground"}`} />
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${store.is_open ? "bg-emerald-500" : "bg-muted-foreground"}`}
+              />
               {store.is_open ? "Open Now" : "Closed"}
             </span>
           </div>
@@ -274,7 +288,7 @@ export function StoresPage() {
         (s) =>
           s.business_name.toLowerCase().includes(q) ||
           (s.address ?? "").toLowerCase().includes(q) ||
-          (s.business_type ?? "").toLowerCase().includes(q)
+          (s.business_type ?? "").toLowerCase().includes(q),
       );
     }
 
@@ -344,7 +358,9 @@ export function StoresPage() {
               key={key}
               onClick={() => setActiveFilter(key)}
               className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                active ? "bg-ink text-primary-foreground" : "glass text-muted-foreground hover:text-foreground"
+                active
+                  ? "bg-ink text-primary-foreground"
+                  : "glass text-muted-foreground hover:text-foreground"
               }`}
             >
               <Icon className="h-3.5 w-3.5" /> {label}
@@ -389,8 +405,8 @@ export function StoresPage() {
 
             <div className="flex flex-col justify-center gap-3 p-6 md:w-1/2 md:p-10">
               <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-mist px-3 py-1 text-xs font-medium text-muted-foreground">
-                <MapPin className="h-3.5 w-3.5" /> {filtered.length} café{filtered.length === 1 ? "" : "s"}{" "}
-                within {radiusKm} km
+                <MapPin className="h-3.5 w-3.5" /> {filtered.length} café
+                {filtered.length === 1 ? "" : "s"} within {radiusKm} km
               </span>
               <h2 className="font-display text-4xl leading-[1.1] tracking-tight text-foreground sm:text-5xl">
                 Find Cafés
@@ -398,7 +414,8 @@ export function StoresPage() {
                 <span className="text-ember">on the Map</span>
               </h2>
               <p className="max-w-xs text-sm leading-relaxed text-muted-foreground">
-                Pins are numbered nearest first, matching the list below. Tap one to see what's brewing.
+                Pins are numbered nearest first, matching the list below. Tap one to see what's
+                brewing.
               </p>
             </div>
           </section>

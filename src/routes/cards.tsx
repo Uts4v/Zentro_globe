@@ -33,11 +33,7 @@ function CardsPage() {
         }
       />
       <div className="h-dvh overflow-hidden overscroll-none px-5 pb-10 pt-2">
-        {isIndex ? (
-          <MembershipCardStack />
-        ) : (
-          <Outlet />
-        )}
+        {isIndex ? <MembershipCardStack /> : <Outlet />}
       </div>
 
       <InstallBanner />

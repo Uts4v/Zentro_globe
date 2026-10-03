@@ -186,14 +186,22 @@ export default function StaffScheduleScreen() {
 
       {/* Add shift modal */}
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowAdd(false)}>
-          <div className="w-full max-w-sm rounded-2xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setShowAdd(false)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-card shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="border-b border-border px-5 py-4">
               <h2 className="text-lg font-bold text-foreground">Add Shift</h2>
             </div>
             <div className="px-5 py-4 space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-muted-foreground">Worker</label>
+                <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Worker
+                </label>
                 <select
                   value={newWorkerId}
                   onChange={(e) => setNewWorkerId(e.target.value)}
@@ -201,7 +209,9 @@ export default function StaffScheduleScreen() {
                 >
                   <option value="">Select worker...</option>
                   {workers.map((w) => (
-                    <option key={w.id} value={w.id}>{w.display_name} ({w.role})</option>
+                    <option key={w.id} value={w.id}>
+                      {w.display_name} ({w.role})
+                    </option>
                   ))}
                 </select>
               </div>
@@ -216,7 +226,9 @@ export default function StaffScheduleScreen() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Start</label>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    Start
+                  </label>
                   <input
                     type="time"
                     value={newStart}
@@ -225,7 +237,9 @@ export default function StaffScheduleScreen() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-muted-foreground">End</label>
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                    End
+                  </label>
                   <input
                     type="time"
                     value={newEnd}

@@ -434,12 +434,12 @@ export function MainPageLoyaltyCard({
                     background: `linear-gradient(135deg, ${primary} 0%, ${secondary} 100%)`,
                     boxShadow: `0 12px 26px ${hexToRGBA(primary, 0.3)}`,
                   }}
->
-                    <Sparkles className="h-4 w-4 text-butter-strong" />
-                    <span className="whitespace-nowrap">
-                      {pointsToNextTier} pts to {nextTier(tier)}
-                    </span>
-                  </div>
+                >
+                  <Sparkles className="h-4 w-4 text-butter-strong" />
+                  <span className="whitespace-nowrap">
+                    {pointsToNextTier} pts to {nextTier(tier)}
+                  </span>
+                </div>
               </div>
             </div>
 

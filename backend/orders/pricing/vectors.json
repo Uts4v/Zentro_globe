@@ -3,185 +3,313 @@
   "vectors": [
     {
       "name": "simple order, legacy VAT 13%",
-      "currency": "NPR", "policy": "legacy",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "1000.00"}],
-      "expected": {"subtotal": "1000.00", "discount_total": "0.00", "taxable_total": "1000.00",
-                   "tax_total": "130.00", "charge_total": "0.00", "grand_total": "1130.00"}
+      "currency": "NPR",
+      "policy": "legacy",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "1000.00" }],
+      "expected": {
+        "subtotal": "1000.00",
+        "discount_total": "0.00",
+        "taxable_total": "1000.00",
+        "tax_total": "130.00",
+        "charge_total": "0.00",
+        "grand_total": "1130.00"
+      }
     },
     {
       "name": "20% discount, legacy taxes the pre-discount subtotal",
-      "currency": "NPR", "policy": "legacy",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "1000.00"}],
-      "adjustment": {"calc_type": "percentage", "value": "20"},
-      "expected": {"subtotal": "1000.00", "discount_total": "200.00", "taxable_total": "1000.00",
-                   "tax_total": "130.00", "charge_total": "0.00", "grand_total": "930.00"}
+      "currency": "NPR",
+      "policy": "legacy",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "1000.00" }],
+      "adjustment": { "calc_type": "percentage", "value": "20" },
+      "expected": {
+        "subtotal": "1000.00",
+        "discount_total": "200.00",
+        "taxable_total": "1000.00",
+        "tax_total": "130.00",
+        "charge_total": "0.00",
+        "grand_total": "930.00"
+      }
     },
     {
       "name": "20% discount, exclusive: discount reduces taxable value, allocated per line",
-      "currency": "NPR", "policy": "exclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
+      "currency": "NPR",
+      "policy": "exclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
       "lines": [
-        {"key": "pizza", "quantity": 1, "unit_price": "600.00"},
-        {"key": "burger", "quantity": 1, "unit_price": "400.00"}
+        { "key": "pizza", "quantity": 1, "unit_price": "600.00" },
+        { "key": "burger", "quantity": 1, "unit_price": "400.00" }
       ],
-      "adjustment": {"calc_type": "percentage", "value": "20"},
-      "expected": {"subtotal": "1000.00", "discount_total": "200.00", "taxable_total": "800.00",
-                   "tax_total": "104.00", "charge_total": "0.00", "grand_total": "904.00",
-                   "lines": {
-                     "pizza": {"discount": "120.00", "tax": "62.40", "line_total": "542.40"},
-                     "burger": {"discount": "80.00", "tax": "41.60", "line_total": "361.60"}
-                   }}
+      "adjustment": { "calc_type": "percentage", "value": "20" },
+      "expected": {
+        "subtotal": "1000.00",
+        "discount_total": "200.00",
+        "taxable_total": "800.00",
+        "tax_total": "104.00",
+        "charge_total": "0.00",
+        "grand_total": "904.00",
+        "lines": {
+          "pizza": { "discount": "120.00", "tax": "62.40", "line_total": "542.40" },
+          "burger": { "discount": "80.00", "tax": "41.60", "line_total": "361.60" }
+        }
+      }
     },
     {
       "name": "fixed 200 discount, exclusive",
-      "currency": "NPR", "policy": "exclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 2, "unit_price": "500.00"}],
-      "adjustment": {"calc_type": "fixed", "value": "200"},
-      "expected": {"subtotal": "1000.00", "discount_total": "200.00", "taxable_total": "800.00",
-                   "tax_total": "104.00", "charge_total": "0.00", "grand_total": "904.00"}
+      "currency": "NPR",
+      "policy": "exclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 2, "unit_price": "500.00" }],
+      "adjustment": { "calc_type": "fixed", "value": "200" },
+      "expected": {
+        "subtotal": "1000.00",
+        "discount_total": "200.00",
+        "taxable_total": "800.00",
+        "tax_total": "104.00",
+        "charge_total": "0.00",
+        "grand_total": "904.00"
+      }
     },
     {
       "name": "percentage discount capped by max amount",
-      "currency": "NPR", "policy": "exclusive",
+      "currency": "NPR",
+      "policy": "exclusive",
       "tax_components": [],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "1000.00"}],
-      "adjustment": {"calc_type": "percentage", "value": "50", "max_amount": "300"},
-      "expected": {"subtotal": "1000.00", "discount_total": "300.00", "taxable_total": "0.00",
-                   "tax_total": "0.00", "charge_total": "0.00", "grand_total": "700.00"}
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "1000.00" }],
+      "adjustment": { "calc_type": "percentage", "value": "50", "max_amount": "300" },
+      "expected": {
+        "subtotal": "1000.00",
+        "discount_total": "300.00",
+        "taxable_total": "0.00",
+        "tax_total": "0.00",
+        "charge_total": "0.00",
+        "grand_total": "700.00"
+      }
     },
     {
       "name": "tax inclusive: tax extracted, never added",
-      "currency": "NPR", "policy": "inclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "904.00"}],
-      "expected": {"subtotal": "904.00", "discount_total": "0.00", "taxable_total": "800.00",
-                   "tax_total": "104.00", "charge_total": "0.00", "grand_total": "904.00"}
+      "currency": "NPR",
+      "policy": "inclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "904.00" }],
+      "expected": {
+        "subtotal": "904.00",
+        "discount_total": "0.00",
+        "taxable_total": "800.00",
+        "tax_total": "104.00",
+        "charge_total": "0.00",
+        "grand_total": "904.00"
+      }
     },
     {
       "name": "tax inclusive with 20% discount",
-      "currency": "NPR", "policy": "inclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "1130.00"}],
-      "adjustment": {"calc_type": "percentage", "value": "20"},
-      "expected": {"subtotal": "1130.00", "discount_total": "226.00", "taxable_total": "800.00",
-                   "tax_total": "104.00", "charge_total": "0.00", "grand_total": "904.00"}
+      "currency": "NPR",
+      "policy": "inclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "1130.00" }],
+      "adjustment": { "calc_type": "percentage", "value": "20" },
+      "expected": {
+        "subtotal": "1130.00",
+        "discount_total": "226.00",
+        "taxable_total": "800.00",
+        "tax_total": "104.00",
+        "charge_total": "0.00",
+        "grand_total": "904.00"
+      }
     },
     {
       "name": "exempt product is not taxed",
-      "currency": "NPR", "policy": "exclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
+      "currency": "NPR",
+      "policy": "exclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
       "lines": [
-        {"key": "food", "quantity": 1, "unit_price": "1000.00"},
-        {"key": "water", "quantity": 1, "unit_price": "500.00", "tax_class": "exempt"}
+        { "key": "food", "quantity": 1, "unit_price": "1000.00" },
+        { "key": "water", "quantity": 1, "unit_price": "500.00", "tax_class": "exempt" }
       ],
-      "expected": {"subtotal": "1500.00", "discount_total": "0.00", "taxable_total": "1000.00",
-                   "tax_total": "130.00", "charge_total": "0.00", "grand_total": "1630.00",
-                   "lines": {
-                     "food": {"discount": "0.00", "tax": "130.00", "line_total": "1130.00"},
-                     "water": {"discount": "0.00", "tax": "0.00", "line_total": "500.00"}
-                   }}
+      "expected": {
+        "subtotal": "1500.00",
+        "discount_total": "0.00",
+        "taxable_total": "1000.00",
+        "tax_total": "130.00",
+        "charge_total": "0.00",
+        "grand_total": "1630.00",
+        "lines": {
+          "food": { "discount": "0.00", "tax": "130.00", "line_total": "1130.00" },
+          "water": { "discount": "0.00", "tax": "0.00", "line_total": "500.00" }
+        }
+      }
     },
     {
       "name": "free item stays a real line, discounted to zero",
-      "currency": "NPR", "policy": "exclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
+      "currency": "NPR",
+      "policy": "exclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
       "lines": [
-        {"key": "pizza", "quantity": 1, "unit_price": "600.00"},
-        {"key": "coke", "quantity": 1, "unit_price": "120.00"}
+        { "key": "pizza", "quantity": 1, "unit_price": "600.00" },
+        { "key": "coke", "quantity": 1, "unit_price": "120.00" }
       ],
-      "adjustment": {"calc_type": "fixed", "value": "120", "eligible_line_keys": ["coke"]},
-      "expected": {"subtotal": "720.00", "discount_total": "120.00", "taxable_total": "600.00",
-                   "tax_total": "78.00", "charge_total": "0.00", "grand_total": "678.00",
-                   "lines": {
-                     "pizza": {"discount": "0.00", "tax": "78.00", "line_total": "678.00"},
-                     "coke": {"discount": "120.00", "tax": "0.00", "line_total": "0.00"}
-                   }}
+      "adjustment": { "calc_type": "fixed", "value": "120", "eligible_line_keys": ["coke"] },
+      "expected": {
+        "subtotal": "720.00",
+        "discount_total": "120.00",
+        "taxable_total": "600.00",
+        "tax_total": "78.00",
+        "charge_total": "0.00",
+        "grand_total": "678.00",
+        "lines": {
+          "pizza": { "discount": "0.00", "tax": "78.00", "line_total": "678.00" },
+          "coke": { "discount": "120.00", "tax": "0.00", "line_total": "0.00" }
+        }
+      }
     },
     {
       "name": "minimum spend not met: discount gives nothing and says why",
-      "currency": "NPR", "policy": "legacy",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "850.00"}],
-      "adjustment": {"calc_type": "percentage", "value": "10", "min_subtotal": "1000"},
-      "expected": {"subtotal": "850.00", "discount_total": "0.00", "taxable_total": "850.00",
-                   "tax_total": "110.50", "charge_total": "0.00", "grand_total": "960.50",
-                   "messages": [{"code": "MINIMUM_ORDER_NOT_MET", "required": "1000.00",
-                                 "current": "850.00", "shortfall": "150.00"}]}
+      "currency": "NPR",
+      "policy": "legacy",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "850.00" }],
+      "adjustment": { "calc_type": "percentage", "value": "10", "min_subtotal": "1000" },
+      "expected": {
+        "subtotal": "850.00",
+        "discount_total": "0.00",
+        "taxable_total": "850.00",
+        "tax_total": "110.50",
+        "charge_total": "0.00",
+        "grand_total": "960.50",
+        "messages": [
+          {
+            "code": "MINIMUM_ORDER_NOT_MET",
+            "required": "1000.00",
+            "current": "850.00",
+            "shortfall": "150.00"
+          }
+        ]
+      }
     },
     {
       "name": "service charge on discounted goods, taxed under exclusive policy",
-      "currency": "NPR", "policy": "exclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "1000.00"}],
-      "adjustment": {"calc_type": "percentage", "value": "10"},
-      "charges": [{"kind": "service", "calc_type": "percentage", "value": "10"}],
-      "expected": {"subtotal": "1000.00", "discount_total": "100.00", "taxable_total": "990.00",
-                   "tax_total": "128.70", "charge_total": "90.00", "grand_total": "1118.70"}
+      "currency": "NPR",
+      "policy": "exclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "1000.00" }],
+      "adjustment": { "calc_type": "percentage", "value": "10" },
+      "charges": [{ "kind": "service", "calc_type": "percentage", "value": "10" }],
+      "expected": {
+        "subtotal": "1000.00",
+        "discount_total": "100.00",
+        "taxable_total": "990.00",
+        "tax_total": "128.70",
+        "charge_total": "90.00",
+        "grand_total": "1118.70"
+      }
     },
     {
       "name": "service charge under legacy policy is untaxed",
-      "currency": "NPR", "policy": "legacy",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "1000.00"}],
-      "charges": [{"kind": "service", "calc_type": "percentage", "value": "10"}],
-      "expected": {"subtotal": "1000.00", "discount_total": "0.00", "taxable_total": "1000.00",
-                   "tax_total": "130.00", "charge_total": "100.00", "grand_total": "1230.00"}
+      "currency": "NPR",
+      "policy": "legacy",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "1000.00" }],
+      "charges": [{ "kind": "service", "calc_type": "percentage", "value": "10" }],
+      "expected": {
+        "subtotal": "1000.00",
+        "discount_total": "0.00",
+        "taxable_total": "1000.00",
+        "tax_total": "130.00",
+        "charge_total": "100.00",
+        "grand_total": "1230.00"
+      }
     },
     {
       "name": "two tax components (CGST + SGST), each rounded on the invoice",
-      "currency": "INR", "policy": "exclusive",
-      "tax_components": [{"name": "CGST", "rate": "9"}, {"name": "SGST", "rate": "9"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "333.33"}],
-      "expected": {"subtotal": "333.33", "discount_total": "0.00", "taxable_total": "333.33",
-                   "tax_total": "60.00", "charge_total": "0.00", "grand_total": "393.33",
-                   "taxes": ["30.00", "30.00"]}
+      "currency": "INR",
+      "policy": "exclusive",
+      "tax_components": [
+        { "name": "CGST", "rate": "9" },
+        { "name": "SGST", "rate": "9" }
+      ],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "333.33" }],
+      "expected": {
+        "subtotal": "333.33",
+        "discount_total": "0.00",
+        "taxable_total": "333.33",
+        "tax_total": "60.00",
+        "charge_total": "0.00",
+        "grand_total": "393.33",
+        "taxes": ["30.00", "30.00"]
+      }
     },
     {
       "name": "fixed discount split over three equal lines by largest remainder",
-      "currency": "NPR", "policy": "exclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
+      "currency": "NPR",
+      "policy": "exclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
       "lines": [
-        {"key": "a", "quantity": 1, "unit_price": "100.00"},
-        {"key": "b", "quantity": 1, "unit_price": "100.00"},
-        {"key": "c", "quantity": 1, "unit_price": "100.00"}
+        { "key": "a", "quantity": 1, "unit_price": "100.00" },
+        { "key": "b", "quantity": 1, "unit_price": "100.00" },
+        { "key": "c", "quantity": 1, "unit_price": "100.00" }
       ],
-      "adjustment": {"calc_type": "fixed", "value": "100"},
-      "expected": {"subtotal": "300.00", "discount_total": "100.00", "taxable_total": "200.00",
-                   "tax_total": "26.00", "charge_total": "0.00", "grand_total": "226.00",
-                   "lines": {
-                     "a": {"discount": "33.34", "tax": "8.66", "line_total": "75.32"},
-                     "b": {"discount": "33.33", "tax": "8.67", "line_total": "75.34"},
-                     "c": {"discount": "33.33", "tax": "8.67", "line_total": "75.34"}
-                   }}
+      "adjustment": { "calc_type": "fixed", "value": "100" },
+      "expected": {
+        "subtotal": "300.00",
+        "discount_total": "100.00",
+        "taxable_total": "200.00",
+        "tax_total": "26.00",
+        "charge_total": "0.00",
+        "grand_total": "226.00",
+        "lines": {
+          "a": { "discount": "33.34", "tax": "8.66", "line_total": "75.32" },
+          "b": { "discount": "33.33", "tax": "8.67", "line_total": "75.34" },
+          "c": { "discount": "33.33", "tax": "8.67", "line_total": "75.34" }
+        }
+      }
     },
     {
       "name": "zero-decimal currency (JPY)",
-      "currency": "JPY", "policy": "exclusive",
-      "tax_components": [{"name": "Consumption tax", "rate": "10"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "1000"}],
-      "adjustment": {"calc_type": "percentage", "value": "15"},
-      "expected": {"subtotal": "1000", "discount_total": "150", "taxable_total": "850",
-                   "tax_total": "85", "charge_total": "0", "grand_total": "935"}
+      "currency": "JPY",
+      "policy": "exclusive",
+      "tax_components": [{ "name": "Consumption tax", "rate": "10" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "1000" }],
+      "adjustment": { "calc_type": "percentage", "value": "15" },
+      "expected": {
+        "subtotal": "1000",
+        "discount_total": "150",
+        "taxable_total": "850",
+        "tax_total": "85",
+        "charge_total": "0",
+        "grand_total": "935"
+      }
     },
     {
       "name": "tax disabled",
-      "currency": "NPR", "policy": "legacy",
+      "currency": "NPR",
+      "policy": "legacy",
       "tax_components": [],
-      "lines": [{"key": "a", "quantity": 3, "unit_price": "120.50"}],
-      "expected": {"subtotal": "361.50", "discount_total": "0.00", "taxable_total": "0.00",
-                   "tax_total": "0.00", "charge_total": "0.00", "grand_total": "361.50"}
+      "lines": [{ "key": "a", "quantity": 3, "unit_price": "120.50" }],
+      "expected": {
+        "subtotal": "361.50",
+        "discount_total": "0.00",
+        "taxable_total": "0.00",
+        "tax_total": "0.00",
+        "charge_total": "0.00",
+        "grand_total": "361.50"
+      }
     },
     {
       "name": "Today's Special is the selling price, not a discount",
-      "currency": "NPR", "policy": "exclusive",
-      "tax_components": [{"name": "VAT", "rate": "13"}],
-      "lines": [{"key": "a", "quantity": 1, "unit_price": "400.00", "list_unit_price": "500.00"}],
-      "expected": {"subtotal": "400.00", "discount_total": "0.00", "taxable_total": "400.00",
-                   "tax_total": "52.00", "charge_total": "0.00", "grand_total": "452.00",
-                   "lines": {"a": {"discount": "0.00", "tax": "52.00", "line_total": "452.00"}}}
+      "currency": "NPR",
+      "policy": "exclusive",
+      "tax_components": [{ "name": "VAT", "rate": "13" }],
+      "lines": [{ "key": "a", "quantity": 1, "unit_price": "400.00", "list_unit_price": "500.00" }],
+      "expected": {
+        "subtotal": "400.00",
+        "discount_total": "0.00",
+        "taxable_total": "400.00",
+        "tax_total": "52.00",
+        "charge_total": "0.00",
+        "grand_total": "452.00",
+        "lines": { "a": { "discount": "0.00", "tax": "52.00", "line_total": "452.00" } }
+      }
     }
   ]
 }

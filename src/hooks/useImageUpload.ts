@@ -69,7 +69,7 @@ export function useImageUpload({
         });
       }
     },
-    [preset, bucket, storagePath, onSuccess]
+    [preset, bucket, storagePath, onSuccess],
   );
 
   const reset = useCallback(() => setState({ status: "idle" }), []);
@@ -80,7 +80,7 @@ export function useImageUpload({
       if (file) upload(file);
       e.target.value = ""; // allow re-selecting same file
     },
-    [upload]
+    [upload],
   );
 
   return { state, upload, reset, onInputChange };

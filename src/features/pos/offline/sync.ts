@@ -7,13 +7,7 @@ import { djangoFetch, apiUrl, tokenStore } from "@/lib/django-api-base";
 import { refreshAccessToken, secondsUntilExpiry } from "@/lib/auth-tokens";
 import { isGatewayError, isOnline, subscribeConnectivity } from "@/lib/connectivity";
 import { posListOrders } from "../api";
-import {
-  syncQueue,
-  offlineOrders,
-  offlinePayments,
-  cachedServerOrders,
-  SyncQueueItem,
-} from "./db";
+import { syncQueue, offlineOrders, offlinePayments, cachedServerOrders, SyncQueueItem } from "./db";
 
 const RETRY_DELAY_MS = 2000;
 const MAX_RETRY_DELAY_MS = 300000;
@@ -72,7 +66,7 @@ export async function enqueueMutation(
   endpoint: string,
   method: SyncQueueItem["method"],
   body: Record<string, any>,
-  clientMutationId: string
+  clientMutationId: string,
 ): Promise<void> {
   const item: SyncQueueItem = {
     id: clientMutationId,
@@ -252,8 +246,7 @@ async function runQueue(force: boolean): Promise<SyncResult> {
 
   for (const item of queue) {
     const parentOrder = item.type === "order" ? null : item.body?.order_id;
-    const notDue =
-      !force && (item.needs_attention || (item.next_retry_at ?? 0) > Date.now());
+    const notDue = !force && (item.needs_attention || (item.next_retry_at ?? 0) > Date.now());
     if (notDue || (parentOrder && waitingOrders.has(parentOrder))) {
       if (item.type === "order") waitingOrders.add(item.id);
       continue;
@@ -326,11 +319,9 @@ export function startBackgroundSync(intervalMs = 30000) {
     if (isOnline()) syncInBackground();
   });
 
-  syncQueue
-    .recoverInterrupted()
-    .finally(() => {
-      syncInBackground();
-    });
+  syncQueue.recoverInterrupted().finally(() => {
+    syncInBackground();
+  });
 
   // Then process periodically
   syncInterval = setInterval(syncInBackground, intervalMs);

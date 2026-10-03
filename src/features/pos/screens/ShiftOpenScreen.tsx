@@ -100,7 +100,10 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
         {/* Expected cash from previous shift */}
         {expectedCash !== null && (
           <div className="mb-4 rounded-xl bg-muted/50 px-4 py-2.5 text-center text-xs text-muted-foreground">
-            Previous shift closing cash: <span className="numeric font-bold text-foreground">{formatCurrency(expectedCash, currencySymbol)}</span>
+            Previous shift closing cash:{" "}
+            <span className="numeric font-bold text-foreground">
+              {formatCurrency(expectedCash, currencySymbol)}
+            </span>
           </div>
         )}
 
@@ -117,15 +120,15 @@ export default function ShiftOpenScreen({ onShiftOpened }: ShiftOpenProps) {
         {/* Worker info */}
         {currentWorker && (
           <div className="mb-4 rounded-xl bg-muted/50 px-4 py-2.5 text-center text-xs text-muted-foreground">
-            Opening as <span className="font-medium text-foreground">{currentWorker.display_name}</span>
+            Opening as{" "}
+            <span className="font-medium text-foreground">{currentWorker.display_name}</span>
           </div>
         )}
 
         {!isOnline && (
           <div className="mb-4 flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-700">
-            <WifiOff className="h-4 w-4 shrink-0" />
-            A shift can only be opened with a connection. Orders can be taken offline once a shift
-            is open.
+            <WifiOff className="h-4 w-4 shrink-0" />A shift can only be opened with a connection.
+            Orders can be taken offline once a shift is open.
           </div>
         )}
 

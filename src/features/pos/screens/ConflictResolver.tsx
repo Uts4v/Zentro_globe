@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
-import {
-  posListConflicts,
-  posResolveConflict,
-  posClearMutations,
-  PosConflicts,
-} from "../api";
+import { posListConflicts, posResolveConflict, posClearMutations, PosConflicts } from "../api";
 import {
   AlertTriangle,
   RefreshCw,
@@ -96,7 +91,7 @@ export default function ConflictResolver() {
   async function resolve(
     entityType: "order" | "payment",
     entityId: string,
-    resolution: "keep_server" | "keep_client"
+    resolution: "keep_server" | "keep_client",
   ) {
     setResolving(entityId);
     try {
@@ -123,8 +118,7 @@ export default function ConflictResolver() {
 
   if (!data) return null;
 
-  const totalConflicts =
-    data.orders.length + data.payments.length + localQueueCount;
+  const totalConflicts = data.orders.length + data.payments.length + localQueueCount;
 
   return (
     <div className="mx-auto max-w-4xl p-4 lg:p-6">
@@ -167,17 +161,14 @@ export default function ConflictResolver() {
               </h2>
               <div className="space-y-3">
                 {data.orders.map((order) => (
-                  <div
-                    key={order.uuid}
-                    className="rounded-2xl border border-border bg-card p-4"
-                  >
+                  <div key={order.uuid} className="rounded-2xl border border-border bg-card p-4">
                     <div className="mb-3 flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-bold text-foreground">
-                          Order #{order.id}
-                        </p>
+                        <p className="text-sm font-bold text-foreground">Order #{order.id}</p>
                         <p className="numeric text-xs text-muted-foreground">
-                          {order.status} &middot; {formatCurrency(Number(order.total_amount), currencySymbol)} &middot; v{order.version}
+                          {order.status} &middot;{" "}
+                          {formatCurrency(Number(order.total_amount), currencySymbol)} &middot; v
+                          {order.version}
                         </p>
                       </div>
                       {resolving === order.uuid && (
@@ -216,10 +207,7 @@ export default function ConflictResolver() {
               </h2>
               <div className="space-y-3">
                 {data.payments.map((payment) => (
-                  <div
-                    key={payment.id}
-                    className="rounded-2xl border border-border bg-card p-4"
-                  >
+                  <div key={payment.id} className="rounded-2xl border border-border bg-card p-4">
                     <div className="mb-3 flex items-center justify-between">
                       <div>
                         <p className="text-sm font-bold text-foreground">
@@ -236,9 +224,7 @@ export default function ConflictResolver() {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() =>
-                          resolve("payment", payment.id, "keep_server")
-                        }
+                        onClick={() => resolve("payment", payment.id, "keep_server")}
                         disabled={resolving === payment.id}
                         className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-40"
                       >
@@ -246,9 +232,7 @@ export default function ConflictResolver() {
                         Keep Server
                       </button>
                       <button
-                        onClick={() =>
-                          resolve("payment", payment.id, "keep_client")
-                        }
+                        onClick={() => resolve("payment", payment.id, "keep_client")}
                         disabled={resolving === payment.id}
                         className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
                       >
@@ -295,20 +279,18 @@ export default function ConflictResolver() {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {m.client_mutation_id.slice(0, 8)}... &middot;{" "}
-                        {m.processed_at
-                          ? new Date(m.processed_at).toLocaleString()
-                          : ""}
+                        {m.processed_at ? new Date(m.processed_at).toLocaleString() : ""}
                       </p>
                     </div>
-                      <button
-                        onClick={() => dismissMutation(m.id)}
-                        disabled={clearing}
-                        className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
-                        aria-label="Dismiss"
-                        title="Dismiss"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                    <button
+                      onClick={() => dismissMutation(m.id)}
+                      disabled={clearing}
+                      className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40"
+                      aria-label="Dismiss"
+                      title="Dismiss"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -337,8 +319,8 @@ export default function ConflictResolver() {
                 </button>
               </div>
               <p className="rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-700">
-                These are offline mutations stored in your browser that failed to sync. They
-                are stale and can be safely cleared.
+                These are offline mutations stored in your browser that failed to sync. They are
+                stale and can be safely cleared.
               </p>
             </section>
           )}

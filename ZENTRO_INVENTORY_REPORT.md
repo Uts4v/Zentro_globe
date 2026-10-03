@@ -28,8 +28,8 @@ Also add:
 - PDF inventory import through a SAFE REVIEW workflow
 
 ============================================================
-1. FIRST — AUDIT THE EXISTING INVENTORY IMPLEMENTATION
-============================================================
+
+1. # FIRST — AUDIT THE EXISTING INVENTORY IMPLEMENTATION
 
 Before changing anything, inspect:
 
@@ -95,22 +95,21 @@ Recommended migration approach:
 
 Then implement.
 
-============================================================
-2. DO NOT REBUILD THE INVENTORY CORE
+============================================================ 2. DO NOT REBUILD THE INVENTORY CORE
 ============================================================
 
 Preserve the existing architecture:
 
-InventoryItem
-=
+# InventoryItem
+
 What the thing is
 
-InventoryBalance
-=
+# InventoryBalance
+
 How much exists right now
 
-InventoryMovement
-=
+# InventoryMovement
+
 Why it changed
 
 InventoryMovement is permanent history.
@@ -145,8 +144,7 @@ audit trail
 
 reversals instead of deletion
 
-============================================================
-3. PRODUCT DESIGN PRINCIPLE
+============================================================ 3. PRODUCT DESIGN PRINCIPLE
 ============================================================
 
 Design around:
@@ -191,8 +189,7 @@ Receiving Document
 
 Design Zentro around the first mental model.
 
-============================================================
-4. NEW PRIMARY INVENTORY NAVIGATION
+============================================================ 4. NEW PRIMARY INVENTORY NAVIGATION
 ============================================================
 
 Replace the current overloaded navigation with a much simpler structure.
@@ -231,20 +228,19 @@ Add / Move Stock
 
 For manager:
 
-+ Suppliers
-+ Reports
-+ History
+- Suppliers
+- Reports
+- History
 
 For owner/admin:
 
-+ Settings
-+ Audit details
-+ Cost information
+- Settings
+- Audit details
+- Cost information
 
 Do not expose everything to everyone.
 
-============================================================
-5. INVENTORY HOME / OVERVIEW
+============================================================ 5. INVENTORY HOME / OVERVIEW
 ============================================================
 
 The Inventory homepage should answer:
@@ -278,7 +274,6 @@ Move stock between locations
 [ Record Waste ]
 Something spoiled, broke or was lost
 
-
 Needs Attention
 
 Milk
@@ -296,7 +291,6 @@ Front Counter
 25 left
 VERY LOW
 
-
 Manager Tools
 
 [ Suppliers ]
@@ -307,8 +301,7 @@ Do NOT lead with six large analytics cards.
 
 Staff actions are more important than dashboards.
 
-============================================================
-6. FRIENDLY TERMINOLOGY
+============================================================ 6. FRIENDLY TERMINOLOGY
 ============================================================
 
 Do not rename backend models/enums unless technically necessary.
@@ -395,8 +388,7 @@ PO
 
 to normal frontline users.
 
-============================================================
-7. STOCK PAGE
+============================================================ 7. STOCK PAGE
 ============================================================
 
 The Stock page should be the easiest inventory page.
@@ -432,7 +424,6 @@ Main Kitchen
 
 ● Good
 
-
 Milk
 
 Bar
@@ -440,7 +431,6 @@ Bar
 3 L left
 
 ⚠ Low
-
 
 Paper Cups
 
@@ -453,15 +443,13 @@ Front Counter
 Use:
 
 icon
-+
-label
-+
-color
+
+- label
+- color
 
 Never color alone.
 
-============================================================
-8. STOCK STATUS
+============================================================ 8. STOCK STATUS
 ============================================================
 
 Keep current backend status logic.
@@ -502,8 +490,7 @@ blue/info
 
 Keep status language simple.
 
-============================================================
-9. STOCK DETAIL
+============================================================ 9. STOCK DETAIL
 ============================================================
 
 Tapping an item opens:
@@ -525,7 +512,6 @@ Sep 28
 Last Delivery
 Sep 29
 
-
 Quick actions:
 
 [ Count ]
@@ -541,21 +527,18 @@ Manager:
 
 Advanced information should be collapsed.
 
-============================================================
-10. ADD STOCK ITEM
+============================================================ 10. ADD STOCK ITEM
 ============================================================
 
 The normal Add Item form should ask approximately FIVE questions.
 
 Add Stock Item
 
-1.
-What is it called?
+1.  What is it called?
 
 [ Chicken Breast ]
 
-2.
-What kind of item is it?
+2.  What kind of item is it?
 
 ○ Food / Ingredient
 ○ Prepared Here
@@ -564,18 +547,15 @@ What kind of item is it?
 
 Map these to existing backend enum values.
 
-3.
-How do you count it?
+3.  How do you count it?
 
 [ kg ]
 
-4.
-Where is it usually stored?
+4.  Where is it usually stored?
 
 [ Main Kitchen ]
 
-5.
-How much do you have now?
+5.  How much do you have now?
 
 [ 20 ] kg
 
@@ -585,8 +565,7 @@ Everything else should be under:
 
 Advanced
 
-============================================================
-11. ADVANCED ITEM SETTINGS
+============================================================ 11. ADVANCED ITEM SETTINGS
 ============================================================
 
 Advanced may contain:
@@ -621,8 +600,7 @@ Do not remove advanced functionality.
 
 Just hide it from the primary workflow.
 
-============================================================
-12. PURCHASE UNIT UX
+============================================================ 12. PURCHASE UNIT UX
 ============================================================
 
 Do not ask users for:
@@ -637,16 +615,13 @@ How do you buy this item?
 
 ● In bags / boxes / cases
 
-
 I buy it as:
 
 [ Sack ]
 
-
 One sack contains:
 
 [ 25 ] [ kg ]
-
 
 Summary:
 
@@ -654,8 +629,7 @@ Summary:
 
 This should map to the existing purchase-unit conversion data.
 
-============================================================
-13. COUNT STOCK
+============================================================ 13. COUNT STOCK
 ============================================================
 
 This should be one of Zentro's strongest inventory experiences.
@@ -678,7 +652,6 @@ Where are you counting?
 
 [ Everything ]
 
-
 Then:
 
 Main Kitchen
@@ -687,7 +660,6 @@ Main Kitchen
 
 [ Search item... ]
 
-
 Chicken Breast
 
 System says:
@@ -695,8 +667,7 @@ System says:
 
 How much do you see?
 
-[        ] kg
-
+[ ] kg
 
 After entry:
 
@@ -708,7 +679,6 @@ You counted:
 
 Difference:
 3 kg less
-
 
 Another:
 
@@ -723,8 +693,7 @@ Matches
 
 Use clear plain language.
 
-============================================================
-14. COUNT PROGRESS
+============================================================ 14. COUNT PROGRESS
 ============================================================
 
 Show:
@@ -747,8 +716,7 @@ Use subtle:
 
 Saved ✓
 
-============================================================
-15. COUNT APPROVAL
+============================================================ 15. COUNT APPROVAL
 ============================================================
 
 If approval is required:
@@ -778,7 +746,6 @@ Counted
 Difference
 3 kg less
 
-
 Milk
 
 System Said
@@ -790,15 +757,13 @@ Counted
 Difference
 2 L more
 
-
 [ Approve & Update Stock ]
 
 Keep existing backend reconciliation behavior.
 
 Do not directly overwrite balances.
 
-============================================================
-16. ADD / MOVE STOCK ACTION CENTER
+============================================================ 16. ADD / MOVE STOCK ACTION CENTER
 ============================================================
 
 This page contains:
@@ -817,8 +782,7 @@ Each is a large action card.
 
 No technical tabs.
 
-============================================================
-17. ADD DELIVERY
+============================================================ 17. ADD DELIVERY
 ============================================================
 
 Use simple language.
@@ -836,7 +800,7 @@ optional
 
 Reference / invoice
 
-[            ]
+[ ]
 optional
 
 What arrived?
@@ -852,9 +816,7 @@ Cost
 [ 12000 ]
 optional
 
-
 [ + Add Another Item ]
-
 
 [ Add to Stock ]
 
@@ -862,8 +824,7 @@ Do not ask user to manually convert sacks to kg/g.
 
 Existing backend handles conversion.
 
-============================================================
-18. DELIVERY RESULT
+============================================================ 18. DELIVERY RESULT
 ============================================================
 
 After success:
@@ -883,8 +844,7 @@ New stock:
 
 [ Add Another Delivery ]
 
-============================================================
-19. MOVE STOCK
+============================================================ 19. MOVE STOCK
 ============================================================
 
 Move Stock
@@ -925,8 +885,7 @@ RECEIVED / COMPLETE
 
 Avoid exposing internal enums.
 
-============================================================
-20. RECORD WASTE
+============================================================ 20. RECORD WASTE
 ============================================================
 
 Record Waste
@@ -976,8 +935,7 @@ Waste must remain explicit.
 
 Never infer waste from stock count difference.
 
-============================================================
-21. FIX STOCK
+============================================================ 21. FIX STOCK
 ============================================================
 
 Manager permission only.
@@ -998,18 +956,15 @@ Current stock:
 
 12 L
 
-
 What needs to change?
 
 ○ Add Stock
 
 ○ Remove Stock
 
-
 Amount
 
 [ 2 ] L
-
 
 Why?
 
@@ -1019,15 +974,13 @@ Note
 
 [ optional ]
 
-
 [ Update Stock ]
 
 Backend may continue using signed adjustment values.
 
 Frontline UI should not.
 
-============================================================
-22. STOCK HISTORY
+============================================================ 22. STOCK HISTORY
 ============================================================
 
 Rename Ledger to:
@@ -1049,7 +1002,6 @@ ABC Foods
 
 Added by Ram
 
-
 Yesterday · 4:10 PM
 
 Milk
@@ -1058,7 +1010,6 @@ Milk
 Waste · Expired
 
 Recorded by Sita
-
 
 Sep 28
 
@@ -1088,8 +1039,7 @@ Sales
 
 Undo
 
-============================================================
-23. REVERSAL UX
+============================================================ 23. REVERSAL UX
 ============================================================
 
 Do not say:
@@ -1114,8 +1064,7 @@ The original record will remain in Stock History.
 
 Preserve append-only movement history.
 
-============================================================
-24. SUPPLIERS
+============================================================ 24. SUPPLIERS
 ============================================================
 
 Keep Suppliers as a manager feature.
@@ -1134,8 +1083,7 @@ Receiving supplier orders should reuse Add Delivery concepts where practical.
 
 Do not expose inventory accounting terminology unnecessarily.
 
-============================================================
-25. REPORTS
+============================================================ 25. REPORTS
 ============================================================
 
 Create one clear Reports page.
@@ -1166,8 +1114,7 @@ Category
 
 Export
 
-============================================================
-26. CSV / PDF EXPORT
+============================================================ 26. CSV / PDF EXPORT
 ============================================================
 
 Every relevant report should support:
@@ -1218,8 +1165,7 @@ Stock Value
 
 Never leak cost data to users without view_cost permission.
 
-============================================================
-27. MAIN IMPORT / EXPORT CENTER
+============================================================ 27. MAIN IMPORT / EXPORT CENTER
 ============================================================
 
 Add:
@@ -1232,18 +1178,15 @@ Recommended modal/page:
 
 Inventory Import & Export
 
-
 IMPORT
 
 [ Import Inventory CSV ]
 
 [ Import Inventory PDF ]
 
-
 TEMPLATES
 
 [ Download CSV Template ]
-
 
 EXPORT
 
@@ -1257,8 +1200,7 @@ EXPORT
 
 [ Export Stock Counts ]
 
-============================================================
-28. CSV TEMPLATE
+============================================================ 28. CSV TEMPLATE
 ============================================================
 
 Provide a downloadable template.
@@ -1307,8 +1249,7 @@ quantity_per_sale
 
 Do not require every optional column.
 
-============================================================
-29. CSV TEMPLATE UX
+============================================================ 29. CSV TEMPLATE UX
 ============================================================
 
 When user clicks:
@@ -1328,8 +1269,8 @@ header row
 or provide:
 
 template
-+
-example instructions
+
+- example instructions
 
 If sample rows could accidentally import, clearly mark/remove them.
 
@@ -1339,8 +1280,7 @@ zentro_inventory_example.csv
 
 if necessary.
 
-============================================================
-30. CSV IMPORT
+============================================================ 30. CSV IMPORT
 ============================================================
 
 Flow:
@@ -1353,31 +1293,25 @@ Upload CSV
 
 [ Choose File ]
 
-
 Step 2
 
 Read file
-
 
 Step 3
 
 Validate
 
-
 Step 4
 
 Preview
-
 
 Step 5
 
 Fix errors
 
-
 Step 6
 
 Confirm Import
-
 
 Step 7
 
@@ -1385,8 +1319,7 @@ Import results
 
 Never immediately mutate inventory after upload.
 
-============================================================
-31. CSV IMPORT PREVIEW
+============================================================ 31. CSV IMPORT PREVIEW
 ============================================================
 
 Example:
@@ -1404,7 +1337,6 @@ inventory.csv
 
 2 errors
 
-
 Chicken Breast
 ✓ Ready
 
@@ -1420,7 +1352,6 @@ Paper Cups
 Rice
 ✕ Quantity cannot be negative
 
-
 [ Download Error Report ]
 
 [ Fix File ]
@@ -1433,8 +1364,7 @@ or:
 
 Choose the safest UX consistent with implementation.
 
-============================================================
-32. CSV IMPORT MODES
+============================================================ 32. CSV IMPORT MODES
 ============================================================
 
 Do not blindly overwrite live inventory.
@@ -1449,13 +1379,11 @@ Create item definitions.
 
 Opening quantity is allowed only for newly created items.
 
-
 [ Update Item Details ]
 
 Update names/categories/alerts/purchase metadata.
 
 Do NOT directly overwrite current stock quantity.
-
 
 [ Physical Stock Count ]
 
@@ -1471,8 +1399,7 @@ This is extremely important.
 
 Do NOT set InventoryBalance directly from CSV.
 
-============================================================
-33. EXISTING ITEM MATCHING
+============================================================ 33. EXISTING ITEM MATCHING
 ============================================================
 
 Prefer stable identifiers.
@@ -1503,8 +1430,7 @@ Chicken Breast
 
 Do not silently duplicate.
 
-============================================================
-34. OPENING STOCK IMPORT
+============================================================ 34. OPENING STOCK IMPORT
 ============================================================
 
 For NEW items only:
@@ -1517,8 +1443,7 @@ InventoryMovementService.opening_balance()
 
 Do not directly set InventoryBalance.
 
-============================================================
-35. EXISTING STOCK QUANTITY IMPORT
+============================================================ 35. EXISTING STOCK QUANTITY IMPORT
 ============================================================
 
 Do not directly overwrite existing quantity.
@@ -1535,8 +1460,7 @@ CSV
 
 This preserves the inventory ledger.
 
-============================================================
-36. CSV ERROR HANDLING
+============================================================ 36. CSV ERROR HANDLING
 ============================================================
 
 Validate:
@@ -1585,8 +1509,7 @@ Unit "box" is not configured.
 
 or fix CSV and upload again.
 
-============================================================
-37. IMPORT AUDIT
+============================================================ 37. IMPORT AUDIT
 ============================================================
 
 Every import session should record:
@@ -1615,8 +1538,7 @@ Do not expose sensitive file data unnecessarily.
 
 If existing audit infrastructure can capture this, reuse it.
 
-============================================================
-38. IDEMPOTENT IMPORT
+============================================================ 38. IDEMPOTENT IMPORT
 ============================================================
 
 Prevent accidental double import.
@@ -1634,8 +1556,7 @@ This file appears to have already been imported.
 [ Import Again Anyway ]
 manager only if needed
 
-============================================================
-39. PDF EXPORT
+============================================================ 39. PDF EXPORT
 ============================================================
 
 Add a professional Inventory PDF.
@@ -1647,7 +1568,6 @@ ZENTRO INVENTORY REPORT
 Silver Fir
 
 Sep 30, 2026
-
 
 SUMMARY
 
@@ -1662,7 +1582,6 @@ Out of Stock
 Inventory Value
 if permission allows
 
-
 NEEDS ATTENTION
 
 Item
@@ -1672,7 +1591,6 @@ Location
 Quantity
 
 Status
-
 
 CURRENT STOCK
 
@@ -1687,7 +1605,6 @@ Quantity
 Unit
 
 Status
-
 
 Optional sections:
 
@@ -1705,8 +1622,7 @@ Repeat table header on new pages.
 
 Include generated date/time.
 
-============================================================
-40. PDF EXPORT TYPES
+============================================================ 40. PDF EXPORT TYPES
 ============================================================
 
 Allow:
@@ -1725,8 +1641,7 @@ Full Inventory Summary PDF
 
 Do not cram every report into one document unless user selects Full Report.
 
-============================================================
-41. PDF IMPORT
+============================================================ 41. PDF IMPORT
 ============================================================
 
 PDF import is fundamentally different from CSV.
@@ -1745,8 +1660,7 @@ PDF
 → Confirm
 → Inventory service
 
-============================================================
-42. PDF IMPORT TYPES
+============================================================ 42. PDF IMPORT TYPES
 ============================================================
 
 Support:
@@ -1766,8 +1680,7 @@ If no safe extraction capability exists:
 
 support text-based PDF first.
 
-============================================================
-43. PDF IMPORT REVIEW
+============================================================ 43. PDF IMPORT REVIEW
 ============================================================
 
 Example:
@@ -1775,7 +1688,6 @@ Example:
 Import from PDF
 
 inventory-september.pdf
-
 
 Zentro found:
 
@@ -1787,14 +1699,12 @@ Zentro found:
 
 2 could not be read
 
-
 Chicken Breast
 
 Quantity
 18 kg
 
 ✓ Looks good
-
 
 Cooking Oil
 
@@ -1806,20 +1716,17 @@ Unit
 
 ⚠ Please confirm
 
-
 Unknown Item
 
 [ Edit Name ]
 
 [ Skip ]
 
-
 [ Review 7 Issues ]
 
 [ Continue ]
 
-============================================================
-44. PDF IMPORT CONFIDENCE
+============================================================ 44. PDF IMPORT CONFIDENCE
 ============================================================
 
 If AI/document extraction is used:
@@ -1842,8 +1749,7 @@ Original text:
 
 [ Confirm 70 kg ]
 
-============================================================
-45. PDF IMPORT SAFETY
+============================================================ 45. PDF IMPORT SAFETY
 ============================================================
 
 PDF-extracted current quantities should become:
@@ -1858,8 +1764,7 @@ New item opening quantity may use opening balance only after user confirms.
 
 Never allow AI/PDF parser to directly call stock-changing APIs without merchant review.
 
-============================================================
-46. IMPORT IMAGES
+============================================================ 46. IMPORT IMAGES
 ============================================================
 
 Inventory item photos do not need to be part of CSV/PDF import in V1.
@@ -1870,8 +1775,7 @@ treat it as optional metadata.
 
 Do not let image handling block inventory import.
 
-============================================================
-47. ROLE-BASED UI
+============================================================ 47. ROLE-BASED UI
 ============================================================
 
 Use the existing permission framework.
@@ -1886,7 +1790,6 @@ Count Stock
 
 Record Waste
 
-
 KITCHEN / BAR STAFF
 
 Stock
@@ -1896,7 +1799,6 @@ Count Stock
 Record Waste
 
 Move Stock
-
 
 MANAGER
 
@@ -1912,7 +1814,6 @@ Reports
 
 History
 
-
 OWNER / ADMIN
 
 Everything
@@ -1927,8 +1828,7 @@ Import / Export
 
 Role defaults may vary according to existing Zentro role model.
 
-============================================================
-48. CRITICAL PERMISSION FIX
+============================================================ 48. CRITICAL PERMISSION FIX
 ============================================================
 
 Audit current inventory permission enforcement.
@@ -1974,8 +1874,7 @@ import/export
 
 Add new permission only if genuinely necessary.
 
-============================================================
-49. COST PRIVACY
+============================================================ 49. COST PRIVACY
 ============================================================
 
 Normal employees should not automatically see:
@@ -2000,8 +1899,7 @@ Exports must apply the same rule.
 
 CSV/PDF cannot become a cost-data leak.
 
-============================================================
-50. FIX CROSS-MERCHANT REPORT COST LEAK
+============================================================ 50. FIX CROSS-MERCHANT REPORT COST LEAK
 ============================================================
 
 Before exposing new report/export functionality:
@@ -2016,8 +1914,7 @@ Add regression test:
 
 Merchant A must never receive Merchant B cost values.
 
-============================================================
-51. FIX STOCK PAGINATION
+============================================================ 51. FIX STOCK PAGINATION
 ============================================================
 
 Current Stock must support real backend pagination.
@@ -2046,8 +1943,7 @@ This matters for merchants with:
 
 items.
 
-============================================================
-52. ADJUSTMENT APPROVAL
+============================================================ 52. ADJUSTMENT APPROVAL
 ============================================================
 
 Inspect:
@@ -2072,8 +1968,7 @@ REJECTED
 
 Stock must only change according to the defined approved workflow.
 
-============================================================
-53. DOCUMENT NUMBER SAFETY
+============================================================ 53. DOCUMENT NUMBER SAFETY
 ============================================================
 
 Review receipt / PO number generation if touching import/export/receiving.
@@ -2089,8 +1984,7 @@ Use a safe sequence strategy if necessary.
 Do not broaden this project unnecessarily, but do not make new import workflows
 depend on collision-prone identifiers.
 
-============================================================
-54. SETTINGS PAGE
+============================================================ 54. SETTINGS PAGE
 ============================================================
 
 Keep Settings simple.
@@ -2106,7 +2000,6 @@ Prevent stock below zero
 Manager approves stock corrections
 [ OFF / only if actually supported ]
 
-
 Advanced
 
 Audit History
@@ -2115,8 +2008,7 @@ Import / Export defaults
 
 Do not expose internal engine settings.
 
-============================================================
-55. MOBILE DESIGN
+============================================================ 55. MOBILE DESIGN
 ============================================================
 
 Inventory must work extremely well on phone.
@@ -2147,8 +2039,7 @@ minimal table layouts
 
 avoid horizontal scrolling
 
-============================================================
-56. DESKTOP DESIGN
+============================================================ 56. DESKTOP DESIGN
 ============================================================
 
 Desktop may use tables for:
@@ -2165,8 +2056,7 @@ But keep actions task-based.
 
 Do not turn the homepage into an accounting dashboard.
 
-============================================================
-57. VISUAL SYSTEM
+============================================================ 57. VISUAL SYSTEM
 ============================================================
 
 Use existing Zentro UI system.
@@ -2201,8 +2091,7 @@ Use icons + text.
 
 Do not use excessive colors.
 
-============================================================
-58. FORM DESIGN
+============================================================ 58. FORM DESIGN
 ============================================================
 
 Always place labels ABOVE fields.
@@ -2227,8 +2116,7 @@ Keep Around
 
 Try to keep about this much in stock.
 
-============================================================
-59. CONFIRMATIONS
+============================================================ 59. CONFIRMATIONS
 ============================================================
 
 Do not ask confirmation for harmless navigation.
@@ -2251,8 +2139,7 @@ archive
 
 Use clear consequence text.
 
-============================================================
-60. NOTIFICATIONS / TOASTS
+============================================================ 60. NOTIFICATIONS / TOASTS
 ============================================================
 
 Good:
@@ -2267,8 +2154,7 @@ Operation successful.
 
 Use human language.
 
-============================================================
-61. ACCESSIBILITY
+============================================================ 61. ACCESSIBILITY
 ============================================================
 
 Requirements:
@@ -2295,8 +2181,7 @@ escape closes dialogs where safe
 
 mobile screen reader testing
 
-============================================================
-62. LOCALIZATION READINESS
+============================================================ 62. LOCALIZATION READINESS
 ============================================================
 
 Do not hard-code UI strings throughout components.
@@ -2309,8 +2194,7 @@ Use simple English that is easy to translate.
 
 Avoid slang and jargon.
 
-============================================================
-63. OFFLINE / FAILURE STATES
+============================================================ 63. OFFLINE / FAILURE STATES
 ============================================================
 
 Do not fake successful stock mutations.
@@ -2331,8 +2215,7 @@ Keep value locally and retry safely if architecture supports it.
 
 Idempotency must prevent duplicates.
 
-============================================================
-64. LOADING STATES
+============================================================ 64. LOADING STATES
 ============================================================
 
 Use lightweight skeletons.
@@ -2347,8 +2230,7 @@ Count line skeleton
 
 Reports skeleton
 
-============================================================
-65. EMPTY STATES
+============================================================ 65. EMPTY STATES
 ============================================================
 
 No items:
@@ -2361,20 +2243,17 @@ Add your first item or import inventory.
 
 [ Import Inventory ]
 
-
 No low stock:
 
 Everything looks good.
 
 No items need attention right now.
 
-
 No history:
 
 No stock changes yet.
 
-============================================================
-66. SEARCH
+============================================================ 66. SEARCH
 ============================================================
 
 Search stock by:
@@ -2391,8 +2270,7 @@ Debounce search.
 
 Do not search only client-side if data is paginated.
 
-============================================================
-67. IMPORT PERFORMANCE
+============================================================ 67. IMPORT PERFORMANCE
 ============================================================
 
 Do not process huge CSV imports synchronously in a way that times out.
@@ -2419,8 +2297,7 @@ Failed
 
 Do not notify "completed" before stock mutations finish.
 
-============================================================
-68. IMPORT TRANSACTIONS
+============================================================ 68. IMPORT TRANSACTIONS
 ============================================================
 
 Do not put an enormous multi-thousand-row import inside one fragile transaction if
@@ -2440,8 +2317,7 @@ merchant scope
 
 Provide import result summary.
 
-============================================================
-69. EXPORT PERFORMANCE
+============================================================ 69. EXPORT PERFORMANCE
 ============================================================
 
 For small reports:
@@ -2452,8 +2328,7 @@ consider background generation using existing worker infrastructure.
 
 Do not load millions of movements into browser memory.
 
-============================================================
-70. FILE SECURITY
+============================================================ 70. FILE SECURITY
 ============================================================
 
 Validate uploads.
@@ -2480,8 +2355,7 @@ Delete temporary import files according to retention policy.
 
 Tenant-scope import sessions.
 
-============================================================
-71. IMPORT RESULT
+============================================================ 71. IMPORT RESULT
 ============================================================
 
 After import:
@@ -2499,13 +2373,11 @@ Opening Stock Added:
 
 No Existing Stock Was Overwritten
 
-
 [ View Stock ]
 
 [ Download Result CSV ]
 
-============================================================
-72. EXPORT FILE NAMES
+============================================================ 72. EXPORT FILE NAMES
 ============================================================
 
 Use meaningful names.
@@ -2520,8 +2392,7 @@ silver-fir-waste-report-2026-09.csv
 
 Do not expose internal IDs unnecessarily.
 
-============================================================
-73. KEEP EXISTING STOCK RULES
+============================================================ 73. KEEP EXISTING STOCK RULES
 ============================================================
 
 Do not alter business rules unintentionally.
@@ -2544,8 +2415,7 @@ Counts reconcile only according to existing approval workflow.
 
 Reversals never delete history.
 
-============================================================
-74. DO NOT OVERENGINEER
+============================================================ 74. DO NOT OVERENGINEER
 ============================================================
 
 Do NOT introduce:
@@ -2584,8 +2454,7 @@ existing serializers/services
 
 existing Zentro design system.
 
-============================================================
-75. COMPONENT ARCHITECTURE
+============================================================ 75. COMPONENT ARCHITECTURE
 ============================================================
 
 Audit existing inventory components and reuse them.
@@ -2640,8 +2509,7 @@ ExportDialog
 
 Do not create duplicate mobile/desktop implementations unless needed.
 
-============================================================
-76. API DESIGN
+============================================================ 76. API DESIGN
 ============================================================
 
 Reuse existing inventory APIs where possible.
@@ -2679,8 +2547,7 @@ Exact paths should follow current API conventions.
 
 Do not create duplicate item/stock APIs.
 
-============================================================
-77. IMPORT SESSION
+============================================================ 77. IMPORT SESSION
 ============================================================
 
 If a persistent import object is needed, keep it simple.
@@ -2711,8 +2578,7 @@ Temporary parsed rows may live in structured JSON or supporting rows depending s
 
 Choose based on existing project conventions.
 
-============================================================
-78. EXPORT SOURCE OF TRUTH
+============================================================ 78. EXPORT SOURCE OF TRUTH
 ============================================================
 
 CSV/PDF exports must read from authoritative backend data.
@@ -2723,8 +2589,7 @@ Filters selected in UI can be passed to server.
 
 Server generates file.
 
-============================================================
-79. CSV FORMAT
+============================================================ 79. CSV FORMAT
 ============================================================
 
 Use UTF-8.
@@ -2751,8 +2616,7 @@ Use raw machine-friendly values in CSV.
 
 PDF may use human-friendly formatting.
 
-============================================================
-80. TESTS — CORE SAFETY
+============================================================ 80. TESTS — CORE SAFETY
 ============================================================
 
 Existing inventory tests must continue passing.
@@ -2761,8 +2625,7 @@ Add tests proving imports never directly edit InventoryBalance.
 
 All quantity changes must create the appropriate InventoryMovement.
 
-============================================================
-81. TESTS — CSV IMPORT
+============================================================ 81. TESTS — CSV IMPORT
 ============================================================
 
 Test:
@@ -2799,8 +2662,7 @@ duplicate upload/idempotency
 
 large file behavior
 
-============================================================
-82. TESTS — PDF IMPORT
+============================================================ 82. TESTS — PDF IMPORT
 ============================================================
 
 Test:
@@ -2823,8 +2685,7 @@ oversized file
 
 tenant isolation
 
-============================================================
-83. TESTS — EXPORT
+============================================================ 83. TESTS — EXPORT
 ============================================================
 
 Test:
@@ -2849,8 +2710,7 @@ Unicode names
 
 decimal quantities
 
-============================================================
-84. TESTS — PERMISSIONS
+============================================================ 84. TESTS — PERMISSIONS
 ============================================================
 
 Test:
@@ -2871,8 +2731,7 @@ backend endpoints reject unauthorized actions
 
 not only frontend hiding
 
-============================================================
-85. TEST — CROSS-MERCHANT DATA
+============================================================ 85. TEST — CROSS-MERCHANT DATA
 ============================================================
 
 Merchant A must never receive:
@@ -2893,8 +2752,7 @@ Merchant B audit data
 
 Add explicit regression tests.
 
-============================================================
-86. TEST — PAGINATION
+============================================================ 86. TEST — PAGINATION
 ============================================================
 
 Create >100 stock items.
@@ -2911,8 +2769,7 @@ filters preserve pagination
 
 total count correct
 
-============================================================
-87. TEST — STOCK COUNT IMPORT
+============================================================ 87. TEST — STOCK COUNT IMPORT
 ============================================================
 
 Book:
@@ -2934,8 +2791,7 @@ NOT:
 
 Never classify -27 as waste.
 
-============================================================
-88. TEST — REVERSAL
+============================================================ 88. TEST — REVERSAL
 ============================================================
 
 Import opening balance:
@@ -2951,8 +2807,7 @@ Original remains.
 
 Do not delete original movement.
 
-============================================================
-89. FINAL USER EXPERIENCE TEST
+============================================================ 89. FINAL USER EXPERIENCE TEST
 ============================================================
 
 Give the interface to someone unfamiliar with inventory terminology.
@@ -2975,8 +2830,7 @@ How do I import a spreadsheet?
 
 without learning database terminology.
 
-============================================================
-90. IMPLEMENTATION ORDER
+============================================================ 90. IMPLEMENTATION ORDER
 ============================================================
 
 PHASE 1
@@ -3043,8 +2897,7 @@ PHASE 16
 
 Full regression testing.
 
-============================================================
-91. REQUIRED VERIFICATION
+============================================================ 91. REQUIRED VERIFICATION
 ============================================================
 
 Backend:
@@ -3075,8 +2928,7 @@ Do not claim success if important tests fail.
 
 Document pre-existing failures separately.
 
-============================================================
-92. FINAL REPORT
+============================================================ 92. FINAL REPORT
 ============================================================
 
 Return a concise implementation report:
@@ -3178,7 +3030,7 @@ NON-NEGOTIABLE RULES
 24. Keep the system ready for hundreds/thousands of inventory items.
 
 25. A lightly trained employee should understand the main workflows without needing
-to understand how the inventory database works.
+    to understand how the inventory database works.
 
 ============================================================
 FINAL PRODUCT TARGET

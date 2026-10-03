@@ -1,6 +1,11 @@
 import { apiUrl, djangoFetch } from "@/lib/django-api-base";
 import { djangoHeaders as authHeaders } from "@/lib/auth";
-import type { MembershipCardDesign, MembershipCard, MembershipQrToken, MembershipQrResolve } from "./types";
+import type {
+  MembershipCardDesign,
+  MembershipCard,
+  MembershipQrToken,
+  MembershipQrResolve,
+} from "./types";
 
 export const merchantCardDesignApi = {
   get: async (): Promise<MembershipCardDesign> => {

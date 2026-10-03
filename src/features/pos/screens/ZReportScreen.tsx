@@ -42,7 +42,7 @@ export default function ZReportScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [dateFilter, setDateFilter] = useState<string>(
-    dateParam || new Date().toISOString().split("T")[0]
+    dateParam || new Date().toISOString().split("T")[0],
   );
 
   useEffect(() => {
@@ -221,17 +221,41 @@ export default function ZReportScreen() {
         <div className="grid gap-6 lg:grid-cols-2">
           {/* Cash Summary */}
           <Card title="Cash Summary">
-            <Row label="Opening Cash" value={formatCurrency(data.cash_summary.total_cash_in, currencySymbol)} />
-            <Row label="Cash Sales" value={formatCurrency(data.shifts.reduce((s, sh) => s + Number(sh.total_cash_sales), 0), currencySymbol)} />
-            <Row label="Change Given" value={`- ${formatCurrency(data.cash_summary.total_cash_out_change, currencySymbol)}`} accent />
+            <Row
+              label="Opening Cash"
+              value={formatCurrency(data.cash_summary.total_cash_in, currencySymbol)}
+            />
+            <Row
+              label="Cash Sales"
+              value={formatCurrency(
+                data.shifts.reduce((s, sh) => s + Number(sh.total_cash_sales), 0),
+                currencySymbol,
+              )}
+            />
+            <Row
+              label="Change Given"
+              value={`- ${formatCurrency(data.cash_summary.total_cash_out_change, currencySymbol)}`}
+              accent
+            />
             <div className="my-2 border-t border-border" />
-            <Row label="Expected in Drawer" value={formatCurrency(data.cash_summary.total_expected_cash, currencySymbol)} bold />
-            <Row label="Actual Closing" value={formatCurrency(data.cash_summary.total_actual_cash, currencySymbol)} bold />
+            <Row
+              label="Expected in Drawer"
+              value={formatCurrency(data.cash_summary.total_expected_cash, currencySymbol)}
+              bold
+            />
+            <Row
+              label="Actual Closing"
+              value={formatCurrency(data.cash_summary.total_actual_cash, currencySymbol)}
+              bold
+            />
             {hasCashDifference && (
-              <div className={`mt-2 rounded-xl px-3 py-2 text-sm font-bold ${
-                cashDiff > 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
-              }`}>
-                {cashDiff > 0 ? "+" : ""} {formatCurrency(cashDiff, currencySymbol)} {cashDiff > 0 ? "Over" : "Short"}
+              <div
+                className={`mt-2 rounded-xl px-3 py-2 text-sm font-bold ${
+                  cashDiff > 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
+                }`}
+              >
+                {cashDiff > 0 ? "+" : ""} {formatCurrency(cashDiff, currencySymbol)}{" "}
+                {cashDiff > 0 ? "Over" : "Short"}
               </div>
             )}
           </Card>
@@ -247,13 +271,12 @@ export default function ZReportScreen() {
                   <div key={pm.method} className="mb-3">
                     <div className="mb-1 flex justify-between text-sm">
                       <span className="text-foreground">{paymentMethodLabel(pm.method)}</span>
-                      <span className="font-medium">{formatCurrency(pm.amount, currencySymbol)}</span>
+                      <span className="font-medium">
+                        {formatCurrency(pm.amount, currencySymbol)}
+                      </span>
                     </div>
                     <div className="h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-ink"
-                        style={{ width: `${pct}%` }}
-                      />
+                      <div className="h-full rounded-full bg-ink" style={{ width: `${pct}%` }} />
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {pm.count} payment{pm.count !== 1 ? "s" : ""} &middot; {pct.toFixed(1)}%
@@ -275,7 +298,9 @@ export default function ZReportScreen() {
                     key={s.status}
                     className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2.5"
                   >
-                    <span className="text-sm capitalize">{STATUS_LABELS[s.status] || s.status}</span>
+                    <span className="text-sm capitalize">
+                      {STATUS_LABELS[s.status] || s.status}
+                    </span>
                     <span className="text-sm font-bold text-ink">{s.count}</span>
                   </div>
                 ))}
@@ -290,19 +315,22 @@ export default function ZReportScreen() {
             ) : (
               <div className="space-y-2">
                 {data.top_selling_items.slice(0, 8).map((item, i) => (
-                  <div key={item.name} className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2">
+                  <div
+                    key={item.name}
+                    className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2"
+                  >
                     <div className="flex items-center gap-3">
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">
                         {i + 1}
                       </span>
                       <div>
                         <p className="text-sm font-medium">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {item.quantity_sold} sold
-                        </p>
+                        <p className="text-xs text-muted-foreground">{item.quantity_sold} sold</p>
                       </div>
                     </div>
-                    <span className="text-sm font-bold">{formatCurrency(item.revenue, currencySymbol)}</span>
+                    <span className="text-sm font-bold">
+                      {formatCurrency(item.revenue, currencySymbol)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -314,24 +342,44 @@ export default function ZReportScreen() {
         <div className="mt-6 grid gap-6 lg:grid-cols-3">
           {/* Credit Summary */}
           <Card title="Credit Accounts">
-            <Row label="Credit Sales" value={formatCurrency(data.credit_summary.sales, currencySymbol)} />
-            <Row label="Repayments" value={formatCurrency(data.credit_summary.repayments, currencySymbol)} accent />
+            <Row
+              label="Credit Sales"
+              value={formatCurrency(data.credit_summary.sales, currencySymbol)}
+            />
+            <Row
+              label="Repayments"
+              value={formatCurrency(data.credit_summary.repayments, currencySymbol)}
+              accent
+            />
             <div className="my-2 border-t border-border" />
             <Row
               label="Net"
-              value={formatCurrency(Number(data.credit_summary.sales) - Number(data.credit_summary.repayments), currencySymbol)}
+              value={formatCurrency(
+                Number(data.credit_summary.sales) - Number(data.credit_summary.repayments),
+                currencySymbol,
+              )}
               bold
             />
           </Card>
 
           {/* Debit Summary */}
           <Card title="Debit (Wallet) Accounts">
-            <Row label="Purchases" value={formatCurrency(data.debit_summary.purchases, currencySymbol)} />
-            <Row label="Top-ups" value={formatCurrency(data.debit_summary.topups, currencySymbol)} accent />
+            <Row
+              label="Purchases"
+              value={formatCurrency(data.debit_summary.purchases, currencySymbol)}
+            />
+            <Row
+              label="Top-ups"
+              value={formatCurrency(data.debit_summary.topups, currencySymbol)}
+              accent
+            />
             <div className="my-2 border-t border-border" />
             <Row
               label="Net"
-              value={formatCurrency(Number(data.debit_summary.purchases) - Number(data.debit_summary.topups), currencySymbol)}
+              value={formatCurrency(
+                Number(data.debit_summary.purchases) - Number(data.debit_summary.topups),
+                currencySymbol,
+              )}
               bold
             />
           </Card>
@@ -339,12 +387,17 @@ export default function ZReportScreen() {
           {/* Refunds */}
           <Card title="Refunds">
             <Row label="Refund Count" value={String(data.refund_count)} />
-            <Row label="Refund Total" value={formatCurrency(data.refund_total, currencySymbol)} bold />
+            <Row
+              label="Refund Total"
+              value={formatCurrency(data.refund_total, currencySymbol)}
+              bold
+            />
           </Card>
         </div>
 
         {/* Cash Payouts / Pay-ins */}
-        {(Number(data.cash_summary.total_payouts) > 0 || Number(data.cash_summary.total_payins) > 0) && (
+        {(Number(data.cash_summary.total_payouts) > 0 ||
+          Number(data.cash_summary.total_payins) > 0) && (
           <div className="mt-6">
             <Card title="Cash Movements">
               <Row
@@ -387,7 +440,9 @@ export default function ZReportScreen() {
                           </div>
                         </td>
                         <td className="py-2.5 pr-4 text-right font-medium">{staff.order_count}</td>
-                        <td className="py-2.5 pr-4 text-right font-bold">{formatCurrency(staff.total_revenue, currencySymbol)}</td>
+                        <td className="py-2.5 pr-4 text-right font-bold">
+                          {formatCurrency(staff.total_revenue, currencySymbol)}
+                        </td>
                         <td className="hidden py-2.5 pr-4 text-right text-muted-foreground sm:table-cell">
                           {formatCurrency(staff.cash_amount, currencySymbol)}
                         </td>
@@ -414,9 +469,13 @@ export default function ZReportScreen() {
                       <span className="text-xs font-bold text-foreground">
                         {s.opened_by} → {s.closed_by || "(open)"}
                       </span>
-                      <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                        s.status === "closed" ? "bg-success/10 text-success" : "bg-warning/10 text-warning"
-                      }`}>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                          s.status === "closed"
+                            ? "bg-success/10 text-success"
+                            : "bg-warning/10 text-warning"
+                        }`}
+                      >
                         {s.status}
                       </span>
                     </div>
@@ -435,7 +494,9 @@ export default function ZReportScreen() {
                       </div>
                       <div>
                         <span className="text-muted-foreground">Closing:</span>{" "}
-                        {s.closing_cash !== null ? formatCurrency(s.closing_cash, currencySymbol) : "—"}
+                        {s.closing_cash !== null
+                          ? formatCurrency(s.closing_cash, currencySymbol)
+                          : "—"}
                       </div>
                       <div>
                         <span className="text-muted-foreground">Cash Sales:</span>{" "}
@@ -446,10 +507,15 @@ export default function ZReportScreen() {
                         {formatCurrency(s.expected_cash, currencySymbol)}
                       </div>
                       {s.cash_difference !== null && Number(s.cash_difference) !== 0 && (
-                        <div className={`col-span-2 rounded-lg px-2 py-1 text-xs font-bold ${
-                          Number(s.cash_difference) > 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"
-                        }`}>
-                          Difference: {Number(s.cash_difference) > 0 ? "+" : ""} {formatCurrency(s.cash_difference, currencySymbol)}
+                        <div
+                          className={`col-span-2 rounded-lg px-2 py-1 text-xs font-bold ${
+                            Number(s.cash_difference) > 0
+                              ? "bg-success/10 text-success"
+                              : "bg-destructive/10 text-destructive"
+                          }`}
+                        >
+                          Difference: {Number(s.cash_difference) > 0 ? "+" : ""}{" "}
+                          {formatCurrency(s.cash_difference, currencySymbol)}
                         </div>
                       )}
                     </div>
@@ -494,7 +560,9 @@ function Row({
   return (
     <div className={`flex justify-between py-1 text-sm ${bold ? "font-bold" : ""}`}>
       <span className={accent ? "text-success" : "text-foreground"}>{label}</span>
-      <span className={`numeric ${accent ? "font-medium text-success" : "text-foreground"}`}>{value}</span>
+      <span className={`numeric ${accent ? "font-medium text-success" : "text-foreground"}`}>
+        {value}
+      </span>
     </div>
   );
 }

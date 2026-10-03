@@ -103,7 +103,10 @@ export function ChatWidget() {
             <div ref={bottomRef} />
           </div>
 
-          <form onSubmit={handleSend} className="flex items-center gap-2 border-t border-border p-4">
+          <form
+            onSubmit={handleSend}
+            className="flex items-center gap-2 border-t border-border p-4"
+          >
             <input
               type="text"
               value={input}
@@ -117,7 +120,11 @@ export function ChatWidget() {
               disabled={!input.trim() || sending}
               className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground disabled:opacity-40"
             >
-              {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              {sending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="h-4 w-4" />
+              )}
             </button>
           </form>
         </div>

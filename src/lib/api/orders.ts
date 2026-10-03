@@ -96,7 +96,9 @@ export const orderApi = {
       fulfillment_type: payload.fulfillment_type ?? "pickup",
       table_token: payload.table_token ?? "",
       ...(payload.claim_id ? { claim_id: payload.claim_id } : {}),
-      ...(payload.claim_id && payload.reward_choice ? { reward_choice: payload.reward_choice } : {}),
+      ...(payload.claim_id && payload.reward_choice
+        ? { reward_choice: payload.reward_choice }
+        : {}),
     };
     const data = await djangoFetch<unknown>(apiUrl("/orders/create/"), {
       method: "POST",
@@ -138,7 +140,9 @@ export const orderApi = {
     reward_choice?: CreateOrderPayload["reward_choice"];
   }): Promise<OrderPreview> => {
     // An offer preview needs to know who the customer is; plain previews stay anonymous.
-    const headers: HeadersInit = payload.claim_id ? authHeaders(true) : { "Content-Type": "application/json" };
+    const headers: HeadersInit = payload.claim_id
+      ? authHeaders(true)
+      : { "Content-Type": "application/json" };
     return djangoFetch<OrderPreview>(apiUrl("/orders/preview/"), {
       method: "POST",
       headers,
@@ -146,7 +150,9 @@ export const orderApi = {
         merchant_id: payload.merchant_id,
         ...(payload.fulfillment_type ? { fulfillment_type: payload.fulfillment_type } : {}),
         ...(payload.claim_id ? { claim_id: payload.claim_id } : {}),
-        ...(payload.claim_id && payload.reward_choice ? { reward_choice: payload.reward_choice } : {}),
+        ...(payload.claim_id && payload.reward_choice
+          ? { reward_choice: payload.reward_choice }
+          : {}),
         items: payload.items.map((i) => ({
           menu_item_id: i.menu_item_id,
           quantity: i.quantity,

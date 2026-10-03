@@ -49,8 +49,10 @@ const PAYMENT_METHODS: Array<{
   { key: "debit", label: PAYMENT_METHOD_LABELS.debit, icon: Wallet },
 ];
 
-const METHOD_ICONS: Record<string, React.ComponentType<{ className?: string }>> =
-  Object.fromEntries(PAYMENT_METHODS.map((pm) => [pm.key, pm.icon]));
+const METHOD_ICONS: Record<
+  string,
+  React.ComponentType<{ className?: string }>
+> = Object.fromEntries(PAYMENT_METHODS.map((pm) => [pm.key, pm.icon]));
 
 interface CollectPaymentSheetProps {
   order: PosOrder;
@@ -121,10 +123,7 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
   const activeMethod = availableMethods.find((m) => m.key === method);
 
   useEffect(() => {
-    if (
-      availableMethods.length > 0 &&
-      !availableMethods.some((m) => m.key === method)
-    ) {
+    if (availableMethods.length > 0 && !availableMethods.some((m) => m.key === method)) {
       setMethod(availableMethods[0].key as PaymentMethod);
     }
   }, [availableMethods, method]);
@@ -313,7 +312,10 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
             <div className="flex items-center gap-2">
               <ReceiptIcon className="h-5 w-5 text-ink" />
-              <h3 id="collect-payment-receipt-title" className="text-base font-bold text-foreground">
+              <h3
+                id="collect-payment-receipt-title"
+                className="text-base font-bold text-foreground"
+              >
                 Payment Complete
               </h3>
             </div>
@@ -338,7 +340,9 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
             <div>
               <p className="text-sm font-bold text-green-800">Payment successful</p>
               {method === "cash" && change > 0 && (
-                <p className="text-xs text-green-600">Change to give: {formatCurrency(change, currencySymbol)}</p>
+                <p className="text-xs text-green-600">
+                  Change to give: {formatCurrency(change, currencySymbol)}
+                </p>
               )}
               {receiptData?.is_offline_receipt && receiptData.sync_status !== "synced" && (
                 <p className="text-xs text-green-600">
@@ -356,7 +360,11 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
               </div>
             ) : receiptData ? (
               <div className="flex justify-center">
-                <Receipt data={receiptData} showPrintButton={true} currencySymbol={currencySymbol} />
+                <Receipt
+                  data={receiptData}
+                  showPrintButton={true}
+                  currencySymbol={currencySymbol}
+                />
               </div>
             ) : null}
           </div>
@@ -461,8 +469,8 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
 
         {activeMethod?.isQr && !qr && (
           <div className="mx-6 mb-4 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">
-            This merchant has no payment QR uploaded yet. Add one in settings
-            before taking QR payments.
+            This merchant has no payment QR uploaded yet. Add one in settings before taking QR
+            payments.
           </div>
         )}
 
@@ -523,7 +531,8 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
           <div className="px-6 pb-4">
             <label className="mb-1 block text-xs font-medium text-muted-foreground">
               Select debit account
-            </label>            {debitAccounts.length === 0 ? (
+            </label>{" "}
+            {debitAccounts.length === 0 ? (
               <p className="text-xs text-muted-foreground">No debit accounts found</p>
             ) : (
               <div className="space-y-2 max-h-40 overflow-y-auto">

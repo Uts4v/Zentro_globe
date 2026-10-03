@@ -81,7 +81,12 @@ export function PaymentMethodsChart({
     <div className="h-44 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={data} layout="vertical" margin={{ top: 5, right: 20, left: 30, bottom: 5 }}>
-          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="currentColor" className="text-border/30" />
+          <CartesianGrid
+            strokeDasharray="3 3"
+            horizontal={false}
+            stroke="currentColor"
+            className="text-border/30"
+          />
           <XAxis
             type="number"
             tickLine={false}
@@ -89,9 +94,7 @@ export function PaymentMethodsChart({
             tick={{ fontSize: 10, fill: "currentColor" }}
             className="text-muted-foreground"
             tickFormatter={(v) =>
-              v >= 1000
-                ? `${currencySymbol} ${(v / 1000).toFixed(0)}k`
-                : `${currencySymbol} ${v}`
+              v >= 1000 ? `${currencySymbol} ${(v / 1000).toFixed(0)}k` : `${currencySymbol} ${v}`
             }
           />
           <YAxis

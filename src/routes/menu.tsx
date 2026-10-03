@@ -188,7 +188,7 @@ function MenuPage() {
       merchantApi
         .list()
         .then((merchants) => {
-          const list = Array.isArray(merchants) ? merchants : (merchants as any).results ?? [];
+          const list = Array.isArray(merchants) ? merchants : ((merchants as any).results ?? []);
           if (list.length > 0) {
             const latest = list[list.length - 1];
             useStore.getState().setSelectedMerchant(String(latest.id));
@@ -323,9 +323,7 @@ function MenuPage() {
                   <div className="grid h-6 w-6 place-items-center rounded-lg bg-ember/15 text-xs text-ember">
                     ☕
                   </div>
-                  <p className="text-xs font-semibold text-foreground truncate">
-                    {merchant.name}
-                  </p>
+                  <p className="text-xs font-semibold text-foreground truncate">{merchant.name}</p>
                 </div>
                 <Link
                   to="/stores"

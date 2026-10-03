@@ -47,9 +47,7 @@ type OnboardingFormValues = z.infer<typeof onboardingSchema>;
 function splitPhone(phone?: string | null): { dial: string; local: string } {
   const normalized = (phone ?? "").trim();
   if (!normalized) return { dial: DEFAULT_DIAL_CODE, local: "" };
-  const match = COUNTRY_CODES.find((c) =>
-    normalized.startsWith(`+${c.dial.replace("+", "")}`),
-  );
+  const match = COUNTRY_CODES.find((c) => normalized.startsWith(`+${c.dial.replace("+", "")}`));
   if (!match) return { dial: DEFAULT_DIAL_CODE, local: normalized };
   return { dial: match.dial, local: normalized.slice(match.dial.length).replace(/^[\s-]+/, "") };
 }
@@ -79,9 +77,7 @@ function MerchantOnboardingPage() {
     mutationFn: (values: OnboardingFormValues) =>
       merchantApi.update({
         ...values,
-        ...(coords
-          ? { latitude: coords.lat.toFixed(6), longitude: coords.lng.toFixed(6) }
-          : {}),
+        ...(coords ? { latitude: coords.lat.toFixed(6), longitude: coords.lng.toFixed(6) } : {}),
         onboarding_complete: true,
       }),
     onSuccess: async () => {

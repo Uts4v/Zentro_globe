@@ -53,7 +53,9 @@ export const pdfMenuApi = {
 
   resolve: async (slug: string, token: string): Promise<PublicPdfMenuResolution> => {
     return djangoFetch<PublicPdfMenuResolution>(
-      apiUrl(`/merchants/public/${encodeURIComponent(slug)}/pdf-menu/${encodeURIComponent(token)}/`),
+      apiUrl(
+        `/merchants/public/${encodeURIComponent(slug)}/pdf-menu/${encodeURIComponent(token)}/`,
+      ),
     );
   },
 };

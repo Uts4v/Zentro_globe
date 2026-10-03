@@ -48,13 +48,15 @@ const t = {
   allAreas: "All areas",
   inactive: "Not active",
   staffCode: "Staff Code",
-  staffCodeHint: "Unique numeric code for POS staff login (e.g. 1001). Leave blank to auto-generate.",
+  staffCodeHint:
+    "Unique numeric code for POS staff login (e.g. 1001). Leave blank to auto-generate.",
   phone: "Phone",
   phoneHint: "Phone number (optional)",
   email: "Email",
   emailHint: "Email address (optional)",
   deleteEmployee: "Delete Employee",
-  deleteEmployeeConfirm: "Are you sure you want to remove this employee? If they have existing shift or order history, they will be archived safely to protect audit records.",
+  deleteEmployeeConfirm:
+    "Are you sure you want to remove this employee? If they have existing shift or order history, they will be archived safely to protect audit records.",
   createRole: "Create Role",
   editRole: "Edit Role",
   roleName: "Role name",
@@ -418,7 +420,8 @@ function EmployeesTab() {
         phone: "",
         email: "",
         pin: "",
-        role: roles.find((r) => r.name === "Server" || r.name === "Cashier")?.id ?? roles[0]?.id ?? 0,
+        role:
+          roles.find((r) => r.name === "Server" || r.name === "Cashier")?.id ?? roles[0]?.id ?? 0,
         areas: new Set(),
         active: true,
       });

@@ -16,7 +16,10 @@ export function SearchBar({ value, onChange, placeholder, merchantName }: Search
       <input
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder || (merchantName ? `Search anything at ${merchantName}...` : "Search anything...")}
+        placeholder={
+          placeholder ||
+          (merchantName ? `Search anything at ${merchantName}...` : "Search anything...")
+        }
         className="h-12 w-full rounded-2xl bg-mist pl-11 pr-20 text-[13px] text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-foreground/10 transition-shadow"
       />
       <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">

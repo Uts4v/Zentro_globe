@@ -37,7 +37,7 @@ const importedFrom = /from\s+["'](?:@\/)"?([^"']+)["']/g;
 
 const files = walk(SRC);
 const featureDirs = readdirSync(join(SRC, "features")).filter((d) =>
-  existsSync(join(SRC, "features", d))
+  existsSync(join(SRC, "features", d)),
 );
 
 const nodes = [];
@@ -53,13 +53,15 @@ const addNode = (id, type, label, filePath) => {
 for (const f of files) {
   const rel = f.replace(ROOT + "\\", "").replace(/[\\/]/g, "/");
   const src = readFileSync(f, "utf8");
-  if (/routes[\\/]/.test(rel)) addNode(`route:${rel}`, "route", rel.replace("src/routes/", ""), rel);
+  if (/routes[\\/]/.test(rel))
+    addNode(`route:${rel}`, "route", rel.replace("src/routes/", ""), rel);
   if (/features[\\/]/.test(rel)) {
     const m = rel.match(/src\/features\/([^/]+)/);
     if (m) addNode(`feature:${m[1]}`, "feature", m[1], `src/features/${m[1]}`);
     addNode(`module:${rel}`, "module", rel.replace("src/", ""), rel);
   }
-  if (/components[\\/]/.test(rel)) addNode(`component:${rel}`, "component", rel.replace("src/", ""), relatatividad);
+  if (/components[\\/]/.test(rel))
+    addNode(`component:${rel}`, "component", rel.replace("src/", ""), relatatividad);
   if (/lib\/api[\\/]/.test(rel)) addNode(`api:${rel}`, "api", rel.replace("src/lib/api/", ""), rel);
 
   let m;
@@ -74,7 +76,8 @@ for (const f of files) {
     }
     if (f2.startsWith("components/")) {
       const sid = `module:${rel}`;
-      if (byId.has(sid)) edges.push({ source: sid, target: `component:${f2}`, type: "uses", evidences: [rel] });
+      if (byId.has(sid))
+        edges.push({ source: sid, target: `component:${f2}`, type: "uses", evidences: [rel] });
     }
   }
 }

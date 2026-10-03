@@ -21,7 +21,11 @@ export default defineConfig({
             if (id.includes("node_modules/react-dom")) return "vendor-react-dom";
             if (id.includes("node_modules/react/")) return "vendor-react";
             if (id.includes("node_modules/@radix-ui/")) return "vendor-radix";
-            if (id.includes("node_modules/@tanstack/react-query") || id.includes("node_modules/@tanstack/react-router")) return "vendor-tanstack";
+            if (
+              id.includes("node_modules/@tanstack/react-query") ||
+              id.includes("node_modules/@tanstack/react-router")
+            )
+              return "vendor-tanstack";
           },
         },
       },
@@ -38,8 +42,7 @@ export default defineConfig({
           id: "/",
           name: "Zentro — Order & Loyalty",
           short_name: "Zentro",
-          description:
-            "Your memberships, rewards, orders and loyalty points in one place.",
+          description: "Your memberships, rewards, orders and loyalty points in one place.",
           start_url: "/",
           scope: "/",
           display: "standalone",

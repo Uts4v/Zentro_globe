@@ -19,7 +19,11 @@ if (!existsSync(dest)) {
 
 const copied = [];
 for (const file of readdirSync(src)) {
-  if (/^(service-worker\.js|registerSW\.js|sw\.js(\.gz)?|manifest\.webmanifest|workbox-.*\.js(\.gz)?)$/.test(file)) {
+  if (
+    /^(service-worker\.js|registerSW\.js|sw\.js(\.gz)?|manifest\.webmanifest|workbox-.*\.js(\.gz)?)$/.test(
+      file,
+    )
+  ) {
     copyFileSync(join(src, file), join(dest, file));
     copied.push(file);
   }

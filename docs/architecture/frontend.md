@@ -5,20 +5,20 @@
 
 ## Route table (verified endpoints; full at `src/routes/*`)
 
-| Route | Page (feature) | Public? |
-|---|---|---|
-| `/` | Storefront Home (customer) | Auth optional |
-| `/auth/login` `/auth/signup` | Auth (auth) | public |
-| `/m/:slug` | Merchant storefront | public |
-| `/m/:slug/table/:token` | Table QR ordering | public (guarded) |
-| `/m/:slug/menu`, `/m/:slug/order` | Menu / checkout | public |
-| `/m/:slug/pdf-menu/:token` | QR PDF menu | public |
-| `/customer/orders` | Customer order history | Auth |
-| `/cards`, `/cards/:merchantSlug` | Membership cards | Auth |
-| `/rewards` `/leaderboard` | Rewards / leaderboard | Auth |
-| `/merchant/*` (orders, prep, pos…) | Merchant dashboards | MerchantAuth |
-| `/pos`, `/pos/preparation*`, `/pos/orders` | POS + KDS | Bouncer/POSAuth |
-| `/table/:token/order` | Table order screen | public |
+| Route                                      | Page (feature)             | Public?          |
+| ------------------------------------------ | -------------------------- | ---------------- |
+| `/`                                        | Storefront Home (customer) | Auth optional    |
+| `/auth/login` `/auth/signup`               | Auth (auth)                | public           |
+| `/m/:slug`                                 | Merchant storefront        | public           |
+| `/m/:slug/table/:token`                    | Table QR ordering          | public (guarded) |
+| `/m/:slug/menu`, `/m/:slug/order`          | Menu / checkout            | public           |
+| `/m/:slug/pdf-menu/:token`                 | QR PDF menu                | public           |
+| `/customer/orders`                         | Customer order history     | Auth             |
+| `/cards`, `/cards/:merchantSlug`           | Membership cards           | Auth             |
+| `/rewards` `/leaderboard`                  | Rewards / leaderboard      | Auth             |
+| `/merchant/*` (orders, prep, pos…)         | Merchant dashboards        | MerchantAuth     |
+| `/pos`, `/pos/preparation*`, `/pos/orders` | POS + KDS                  | Bouncer/POSAuth  |
+| `/table/:token/order`                      | Table order screen         | public           |
 
 > Route→API mapping is centralized in `src/lib/api/*` — **the frontend never talks to Django
 > directly; it is a thin wrapper over `.delay()` of the endpoints in `src/lib/api` (plus PWA +
@@ -92,5 +92,5 @@ PremiumPunchCard, TodaySpecial…). `src/components/brand/*` = brand assets/logo
 - `features/transactions` imports `features/catalog` (ProductDetailSheet) + `features/pos`
   (printing KOT) → see `health.md` for the POS-ordination coupling flag.
 - `features/loyalty-engine` imports `features/merchant-management` (TodaySpecialPopup)
-  + `features/missions` + `features/rewards` + `features/punch-cards` — a hub pattern.
+  - `features/missions` + `features/rewards` + `features/punch-cards` — a hub pattern.
 - `features/customer-management` imports `features/pwa` (PwaProvider) → read `health.md`.

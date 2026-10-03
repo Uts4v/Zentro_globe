@@ -11,12 +11,12 @@ Verification was performed against the **codebase, automated test suite, and liv
 dev server** at commit `afb3f94` (branch `upgrade-ui-system`), not by clicking
 through the live UI. Anything not exercised end-to-end is explicitly marked as such.
 
-| Field | Value |
-|---|---|
-| Environment | Local dev: Django (`daphne`/ASGI) on `http://127.0.0.1:8000`, SQLite `backend/db.sqlite3`, TanStack Start frontend served by Vite |
-| Verified commit | `afb3f94` (2026-07-29, branch `upgrade-ui-system`) |
-| Report date | 2026-07-31 |
-| Method | Static code inspection + automated backend tests + frontend typecheck/build + live HTTP probes |
+| Field           | Value                                                                                                                             |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Environment     | Local dev: Django (`daphne`/ASGI) on `http://127.0.0.1:8000`, SQLite `backend/db.sqlite3`, TanStack Start frontend served by Vite |
+| Verified commit | `afb3f94` (2026-07-29, branch `upgrade-ui-system`)                                                                                |
+| Report date     | 2026-07-31                                                                                                                        |
+| Method          | Static code inspection + automated backend tests + frontend typecheck/build + live HTTP probes                                    |
 
 ---
 
@@ -60,17 +60,17 @@ auth-required probes to confirm 401 behavior.
 
 ### 3.1 Backend integrity
 
-| Command | Result |
-|---|---|
-| `python manage.py check` | No issues |
+| Command                           | Result                         |
+| --------------------------------- | ------------------------------ |
+| `python manage.py check`          | No issues                      |
 | `python manage.py showmigrations` | All migrations applied (`[X]`) |
 
 ### 3.2 Backend test suites
 
-| Command | Result |
-|---|---|
-| `python manage.py test` | **114 tests OK** (~291s) |
-| `python manage.py test qa_test` | **33 tests OK** (~62s) |
+| Command                         | Result                   |
+| ------------------------------- | ------------------------ |
+| `python manage.py test`         | **114 tests OK** (~291s) |
+| `python manage.py test qa_test` | **33 tests OK** (~62s)   |
 
 The 33-test QA suite (`backend/qa_test.py`) covers, in order:
 
@@ -110,24 +110,24 @@ The 33-test QA suite (`backend/qa_test.py`) covers, in order:
 
 ### 3.3 Frontend
 
-| Command | Result |
-|---|---|
+| Command            | Result                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------ |
 | `npx tsc --noEmit` | Only pre-existing errors (see section 6.4); no errors in files touched by this audit |
-| `npm run build` | Success — `✓ built in 8.19s` |
+| `npm run build`    | Success — `✓ built in 8.19s`                                                         |
 
 ### 3.4 Live HTTP probes (dev server on port 8000)
 
-| Endpoint | Expected | Result |
-|---|---|---|
-| `GET /healthz/` | 200 | ✅ 200 |
-| `GET /api/merchants/` | 200 | ✅ 200 |
-| `GET /api/merchants/slug/chiya/` | 200 | ✅ 200 |
-| `GET /api/merchants/13/menu/` | 200 | ✅ 200 |
-| `GET /api/loyalty/specials/chiya/` | 200 | ✅ 200 |
-| `GET /api/loyalty/leaderboard/?merchant=13` | 200 | ✅ 200 |
-| `GET /api/loyalty/rewards/?merchant=13` | 200 | ✅ 200 |
-| `GET /api/pos/health/` | 401 without device token | ✅ 401 (auth enforced) |
-| `GET /api/loyalty/merchant-profiles/mine/` | 401 without JWT | ✅ 401 (auth enforced) |
+| Endpoint                                    | Expected                 | Result                 |
+| ------------------------------------------- | ------------------------ | ---------------------- |
+| `GET /healthz/`                             | 200                      | ✅ 200                 |
+| `GET /api/merchants/`                       | 200                      | ✅ 200                 |
+| `GET /api/merchants/slug/chiya/`            | 200                      | ✅ 200                 |
+| `GET /api/merchants/13/menu/`               | 200                      | ✅ 200                 |
+| `GET /api/loyalty/specials/chiya/`          | 200                      | ✅ 200                 |
+| `GET /api/loyalty/leaderboard/?merchant=13` | 200                      | ✅ 200                 |
+| `GET /api/loyalty/rewards/?merchant=13`     | 200                      | ✅ 200                 |
+| `GET /api/pos/health/`                      | 401 without device token | ✅ 401 (auth enforced) |
+| `GET /api/loyalty/merchant-profiles/mine/`  | 401 without JWT          | ✅ 401 (auth enforced) |
 
 ### 3.5 Dev server
 
@@ -141,109 +141,109 @@ The 33-test QA suite (`backend/qa_test.py`) covers, in order:
 
 Status legend:
 
-| Status | Meaning |
-|---|---|
-| ✅ **Verified** | Confirmed by passing tests and/or live HTTP response |
-| 🟡 **Partially verified** | Code/API/tests confirm the behavior, but not exercised end-to-end in the live UI |
-| 🟢 **Implemented, untested** | Present in code; no automated test or live check covers it |
-| 🔵 **UI only** | Frontend present; no backend counterpart found |
-| 🟣 **Backend only** | Backend/API present; no frontend wiring found |
-| ⚪ **Planned / not found** | Referenced but not found in the codebase |
+| Status                       | Meaning                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| ✅ **Verified**              | Confirmed by passing tests and/or live HTTP response                             |
+| 🟡 **Partially verified**    | Code/API/tests confirm the behavior, but not exercised end-to-end in the live UI |
+| 🟢 **Implemented, untested** | Present in code; no automated test or live check covers it                       |
+| 🔵 **UI only**               | Frontend present; no backend counterpart found                                   |
+| 🟣 **Backend only**          | Backend/API present; no frontend wiring found                                    |
+| ⚪ **Planned / not found**   | Referenced but not found in the codebase                                         |
 
 ### 4.1 Authentication and accounts
 
-| Feature | Status | Evidence |
-|---|---|---|
-| Customer registration + login | ✅ Verified | `qa_test` test_01; API + JWT |
-| Merchant registration + slug derivation | ✅ Verified | `qa_test` test_03/test_06 |
-| Role-enforced login | ✅ Verified | `qa_test` test_04 |
-| Merchant onboarding gate | ✅ Verified | `qa_test` test_07 |
-| Staff PIN login + 5-attempt lockout | ✅ Verified | `qa_test` test_29/test_30 |
-| Password change | 🟢 Implemented, untested | `POST /api/auth/change-password/` in code |
-| Password recovery | 🟡 Partially verified | Flow implemented + API tested; **email not delivered** without SMTP (console backend default) |
-| Refresh rotation + blacklist | ✅ Verified | Code in JWT config; covered by auth flow |
-| Email verification | ⚪ Not found | No self-service flow in code |
-| SMS/OTP login | ⚪ Not found | Not implemented |
-| Change email in-app | ⚪ Not found | No endpoint |
+| Feature                                 | Status                   | Evidence                                                                                      |
+| --------------------------------------- | ------------------------ | --------------------------------------------------------------------------------------------- |
+| Customer registration + login           | ✅ Verified              | `qa_test` test_01; API + JWT                                                                  |
+| Merchant registration + slug derivation | ✅ Verified              | `qa_test` test_03/test_06                                                                     |
+| Role-enforced login                     | ✅ Verified              | `qa_test` test_04                                                                             |
+| Merchant onboarding gate                | ✅ Verified              | `qa_test` test_07                                                                             |
+| Staff PIN login + 5-attempt lockout     | ✅ Verified              | `qa_test` test_29/test_30                                                                     |
+| Password change                         | 🟢 Implemented, untested | `POST /api/auth/change-password/` in code                                                     |
+| Password recovery                       | 🟡 Partially verified    | Flow implemented + API tested; **email not delivered** without SMTP (console backend default) |
+| Refresh rotation + blacklist            | ✅ Verified              | Code in JWT config; covered by auth flow                                                      |
+| Email verification                      | ⚪ Not found             | No self-service flow in code                                                                  |
+| SMS/OTP login                           | ⚪ Not found             | Not implemented                                                                               |
+| Change email in-app                     | ⚪ Not found             | No endpoint                                                                                   |
 
 ### 4.2 Customer loyalty
 
-| Feature | Status | Evidence |
-|---|---|---|
-| Join merchant (membership) | ✅ Verified | `qa_test` test_10 |
-| Points earned on eligible items at completion | ✅ Verified | `qa_test` test_12; `orders/views.py` `_award_loyalty` |
-| Wallet isolation per merchant | ✅ Verified | `qa_test` test_13 |
-| Tier progression (Bronze/Silver/Gold/Platinum) | ✅ Verified | `qa_test` test_14 |
-| Punch cards | ✅ Verified | `qa_test` test_15 |
-| Missions (order_count/spend_amount/visit_streak) | ✅ Verified | `qa_test` test_16 |
+| Feature                                               | Status                   | Evidence                                                |
+| ----------------------------------------------------- | ------------------------ | ------------------------------------------------------- |
+| Join merchant (membership)                            | ✅ Verified              | `qa_test` test_10                                       |
+| Points earned on eligible items at completion         | ✅ Verified              | `qa_test` test_12; `orders/views.py` `_award_loyalty`   |
+| Wallet isolation per merchant                         | ✅ Verified              | `qa_test` test_13                                       |
+| Tier progression (Bronze/Silver/Gold/Platinum)        | ✅ Verified              | `qa_test` test_14                                       |
+| Punch cards                                           | ✅ Verified              | `qa_test` test_15                                       |
+| Missions (order_count/spend_amount/visit_streak)      | ✅ Verified              | `qa_test` test_16                                       |
 | Mission types `purchase`/`visit`/`referral`/`special` | 🟢 Implemented, untested | Model choices only; **no auto-tracker** for these types |
-| Reward redemption + stock decrement | ✅ Verified | `qa_test` test_17/test_18/test_19 |
-| Leaderboard | ✅ Verified | `qa_test` test_20; live 200 |
-| Points transfer (same merchant) | ✅ Verified | `qa_test` test_21/test_22 |
-| Cross-merchant transfer rejected | ✅ Verified | `qa_test` test_23 |
-| Streaks (12–36h gap) | ✅ Verified | Code + tests for gap logic |
-| Merchant specials | ✅ Verified (live read) | `GET /api/loyalty/specials/chiya/` → 200 |
-| Rewards public listing | ✅ Verified (live read) | `GET /api/loyalty/rewards/?merchant=13` → 200 |
+| Reward redemption + stock decrement                   | ✅ Verified              | `qa_test` test_17/test_18/test_19                       |
+| Leaderboard                                           | ✅ Verified              | `qa_test` test_20; live 200                             |
+| Points transfer (same merchant)                       | ✅ Verified              | `qa_test` test_21/test_22                               |
+| Cross-merchant transfer rejected                      | ✅ Verified              | `qa_test` test_23                                       |
+| Streaks (12–36h gap)                                  | ✅ Verified              | Code + tests for gap logic                              |
+| Merchant specials                                     | ✅ Verified (live read)  | `GET /api/loyalty/specials/chiya/` → 200                |
+| Rewards public listing                                | ✅ Verified (live read)  | `GET /api/loyalty/rewards/?merchant=13` → 200           |
 
 ### 4.3 Orders
 
-| Feature | Status | Evidence |
-|---|---|---|
-| Order status machine + valid transitions | ✅ Verified | `qa_test` test_26/test_27; `orders/models.py` `VALID_TRANSITIONS` |
-| QR guest order | ✅ Verified | `qa_test` test_24 |
-| Customer order history | ✅ Verified | `qa_test` test_25 |
-| Table ordering | 🟡 Partially verified | Public fields + route present; no live click-through |
-| Delivery / pickup / dine-in flags | 🟡 Partially verified | Merchant public fields present; not exercised live |
+| Feature                                  | Status                | Evidence                                                          |
+| ---------------------------------------- | --------------------- | ----------------------------------------------------------------- |
+| Order status machine + valid transitions | ✅ Verified           | `qa_test` test_26/test_27; `orders/models.py` `VALID_TRANSITIONS` |
+| QR guest order                           | ✅ Verified           | `qa_test` test_24                                                 |
+| Customer order history                   | ✅ Verified           | `qa_test` test_25                                                 |
+| Table ordering                           | 🟡 Partially verified | Public fields + route present; no live click-through              |
+| Delivery / pickup / dine-in flags        | 🟡 Partially verified | Merchant public fields present; not exercised live                |
 
 ### 4.4 POS
 
-| Feature | Status | Evidence |
-|---|---|---|
-| Device bootstrap + device-token auth | ✅ Verified | `qa_test` test_28; 401 without token |
-| Worker CRUD | ✅ Verified | `qa_test` test_41 (`worker_crud`) |
-| Shift open/close with cash | 🟢 Implemented, untested | Shift models/views in code; not covered by QA suite |
-| Idempotent order creation | ✅ Verified | `qa_test` test_31 (`client_mutation_id`) |
-| Offline queue + background sync (~30s, 5 retries) | 🟡 Partially verified | Implemented in `src/features/pos/store.ts` + IndexedDB stores; **offline replay not exercised** |
-| Conflict resolution screen | 🟡 Partially verified | `/pos/conflicts` UI present; not exercised |
-| Discounts | 🟡 Partially verified | Code/UI present; **not exercised live** |
-| Refunds (credit/debit) | 🟡 Partially verified | Code/UI present; **not exercised live** |
-| Card-design publish | 🟡 Partially verified | UI present; publish flow not exercised |
+| Feature                                           | Status                   | Evidence                                                                                        |
+| ------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------- |
+| Device bootstrap + device-token auth              | ✅ Verified              | `qa_test` test_28; 401 without token                                                            |
+| Worker CRUD                                       | ✅ Verified              | `qa_test` test_41 (`worker_crud`)                                                               |
+| Shift open/close with cash                        | 🟢 Implemented, untested | Shift models/views in code; not covered by QA suite                                             |
+| Idempotent order creation                         | ✅ Verified              | `qa_test` test_31 (`client_mutation_id`)                                                        |
+| Offline queue + background sync (~30s, 5 retries) | 🟡 Partially verified    | Implemented in `src/features/pos/store.ts` + IndexedDB stores; **offline replay not exercised** |
+| Conflict resolution screen                        | 🟡 Partially verified    | `/pos/conflicts` UI present; not exercised                                                      |
+| Discounts                                         | 🟡 Partially verified    | Code/UI present; **not exercised live**                                                         |
+| Refunds (credit/debit)                            | 🟡 Partially verified    | Code/UI present; **not exercised live**                                                         |
+| Card-design publish                               | 🟡 Partially verified    | UI present; publish flow not exercised                                                          |
 
 ### 4.5 Preparation areas and realtime
 
-| Feature | Status | Evidence |
-|---|---|---|
-| Prep-area routing of items | ✅ Verified | `qa_test` test_32 |
+| Feature                         | Status                   | Evidence                                                 |
+| ------------------------------- | ------------------------ | -------------------------------------------------------- |
+| Prep-area routing of items      | ✅ Verified              | `qa_test` test_32                                        |
 | WebSocket `/ws/preparation/...` | 🟢 Implemented, untested | Channel wiring in code; not exercised with a live client |
-| WebSocket `/ws/notifications/` | 🟢 Implemented, untested | Channel group wiring in code |
-| Notifications created on order | ✅ Verified | `qa_test` test_33 |
+| WebSocket `/ws/notifications/`  | 🟢 Implemented, untested | Channel group wiring in code                             |
+| Notifications created on order  | ✅ Verified              | `qa_test` test_33                                        |
 
 ### 4.6 Merchants
 
-| Feature | Status | Evidence |
-|---|---|---|
-| Merchant public profile (slug, flags) | ✅ Verified (live read) | `GET /api/merchants/slug/chiya/` → 200 |
-| Menu endpoint | ✅ Verified (live read) | `GET /api/merchants/13/menu/` → 200 |
-| Menu item points/loyalty fields | ✅ Verified (live read) | `points_per_item`, `loyalty_reward` fields present |
-| Staff management | ✅ Verified | `qa_test` test_41 |
-| Merchant analytics | 🟢 Implemented, untested | Views/models present; no automated coverage |
-| Reports | 🟢 Implemented, untested | `ai_core` report generation; no automated coverage |
+| Feature                               | Status                   | Evidence                                           |
+| ------------------------------------- | ------------------------ | -------------------------------------------------- |
+| Merchant public profile (slug, flags) | ✅ Verified (live read)  | `GET /api/merchants/slug/chiya/` → 200             |
+| Menu endpoint                         | ✅ Verified (live read)  | `GET /api/merchants/13/menu/` → 200                |
+| Menu item points/loyalty fields       | ✅ Verified (live read)  | `points_per_item`, `loyalty_reward` fields present |
+| Staff management                      | ✅ Verified              | `qa_test` test_41                                  |
+| Merchant analytics                    | 🟢 Implemented, untested | Views/models present; no automated coverage        |
+| Reports                               | 🟢 Implemented, untested | `ai_core` report generation; no automated coverage |
 
 ### 4.7 AI and notifications
 
-| Feature | Status | Evidence |
-|---|---|---|
-| AI assistant live chat | 🟡 Partially verified | Integration code present; **requires external provider credentials/network** — not exercised |
-| Daily AI insights | 🟣 Backend only | `ai_core.tasks.scheduler.dispatch_due_reports` exists; **requires external scheduler** (Celery not configured; django-q2 configured but no jobs registered) |
-| Push notifications (Web-Push) | 🔵 UI only | Service-worker listeners exist; **no backend Web-Push pipeline** found |
+| Feature                       | Status                | Evidence                                                                                                                                                    |
+| ----------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AI assistant live chat        | 🟡 Partially verified | Integration code present; **requires external provider credentials/network** — not exercised                                                                |
+| Daily AI insights             | 🟣 Backend only       | `ai_core.tasks.scheduler.dispatch_due_reports` exists; **requires external scheduler** (Celery not configured; django-q2 configured but no jobs registered) |
+| Push notifications (Web-Push) | 🔵 UI only            | Service-worker listeners exist; **no backend Web-Push pipeline** found                                                                                      |
 
 ### 4.8 Platform
 
-| Feature | Status | Evidence |
-|---|---|---|
-| Django admin site | 🟢 Implemented, untested | Enabled; not exercised in this audit |
-| Audit logging | 🟢 Implemented, untested | Audit code present; no automated coverage |
-| Health check | ✅ Verified (live read) | `GET /healthz/` → 200 |
+| Feature           | Status                   | Evidence                                  |
+| ----------------- | ------------------------ | ----------------------------------------- |
+| Django admin site | 🟢 Implemented, untested | Enabled; not exercised in this audit      |
+| Audit logging     | 🟢 Implemented, untested | Audit code present; no automated coverage |
+| Health check      | ✅ Verified (live read)  | `GET /healthz/` → 200                     |
 
 ---
 

@@ -165,15 +165,31 @@ export function ClearCacheRow() {
 }
 
 /** Sidebar footer entry: the same action, always one click from anywhere. */
-export function ClearCacheNavButton({ className }: { className?: string }) {
+export function ClearCacheNavButton({
+  className,
+  disabled,
+  disabledReason,
+}: {
+  className?: string;
+  disabled?: boolean;
+  disabledReason?: string;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        title="Clear this browser's saved copy of Zentro"
+        onClick={() => {
+          if (disabled) return;
+          setOpen(true);
+        }}
+        title={
+          disabled
+            ? disabledReason || "Needs an internet connection"
+            : "Clear this browser's saved copy of Zentro"
+        }
+        disabled={disabled}
         className={className}
       >
         <Trash2 className="h-4 w-4 shrink-0" />

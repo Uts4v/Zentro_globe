@@ -12,12 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-export default function CreditRepaymentModal({
-  open,
-  account,
-  onDone,
-  onClose,
-}: Props) {
+export default function CreditRepaymentModal({ open, account, onDone, onClose }: Props) {
   const worker = usePosStore((s) => s.currentWorker);
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
@@ -184,11 +179,7 @@ export default function CreditRepaymentModal({
               disabled={loading || !amount}
               className="w-full rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
             >
-              {loading ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-              ) : (
-                "Record Payment"
-              )}
+              {loading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Record Payment"}
             </button>
           </>
         )}

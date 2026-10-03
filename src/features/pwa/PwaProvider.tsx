@@ -1,5 +1,13 @@
 // src/features/pwa/PwaProvider.tsx
-import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  type ReactNode,
+} from "react";
 import type { BeforeInstallPromptEvent, InstallPlatform, PwaState } from "./types";
 
 interface PwaContextValue extends PwaState {
@@ -162,7 +170,9 @@ export function PwaProvider({ children }: { children: ReactNode }) {
       localStorage.setItem(DISMISSED_KEY, String(Date.now()));
       const count = getDismissCount() + 1;
       localStorage.setItem(DISMISSED_COUNT_KEY, String(count));
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     setDeferredPrompt(null);
   }, []);
 
@@ -175,18 +185,32 @@ export function PwaProvider({ children }: { children: ReactNode }) {
     navigator.serviceWorker.controller.postMessage({ type: "SKIP_WAITING" });
   }, []);
 
-  const value: PwaContextValue = useMemo(() => ({
-    isInstallable,
-    isInstalled,
-    isStandalone: standalone,
-    platform,
-    deferredPrompt,
-    updateAvailable,
-    offlineReady,
-    promptInstall,
-    dismissInstall,
-    applyUpdate,
-  }), [isInstallable, isInstalled, standalone, platform, deferredPrompt, updateAvailable, offlineReady, promptInstall, dismissInstall, applyUpdate]);
+  const value: PwaContextValue = useMemo(
+    () => ({
+      isInstallable,
+      isInstalled,
+      isStandalone: standalone,
+      platform,
+      deferredPrompt,
+      updateAvailable,
+      offlineReady,
+      promptInstall,
+      dismissInstall,
+      applyUpdate,
+    }),
+    [
+      isInstallable,
+      isInstalled,
+      standalone,
+      platform,
+      deferredPrompt,
+      updateAvailable,
+      offlineReady,
+      promptInstall,
+      dismissInstall,
+      applyUpdate,
+    ],
+  );
 
   return <PwaContext.Provider value={value}>{children}</PwaContext.Provider>;
 }

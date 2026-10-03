@@ -33,11 +33,7 @@ import {
 } from "@/components/charts";
 import { paymentMethodLabel } from "@/lib/payment-methods";
 
-function fmt(
-  value: number | string | null | undefined,
-  symbol = "Rs",
-  decimals = 0
-): string {
+function fmt(value: number | string | null | undefined, symbol = "Rs", decimals = 0): string {
   const num = Number(value ?? 0);
   return `${symbol} ${num.toLocaleString(undefined, {
     minimumFractionDigits: decimals,
@@ -68,30 +64,33 @@ export function MerchantReportsPage() {
 
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadData = useCallback(async (isRefresh = false) => {
-    if (isRefresh) setRefreshing(true);
-    else setLoading(true);
-    setError("");
-    try {
-      const [sales, payments] = await Promise.all([
-        reportsApi.sales({
-          date_from: dateRange.dateFrom,
-          date_to: dateRange.dateTo,
-        }),
-        reportsApi.payments({
-          date_from: dateRange.dateFrom,
-          date_to: dateRange.dateTo,
-        }),
-      ]);
-      setSalesData(sales);
-      setPaymentData(payments);
-    } catch (e: any) {
-      setError(e?.message || "Failed to load reports");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [dateRange.dateFrom, dateRange.dateTo]);
+  const loadData = useCallback(
+    async (isRefresh = false) => {
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+      setError("");
+      try {
+        const [sales, payments] = await Promise.all([
+          reportsApi.sales({
+            date_from: dateRange.dateFrom,
+            date_to: dateRange.dateTo,
+          }),
+          reportsApi.payments({
+            date_from: dateRange.dateFrom,
+            date_to: dateRange.dateTo,
+          }),
+        ]);
+        setSalesData(sales);
+        setPaymentData(payments);
+      } catch (e: any) {
+        setError(e?.message || "Failed to load reports");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [dateRange.dateFrom, dateRange.dateTo],
+  );
 
   useEffect(() => {
     loadData();
@@ -161,7 +160,9 @@ export function MerchantReportsPage() {
                 className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 disabled:opacity-50 transition-colors"
                 title="Refresh report data"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-ember" : ""}`} />
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-ember" : ""}`}
+                />
                 Refresh
               </button>
               <button
@@ -169,7 +170,11 @@ export function MerchantReportsPage() {
                 onClick={() => handleExport("csv", activeTab === "fiscal" ? "fiscal" : activeTab)}
                 className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 disabled:opacity-50"
               >
-                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                {exporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
                 CSV
               </button>
               <button
@@ -177,7 +182,11 @@ export function MerchantReportsPage() {
                 onClick={() => handleExport("pdf", activeTab === "fiscal" ? "fiscal" : activeTab)}
                 className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-2 text-xs font-medium text-foreground hover:bg-muted/50 disabled:opacity-50"
               >
-                {exporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                {exporting ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Download className="h-3.5 w-3.5" />
+                )}
                 PDF
               </button>
             </div>
@@ -207,21 +216,9 @@ export function MerchantReportsPage() {
             <div className="space-y-6">
               {/* KPI Cards */}
               <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-                <KpiCard
-                  label="Total Sales"
-                  value={fmt(ov?.total_sales, sym)}
-                  icon={TrendingUp}
-                />
-                <KpiCard
-                  label="Net Sales"
-                  value={fmt(ov?.net_sales, sym)}
-                  icon={TrendingUp}
-                />
-                <KpiCard
-                  label="Orders"
-                  value={String(ov?.total_orders ?? 0)}
-                  icon={Receipt}
-                />
+                <KpiCard label="Total Sales" value={fmt(ov?.total_sales, sym)} icon={TrendingUp} />
+                <KpiCard label="Net Sales" value={fmt(ov?.net_sales, sym)} icon={TrendingUp} />
+                <KpiCard label="Orders" value={String(ov?.total_orders ?? 0)} icon={Receipt} />
                 <KpiCard
                   label="Avg Order"
                   value={fmt(ov?.avg_order_value, sym, 2)}
@@ -255,7 +252,9 @@ export function MerchantReportsPage() {
               {/* Refunds & Customers */}
               <section className="grid gap-3 sm:grid-cols-2">
                 <div className="glass-strong rounded-3xl p-5">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Refunds</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Refunds
+                  </p>
                   <div className="mt-2 flex items-end justify-between">
                     <p className="numeric font-display text-3xl font-bold text-foreground">
                       {salesData.refunds.count}
@@ -266,7 +265,9 @@ export function MerchantReportsPage() {
                   </div>
                 </div>
                 <div className="glass-strong rounded-3xl p-5">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Customers</p>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Customers
+                  </p>
                   <div className="mt-2 flex items-end justify-between">
                     <p className="numeric font-display text-3xl font-bold text-foreground">
                       {ov?.total_customers ?? 0}
@@ -280,7 +281,9 @@ export function MerchantReportsPage() {
 
               {/* Daily Trend */}
               <section className="glass-strong rounded-3xl p-6">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Trend</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Trend
+                </p>
                 <h3 className="font-display mt-1 text-2xl text-foreground">Daily Sales</h3>
                 <div className="mt-4">
                   <ReportsTrendChart
@@ -294,12 +297,17 @@ export function MerchantReportsPage() {
 
               {/* Top Items */}
               <section className="glass-strong rounded-3xl p-6">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Items</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Items
+                </p>
                 <h3 className="font-display mt-1 text-2xl text-foreground">Top Selling Items</h3>
                 {salesData.top_items.length > 0 ? (
                   <ul className="mt-4 space-y-2">
                     {salesData.top_items.slice(0, 10).map((item, i) => (
-                      <li key={i} className="flex items-center gap-3 rounded-2xl bg-mist px-4 py-2.5">
+                      <li
+                        key={i}
+                        className="flex items-center gap-3 rounded-2xl bg-mist px-4 py-2.5"
+                      >
                         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-background text-xs font-medium text-muted-foreground">
                           {i + 1}
                         </span>
@@ -329,28 +337,46 @@ export function MerchantReportsPage() {
                 <div className="glass-strong rounded-3xl p-6">
                   <div className="flex items-center gap-2 mb-3">
                     <Banknote className="h-4 w-4 text-success" />
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Cash</p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Cash
+                    </p>
                   </div>
                   <div className="space-y-3">
                     <StatRow label="Transactions" value={String(paymentData.cash.count)} />
                     <StatRow label="Total Collected" value={fmt(paymentData.cash.amount, sym)} />
-                    <StatRow label="Average Transaction" value={fmt(paymentData.cash.average, sym, 2)} />
+                    <StatRow
+                      label="Average Transaction"
+                      value={fmt(paymentData.cash.average, sym, 2)}
+                    />
                     <StatRow label="% of Total Sales" value={`${paymentData.cash.percentage}%`} />
-                    <StatRow label="Refunds" value={fmt(paymentData.cash.refunds, sym)} hint="subtracted" />
+                    <StatRow
+                      label="Refunds"
+                      value={fmt(paymentData.cash.refunds, sym)}
+                      hint="subtracted"
+                    />
                     <StatRow label="Net Cash" value={fmt(paymentData.cash.net, sym)} bold />
                   </div>
                 </div>
                 <div className="glass-strong rounded-3xl p-6">
                   <div className="flex items-center gap-2 mb-3">
                     <CreditCard className="h-4 w-4 text-info" />
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Online</p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Online
+                    </p>
                   </div>
                   <div className="space-y-3">
                     <StatRow label="Transactions" value={String(paymentData.online.count)} />
                     <StatRow label="Total Collected" value={fmt(paymentData.online.amount, sym)} />
-                    <StatRow label="Average Transaction" value={fmt(paymentData.online.average, sym, 2)} />
+                    <StatRow
+                      label="Average Transaction"
+                      value={fmt(paymentData.online.average, sym, 2)}
+                    />
                     <StatRow label="% of Total Sales" value={`${paymentData.online.percentage}%`} />
-                    <StatRow label="Refunds" value={fmt(paymentData.online.refunds, sym)} hint="subtracted" />
+                    <StatRow
+                      label="Refunds"
+                      value={fmt(paymentData.online.refunds, sym)}
+                      hint="subtracted"
+                    />
                     <StatRow label="Net Online" value={fmt(paymentData.online.net, sym)} bold />
                   </div>
                 </div>
@@ -358,7 +384,9 @@ export function MerchantReportsPage() {
 
               {/* Payment Method Breakdown */}
               <section className="glass-strong rounded-3xl p-6">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Breakdown</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Breakdown
+                </p>
                 <h3 className="font-display mt-1 text-2xl text-foreground">Payment Methods</h3>
                 {paymentData.methods.length === 0 ? (
                   <p className="mt-5 text-sm text-muted-foreground">No payment data yet.</p>
@@ -370,54 +398,58 @@ export function MerchantReportsPage() {
                       totalSales={ov?.total_sales ?? 0}
                     />
                     <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-border">
-                          <th className="pb-3 text-left text-xs uppercase tracking-wider text-muted-foreground font-medium">
-                            Method
-                          </th>
-                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
-                            Transactions
-                          </th>
-                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
-                            Amount
-                          </th>
-                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
-                            %
-                          </th>
-                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
-                            Refunds
-                          </th>
-                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
-                            Net
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paymentData.methods.map((pm) => (
-                          <tr key={pm.method} className="border-b border-border/50">
-                            <td className="py-3 font-medium capitalize text-foreground">
-                              {paymentMethodLabel(pm.method)}
-                            </td>
-                            <td className="py-3 text-right text-muted-foreground">{pm.count}</td>
-                            <td className="numeric py-3 text-right font-medium text-foreground">
-                              {fmt(pm.amount, sym)}
-                            </td>
-                            <td className="py-3 text-right text-muted-foreground">{pm.percentage}%</td>
-                            <td className="numeric py-3 text-right text-destructive">{fmt(pm.refunds ?? 0, sym)}</td>
-                            <td className="numeric py-3 text-right font-medium text-foreground">
-                              {fmt(pm.net ?? pm.amount, sym)}
-                            </td>
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-border">
+                            <th className="pb-3 text-left text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                              Method
+                            </th>
+                            <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                              Transactions
+                            </th>
+                            <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                              Amount
+                            </th>
+                            <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                              %
+                            </th>
+                            <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                              Refunds
+                            </th>
+                            <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                              Net
+                            </th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {paymentData.methods.map((pm) => (
+                            <tr key={pm.method} className="border-b border-border/50">
+                              <td className="py-3 font-medium capitalize text-foreground">
+                                {paymentMethodLabel(pm.method)}
+                              </td>
+                              <td className="py-3 text-right text-muted-foreground">{pm.count}</td>
+                              <td className="numeric py-3 text-right font-medium text-foreground">
+                                {fmt(pm.amount, sym)}
+                              </td>
+                              <td className="py-3 text-right text-muted-foreground">
+                                {pm.percentage}%
+                              </td>
+                              <td className="numeric py-3 text-right text-destructive">
+                                {fmt(pm.refunds ?? 0, sym)}
+                              </td>
+                              <td className="numeric py-3 text-right font-medium text-foreground">
+                                {fmt(pm.net ?? pm.amount, sym)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              )}
-            </section>
-          </div>
-        )}
+                )}
+              </section>
+            </div>
+          )}
 
           {/* ── TAX TAB ──────────────────────────────────────────────────── */}
           {activeTab === "tax" && taxSum && (
@@ -425,7 +457,9 @@ export function MerchantReportsPage() {
               <section className="glass-strong rounded-3xl p-6">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Tax Summary</p>
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Tax Summary
+                    </p>
                     <h3 className="font-display mt-1 text-2xl text-foreground">
                       {taxLabel} {taxSum.tax_rate}%
                     </h3>
@@ -483,7 +517,9 @@ export function MerchantReportsPage() {
             <div className="space-y-6">
               {/* Items table */}
               <section className="glass-strong rounded-3xl p-6">
-                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Item Analytics</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Item Analytics
+                </p>
                 <h3 className="font-display mt-1 text-2xl text-foreground">Items Sold</h3>
                 {salesData.top_items.length === 0 ? (
                   <p className="mt-5 text-sm text-muted-foreground">No item data yet.</p>
@@ -492,11 +528,21 @@ export function MerchantReportsPage() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-border">
-                          <th className="pb-3 text-left text-xs uppercase tracking-wider text-muted-foreground font-medium">#</th>
-                          <th className="pb-3 text-left text-xs uppercase tracking-wider text-muted-foreground font-medium">Item</th>
-                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">Qty Sold</th>
-                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">Revenue</th>
-                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">Orders</th>
+                          <th className="pb-3 text-left text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                            #
+                          </th>
+                          <th className="pb-3 text-left text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                            Item
+                          </th>
+                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                            Qty Sold
+                          </th>
+                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                            Revenue
+                          </th>
+                          <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                            Orders
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -504,9 +550,15 @@ export function MerchantReportsPage() {
                           <tr key={i} className="border-b border-border/50">
                             <td className="py-3 text-muted-foreground">{i + 1}</td>
                             <td className="py-3 font-medium text-foreground">{item.name}</td>
-                            <td className="py-3 text-right text-muted-foreground">{item.quantity_sold}</td>
-                            <td className="numeric py-3 text-right font-medium text-foreground">{fmt(item.revenue, sym)}</td>
-                            <td className="py-3 text-right text-muted-foreground">{item.order_count}</td>
+                            <td className="py-3 text-right text-muted-foreground">
+                              {item.quantity_sold}
+                            </td>
+                            <td className="numeric py-3 text-right font-medium text-foreground">
+                              {fmt(item.revenue, sym)}
+                            </td>
+                            <td className="py-3 text-right text-muted-foreground">
+                              {item.order_count}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -518,8 +570,12 @@ export function MerchantReportsPage() {
               {/* Categories */}
               {salesData.categories.length > 0 && (
                 <section className="glass-strong rounded-3xl p-6">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Categories</p>
-                  <h3 className="font-display mt-1 text-2xl text-foreground">Revenue by Category</h3>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Categories
+                  </p>
+                  <h3 className="font-display mt-1 text-2xl text-foreground">
+                    Revenue by Category
+                  </h3>
                   <div className="mt-4">
                     <CategoryBreakdownChart
                       categories={salesData.categories}
@@ -543,15 +599,7 @@ export function MerchantReportsPage() {
 
 // ── Fiscal Tab (lazy-loaded) ───────────────────────────────────────────────
 
-function FiscalTab({
-  dateFrom,
-  dateTo,
-  sym,
-}: {
-  dateFrom: string;
-  dateTo: string;
-  sym: string;
-}) {
+function FiscalTab({ dateFrom, dateTo, sym }: { dateFrom: string; dateTo: string; sym: string }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -591,7 +639,9 @@ function FiscalTab({
     <div className="space-y-6">
       {/* Core Fiscal */}
       <section className="glass-strong rounded-3xl p-6">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Fiscal Summary</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          Fiscal Summary
+        </p>
         <h3 className="font-display mt-1 text-2xl text-foreground">
           {fs.tax_label} {fs.tax_rate}%
         </h3>
@@ -604,8 +654,16 @@ function FiscalTab({
           <StatRow label="Discounts" value={fmt(fs.discounts, sym)} hint="applied" />
           <StatRow label="Sales Including Tax" value={fmt(fs.sales_including_tax, sym)} />
           <StatRow label="Sales Excluding Tax" value={fmt(fs.sales_excluding_tax, sym)} />
-          <StatRow label="Refunds" value={fmt(fs.refunds, sym)} hint={`${fs.refund_count} orders`} />
-          <StatRow label="Cancelled / Voided" value={fmt(fs.cancelled_amount, sym)} hint={`${fs.cancelled_orders} orders`} />
+          <StatRow
+            label="Refunds"
+            value={fmt(fs.refunds, sym)}
+            hint={`${fs.refund_count} orders`}
+          />
+          <StatRow
+            label="Cancelled / Voided"
+            value={fmt(fs.cancelled_amount, sym)}
+            hint={`${fs.cancelled_orders} orders`}
+          />
           <StatRow label="Total Transactions" value={String(fs.total_transactions)} />
           <StatRow label="Average Order" value={fmt(fs.avg_order_value, sym, 2)} />
         </div>
@@ -613,15 +671,23 @@ function FiscalTab({
 
       {/* Payment Breakdown */}
       <section className="glass-strong rounded-3xl p-6">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Payment Collections</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+          Payment Collections
+        </p>
         <h3 className="font-display mt-1 text-2xl text-foreground">Cash & Online Breakdown</h3>
         <div className="mt-5 overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border">
-                <th className="pb-3 text-left text-xs uppercase tracking-wider text-muted-foreground font-medium">Method</th>
-                <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">Amount</th>
-                <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">%</th>
+                <th className="pb-3 text-left text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                  Method
+                </th>
+                <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                  Amount
+                </th>
+                <th className="pb-3 text-right text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                  %
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -647,7 +713,9 @@ function FiscalTab({
       {/* Cash & Online Summaries */}
       <section className="grid gap-3 sm:grid-cols-2">
         <div className="glass-strong rounded-3xl p-6">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-3">Cash Summary</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-3">
+            Cash Summary
+          </p>
           <div className="space-y-2">
             <StatRow label="Cash Sales" value={fmt(cs.cash_sales, sym)} />
             <StatRow label="Cash Refunds" value={fmt(cs.cash_refunds, sym)} />
@@ -658,14 +726,19 @@ function FiscalTab({
           </div>
         </div>
         <div className="glass-strong rounded-3xl p-6">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-3">Online Summary</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground mb-3">
+            Online Summary
+          </p>
           <div className="space-y-2">
             <StatRow label="Online Sales" value={fmt(os.online_sales, sym)} />
             <StatRow label="Online Refunds" value={fmt(os.online_refunds, sym)} />
             <StatRow label="Net Online" value={fmt(os.net_online, sym)} bold />
             <StatRow label="Card" value={fmt(os.card, sym)} />
             <StatRow label={paymentMethodLabel("bank_qr")} value={fmt(os.bank_qr, sym)} />
-            <StatRow label={paymentMethodLabel("mobile_wallet")} value={fmt(os.mobile_wallet, sym)} />
+            <StatRow
+              label={paymentMethodLabel("mobile_wallet")}
+              value={fmt(os.mobile_wallet, sym)}
+            />
           </div>
         </div>
       </section>
@@ -733,9 +806,9 @@ function StatRow({
         <p className={`text-sm ${bold ? "font-medium" : ""} text-foreground`}>{label}</p>
         {hint && <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>}
       </div>
-      <p className={`numeric text-sm ${bold ? "font-bold" : "font-medium"} text-foreground`}>{value}</p>
+      <p className={`numeric text-sm ${bold ? "font-bold" : "font-medium"} text-foreground`}>
+        {value}
+      </p>
     </div>
   );
 }
-
-

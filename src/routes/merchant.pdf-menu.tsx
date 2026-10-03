@@ -35,7 +35,7 @@ function MerchantPdfMenuPage() {
   const pageUrl =
     info?.pdf_menu_token && merchantProfile?.slug
       ? `${window.location.origin}/m/${encodeURIComponent(merchantProfile.slug)}/pdf-menu/${info.pdf_menu_token}`
-      : info?.pdf_menu_page_url ?? "";
+      : (info?.pdf_menu_page_url ?? "");
 
   const fetchInfo = useCallback(async () => {
     try {
@@ -145,8 +145,8 @@ function MerchantPdfMenuPage() {
         <div>
           <h1 className="font-display text-2xl text-foreground">PDF Menu</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Upload your menu as a PDF and give customers a printable, high-quality
-            menu through a QR code — no app or login required.
+            Upload your menu as a PDF and give customers a printable, high-quality menu through a QR
+            code — no app or login required.
           </p>
         </div>
       </div>
@@ -191,9 +191,7 @@ function MerchantPdfMenuPage() {
                 style={{ width: `${uploadingProgress}%` }}
               />
             </div>
-            <p className="mt-1 text-right text-xs text-muted-foreground">
-              {uploadingProgress}%
-            </p>
+            <p className="mt-1 text-right text-xs text-muted-foreground">{uploadingProgress}%</p>
           </div>
         )}
 
@@ -224,15 +222,12 @@ function MerchantPdfMenuPage() {
         {info?.has_pdf ? (
           <>
             <p className="mt-1 text-xs text-muted-foreground">
-              Print this QR code and place it on tables, at the counter, or on your
-              window — customers scan it and see your PDF menu instantly.
+              Print this QR code and place it on tables, at the counter, or on your window —
+              customers scan it and see your PDF menu instantly.
             </p>
 
             <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-              <div
-                id="pdf-menu-qr"
-                className="rounded-2xl border border-border bg-white p-4"
-              >
+              <div id="pdf-menu-qr" className="rounded-2xl border border-border bg-white p-4">
                 <QRCodeSVG value={pageUrl} size={240} />
               </div>
               <div className="flex flex-col gap-2">

@@ -134,7 +134,9 @@ function Index() {
               .list()
               .then((merchants) => {
                 if (cancelled) return;
-                const list = Array.isArray(merchants) ? merchants : (merchants as any).results ?? [];
+                const list = Array.isArray(merchants)
+                  ? merchants
+                  : ((merchants as any).results ?? []);
                 if (list.length > 0) {
                   setSelectedMerchant(String(list[list.length - 1].id));
                 }
@@ -155,7 +157,7 @@ function Index() {
       merchantApi
         .list()
         .then((data) => {
-          const list = Array.isArray(data) ? data : (data as any).results ?? [];
+          const list = Array.isArray(data) ? data : ((data as any).results ?? []);
           setAllStores(list);
         })
         .catch(() => {});
@@ -685,7 +687,10 @@ function Index() {
                           {discountedPrice && s.linked_menu_item_price && (
                             <span className="shrink-0 whitespace-nowrap">
                               <span className="line-through opacity-50">
-                                {formatCurrency(parseFloat(s.linked_menu_item_price), currencySymbol)}
+                                {formatCurrency(
+                                  parseFloat(s.linked_menu_item_price),
+                                  currencySymbol,
+                                )}
                               </span>{" "}
                               <span className="font-extrabold text-bordeaux">
                                 {formatCurrency(parseFloat(discountedPrice), currencySymbol)}
@@ -735,15 +740,11 @@ function Index() {
                     }}
                   >
                     <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-mist text-2xl">
-                      <span style={{ filter: "grayscale(1) brightness(0)" }}>
-                        {m.icon || "🎯"}
-                      </span>
+                      <span style={{ filter: "grayscale(1) brightness(0)" }}>{m.icon || "🎯"}</span>
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-extrabold text-foreground">
-                          {m.title}
-                        </p>
+                        <p className="truncate text-sm font-extrabold text-foreground">{m.title}</p>
                         {m.is_completed ? (
                           <span className="shrink-0 rounded-full bg-olive px-2.5 py-0.5 text-[10px] font-extrabold text-[#fff9f0]">
                             Done ✓
@@ -939,7 +940,11 @@ function Index() {
                           className="h-11 w-11 shrink-0 rounded-xl grid place-items-center bg-mist text-lg overflow-hidden border border-border/40"
                           style={
                             store.logo_url
-                              ? { backgroundImage: `url(${store.logo_url})`, backgroundSize: "cover", backgroundPosition: "center" }
+                              ? {
+                                  backgroundImage: `url(${store.logo_url})`,
+                                  backgroundSize: "cover",
+                                  backgroundPosition: "center",
+                                }
                               : undefined
                           }
                         >

@@ -3,7 +3,7 @@ import { Loader2, Send, Camera } from "lucide-react";
 import { customerApi, transferApi, type CustomerMerchantWallet } from "@/lib/api";
 import { toast } from "sonner";
 
-const QRScanner = lazy(() => import("./QRScanner").then(m => ({ default: m.QRScanner })));
+const QRScanner = lazy(() => import("./QRScanner").then((m) => ({ default: m.QRScanner })));
 
 interface TransferFormProps {
   preselectedMerchantId?: string;
@@ -12,7 +12,12 @@ interface TransferFormProps {
   compact?: boolean;
 }
 
-export function TransferForm({ preselectedMerchantId, scannedTransferCode, onSuccess, compact }: TransferFormProps) {
+export function TransferForm({
+  preselectedMerchantId,
+  scannedTransferCode,
+  onSuccess,
+  compact,
+}: TransferFormProps) {
   const [wallets, setWallets] = useState<CustomerMerchantWallet[]>([]);
   const [selectedWalletId, setSelectedWalletId] = useState("");
   const [receiverCode, setReceiverCode] = useState<string>(scannedTransferCode ?? "");
@@ -73,7 +78,9 @@ export function TransferForm({ preselectedMerchantId, scannedTransferCode, onSuc
       setDescription("");
       onSuccess?.();
     } catch (e: any) {
-      toast.error(e.message || "Transfer failed. Check that both users belong to the same merchant.");
+      toast.error(
+        e.message || "Transfer failed. Check that both users belong to the same merchant.",
+      );
     } finally {
       setSending(false);
     }
@@ -122,13 +129,17 @@ export function TransferForm({ preselectedMerchantId, scannedTransferCode, onSuc
             ))}
           </select>
         </div>
-      ) : activeWallet && (
-        <div className="flex min-w-0 items-center justify-between overflow-hidden rounded-xl bg-mist px-4 py-2.5">
-          <span className="min-w-0 truncate text-xs text-muted-foreground">
-            From <span className="font-medium text-ink">{activeWallet.merchant_name}</span>
-          </span>
-          <span className="shrink-0 text-xs font-medium text-ink">{activeWallet.points_balance.toLocaleString()} pts</span>
-        </div>
+      ) : (
+        activeWallet && (
+          <div className="flex min-w-0 items-center justify-between overflow-hidden rounded-xl bg-mist px-4 py-2.5">
+            <span className="min-w-0 truncate text-xs text-muted-foreground">
+              From <span className="font-medium text-ink">{activeWallet.merchant_name}</span>
+            </span>
+            <span className="shrink-0 text-xs font-medium text-ink">
+              {activeWallet.points_balance.toLocaleString()} pts
+            </span>
+          </div>
+        )
       )}
 
       <div>
@@ -155,11 +166,13 @@ export function TransferForm({ preselectedMerchantId, scannedTransferCode, onSuc
       </div>
 
       {showScanner && (
-        <Suspense fallback={
-          <div className="flex justify-center py-6">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-          </div>
-        }>
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          }
+        >
           <QRScanner
             onScan={(code) => setReceiverCode(code)}
             onClose={() => setShowScanner(false)}
@@ -203,11 +216,7 @@ export function TransferForm({ preselectedMerchantId, scannedTransferCode, onSuc
         disabled={sending || !selectedWalletId || !receiverCode.trim() || !amount}
         className="inline-flex h-11 w-full items-center justify-center gap-2 overflow-hidden truncate rounded-full gradient-ember text-sm font-medium text-white shadow-ember transition-transform active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100"
       >
-        {sending ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <Send className="h-4 w-4" />
-        )}
+        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
         {sending ? "Sending…" : `Send ${amount || "0"} points`}
       </button>
     </div>

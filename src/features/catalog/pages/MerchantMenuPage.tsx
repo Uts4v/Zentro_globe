@@ -471,9 +471,7 @@ export function MerchantMenuPage() {
         ].map(({ label, value }) => (
           <div key={label} className="glass rounded-2xl p-4 text-center">
             <p className="font-display text-3xl text-foreground">{value}</p>
-            <p className="mt-1 text-xs uppercase tracking-widest text-muted-foreground">
-              {label}
-            </p>
+            <p className="mt-1 text-xs uppercase tracking-widest text-muted-foreground">{label}</p>
           </div>
         ))}
       </div>
@@ -882,45 +880,48 @@ export function MerchantMenuPage() {
               </div>
 
               <div className="flex flex-wrap gap-3">
-              <div className="w-40">
-                <label
-                  htmlFor="menu-item-calories"
-                  className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
-                >
-                  Calories (kCal)
-                </label>
-                <input
-                  id="menu-item-calories"
-                  type="number"
-                  min={0}
-                  step={1}
-                  inputMode="numeric"
-                  value={form.calories}
-                  onChange={(e) => setForm((f) => ({ ...f, calories: e.target.value }))}
-                  placeholder="Optional"
-                  className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
-                />
-              </div>
-              <div className="w-48">
-                <label
-                  htmlFor="menu-item-tax-class"
-                  className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
-                >
-                  Tax
-                </label>
-                <select
-                  id="menu-item-tax-class"
-                  value={form.tax_class}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, tax_class: e.target.value as FormState["tax_class"] }))
-                  }
-                  className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
-                >
-                  <option value="standard">Taxed (standard)</option>
-                  <option value="exempt">Tax exempt</option>
-                  <option value="zero_rated">Zero-rated</option>
-                </select>
-              </div>
+                <div className="w-40">
+                  <label
+                    htmlFor="menu-item-calories"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
+                    Calories (kCal)
+                  </label>
+                  <input
+                    id="menu-item-calories"
+                    type="number"
+                    min={0}
+                    step={1}
+                    inputMode="numeric"
+                    value={form.calories}
+                    onChange={(e) => setForm((f) => ({ ...f, calories: e.target.value }))}
+                    placeholder="Optional"
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  />
+                </div>
+                <div className="w-48">
+                  <label
+                    htmlFor="menu-item-tax-class"
+                    className="mb-1.5 block text-xs uppercase tracking-widest text-muted-foreground"
+                  >
+                    Tax
+                  </label>
+                  <select
+                    id="menu-item-tax-class"
+                    value={form.tax_class}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        tax_class: e.target.value as FormState["tax_class"],
+                      }))
+                    }
+                    className="h-11 w-full rounded-xl border border-border bg-muted px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+                  >
+                    <option value="standard">Taxed (standard)</option>
+                    <option value="exempt">Tax exempt</option>
+                    <option value="zero_rated">Zero-rated</option>
+                  </select>
+                </div>
               </div>
 
               {/* Points */}

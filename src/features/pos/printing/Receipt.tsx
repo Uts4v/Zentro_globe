@@ -303,9 +303,7 @@ export default function Receipt({
             <p className="receipt-bold">Thank you!</p>
           )}
           {data.is_offline_receipt && data.sync_status !== "synced" && (
-            <span className="receipt-offline-badge">
-              OFFLINE - Pending Sync
-            </span>
+            <span className="receipt-offline-badge">OFFLINE - Pending Sync</span>
           )}
         </div>
       </div>

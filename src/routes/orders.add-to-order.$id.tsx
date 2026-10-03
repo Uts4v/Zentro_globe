@@ -91,14 +91,17 @@ function AddToOrderPage() {
       const ex = prev.find((c) => c.key === key);
       return ex
         ? prev.map((c) => (c.key === key ? { ...c, qty: c.qty + 1 } : c))
-        : [...prev, {
-            key,
-            item,
-            qty: 1,
-            selections: [],
-            specialInstructions: "",
-            unitPrice,
-          }];
+        : [
+            ...prev,
+            {
+              key,
+              item,
+              qty: 1,
+              selections: [],
+              specialInstructions: "",
+              unitPrice,
+            },
+          ];
     });
   }
 
@@ -125,16 +128,13 @@ function AddToOrderPage() {
   }
 
   function handleSheetAdd(draft: ProductDraft) {
-    const key = cartKey(
-      draft.itemId,
-      draft.selections,
-      draft.specialInstructions,
-    );
+    const key = cartKey(draft.itemId, draft.selections, draft.specialInstructions);
     setCart((prev) => {
       if (editingKey) {
         const rest = prev.filter((c) => c.key !== editingKey);
-        const item = prev.find((c) => c.key === editingKey)?.item
-          ?? menu.find((m) => String(m.id) === draft.itemId);
+        const item =
+          prev.find((c) => c.key === editingKey)?.item ??
+          menu.find((m) => String(m.id) === draft.itemId);
         return item
           ? [
               ...rest,
@@ -176,17 +176,14 @@ function AddToOrderPage() {
 
   const editingLine = editingKey ? cart.find((c) => c.key === editingKey) : undefined;
 
-  const totalAmount = useMemo(
-    () => cart.reduce((sum, c) => sum + c.unitPrice * c.qty, 0),
-    [cart],
-  );
+  const totalAmount = useMemo(() => cart.reduce((sum, c) => sum + c.unitPrice * c.qty, 0), [cart]);
 
   const totalPoints = useMemo(
-    () => cart.reduce(
-      (sum, c) =>
-        sum + (c.item.loyalty_reward ? (c.item.points_per_item ?? 0) * c.qty : 0),
-      0,
-    ),
+    () =>
+      cart.reduce(
+        (sum, c) => sum + (c.item.loyalty_reward ? (c.item.points_per_item ?? 0) * c.qty : 0),
+        0,
+      ),
     [cart],
   );
 
@@ -194,7 +191,7 @@ function AddToOrderPage() {
 
   const categories = useMemo(
     () => ["All", ...Array.from(new Set(menu.map((i) => i.category).filter(Boolean)))],
-    [menu]
+    [menu],
   );
 
   const visibleMenu = filterCat === "All" ? menu : menu.filter((i) => i.category === filterCat);
@@ -233,12 +230,13 @@ function AddToOrderPage() {
           <p className="text-6xl">✅</p>
           <h2 className="font-display mt-4 text-3xl text-foreground">Items added!</h2>
           <p className="mt-2 text-muted-foreground">
-            Your order <span className="font-medium text-foreground">#{String(order?.id).slice(0, 8)}</span> has been updated
+            Your order{" "}
+            <span className="font-medium text-foreground">#{String(order?.id).slice(0, 8)}</span>{" "}
+            has been updated
           </p>
           {totalPoints > 0 && (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-100 px-4 py-2 text-sm font-medium text-emerald-700">
-              <Zap className="h-4 w-4" />
-              +{totalPoints} additional points
+              <Zap className="h-4 w-4" />+{totalPoints} additional points
             </div>
           )}
           <button
@@ -257,7 +255,10 @@ function AddToOrderPage() {
     return (
       <div className="space-y-6 px-5">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate({ to: "/orders/$id", params: { id } })} className="glass grid h-9 w-9 place-items-center rounded-full">
+          <button
+            onClick={() => navigate({ to: "/orders/$id", params: { id } })}
+            className="glass grid h-9 w-9 place-items-center rounded-full"
+          >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Add items</p>
@@ -274,14 +275,22 @@ function AddToOrderPage() {
     return (
       <div className="space-y-6 px-5">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate({ to: "/orders/$id", params: { id } })} className="glass grid h-9 w-9 place-items-center rounded-full">
+          <button
+            onClick={() => navigate({ to: "/orders/$id", params: { id } })}
+            className="glass grid h-9 w-9 place-items-center rounded-full"
+          >
             <ArrowLeft className="h-4 w-4" />
           </button>
           <p className="text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Add items</p>
         </div>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
-          <button onClick={() => navigate({ to: "/orders/$id", params: { id } })} className="ml-2 underline">Go back</button>
+          <button
+            onClick={() => navigate({ to: "/orders/$id", params: { id } })}
+            className="ml-2 underline"
+          >
+            Go back
+          </button>
         </div>
       </div>
     );
@@ -322,26 +331,26 @@ function AddToOrderPage() {
       {error && (
         <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
           {error}
-          <button onClick={() => setError("")} className="ml-3 underline">Dismiss</button>
+          <button onClick={() => setError("")} className="ml-3 underline">
+            Dismiss
+          </button>
         </div>
       )}
 
       {/* Existing order items summary */}
       {order && (
         <div className="glass rounded-2xl p-4">
-          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2">Current order</p>
+          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2">
+            Current order
+          </p>
           <div className="space-y-1">
             {(order.order_items ?? []).map((item, idx) => {
-              const opts = (item.options ?? [])
-                .map((o) => o.option_name)
-                .join(" · ");
+              const opts = (item.options ?? []).map((o) => o.option_name).join(" · ");
               return (
                 <div key={idx} className="flex justify-between text-sm">
                   <span className="text-foreground">
                     {item.quantity}× {item.name}
-                    {opts && (
-                      <span className="ml-1 text-[11px] text-muted-foreground">{opts}</span>
-                    )}
+                    {opts && <span className="ml-1 text-[11px] text-muted-foreground">{opts}</span>}
                   </span>
                   <span className="text-muted-foreground">
                     {formatCurrency(Number(item.subtotal), currencySymbol)}
@@ -352,9 +361,7 @@ function AddToOrderPage() {
           </div>
           <div className="mt-2 border-t border-border pt-2 flex justify-between text-sm font-medium">
             <span className="text-muted-foreground">Current total</span>
-            <span className="text-foreground">
-              {formatCurrency(existingTotal, currencySymbol)}
-            </span>
+            <span className="text-foreground">{formatCurrency(existingTotal, currencySymbol)}</span>
           </div>
         </div>
       )}
@@ -366,10 +373,11 @@ function AddToOrderPage() {
             <button
               key={cat}
               onClick={() => setFilterCat(cat)}
-              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${filterCat === cat
+              className={`shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors ${
+                filterCat === cat
                   ? "bg-ink text-primary-foreground"
                   : "bg-mist text-foreground hover:bg-ink/10"
-                }`}
+              }`}
             >
               {cat}
             </button>
@@ -446,7 +454,9 @@ function AddToOrderPage() {
                           src={line.item.image_url}
                           alt={line.item.name}
                           className="h-full w-full object-cover"
-                          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
                         />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-mist text-xl">
@@ -461,9 +471,7 @@ function AddToOrderPage() {
                       <p className="text-xs text-muted-foreground">
                         {formatCurrency(line.unitPrice, currencySymbol)} each
                       </p>
-                      {opts && (
-                        <p className="truncate text-[11px] text-muted-foreground">{opts}</p>
-                      )}
+                      {opts && <p className="truncate text-[11px] text-muted-foreground">{opts}</p>}
                       {line.specialInstructions && (
                         <p className="truncate text-[11px] italic text-muted-foreground">
                           “{line.specialInstructions}”
@@ -525,11 +533,15 @@ function AddToOrderPage() {
             <div className="mt-4 space-y-1.5 rounded-2xl bg-mist p-4">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Current order</span>
-                <span className="text-foreground">{formatCurrency(existingTotal, currencySymbol)}</span>
+                <span className="text-foreground">
+                  {formatCurrency(existingTotal, currencySymbol)}
+                </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">New items</span>
-                <span className="text-foreground">{formatCurrency(totalAmount, currencySymbol)}</span>
+                <span className="text-foreground">
+                  {formatCurrency(totalAmount, currencySymbol)}
+                </span>
               </div>
               {totalPoints > 0 && (
                 <div className="flex justify-between text-sm">
@@ -539,7 +551,9 @@ function AddToOrderPage() {
               )}
               <div className="flex justify-between border-t border-border pt-2 font-medium">
                 <span className="text-foreground">New total</span>
-                <span className="font-display text-lg text-foreground">{formatCurrency(grandTotal, currencySymbol)}</span>
+                <span className="font-display text-lg text-foreground">
+                  {formatCurrency(grandTotal, currencySymbol)}
+                </span>
               </div>
             </div>
 
@@ -606,9 +620,7 @@ function MenuCard({
           loading="lazy"
         />
       ) : (
-        <div className="flex h-32 items-center justify-center bg-mist text-5xl">
-          {item.emoji}
-        </div>
+        <div className="flex h-32 items-center justify-center bg-mist text-5xl">{item.emoji}</div>
       )}
 
       <div className="p-5">
@@ -637,13 +649,15 @@ function MenuCard({
 
         {item.loyalty_reward && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-            <Zap className="h-2.5 w-2.5" />
-            +{item.points_per_item} pts per item
+            <Zap className="h-2.5 w-2.5" />+{item.points_per_item} pts per item
           </div>
         )}
 
         <button
-          onClick={(e) => { e.stopPropagation(); onTap(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTap();
+          }}
           className="gradient-ember mt-4 flex h-10 w-full items-center justify-center gap-1.5 rounded-xl text-sm font-medium text-white transition-transform active:scale-[0.98]"
         >
           {hasOptions ? <Sparkles className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}

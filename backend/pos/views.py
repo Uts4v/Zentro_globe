@@ -1703,6 +1703,7 @@ def create_pos_order(request):
             return Response({"error": "Worker not found."},
                             status=status.HTTP_404_NOT_FOUND)
     if worker is None:
+        from . import rbac
         worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
 
     denied = _perm_denied(worker, "orders.create", request)

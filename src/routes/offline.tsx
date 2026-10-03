@@ -15,7 +15,8 @@ function OfflinePage() {
       </div>
       <h1 className="mt-5 font-display text-3xl text-foreground">You're offline</h1>
       <p className="mt-2 max-w-sm text-sm text-muted-foreground leading-relaxed">
-        Your saved app shell is available, but live points, orders and rewards need an internet connection.
+        Your saved app shell is available, but live points, orders and rewards need an internet
+        connection.
       </p>
       <div className="mt-6 space-y-2 text-xs text-muted-foreground">
         <p>• Points unavailable offline</p>

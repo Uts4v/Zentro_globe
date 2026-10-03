@@ -47,7 +47,7 @@ const PAYMENT_METHOD_OPTIONS = [
   { key: "credit", label: "Credit" },
   { key: "debit", label: "Debit" },
   { key: "other", label: "Other" },
-]   as const;
+] as const;
 
 /**
  * `merchantApi` speaks the API-shaped `MerchantProfile` (string `id`) while the
@@ -191,9 +191,7 @@ export function MerchantSettingsPage() {
       }
       return {
         ...p,
-        accepted_payment_methods: on
-          ? current.filter((k) => k !== key)
-          : [...current, key],
+        accepted_payment_methods: on ? current.filter((k) => k !== key) : [...current, key],
         payment_qr_enabled: key === "bank_qr" ? !on : p.payment_qr_enabled,
       };
     });
@@ -535,8 +533,8 @@ export function MerchantSettingsPage() {
           </h2>
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Staff record what the customer paid in cash. Zentro never contacts a
-          payment provider, so no terminal or gateway is required.
+          Staff record what the customer paid in cash. Zentro never contacts a payment provider, so
+          no terminal or gateway is required.
         </p>
 
         <div className="space-y-2">
@@ -587,15 +585,12 @@ export function MerchantSettingsPage() {
       <section className="glass-strong rounded-3xl p-6">
         <div className="mb-1 flex items-center gap-2">
           <QrCode className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
-            Payment QR
-          </h2>
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Payment QR</h2>
         </div>
         <p className="mb-4 text-xs text-muted-foreground">
-          Shown to the customer in the POS payment sheet. Drop a file on the
-          button or click to browse. PNG, JPEG, WEBP and SVG all work - vector
-          files are converted to a sharp PNG on the server, and the image is
-          kept at full size so it stays scannable.
+          Shown to the customer in the POS payment sheet. Drop a file on the button or click to
+          browse. PNG, JPEG, WEBP and SVG all work - vector files are converted to a sharp PNG on
+          the server, and the image is kept at full size so it stays scannable.
         </p>
 
         <div className="flex items-start gap-4">
@@ -635,9 +630,7 @@ export function MerchantSettingsPage() {
               <input
                 value={profile.payment_qr_account_name ?? ""}
                 onChange={(e) =>
-                  setProfile((p) =>
-                    p ? { ...p, payment_qr_account_name: e.target.value } : p,
-                  )
+                  setProfile((p) => (p ? { ...p, payment_qr_account_name: e.target.value } : p))
                 }
                 placeholder="e.g. Zentro Cafe Sdn Bhd"
                 maxLength={80}
@@ -651,9 +644,7 @@ export function MerchantSettingsPage() {
               <textarea
                 value={profile.payment_qr_instructions ?? ""}
                 onChange={(e) =>
-                  setProfile((p) =>
-                    p ? { ...p, payment_qr_instructions: e.target.value } : p,
-                  )
+                  setProfile((p) => (p ? { ...p, payment_qr_instructions: e.target.value } : p))
                 }
                 rows={2}
                 maxLength={240}
@@ -686,9 +677,7 @@ export function MerchantSettingsPage() {
             onDrop={handleQrDrop}
             disabled={qrUploading}
             className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium text-foreground transition-colors disabled:opacity-50 ${
-              qrDragOver
-                ? "border-ember bg-ember/10"
-                : "border-border hover:bg-mist"
+              qrDragOver ? "border-ember bg-ember/10" : "border-border hover:bg-mist"
             }`}
           >
             {qrUploading ? (

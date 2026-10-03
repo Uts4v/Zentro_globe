@@ -47,7 +47,7 @@ export function MerchantCustomersPage() {
         c.customer_name.toLowerCase().includes(q) ||
         (c.customer_phone || "").toLowerCase().includes(q) ||
         (c.customer_email || "").toLowerCase().includes(q) ||
-        (c.membership_number || "").toLowerCase().includes(q)
+        (c.membership_number || "").toLowerCase().includes(q),
     );
   }, [customers, query]);
 
@@ -68,9 +68,7 @@ export function MerchantCustomersPage() {
             <h1 className="font-display text-3xl font-bold text-foreground sm:text-4xl">
               Customers
             </h1>
-            <p className="text-xs text-muted-foreground">
-              Everyone linked to your business
-            </p>
+            <p className="text-xs text-muted-foreground">Everyone linked to your business</p>
           </div>
         </div>
       </div>
@@ -78,29 +76,21 @@ export function MerchantCustomersPage() {
       {/* Summary cards */}
       <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
-            Total Customers
-          </p>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Total Customers</p>
           <p className="numeric mt-1 text-2xl font-bold text-foreground">{totals.total}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
-            Active Members
-          </p>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Active Members</p>
           <p className="numeric mt-1 text-2xl font-bold text-foreground">{totals.active}</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
-            Points Issued
-          </p>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Points Issued</p>
           <p className="numeric mt-1 text-2xl font-bold text-foreground">
             {totals.points.toLocaleString()}
           </p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-4">
-          <p className="text-xs uppercase tracking-widest text-muted-foreground">
-            Total Spend
-          </p>
+          <p className="text-xs uppercase tracking-widest text-muted-foreground">Total Spend</p>
           <p className="numeric mt-1 text-2xl font-bold text-foreground">
             {formatCurrency(totals.spend, currencySymbol, 0)}
           </p>

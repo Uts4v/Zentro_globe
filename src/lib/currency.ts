@@ -35,11 +35,7 @@ export type CurrencyCode = (typeof CURRENCIES)[number]["code"];
  * @param symbol  – currency symbol (e.g. "Rs", "₹", "$")
  * @param decimals – decimal places (default 2)
  */
-export function formatCurrency(
-  amount: number | string,
-  symbol = "Rs",
-  decimals = 2,
-): string {
+export function formatCurrency(amount: number | string, symbol = "Rs", decimals = 2): string {
   const num = typeof amount === "string" ? Number.parseFloat(amount) : amount;
   if (!Number.isFinite(num)) return `${symbol} 0.00`;
   return `${symbol} ${num.toLocaleString(undefined, {
@@ -53,9 +49,7 @@ export function formatCurrency(
  * Falls back to the code itself if unknown.
  */
 export function getCurrencySymbol(code: string): string {
-  const found = CURRENCIES.find(
-    (c) => c.code.toUpperCase() === code.toUpperCase(),
-  );
+  const found = CURRENCIES.find((c) => c.code.toUpperCase() === code.toUpperCase());
   return found?.symbol ?? code;
 }
 

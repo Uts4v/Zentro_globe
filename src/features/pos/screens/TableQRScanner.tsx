@@ -99,8 +99,7 @@ export function parseScannedQR(text: string): ScannedQRResult | null {
         urlObj.searchParams.get("table") ||
         urlObj.searchParams.get("table_token") ||
         urlObj.searchParams.get("public_token");
-      const slug =
-        urlObj.searchParams.get("slug") || urlObj.searchParams.get("merchant");
+      const slug = urlObj.searchParams.get("slug") || urlObj.searchParams.get("merchant");
       if (token) {
         return {
           type: "table",
@@ -316,9 +315,7 @@ export function TableQRScanner({ onClose }: TableQRScannerProps) {
                 scannerRef.current?.resume();
               } catch {}
 
-              const message =
-                err?.message ||
-                "Table not found. Please scan again.";
+              const message = err?.message || "Table not found. Please scan again.";
               setError(message);
               setResolving(false);
             }

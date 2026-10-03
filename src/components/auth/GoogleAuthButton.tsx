@@ -29,7 +29,7 @@ declare global {
               logo_alignment?: "left" | "center";
               width?: number | string;
               click_listener?: () => void;
-            }
+            },
           ) => void;
         };
       };

@@ -94,7 +94,7 @@ export default function MinusStockModal({
           const matched = data.find(
             (p) =>
               (targetItem.menu_item_id && p.menu_item_ids?.includes(targetItem.menu_item_id)) ||
-              p.name.trim().toLowerCase() === targetItem.name.trim().toLowerCase()
+              p.name.trim().toLowerCase() === targetItem.name.trim().toLowerCase(),
           );
           if (matched) {
             setSelectedProduct(matched);
@@ -126,7 +126,7 @@ export default function MinusStockModal({
       (p) =>
         p.name.toLowerCase().includes(q) ||
         p.category?.toLowerCase().includes(q) ||
-        p.sku?.toLowerCase().includes(q)
+        p.sku?.toLowerCase().includes(q),
     );
   }, [products, search]);
 
@@ -171,14 +171,14 @@ export default function MinusStockModal({
         prev.map((p) =>
           p.inventory_item_id === result.inventory_item_id
             ? { ...p, available_stock: result.available_stock }
-            : p
-        )
+            : p,
+        ),
       );
 
       setSelectedProduct((prev) =>
         prev && prev.inventory_item_id === result.inventory_item_id
           ? { ...prev, available_stock: result.available_stock }
-          : prev
+          : prev,
       );
 
       setSuccessResult(result);
@@ -252,7 +252,8 @@ export default function MinusStockModal({
                   <span className="font-bold text-destructive">
                     -{successResult.deducted_quantity} {successResult.unit}
                   </span>{" "}
-                  from <span className="font-semibold text-foreground">{successResult.item_name}</span>.
+                  from{" "}
+                  <span className="font-semibold text-foreground">{successResult.item_name}</span>.
                 </p>
               </div>
 
@@ -312,9 +313,10 @@ export default function MinusStockModal({
                       const matched = products.find(
                         (p) =>
                           (item.menu_item_id && p.menu_item_ids?.includes(item.menu_item_id)) ||
-                          p.name.trim().toLowerCase() === item.name.trim().toLowerCase()
+                          p.name.trim().toLowerCase() === item.name.trim().toLowerCase(),
                       );
-                      const isSelected = selectedProduct?.inventory_item_id === matched?.inventory_item_id;
+                      const isSelected =
+                        selectedProduct?.inventory_item_id === matched?.inventory_item_id;
 
                       return (
                         <button
@@ -324,7 +326,9 @@ export default function MinusStockModal({
                             if (matched) {
                               setSelectedProduct(matched);
                               if (item.quantity && item.quantity > 0) {
-                                setQuantity(Math.min(item.quantity, Math.max(1, matched.available_stock)));
+                                setQuantity(
+                                  Math.min(item.quantity, Math.max(1, matched.available_stock)),
+                                );
                               }
                             }
                           }}
@@ -346,8 +350,8 @@ export default function MinusStockModal({
                                 isSelected
                                   ? "text-destructive-foreground/80"
                                   : matched.available_stock > 0
-                                  ? "text-success"
-                                  : "text-destructive"
+                                    ? "text-success"
+                                    : "text-destructive"
                               }`}
                             >
                               ({matched.available_stock} {matched.unit})
@@ -428,7 +432,9 @@ export default function MinusStockModal({
                           }`}
                         >
                           <div className="min-w-0 pr-3">
-                            <p className="text-sm font-semibold text-foreground truncate">{p.name}</p>
+                            <p className="text-sm font-semibold text-foreground truncate">
+                              {p.name}
+                            </p>
                             <p className="text-xs text-muted-foreground">
                               {p.category} · {p.location_name}
                             </p>
@@ -439,8 +445,8 @@ export default function MinusStockModal({
                                 isZero
                                   ? "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300"
                                   : p.available_stock <= 5
-                                  ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                                  : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
+                                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
                               }`}
                             >
                               {p.available_stock} {p.unit}
@@ -515,11 +521,11 @@ export default function MinusStockModal({
                       <button
                         type="button"
                         onClick={() =>
-                          setQuantity(
-                            Math.min(selectedProduct.available_stock, numQty + 1)
-                          )
+                          setQuantity(Math.min(selectedProduct.available_stock, numQty + 1))
                         }
-                        disabled={isExceeding || numQty >= selectedProduct.available_stock || isOutOfStock}
+                        disabled={
+                          isExceeding || numQty >= selectedProduct.available_stock || isOutOfStock
+                        }
                         className="flex h-11 w-11 items-center justify-center rounded-xl border border-border bg-background text-foreground hover:bg-muted disabled:opacity-40 transition-colors"
                       >
                         <Plus className="h-4 w-4" />
@@ -567,8 +573,8 @@ export default function MinusStockModal({
                           remainingStock < 0
                             ? "text-rose-600"
                             : remainingStock === 0
-                            ? "text-amber-600"
-                            : "text-emerald-600"
+                              ? "text-amber-600"
+                              : "text-emerald-600"
                         }`}
                       >
                         {Math.max(0, remainingStock)} {selectedProduct.unit} remaining
@@ -581,8 +587,15 @@ export default function MinusStockModal({
                     <div className="flex items-center gap-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 p-3 text-xs text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900">
                       <AlertCircle className="h-4 w-4 shrink-0 text-rose-600" />
                       <span>
-                        Cannot deduct <strong>{numQty} {selectedProduct.unit}</strong>. Only{" "}
-                        <strong>{selectedProduct.available_stock} {selectedProduct.unit}</strong> available in stock.
+                        Cannot deduct{" "}
+                        <strong>
+                          {numQty} {selectedProduct.unit}
+                        </strong>
+                        . Only{" "}
+                        <strong>
+                          {selectedProduct.available_stock} {selectedProduct.unit}
+                        </strong>{" "}
+                        available in stock.
                       </span>
                     </div>
                   )}

@@ -16,7 +16,7 @@ declare global {
 
 // Build-time default (baked by Vite). Overridden at runtime when the SSR server
 // injects `window.__DJANGO_API_BASE__` from the DJANGO_API_BASE_URL env var.
-const BUILD_BASE = (import.meta.env.VITE_DJANGO_API_BASE_URL as string | undefined);
+const BUILD_BASE = import.meta.env.VITE_DJANGO_API_BASE_URL as string | undefined;
 
 function resolveBase(): string {
   const injected =
@@ -57,10 +57,7 @@ setConnectivityProbe(() => {
   });
 });
 
-export async function djangoFetch<T>(
-  url: string,
-  options: RequestInit = {}
-): Promise<T> {
+export async function djangoFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, { cache: "no-store", ...options });

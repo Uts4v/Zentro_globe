@@ -80,9 +80,7 @@ export default function CreateCreditAccountModal({
           <h3 id="credit-account-success-title" className="text-lg font-bold text-foreground">
             Account Created
           </h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Credit account created for {name}
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Credit account created for {name}</p>
           <p className="numeric mt-3 text-2xl font-bold text-amber-600">
             Limit: {formatCurrency(numLimit, currencySymbol)}
           </p>
@@ -104,9 +102,7 @@ export default function CreateCreditAccountModal({
             <h3 id="credit-account-title" className="text-base font-bold text-foreground">
               New Credit Account
             </h3>
-            <p className="text-xs text-muted-foreground">
-              Create a credit account for a customer
-            </p>
+            <p className="text-xs text-muted-foreground">Create a credit account for a customer</p>
           </div>
           <button
             aria-label="Close"
@@ -175,11 +171,7 @@ export default function CreateCreditAccountModal({
           ))}
         </div>
 
-        {error && (
-          <div className="mb-4 rounded-xl bg-red-50 p-3 text-xs text-red-600">
-            {error}
-          </div>
-        )}
+        {error && <div className="mb-4 rounded-xl bg-red-50 p-3 text-xs text-red-600">{error}</div>}
 
         <button
           onClick={handleSubmit}

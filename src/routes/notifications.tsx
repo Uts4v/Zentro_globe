@@ -1,11 +1,18 @@
-﻿// routes/notifications.tsx 
+﻿// routes/notifications.tsx
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { requireAuth } from "@/lib/auth-guard";
 import { notificationApi, type Notification } from "@/lib/api";
 import {
-  Bell, ShoppingBag, Target, Gift, Stamp,
-  Sparkles, CheckCheck, Trash2, Loader2,
+  Bell,
+  ShoppingBag,
+  Target,
+  Gift,
+  Stamp,
+  Sparkles,
+  CheckCheck,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -100,9 +107,11 @@ function NotificationsPage() {
               disabled={clearAll.isPending}
               className="inline-flex items-center gap-1.5 rounded-full border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950 px-3 py-1.5 text-xs font-medium text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900 disabled:opacity-50"
             >
-              {clearAll.isPending
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <Trash2 className="h-3.5 w-3.5" />}
+              {clearAll.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
               Clear all
             </button>
           )}
@@ -119,7 +128,9 @@ function NotificationsPage() {
       ) : isError ? (
         <div className="rounded-3xl border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950 p-6 text-sm text-red-700 dark:text-red-300">
           Unable to load notifications.{" "}
-          <button onClick={() => refetch()} className="underline">Retry</button>
+          <button onClick={() => refetch()} className="underline">
+            Retry
+          </button>
         </div>
       ) : !data || data.length === 0 ? (
         <div className="glass rounded-3xl p-12 text-center">
@@ -137,15 +148,15 @@ function NotificationsPage() {
               <div
                 key={n.id}
                 className={`rounded-3xl border px-4 py-4 transition-all ${
-                  n.is_read
-                    ? "border-border bg-background"
-                    : "border-ember/20 bg-ember/5"
+                  n.is_read ? "border-border bg-background" : "border-ember/20 bg-ember/5"
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${
-                    n.is_read ? "bg-mist text-muted-foreground" : "gradient-ember text-white"
-                  }`}>
+                  <div
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ${
+                      n.is_read ? "bg-mist text-muted-foreground" : "gradient-ember text-white"
+                    }`}
+                  >
                     <Icon className="h-4 w-4" strokeWidth={2} />
                   </div>
 

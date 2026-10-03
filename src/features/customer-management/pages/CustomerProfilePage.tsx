@@ -219,7 +219,11 @@ function InstallAppRow() {
 
   return (
     <div>
-      <button onClick={handleClick} disabled={installing} className="flex w-full items-center gap-3 p-4 text-left">
+      <button
+        onClick={handleClick}
+        disabled={installing}
+        className="flex w-full items-center gap-3 p-4 text-left"
+      >
         <Download className="h-4 w-4 text-muted-foreground" />
         <span className="flex-1 text-sm text-foreground">
           {installing ? "Installing…" : "Download app"}

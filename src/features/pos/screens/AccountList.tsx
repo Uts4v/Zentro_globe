@@ -78,19 +78,13 @@ export default function AccountList({
   const filteredDebit = debitAccounts.filter((a) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
-      a.contact_name.toLowerCase().includes(q) ||
-      a.contact_phone.includes(q)
-    );
+    return a.contact_name.toLowerCase().includes(q) || a.contact_phone.includes(q);
   });
 
   const filteredCredit = creditAccounts.filter((a) => {
     if (!search) return true;
     const q = search.toLowerCase();
-    return (
-      a.contact_name.toLowerCase().includes(q) ||
-      a.contact_phone.includes(q)
-    );
+    return a.contact_name.toLowerCase().includes(q) || a.contact_phone.includes(q);
   });
 
   const creditEnabled = posSettings?.credit_accounts_enabled ?? false;
@@ -121,9 +115,7 @@ export default function AccountList({
             key={t}
             onClick={() => setTab(t)}
             className={`rounded-xl px-4 py-2 text-sm font-medium capitalize transition-colors ${
-              tab === t
-                ? "bg-ink text-white"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
+              tab === t ? "bg-ink text-white" : "bg-muted text-muted-foreground hover:bg-muted/80"
             }`}
           >
             {t === "debit" ? "Debit (Wallet)" : "Credit"}
@@ -190,9 +182,7 @@ export default function AccountList({
                     {account.contact_name || "Walk-in"}
                   </p>
                   {account.contact_phone && (
-                    <p className="text-xs text-muted-foreground">
-                      {account.contact_phone}
-                    </p>
+                    <p className="text-xs text-muted-foreground">{account.contact_phone}</p>
                   )}
                 </div>
                 <div className="text-right">
@@ -239,15 +229,10 @@ export default function AccountList({
           {filteredCredit.map((account) => {
             const utilizationPct =
               Number(account.credit_limit) > 0
-                ? (Number(account.current_balance) /
-                    Number(account.credit_limit)) *
-                  100
+                ? (Number(account.current_balance) / Number(account.credit_limit)) * 100
                 : 0;
             return (
-              <div
-                key={account.id}
-                className="rounded-2xl border border-border bg-card p-4"
-              >
+              <div key={account.id} className="rounded-2xl border border-border bg-card p-4">
                 <div className="mb-3 flex items-center gap-4">
                   <div className="grid h-12 w-12 place-items-center rounded-full bg-amber-500 text-lg font-bold text-white">
                     {(account.contact_name || "?").charAt(0).toUpperCase()}
@@ -257,9 +242,7 @@ export default function AccountList({
                       {account.contact_name || "Walk-in"}
                     </p>
                     {account.contact_phone && (
-                      <p className="text-xs text-muted-foreground">
-                        {account.contact_phone}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{account.contact_phone}</p>
                     )}
                   </div>
                 </div>
@@ -289,17 +272,17 @@ export default function AccountList({
                 {/* Utilization bar */}
                 <div className="mb-3">
                   <div className="mb-1 flex justify-between text-xs">
-                    <span className="text-muted-foreground">
-                      Utilization
-                    </span>
-                    <span className="font-medium">
-                      {utilizationPct.toFixed(0)}%
-                    </span>
+                    <span className="text-muted-foreground">Utilization</span>
+                    <span className="font-medium">{utilizationPct.toFixed(0)}%</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-muted">
                     <div
                       className={`h-full rounded-full ${
-                        utilizationPct > 80 ? "bg-destructive" : utilizationPct > 50 ? "bg-warning" : "bg-success"
+                        utilizationPct > 80
+                          ? "bg-destructive"
+                          : utilizationPct > 50
+                            ? "bg-warning"
+                            : "bg-success"
                       }`}
                       style={{ width: `${Math.min(utilizationPct, 100)}%` }}
                     />

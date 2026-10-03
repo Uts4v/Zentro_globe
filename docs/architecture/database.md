@@ -50,30 +50,30 @@ erDiagram
 
 ## Vertices (verified tables + key columns)
 
-| Table | Domain | Key relationships |
-|---|---|---|
-| `accounts_user` | Accounts | base for customer+merchant |
-| `accounts_customerprofile` | Accounts | 1:1 to User |
-| `accounts_merchantprofile` | Merchants | 1:1 User? — verify (see below) |
-| `merchants_menuitem` | Menu | FK merchant; prep_area; optional_category; today_special |
-| `merchants_menuitemoption` | Menu | FK menu_item |
-| `merchants_merchanttable` | Tables | FK merchant; public_token; qr |
-| `orders_order` | Orders | FK customer, merchant, membership?, table?, preparation_area |
-| `orders_orderitem` | Orders | items |
-| `orders_orderitemoption` | Orders | option snapshots |
-| `orders_preparationarea` | Preparation/KDS | area groups merchant items |
-| `loyalty_customermerchantwallet` | Loyalty | FK customer+merchant (join table) |
-| `loyalty_punchcard` | Loyalty | FK wallet; counts; reward threshold |
-| `loyalty_missionprogress` / `mission` | Loyalty | progress on wallet |
-| `loyalty_reward` / `rewardredemption` | Loyalty | redemptions with codes |
-| `loyalty_pointstransaction` | Loyalty | ledger |
-| `loyalty_transfer` | Loyalty | transfers between wallets |
-| `pos_posdevice` | POS | FK merchant |
-| `pos_shiftworker` / `pos_staffshift` / `pos_cashshift` | POS/Schedule | shift + cash tracking |
-| `pos_pospayment` | Payments | session-scoped (POS) |
-| `orders_order.payment*` | Payments | customer payments (online/table) |
-| `notifications_notification` + `pushsubscription` | Notifications | user-scoped |
-| `ai_core_*` | AI | conversations/messages/artifacts |
+| Table                                                  | Domain          | Key relationships                                            |
+| ------------------------------------------------------ | --------------- | ------------------------------------------------------------ |
+| `accounts_user`                                        | Accounts        | base for customer+merchant                                   |
+| `accounts_customerprofile`                             | Accounts        | 1:1 to User                                                  |
+| `accounts_merchantprofile`                             | Merchants       | 1:1 User? — verify (see below)                               |
+| `merchants_menuitem`                                   | Menu            | FK merchant; prep_area; optional_category; today_special     |
+| `merchants_menuitemoption`                             | Menu            | FK menu_item                                                 |
+| `merchants_merchanttable`                              | Tables          | FK merchant; public_token; qr                                |
+| `orders_order`                                         | Orders          | FK customer, merchant, membership?, table?, preparation_area |
+| `orders_orderitem`                                     | Orders          | items                                                        |
+| `orders_orderitemoption`                               | Orders          | option snapshots                                             |
+| `orders_preparationarea`                               | Preparation/KDS | area groups merchant items                                   |
+| `loyalty_customermerchantwallet`                       | Loyalty         | FK customer+merchant (join table)                            |
+| `loyalty_punchcard`                                    | Loyalty         | FK wallet; counts; reward threshold                          |
+| `loyalty_missionprogress` / `mission`                  | Loyalty         | progress on wallet                                           |
+| `loyalty_reward` / `rewardredemption`                  | Loyalty         | redemptions with codes                                       |
+| `loyalty_pointstransaction`                            | Loyalty         | ledger                                                       |
+| `loyalty_transfer`                                     | Loyalty         | transfers between wallets                                    |
+| `pos_posdevice`                                        | POS             | FK merchant                                                  |
+| `pos_shiftworker` / `pos_staffshift` / `pos_cashshift` | POS/Schedule    | shift + cash tracking                                        |
+| `pos_pospayment`                                       | Payments        | session-scoped (POS)                                         |
+| `orders_order.payment*`                                | Payments        | customer payments (online/table)                             |
+| `notifications_notification` + `pushsubscription`      | Notifications   | user-scoped                                                  |
+| `ai_core_*`                                            | AI              | conversations/messages/artifacts                             |
 
 > Cross-check `accounts.merchantprofile` vs `merchants.merchantprofile`: both names exist —
 > one is on `accounts` for global identity, the other is the merchant-owned store profile.

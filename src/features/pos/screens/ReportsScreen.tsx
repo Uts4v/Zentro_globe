@@ -64,15 +64,9 @@ export default function ReportsScreen() {
     }
   });
   const completedOrders = todayOrders.filter((o) => o.status === "completed");
-  const totalRevenue = completedOrders.reduce(
-    (sum, o) => sum + Number(o.total_amount),
-    0
-  );
+  const totalRevenue = completedOrders.reduce((sum, o) => sum + Number(o.total_amount), 0);
   const avgOrderValue = completedOrders.length > 0 ? totalRevenue / completedOrders.length : 0;
-  const totalDebitBalance = debitAccounts.reduce(
-    (sum, a) => sum + Number(a.balance),
-    0
-  );
+  const totalDebitBalance = debitAccounts.reduce((sum, a) => sum + Number(a.balance), 0);
 
   const stats = [
     {
@@ -149,9 +143,7 @@ export default function ReportsScreen() {
       {/* Shift info */}
       {activeShift && (
         <div className="mb-6 rounded-2xl border border-border bg-card p-4">
-          <h2 className="mb-3 text-xs font-bold uppercase text-muted-foreground">
-            Current Shift
-          </h2>
+          <h2 className="mb-3 text-xs font-bold uppercase text-muted-foreground">Current Shift</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
               <p className="text-xs text-muted-foreground">Opening</p>
@@ -215,13 +207,12 @@ export default function ReportsScreen() {
                         <span className="capitalize text-foreground">
                           {paymentMethodLabel(method)}
                         </span>
-                        <span className="font-medium">{formatCurrency(amount, currencySymbol)}</span>
+                        <span className="font-medium">
+                          {formatCurrency(amount, currencySymbol)}
+                        </span>
                       </div>
                       <div className="h-2 overflow-hidden rounded-full bg-muted">
-                        <div
-                          className="h-full rounded-full bg-ink"
-                          style={{ width: `${pct}%` }}
-                        />
+                        <div className="h-full rounded-full bg-ink" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   );
@@ -232,9 +223,7 @@ export default function ReportsScreen() {
 
         {/* Status breakdown */}
         <div className="rounded-2xl border border-border bg-card p-5">
-          <h2 className="mb-4 text-xs font-bold uppercase text-muted-foreground">
-            Order Status
-          </h2>
+          <h2 className="mb-4 text-xs font-bold uppercase text-muted-foreground">Order Status</h2>
           {Object.keys(statusBreakdown).length === 0 ? (
             <p className="text-sm text-muted-foreground">No data</p>
           ) : (
@@ -246,9 +235,7 @@ export default function ReportsScreen() {
                     key={status}
                     className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2.5"
                   >
-                    <span className="text-sm capitalize text-foreground">
-                      {status}
-                    </span>
+                    <span className="text-sm capitalize text-foreground">{status}</span>
                     <span className="text-sm font-bold text-ink">{count}</span>
                   </div>
                 ))}

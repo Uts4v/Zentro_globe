@@ -89,7 +89,9 @@ function MenuItemCard({
         <div className="mt-3 flex items-center justify-between gap-2">
           <span className="flex min-w-0 flex-col">
             <span className="font-display text-xl text-foreground">
-              {hasOptions && <span className="mr-1 text-[10px] font-sans text-muted-foreground">from</span>}
+              {hasOptions && (
+                <span className="mr-1 text-[10px] font-sans text-muted-foreground">from</span>
+              )}
               {formatCurrency(price, currencySymbol, 0)}
             </span>
             {discount && (
@@ -285,9 +287,7 @@ function TableQRScanPage() {
 
   /** Total qty of an item across every distinct configuration in the cart. */
   function qtyInCart(itemId: string) {
-    return cart
-      .filter((c) => String(c.itemId) === String(itemId))
-      .reduce((s, c) => s + c.qty, 0);
+    return cart.filter((c) => String(c.itemId) === String(itemId)).reduce((s, c) => s + c.qty, 0);
   }
 
   function handleCardTap(item: MenuItem) {
@@ -587,7 +587,8 @@ function TableQRScanPage() {
           <div className="mt-6 rounded-2xl border border-border bg-muted/40 p-4 text-center">
             <p className="text-sm font-semibold text-foreground">Menu Browsing Only</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Direct table ordering is currently disabled for this café. Please place your order directly with your server.
+              Direct table ordering is currently disabled for this café. Please place your order
+              directly with your server.
             </p>
           </div>
         ) : (
@@ -612,8 +613,8 @@ function TableQRScanPage() {
           <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/50 p-4 text-center">
             <p className="text-xs text-amber-700">
               <Sparkles className="inline h-3 w-3 mr-1" />
-              <span className="font-semibold">Join Zentro</span> — earn points on every order, unlock
-              rewards & member-only offers.
+              <span className="font-semibold">Join Zentro</span> — earn points on every order,
+              unlock rewards & member-only offers.
             </p>
             <Link
               to="/auth/signup"

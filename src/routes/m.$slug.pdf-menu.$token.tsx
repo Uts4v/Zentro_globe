@@ -40,7 +40,9 @@ function PdfMenuPage() {
     };
 
     fetchPdf();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [slug, token]);
 
   if (loading) {
@@ -56,9 +58,7 @@ function PdfMenuPage() {
     return (
       <div className="flex min-h-dvh flex-col items-center justify-center gap-4 px-5 text-center bg-background">
         <p className="text-5xl">🍽️</p>
-        <p className="text-sm text-muted-foreground">
-          {error ?? "Menu not available."}
-        </p>
+        <p className="text-sm text-muted-foreground">{error ?? "Menu not available."}</p>
         <Link
           to="/"
           className="text-sm font-medium text-foreground underline-offset-4 hover:underline"
@@ -90,9 +90,7 @@ function PdfMenuPage() {
               </div>
             )}
             <div className="min-w-0">
-              <h1 className="truncate font-display text-lg text-foreground">
-                {merchant.name}
-              </h1>
+              <h1 className="truncate font-display text-lg text-foreground">{merchant.name}</h1>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
                 {merchant.address && (
                   <span className="inline-flex items-center gap-0.5">

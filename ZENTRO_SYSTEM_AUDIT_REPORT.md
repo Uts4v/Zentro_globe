@@ -1,13 +1,15 @@
 # ZENTRO GLOBE — PRODUCTION SYSTEM AUDIT REPORT
+
 **Target Application:** Zentro Globe (Restaurant Loyalty, Online Ordering, Inventory & POS System)  
 **Workspace:** `c:\Zentro_globe`  
 **Audit Type:** Full-Stack Defensive Security, Architecture, Performance & Code Quality Review  
 **Mode:** Inspection & Testing Only (Read-Only; Zero Source Code or DB Modifications)  
-**Date:** September 30, 2026  
+**Date:** September 30, 2026
 
 ---
 
 ## TABLE OF CONTENTS
+
 1. [A. Executive Summary](#a-executive-summary)
 2. [B. Complete Project Inventory](#b-complete-project-inventory)
 3. [C. Page & Route Audit](#c-page--route-audit)
@@ -44,12 +46,14 @@
 An exhaustive, production-readiness audit of the **Zentro Globe** platform was executed across the frontend (TanStack Start / React 19 / Vite), backend (Django 5.0+ / DRF / Channels / ASGI Daphne), databases (SQLite / PostgreSQL 16), caching (Redis 7), and PWA offline infrastructure.
 
 ### Key Strengths Verified
+
 1. **Deterministic Authoritative Pricing:** The server-side pricing engine (`backend/orders/pricing/engine.py`) and matching client preview (`src/lib/pricing/preview.ts`) passed **100% (18/18) of golden test vectors**, correctly computing compound tax components, line item discount distributions, non-taxable service charges, and minimum spend boundaries.
 2. **Hardened Media Pipeline:** Server-side upload handlers in `backend/config/media_utils.py` verify magic bytes, enforce pixel dimensions, guard against decompression bombs, sanitize and rasterize SVG vectors to PNG, and re-encode all images via Pillow. Media serving (`backend/config/views.py`) strictly enforces sandbox CSP, `X-Content-Type-Options: nosniff`, and path traversal prevention.
 3. **Database Migration Health:** All 85 Django migrations across all 11 applications are cleanly synchronized and fully applied (`[X]`).
 4. **TypeScript Strictness:** Full workspace static type checking (`npx tsc --noEmit`) completed with **0 type errors**.
 
 ### Critical Production Blockers
+
 1. **Table QR Guest Orders & Public Stores Blocked by AuthGate (P0 / Critical):** In `src/routes/__root.tsx` (lines 30–61), `PUBLIC_ROUTES` is limited to auth pages. Table QR scan URLs (`/m/$slug/table/$token`), guest storefronts (`/guest/merchant/$slug`), the store directory (`/stores`), and offline fallback (`/offline`) are omitted. Any unauthenticated diner scanning a physical table QR code is forcibly redirected to `/auth`, breaking in-restaurant table ordering.
 2. **Missing Guest Order Tracking Endpoint (P0 / Critical):** Guest orders created via `POST /api/orders/guest-create/` set `order.customer = None`. However, the order detail endpoint `GET /api/orders/<int:pk>/` requires authentication and enforces `order.customer == request.user.customer_profile`, resulting in `401 Unauthorized` or `403 Forbidden`. Guests cannot track the progress of their food or drinks.
 3. **POS Payment Completion Failure Under Default Tax Configuration (P1 / High):** Verified by test failure in `backend/qa_test.py` (`test_43_pos_order_and_payment`). Because `tax_enabled` defaults to `True` on `MerchantProfile`, orders include calculated tax. Payments tendered for subtotal only leave the order in `payment_status="partially_paid"` and `status="confirmed"`, blocking auto-completion and loyalty awards.
@@ -61,6 +65,7 @@ An exhaustive, production-readiness audit of the **Zentro Globe** platform was e
 ## B. COMPLETE PROJECT INVENTORY
 
 ### Core Architecture
+
 - **Frontend:** TanStack Start (`@tanstack/react-start` v1.167.50) + TanStack Router v1.168.25
 - **UI & State:** React 19 (`react` v19.2.0, `react-dom` v19.2.0), Zustand v5.0.14, `@tanstack/react-query` v5.83.0
 - **Styling:** Tailwind CSS v4 (`@tailwindcss/vite` v4.2.1, `tailwindcss` v4.2.1), Radix UI primitives, Lucide React v0.575.0
@@ -74,6 +79,7 @@ An exhaustive, production-readiness audit of the **Zentro Globe** platform was e
 - **AI Core:** Google Gemini API (`google-generativeai`) + Groq Cloud API (`llama-3.1-8b-instant`)
 
 ### User Roles
+
 1. **Anonymous / Visitor:** Browsing nearby cafes, scanning QR codes, viewing digital PDF menus, placing guest table orders.
 2. **Customer:** Member loyalty card, earning/redeeming points, wallet, punch cards, order history, PWA push alerts.
 3. **Merchant (Owner / Manager):** Storefront config, table QR generation, menu CRUD, pricing policies, analytics, inventory management, offers, staff scheduling.
@@ -82,6 +88,7 @@ An exhaustive, production-readiness audit of the **Zentro Globe** platform was e
 6. **Platform Superuser:** Django Admin, system health monitor, developer database browser (`/__db__/`).
 
 ### Unused Code & Technical Debt
+
 - **Dead Route:** `src/routes/stores_.$id.tsx` (`/stores_/$id`) contains a typo with a trailing underscore. It is unlinked across the entire codebase.
 - **Dead Route:** `src/routes/customer.order.tsx` (`/customer/order`) is an abandoned screen that unconditionally redirects to `/`.
 - **Duplicate Implementation:** `src/routes/leaderboard.tsx` completely duplicates the 223-line component `src/features/loyalty-engine/pages/LeaderboardPage.tsx`.
@@ -97,28 +104,29 @@ An exhaustive, production-readiness audit of the **Zentro Globe** platform was e
 
 ## C. PAGE & ROUTE AUDIT
 
-| Route Path | Auth Required | Target Role | Inspection Result | Status | Key Finding |
-|---|---|---|---|---|---|
-| `/` | Yes | Customer | Verified | PASS | Renders customer dashboard; blocks public search crawlers. |
-| `/auth/*` | No | Public | Verified | PASS | Login, registration, password reset, and OAuth function. |
-| `/m/$slug/table/$token` | No (Intended) | Public Diner | Verified | **FAIL** | Blocked by `AuthGate` in `__root.tsx`; redirects guests to `/auth`. |
-| `/m/$slug` | No (Intended) | Public Diner | Verified | **FAIL** | Blocked by `AuthGate` in `__root.tsx`; redirects guests to `/auth`. |
-| `/guest/merchant/$slug` | No (Intended) | Public Diner | Verified | **FAIL** | Blocked by `AuthGate` in `__root.tsx`; redirects guests to `/auth`. |
-| `/stores_/$id` | Yes | Customer | Verified | **FAIL** | Dead route with typo in filename; never linked internally. |
-| `/customer/order` | Yes | Customer | Verified | **FAIL** | Deprecated stub that immediately bounces to `/`. |
-| `/orders/$id` | Yes | Customer | Verified | **PARTIAL** | Fails for guest table orders; guest users cannot track orders. |
-| `/map` | Yes | Customer | Verified | **PARTIAL** | Requires registration; anonymous visitors cannot view cafe map. |
-| `/stores` | No (Intended) | Public Diner | Verified | **FAIL** | Missing from `PUBLIC_ROUTES`; redirects visitors to `/auth`. |
-| `/merchant/*` | Yes (Merchant) | Merchant Staff | Verified | PASS | Role validation enforced; redirects unapproved/unboarded users. |
-| `/pos/*` | Yes (Merchant) | POS Worker | Verified | PASS | PIN protection, device registration, and cash shifts function properly. |
-| `/pos/preparation` | Yes (Merchant) | Kitchen/Bar | Verified | PASS | KDS display auto-routes items based on assigned area. |
-| `/offline` | No (Intended) | Public / All | Verified | **FAIL** | Missing from `PUBLIC_ROUTES`; redirects offline users to `/auth`. |
+| Route Path              | Auth Required  | Target Role    | Inspection Result | Status      | Key Finding                                                             |
+| ----------------------- | -------------- | -------------- | ----------------- | ----------- | ----------------------------------------------------------------------- |
+| `/`                     | Yes            | Customer       | Verified          | PASS        | Renders customer dashboard; blocks public search crawlers.              |
+| `/auth/*`               | No             | Public         | Verified          | PASS        | Login, registration, password reset, and OAuth function.                |
+| `/m/$slug/table/$token` | No (Intended)  | Public Diner   | Verified          | **FAIL**    | Blocked by `AuthGate` in `__root.tsx`; redirects guests to `/auth`.     |
+| `/m/$slug`              | No (Intended)  | Public Diner   | Verified          | **FAIL**    | Blocked by `AuthGate` in `__root.tsx`; redirects guests to `/auth`.     |
+| `/guest/merchant/$slug` | No (Intended)  | Public Diner   | Verified          | **FAIL**    | Blocked by `AuthGate` in `__root.tsx`; redirects guests to `/auth`.     |
+| `/stores_/$id`          | Yes            | Customer       | Verified          | **FAIL**    | Dead route with typo in filename; never linked internally.              |
+| `/customer/order`       | Yes            | Customer       | Verified          | **FAIL**    | Deprecated stub that immediately bounces to `/`.                        |
+| `/orders/$id`           | Yes            | Customer       | Verified          | **PARTIAL** | Fails for guest table orders; guest users cannot track orders.          |
+| `/map`                  | Yes            | Customer       | Verified          | **PARTIAL** | Requires registration; anonymous visitors cannot view cafe map.         |
+| `/stores`               | No (Intended)  | Public Diner   | Verified          | **FAIL**    | Missing from `PUBLIC_ROUTES`; redirects visitors to `/auth`.            |
+| `/merchant/*`           | Yes (Merchant) | Merchant Staff | Verified          | PASS        | Role validation enforced; redirects unapproved/unboarded users.         |
+| `/pos/*`                | Yes (Merchant) | POS Worker     | Verified          | PASS        | PIN protection, device registration, and cash shifts function properly. |
+| `/pos/preparation`      | Yes (Merchant) | Kitchen/Bar    | Verified          | PASS        | KDS display auto-routes items based on assigned area.                   |
+| `/offline`              | No (Intended)  | Public / All   | Verified          | **FAIL**    | Missing from `PUBLIC_ROUTES`; redirects offline users to `/auth`.       |
 
 ---
 
 ## D. FUNCTIONALITY AUDIT
 
 ### Automated QA Test Run Summary (`backend/qa_test.py`)
+
 Execution of the comprehensive Django test suite produced **31 PASSES and 2 FAILURES**:
 
 ```
@@ -152,20 +160,24 @@ FAILED (failures=2)
 ## E. USER FLOW AUDIT
 
 ### 1. In-Restaurant Table QR Ordering Flow (FAIL)
+
 - **Intended Flow:** Diner sits at table → Scans table QR code (`/m/:slug/table/:token`) → Menu resolves with table number banner → Selects items and options → Places guest order.
 - **Failure Root Cause:** `src/routes/__root.tsx` executes before route components mount. Since `PUBLIC_ROUTES` excludes `/m`, unauthenticated diners are bounced to `/auth`.
 - **Severity:** P0 / Critical.
 
 ### 2. Guest Order Status Polling Flow (FAIL)
+
 - **Intended Flow:** Guest order submitted → App redirects to `/orders/:id` → Status updates via polling (Pending → Confirmed → Brewing → Ready).
 - **Failure Root Cause:** `src/routes/orders.$id.tsx` enforces `requireAuth`. Concurrently, `GET /api/orders/<id>/` enforces `order.customer == request.user.customer_profile`. With `order.customer = None`, the API returns `403 Forbidden`.
 - **Severity:** P0 / Critical.
 
 ### 3. POS Order & Split Payment Flow (PASS with caveat)
+
 - **Flow:** Worker opens shift → Punches cart items → Tenders split payment (Cash + Fonepay QR) → Order moves to Completed → Loyalty awarded.
 - **Caveat:** If cashier tenders exact item subtotal while `tax_enabled=True`, order stalls at `partially_paid`.
 
 ### 4. Reward Redemption & Voucher Burning (PASS)
+
 - **Flow:** Customer selects reward → Spends points → Single-use alphanumeric code with 15-minute countdown is generated → Merchant confirms via store PIN → Voucher marked burnt. Verified clean.
 
 ---
@@ -212,16 +224,16 @@ FAILED (failures=2)
 
 ## K. API ENDPOINT AUDIT
 
-| Method | Endpoint | Auth | Role | Validation | Risk / Finding |
-|---|---|---|---|---|---|
-| `POST` | `/api/auth/register/` | No | Any | `RegisterSerializer` | Validates email uniqueness, password confirmation. PASS. |
-| `POST` | `/api/auth/login/` | No | Any | `CustomTokenObtainPairSerializer` | Returns access + refresh tokens. Scoped rate limit enforced. PASS. |
-| `GET` | `/api/merchants/slug/<slug>/` | No | Any | Slug param | **Fails with 404 if merchant `is_approved=False`.** |
-| `POST` | `/api/orders/guest-create/` | No | Any | `CreateGuestOrderSerializer` | Validates table token & store status. PASS. |
-| `GET` | `/api/orders/<id>/` | Yes | Owner | PK param | **Fails for guests (401/403). No guest tracking access.** |
-| `POST` | `/api/pos/order/create/` | Yes | Merchant/Staff | `PosOrderSerializer` | Enforces `client_mutation_id` idempotency. PASS. |
-| `POST` | `/api/pos/payment/create/` | Yes | Merchant/Staff | `PosPaymentSerializer` | **Stalls order at `partially_paid` if tendered amount ignores tax.** |
-| `POST` | `/api/inventory/reconcile/` | Yes | Owner/Manager | `CountReconcileSerializer` | Verifies stock count approval and updates balance atomically. PASS. |
+| Method | Endpoint                      | Auth | Role           | Validation                        | Risk / Finding                                                       |
+| ------ | ----------------------------- | ---- | -------------- | --------------------------------- | -------------------------------------------------------------------- |
+| `POST` | `/api/auth/register/`         | No   | Any            | `RegisterSerializer`              | Validates email uniqueness, password confirmation. PASS.             |
+| `POST` | `/api/auth/login/`            | No   | Any            | `CustomTokenObtainPairSerializer` | Returns access + refresh tokens. Scoped rate limit enforced. PASS.   |
+| `GET`  | `/api/merchants/slug/<slug>/` | No   | Any            | Slug param                        | **Fails with 404 if merchant `is_approved=False`.**                  |
+| `POST` | `/api/orders/guest-create/`   | No   | Any            | `CreateGuestOrderSerializer`      | Validates table token & store status. PASS.                          |
+| `GET`  | `/api/orders/<id>/`           | Yes  | Owner          | PK param                          | **Fails for guests (401/403). No guest tracking access.**            |
+| `POST` | `/api/pos/order/create/`      | Yes  | Merchant/Staff | `PosOrderSerializer`              | Enforces `client_mutation_id` idempotency. PASS.                     |
+| `POST` | `/api/pos/payment/create/`    | Yes  | Merchant/Staff | `PosPaymentSerializer`            | **Stalls order at `partially_paid` if tendered amount ignores tax.** |
+| `POST` | `/api/inventory/reconcile/`   | Yes  | Owner/Manager  | `CountReconcileSerializer`        | Verifies stock count approval and updates balance atomically. PASS.  |
 
 ---
 
@@ -369,6 +381,7 @@ FAILED (failures=2)
 ## Z. INDIVIDUAL REMEDIATION ISSUE CARDS
 
 ### ISSUE-001
+
 - **ID:** ISSUE-001
 - **Category:** Functionality / User Flow / Routing
 - **Severity:** CRITICAL
@@ -398,6 +411,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-002
+
 - **ID:** ISSUE-002
 - **Category:** API / Authorization / Error Handling
 - **Severity:** CRITICAL
@@ -429,6 +443,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-003
+
 - **ID:** ISSUE-003
 - **Category:** Business Logic / POS / Billing
 - **Severity:** HIGH
@@ -457,6 +472,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-004
+
 - **ID:** ISSUE-004
 - **Category:** Performance / Assets
 - **Severity:** HIGH
@@ -476,6 +492,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-005
+
 - **ID:** ISSUE-005
 - **Category:** SEO / Crawlability
 - **Severity:** HIGH
@@ -501,6 +518,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-006
+
 - **ID:** ISSUE-006
 - **Category:** Security / Session Handling
 - **Severity:** HIGH
@@ -525,6 +543,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-007
+
 - **ID:** ISSUE-007
 - **Category:** Database / Concurrency / Idempotency
 - **Severity:** HIGH
@@ -551,6 +570,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-008
+
 - **ID:** ISSUE-008
 - **Category:** Code Quality / Developer Experience
 - **Severity:** MEDIUM
@@ -570,6 +590,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-009
+
 - **ID:** ISSUE-009
 - **Category:** Code Quality / React Architecture
 - **Severity:** MEDIUM
@@ -593,6 +614,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-010
+
 - **ID:** ISSUE-010
 - **Category:** Routing / Dead Code
 - **Severity:** MEDIUM
@@ -611,6 +633,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-011
+
 - **ID:** ISSUE-011
 - **Category:** Code Duplication / Maintainability
 - **Severity:** MEDIUM
@@ -629,6 +652,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-012
+
 - **ID:** ISSUE-012
 - **Category:** Monitoring / Error Tracking
 - **Severity:** MEDIUM
@@ -652,6 +676,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-013
+
 - **ID:** ISSUE-013
 - **Category:** Codebase Cleanliness / Privacy
 - **Severity:** LOW
@@ -670,6 +695,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-014
+
 - **ID:** ISSUE-014
 - **Category:** Accessibility (a11y)
 - **Severity:** LOW
@@ -688,6 +714,7 @@ FAILED (failures=2)
 ---
 
 ### ISSUE-015
+
 - **ID:** ISSUE-015
 - **Category:** Dependencies / Compliance
 - **Severity:** INFORMATIONAL
@@ -705,41 +732,41 @@ FAILED (failures=2)
 
 ## FINAL PRIORITIZED ISSUE TABLE
 
-| ID | Severity | Category | Page/Feature | Issue | User Impact | Production Impact |
-|---|---|---|---|---|---|---|
-| **ISSUE-001** | **CRITICAL** | Routing / Auth | Table QR & Storefront | `AuthGate` intercepts and blocks guest diners; redirects to `/auth` | Guests cannot scan QR code and order food without logging in | Primary in-restaurant order funnel completely non-functional |
-| **ISSUE-002** | **CRITICAL** | API / Auth | Order Detail / Tracking | Guest orders have `customer=None`; `GET /api/orders/<id>/` returns 401/403 | Diners cannot track order preparation or pickup status | Severe customer confusion; duplicate orders placed |
-| **ISSUE-003** | **HIGH** | Business Logic | POS Payment | Orders stall in `confirmed` and `partially_paid` when tax calculation exceeds tender | Cashiers cannot close tickets; loyalty points withheld | Open tickets accumulate; daily cash reconciliations mismatch |
-| **ISSUE-004** | **HIGH** | Performance | Asset Loading | `public/favicon.png` is **2.17 MB** | Slow initial load on mobile networks; high data usage | Poor Core Web Vitals (FCP/LCP); wasted bandwidth |
-| **ISSUE-005** | **HIGH** | SEO / Crawling | Root Domain (`/`) | Root URL requires auth; missing `robots.txt` & `sitemap.xml` | Platform and partner cafes cannot be found via web search | Zero organic search indexability |
-| **ISSUE-006** | **HIGH** | Security | Auth Storage | Refresh token stored in `localStorage` instead of `HttpOnly` cookie | User accounts vulnerable to 30-day session hijacking via XSS | Elevated risk profile in security audits |
-| **ISSUE-007** | **HIGH** | Database | Order Constraints | Idempotency unique constraint fails when `customer` is `NULL` | Network retries can create duplicate guest orders and double-charge | Order and payment duplication |
-| **ISSUE-008** | **MEDIUM** | Code Quality | Prettier / Linter | Missing `endOfLine: auto` triggers 560+ CRLF errors per file on Windows | Windows developers cannot run lint checks or pre-commit hooks | CI/CD build failures |
-| **ISSUE-009** | **MEDIUM** | Code Quality | Root Component | `useMemo` mutates `router.options.context` | Potential routing state desynchronization in React 19 | Intermittent navigation glitches |
-| **ISSUE-010** | **MEDIUM** | Routing | Store Detail | Dead route `stores_.$id.tsx` contains typo in filename | None (unlinked route) | Unnecessary code and bundle bloat |
-| **ISSUE-011** | **MEDIUM** | Code Quality | Leaderboard | `routes/leaderboard.tsx` duplicates 223 lines from feature page | Inconsistent UI if one copy is edited and not the other | Technical debt and maintenance overhead |
-| **ISSUE-012** | **MEDIUM** | Monitoring | Error Telemetry | Frontend errors delegate to undefined `window.__lovableEvents` | Production UI crashes go undetected by developers | Inability to proactively resolve frontend bugs |
-| **ISSUE-013** | **LOW** | Cleanliness | Workspace Root | Binary `.bak` databases, scratch test scripts, and log dumps in repo | None directly | Cluttered repo; risk of committing test credentials |
-| **ISSUE-014** | **LOW** | Accessibility | Shell Navigation | Root template lacks "Skip to main content" link | Keyboard/screen reader users must tab through all nav links | Fails WCAG 2.1 AA bypass criteria |
-| **ISSUE-015** | **INFORMATIONAL** | Compliance | Backend PDF | PyMuPDF uses GNU AGPLv3 copyleft license | None directly | Requires commercial license for closed-source compliance |
+| ID            | Severity          | Category       | Page/Feature            | Issue                                                                                | User Impact                                                         | Production Impact                                            |
+| ------------- | ----------------- | -------------- | ----------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------ |
+| **ISSUE-001** | **CRITICAL**      | Routing / Auth | Table QR & Storefront   | `AuthGate` intercepts and blocks guest diners; redirects to `/auth`                  | Guests cannot scan QR code and order food without logging in        | Primary in-restaurant order funnel completely non-functional |
+| **ISSUE-002** | **CRITICAL**      | API / Auth     | Order Detail / Tracking | Guest orders have `customer=None`; `GET /api/orders/<id>/` returns 401/403           | Diners cannot track order preparation or pickup status              | Severe customer confusion; duplicate orders placed           |
+| **ISSUE-003** | **HIGH**          | Business Logic | POS Payment             | Orders stall in `confirmed` and `partially_paid` when tax calculation exceeds tender | Cashiers cannot close tickets; loyalty points withheld              | Open tickets accumulate; daily cash reconciliations mismatch |
+| **ISSUE-004** | **HIGH**          | Performance    | Asset Loading           | `public/favicon.png` is **2.17 MB**                                                  | Slow initial load on mobile networks; high data usage               | Poor Core Web Vitals (FCP/LCP); wasted bandwidth             |
+| **ISSUE-005** | **HIGH**          | SEO / Crawling | Root Domain (`/`)       | Root URL requires auth; missing `robots.txt` & `sitemap.xml`                         | Platform and partner cafes cannot be found via web search           | Zero organic search indexability                             |
+| **ISSUE-006** | **HIGH**          | Security       | Auth Storage            | Refresh token stored in `localStorage` instead of `HttpOnly` cookie                  | User accounts vulnerable to 30-day session hijacking via XSS        | Elevated risk profile in security audits                     |
+| **ISSUE-007** | **HIGH**          | Database       | Order Constraints       | Idempotency unique constraint fails when `customer` is `NULL`                        | Network retries can create duplicate guest orders and double-charge | Order and payment duplication                                |
+| **ISSUE-008** | **MEDIUM**        | Code Quality   | Prettier / Linter       | Missing `endOfLine: auto` triggers 560+ CRLF errors per file on Windows              | Windows developers cannot run lint checks or pre-commit hooks       | CI/CD build failures                                         |
+| **ISSUE-009** | **MEDIUM**        | Code Quality   | Root Component          | `useMemo` mutates `router.options.context`                                           | Potential routing state desynchronization in React 19               | Intermittent navigation glitches                             |
+| **ISSUE-010** | **MEDIUM**        | Routing        | Store Detail            | Dead route `stores_.$id.tsx` contains typo in filename                               | None (unlinked route)                                               | Unnecessary code and bundle bloat                            |
+| **ISSUE-011** | **MEDIUM**        | Code Quality   | Leaderboard             | `routes/leaderboard.tsx` duplicates 223 lines from feature page                      | Inconsistent UI if one copy is edited and not the other             | Technical debt and maintenance overhead                      |
+| **ISSUE-012** | **MEDIUM**        | Monitoring     | Error Telemetry         | Frontend errors delegate to undefined `window.__lovableEvents`                       | Production UI crashes go undetected by developers                   | Inability to proactively resolve frontend bugs               |
+| **ISSUE-013** | **LOW**           | Cleanliness    | Workspace Root          | Binary `.bak` databases, scratch test scripts, and log dumps in repo                 | None directly                                                       | Cluttered repo; risk of committing test credentials          |
+| **ISSUE-014** | **LOW**           | Accessibility  | Shell Navigation        | Root template lacks "Skip to main content" link                                      | Keyboard/screen reader users must tab through all nav links         | Fails WCAG 2.1 AA bypass criteria                            |
+| **ISSUE-015** | **INFORMATIONAL** | Compliance     | Backend PDF             | PyMuPDF uses GNU AGPLv3 copyleft license                                             | None directly                                                       | Requires commercial license for closed-source compliance     |
 
 ---
 
 ## PASS / FAIL SUMMARY
 
-| Domain | Status | Key Evaluation Summary |
-|---|---|---|
-| **FUNCTIONALITY** | **PARTIAL** | Core merchant, POS, inventory, and member flows pass; Guest table QR flow fails due to root auth gating. |
-| **UI/UX** | **PARTIAL** | Sleek mobile aesthetic and modern design tokens; desktop view suffers from narrow phone column lock. |
-| **RESPONSIVENESS** | **PARTIAL** | Mobile responsive layouts work well; tablet and small mobile (<360px) experience nav tap overcrowding. |
-| **ACCESSIBILITY** | **PARTIAL** | Semantic tags present in many areas; lacks skip navigation links and some icon buttons lack labels. |
-| **SECURITY** | **PARTIAL** | Excellent file upload sanitization and ORM SQL protection; tokens stored in `localStorage` rather than `HttpOnly` cookies. |
-| **PERFORMANCE** | **PARTIAL** | Fast client bundle compilation (~4s); dragged down by 2.17 MB favicon and uncompressed public rasters. |
-| **SEO** | **FAIL** | Root URL redirects crawlers to `/auth`; missing `robots.txt`, `sitemap.xml`, canonical tags, and Open Graph images. |
-| **BACKEND** | **PASS** | Solid DRF architecture, structured middleware logging, transaction isolation, and Django Unfold admin. |
-| **DATABASE** | **PARTIAL** | Migrations clean and applied; nullable unique constraint allows duplicate guest mutations. |
-| **API** | **PARTIAL** | 31/33 test suite endpoints pass; guest order detail lookup is missing and returns 401/403. |
-| **AUTHENTICATION** | **PASS** | Role isolation, SimpleJWT blacklist rotation, password hashing, and phone OTP verification verified. |
-| **BUSINESS LOGIC** | **PARTIAL** | Deterministic pricing engine verified; POS payment completion logic stalls under default tax conditions. |
-| **DEPLOYMENT** | **PASS** | Multi-stage Dockerfiles for backend and frontend with Docker Compose orchestration configured. |
-| **CODE QUALITY** | **PARTIAL** | Strict TypeScript compiles with 0 errors; zero TODOs; Windows prettier CRLF line-ending configuration missing. |
+| Domain             | Status      | Key Evaluation Summary                                                                                                     |
+| ------------------ | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **FUNCTIONALITY**  | **PARTIAL** | Core merchant, POS, inventory, and member flows pass; Guest table QR flow fails due to root auth gating.                   |
+| **UI/UX**          | **PARTIAL** | Sleek mobile aesthetic and modern design tokens; desktop view suffers from narrow phone column lock.                       |
+| **RESPONSIVENESS** | **PARTIAL** | Mobile responsive layouts work well; tablet and small mobile (<360px) experience nav tap overcrowding.                     |
+| **ACCESSIBILITY**  | **PARTIAL** | Semantic tags present in many areas; lacks skip navigation links and some icon buttons lack labels.                        |
+| **SECURITY**       | **PARTIAL** | Excellent file upload sanitization and ORM SQL protection; tokens stored in `localStorage` rather than `HttpOnly` cookies. |
+| **PERFORMANCE**    | **PARTIAL** | Fast client bundle compilation (~4s); dragged down by 2.17 MB favicon and uncompressed public rasters.                     |
+| **SEO**            | **FAIL**    | Root URL redirects crawlers to `/auth`; missing `robots.txt`, `sitemap.xml`, canonical tags, and Open Graph images.        |
+| **BACKEND**        | **PASS**    | Solid DRF architecture, structured middleware logging, transaction isolation, and Django Unfold admin.                     |
+| **DATABASE**       | **PARTIAL** | Migrations clean and applied; nullable unique constraint allows duplicate guest mutations.                                 |
+| **API**            | **PARTIAL** | 31/33 test suite endpoints pass; guest order detail lookup is missing and returns 401/403.                                 |
+| **AUTHENTICATION** | **PASS**    | Role isolation, SimpleJWT blacklist rotation, password hashing, and phone OTP verification verified.                       |
+| **BUSINESS LOGIC** | **PARTIAL** | Deterministic pricing engine verified; POS payment completion logic stalls under default tax conditions.                   |
+| **DEPLOYMENT**     | **PASS**    | Multi-stage Dockerfiles for backend and frontend with Docker Compose orchestration configured.                             |
+| **CODE QUALITY**   | **PARTIAL** | Strict TypeScript compiles with 0 errors; zero TODOs; Windows prettier CRLF line-ending configuration missing.             |

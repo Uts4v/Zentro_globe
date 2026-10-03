@@ -114,9 +114,7 @@ function OrderCard({
                   <span className="font-bold">{item.quantity}×</span>{" "}
                   <span className="font-semibold">{item.name}</span>
                   {item.variant_name && (
-                    <span className="ml-1 font-medium text-gray-500">
-                      ({item.variant_name})
-                    </span>
+                    <span className="ml-1 font-medium text-gray-500">({item.variant_name})</span>
                   )}
                 </span>
                 <span className="text-xs text-gray-400">

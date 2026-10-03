@@ -63,37 +63,37 @@ giant monolith) plus a file-paths evidence map.
 
 ## Domain index
 
-| Domain | Doc | Frontend (features/) | Backend (apps/) | Key models |
-|---|---|---|---|---|
-| Accounts & auth | `frontend.md`,`backend.md` | `auth`, `pwa`, `customer-management` | `accounts` (config `config`) | `User`, `CustomerProfile`, `MerchantProfile`, `Membership*` |
-| Merchants & catalog | `backend.md`, `orders.md` | `catalog`, `merchant-management`, `business-profile` | `merchants` | `MerchantProfile`, `MenuItem`, `MenuItemOption`, `MerchantTable` |
-| Orders | `orders.md` | `transactions`, `pos`, `guest` | `orders` | `Order`, `OrderItem`, `OrderItemOption`, `PreparationArea` |
-| Payments | `payments.md` | `transactions`, `pos` | `orders` (payment endpoints), `pos` | `OrderPayment`, `PosPayment`, `Refund` |
-| Loyalty & rewards | `loyalty.md` | `loyalty-engine`, `rewards`, `punch-cards`, `missions`, `leaderboard` | `loyalty` | `CustomerMerchantWallet`, `PunchCard`, `PunchCardReward`, `Mission`, `Reward` |
-| Offers | `offers.md` | `offers` | `offers` | `PromotionCampaign`, `VoucherClaim`, `VoucherRedemption` |
-| POS | `pos-kds.md` | `pos` | `pos` | `PosDevice`, `ShiftWorker`, `StaffShift`, `CashShift` |
-| Preparation / KDS | `pos-kds.md` | `preparation` | `orders.preparation_views`, `pos` | `PreparationArea`, `PreparationSettings` |
-| Realtime | `realtime.md` | `ws` lib, `preparation`, `pos` | `notifications` (Channels), `config.asgi` | `Notification` |
-| AI | `ai.md` | `ai-core` | `ai_core` | `AIRequest`, AI provider models |
-| Background jobs | `deployment.md`, `realtime.md` | — | Celery via `config` | Celery tasks in `ai_core` |
-| Media/storage | `deployment.md` | `lib/api` upload, `image-upload` | `config` (S3/file), `accounts.upload_image` | `media` |
+| Domain              | Doc                            | Frontend (features/)                                                  | Backend (apps/)                             | Key models                                                                    |
+| ------------------- | ------------------------------ | --------------------------------------------------------------------- | ------------------------------------------- | ----------------------------------------------------------------------------- |
+| Accounts & auth     | `frontend.md`,`backend.md`     | `auth`, `pwa`, `customer-management`                                  | `accounts` (config `config`)                | `User`, `CustomerProfile`, `MerchantProfile`, `Membership*`                   |
+| Merchants & catalog | `backend.md`, `orders.md`      | `catalog`, `merchant-management`, `business-profile`                  | `merchants`                                 | `MerchantProfile`, `MenuItem`, `MenuItemOption`, `MerchantTable`              |
+| Orders              | `orders.md`                    | `transactions`, `pos`, `guest`                                        | `orders`                                    | `Order`, `OrderItem`, `OrderItemOption`, `PreparationArea`                    |
+| Payments            | `payments.md`                  | `transactions`, `pos`                                                 | `orders` (payment endpoints), `pos`         | `OrderPayment`, `PosPayment`, `Refund`                                        |
+| Loyalty & rewards   | `loyalty.md`                   | `loyalty-engine`, `rewards`, `punch-cards`, `missions`, `leaderboard` | `loyalty`                                   | `CustomerMerchantWallet`, `PunchCard`, `PunchCardReward`, `Mission`, `Reward` |
+| Offers              | `offers.md`                    | `offers`                                                              | `offers`                                    | `PromotionCampaign`, `VoucherClaim`, `VoucherRedemption`                      |
+| POS                 | `pos-kds.md`                   | `pos`                                                                 | `pos`                                       | `PosDevice`, `ShiftWorker`, `StaffShift`, `CashShift`                         |
+| Preparation / KDS   | `pos-kds.md`                   | `preparation`                                                         | `orders.preparation_views`, `pos`           | `PreparationArea`, `PreparationSettings`                                      |
+| Realtime            | `realtime.md`                  | `ws` lib, `preparation`, `pos`                                        | `notifications` (Channels), `config.asgi`   | `Notification`                                                                |
+| AI                  | `ai.md`                        | `ai-core`                                                             | `ai_core`                                   | `AIRequest`, AI provider models                                               |
+| Background jobs     | `deployment.md`, `realtime.md` | —                                                                     | Celery via `config`                         | Celery tasks in `ai_core`                                                     |
+| Media/storage       | `deployment.md`                | `lib/api` upload, `image-upload`                                      | `config` (S3/file), `accounts.upload_image` | `media`                                                                       |
 
 ---
 
 ## Status of each concern
 
-| Concern | Status |
-|---|---|
-| Repository inventory (frontend + backend) | ✅ verified |
-| Frontend route table (68 routes) | ✅ verified |
-| Frontend feature module map (20 features) | ✅ verified (feature graph in `frontend.md`) |
-| Backend app graph (7 apps) + cross-app coupling | ✅ verified |
-| Database / domain map | ✅ verified (models + FK relationships) |
-| 8 user flows (QR, POS, loyalty, punch, rewards, KDS, prep, transfers) | ✅ verified |
-| Realtime (Channels + Redis) | ✅ verified |
-| Background (Celery + Redis + beat) | ✅ verified |
-| AI architecture (AI waiter + merchant AI) | ✅ verified |
-| Architecture health (risks, circular deps, god files) | ✅ verified → `health.md` |
+| Concern                                                               | Status                                       |
+| --------------------------------------------------------------------- | -------------------------------------------- |
+| Repository inventory (frontend + backend)                             | ✅ verified                                  |
+| Frontend route table (68 routes)                                      | ✅ verified                                  |
+| Frontend feature module map (20 features)                             | ✅ verified (feature graph in `frontend.md`) |
+| Backend app graph (7 apps) + cross-app coupling                       | ✅ verified                                  |
+| Database / domain map                                                 | ✅ verified (models + FK relationships)      |
+| 8 user flows (QR, POS, loyalty, punch, rewards, KDS, prep, transfers) | ✅ verified                                  |
+| Realtime (Channels + Redis)                                           | ✅ verified                                  |
+| Background (Celery + Redis + beat)                                    | ✅ verified                                  |
+| AI architecture (AI waiter + merchant AI)                             | ✅ verified                                  |
+| Architecture health (risks, circular deps, god files)                 | ✅ verified → `health.md`                    |
 
 ---
 
@@ -108,4 +108,4 @@ from the codebase automatically. See:
 - `viewer/interactive.md` — the `/dev/architecture` React Flow proposal.
 
 > **Do not hand-edit the graph JSON.** Regenerate it with the scanner. Hand-edit the `.md`
-> files when you change architecture *intent*.
+> files when you change architecture _intent_.

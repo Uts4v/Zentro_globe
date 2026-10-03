@@ -2,8 +2,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, useMemo } from "react";
 import {
-  Loader2, Plus, Minus, ShoppingBag, Search, X as XIcon,
-  MapPin, Utensils, ArrowRight, SendHorizontal,
+  Loader2,
+  Plus,
+  Minus,
+  ShoppingBag,
+  Search,
+  X as XIcon,
+  MapPin,
+  Utensils,
+  ArrowRight,
+  SendHorizontal,
 } from "lucide-react";
 import { menuApi, merchantApi, type MerchantProfile } from "@/lib/api";
 import { useStore, cartTotal, type MenuItem } from "@/lib/store";
@@ -47,9 +55,7 @@ function GuestMenuItemCard({
         <h3 className="text-sm font-semibold text-foreground">{item.name}</h3>
         <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{item.description}</p>
         <div className="mt-3 flex items-center justify-between">
-          <span className="font-display text-xl text-foreground">
-            NPR {price.toLocaleString()}
-          </span>
+          <span className="font-display text-xl text-foreground">NPR {price.toLocaleString()}</span>
           {qty === 0 ? (
             <button
               onClick={onAdd}
@@ -66,7 +72,9 @@ function GuestMenuItemCard({
               >
                 <Minus className="h-3.5 w-3.5" />
               </button>
-              <span className="min-w-[20px] text-center text-sm font-semibold text-foreground">{qty}</span>
+              <span className="min-w-[20px] text-center text-sm font-semibold text-foreground">
+                {qty}
+              </span>
               <button
                 onClick={onAdd}
                 className="grid h-8 w-8 place-items-center rounded-full bg-ink text-primary-foreground transition-transform active:scale-90"
@@ -84,7 +92,8 @@ function GuestMenuItemCard({
 function GuestMerchantMenu() {
   const { slug } = Route.useParams();
   const navigate = useNavigate();
-  const { cart, add, remove, activeTable, guestSession, setGuestName, placeGuestOrder } = useStore();
+  const { cart, add, remove, activeTable, guestSession, setGuestName, placeGuestOrder } =
+    useStore();
 
   const [merchant, setMerchant] = useState<MerchantProfile | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -95,31 +104,42 @@ function GuestMerchantMenu() {
   const [guestName, setLocalGuestName] = useState(guestSession?.guestName || "");
   const [notes, setNotes] = useState("");
   const [placing, setPlacing] = useState(false);
-  const [orderSuccess, setOrderSuccess] = useState<{ orderId: string; tableNum: number } | null>(null);
+  const [orderSuccess, setOrderSuccess] = useState<{ orderId: string; tableNum: number } | null>(
+    null,
+  );
 
   // Load merchant + menu
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     Promise.all([
-      merchantApi.bySlug(slug).then((m) => { if (!cancelled) setMerchant(m); }),
+      merchantApi.bySlug(slug).then((m) => {
+        if (!cancelled) setMerchant(m);
+      }),
       merchantApi.bySlug(slug).then((m) =>
         menuApi.forMerchant(String(m.id)).then((items) => {
-          if (!cancelled) setMenuItems(items.map((i) => ({
-            id: String(i.id),
-            name: i.name,
-            description: i.description ?? "",
-            price: Number(i.price),
-            category: i.category ?? "",
-            emoji: i.emoji ?? "☕",
-            points_per_item: i.points_per_item ?? 0,
-            is_available: i.is_available,
-            image_url: i.image_url,
-          })));
-        })
+          if (!cancelled)
+            setMenuItems(
+              items.map((i) => ({
+                id: String(i.id),
+                name: i.name,
+                description: i.description ?? "",
+                price: Number(i.price),
+                category: i.category ?? "",
+                emoji: i.emoji ?? "☕",
+                points_per_item: i.points_per_item ?? 0,
+                is_available: i.is_available,
+                image_url: i.image_url,
+              })),
+            );
+        }),
       ),
-    ]).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    ]).finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [slug]);
 
   const cats = useMemo(
@@ -179,7 +199,9 @@ function GuestMerchantMenu() {
         )}
         <p className="mt-2 text-xs text-muted-foreground">Order #{orderSuccess.orderId}</p>
         <button
-          onClick={() => { setOrderSuccess(null); }}
+          onClick={() => {
+            setOrderSuccess(null);
+          }}
           className="mt-8 flex h-12 items-center gap-2 rounded-2xl bg-foreground px-8 text-sm font-medium text-background active:scale-[0.98]"
         >
           Order More <ArrowRight className="h-4 w-4" />
@@ -192,7 +214,10 @@ function GuestMerchantMenu() {
   if (showCheckout) {
     return (
       <div className="mx-auto min-h-dvh max-w-[480px] bg-background px-5 pb-10 pt-5">
-        <button onClick={() => setShowCheckout(false)} className="mb-4 text-sm text-muted-foreground hover:text-foreground">
+        <button
+          onClick={() => setShowCheckout(false)}
+          className="mb-4 text-sm text-muted-foreground hover:text-foreground"
+        >
           ← Back to menu
         </button>
 
@@ -202,7 +227,9 @@ function GuestMerchantMenu() {
         {activeTable && (
           <div className="mt-3 flex items-center gap-2 rounded-2xl bg-muted/50 px-4 py-3">
             <Utensils className="h-4 w-4 text-ember" />
-            <span className="text-sm font-medium text-foreground">Table {activeTable.tableName}</span>
+            <span className="text-sm font-medium text-foreground">
+              Table {activeTable.tableName}
+            </span>
           </div>
         )}
 
@@ -237,8 +264,12 @@ function GuestMerchantMenu() {
             if (!item) return null;
             return (
               <div key={c.itemId} className="flex justify-between text-sm">
-                <span className="text-foreground">{c.qty}× {item.name}</span>
-                <span className="font-medium text-foreground">NPR {(item.price * c.qty).toFixed(2)}</span>
+                <span className="text-foreground">
+                  {c.qty}× {item.name}
+                </span>
+                <span className="font-medium text-foreground">
+                  NPR {(item.price * c.qty).toFixed(2)}
+                </span>
               </div>
             );
           })}
@@ -275,7 +306,9 @@ function GuestMerchantMenu() {
       <div className="sticky top-0 z-10 bg-background px-5 pt-5 pb-3">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-display text-xl text-foreground">{merchant?.business_name || "Menu"}</h1>
+            <h1 className="font-display text-xl text-foreground">
+              {merchant?.business_name || "Menu"}
+            </h1>
             {activeTable && (
               <div className="flex items-center gap-1.5 mt-0.5">
                 <Utensils className="h-3 w-3 text-ember" />
@@ -311,7 +344,10 @@ function GuestMerchantMenu() {
             className="h-10 w-full rounded-xl bg-muted/50 pl-9 pr-4 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-foreground/10"
           />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2"
+            >
               <XIcon className="h-4 w-4 text-muted-foreground" />
             </button>
           )}
@@ -338,8 +374,13 @@ function GuestMerchantMenu() {
       {/* Membership banner (subtle, not blocking) */}
       <div className="mx-5 mt-2 rounded-2xl border border-amber-200 bg-amber-50/50 p-3">
         <p className="text-xs text-amber-700">
-          <span className="font-semibold">Join Zentro</span> — earn points on every order, unlock rewards & member-only offers.{" "}
-          <Link to="/auth/signup" search={{ redirect: `/customer/merchant/${slug}` }} className="font-semibold underline">
+          <span className="font-semibold">Join Zentro</span> — earn points on every order, unlock
+          rewards & member-only offers.{" "}
+          <Link
+            to="/auth/signup"
+            search={{ redirect: `/customer/merchant/${slug}` }}
+            className="font-semibold underline"
+          >
             Join Free →
           </Link>
         </p>

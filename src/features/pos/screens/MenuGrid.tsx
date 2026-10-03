@@ -187,17 +187,14 @@ export default function MenuGrid() {
               <RefreshCw className="h-4 w-4" />
             </button>
             <span className="hidden items-center gap-1 rounded-lg border border-border bg-mist px-2 py-1 text-xs font-medium text-muted-foreground sm:flex">
-              <Command className="h-3 w-3" />
-              K
+              <Command className="h-3 w-3" />K
             </span>
             <button
               onClick={() => setShowUnavailable((v) => !v)}
               title="Toggle unavailable items"
               aria-label="Toggle unavailable items"
               className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${
-                showUnavailable
-                  ? "bg-ember-soft text-ember"
-                  : "text-muted-foreground hover:bg-mist"
+                showUnavailable ? "bg-ember-soft text-ember" : "text-muted-foreground hover:bg-mist"
               }`}
             >
               <SlidersHorizontal className="h-4 w-4" />

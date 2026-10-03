@@ -488,7 +488,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                       )}
                     </div>
                     <p className="numeric text-xs text-muted-foreground">
-                      {item.price === 0 ? "No charge" : `${formatCurrency(item.price, currencySymbol)} each`}
+                      {item.price === 0
+                        ? "No charge"
+                        : `${formatCurrency(item.price, currencySymbol)} each`}
                     </p>
                     {optionsText ? (
                       <p className="mt-0.5 truncate text-[11px] text-muted-foreground/90">
@@ -627,7 +629,10 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
             <span className="flex min-w-0 items-center gap-1.5">
               <Ticket className="h-3.5 w-3.5 shrink-0" />
               <span className="truncate">
-                {pendingOffer.customerFirstName ? `${pendingOffer.customerFirstName}'s offer` : "Offer"}: {pendingOffer.summary}
+                {pendingOffer.customerFirstName
+                  ? `${pendingOffer.customerFirstName}'s offer`
+                  : "Offer"}
+                : {pendingOffer.summary}
               </span>
               <button
                 onClick={() => setPendingOffer(null)}
@@ -805,11 +810,13 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               required.
             </p>
             <div className="mt-3 rounded-xl bg-mist px-4 py-3 text-xs text-muted-foreground">
-              {cart.length} item{cart.length !== 1 && "s"} · Total: <span className="numeric font-bold text-foreground">{formatCurrency(total, currencySymbol)}</span> → <span className="font-bold text-success">FREE</span>
+              {cart.length} item{cart.length !== 1 && "s"} · Total:{" "}
+              <span className="numeric font-bold text-foreground">
+                {formatCurrency(total, currencySymbol)}
+              </span>{" "}
+              → <span className="font-bold text-success">FREE</span>
             </div>
-            {freeOrderError && (
-              <p className="mt-2 text-xs text-destructive">{freeOrderError}</p>
-            )}
+            {freeOrderError && <p className="mt-2 text-xs text-destructive">{freeOrderError}</p>}
             <div className="mt-5 flex gap-2">
               <button
                 onClick={() => {
@@ -841,7 +848,9 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
             setShowMinusStock(false);
             setSelectedMinusStockItem(null);
           }}
-          tableName={selectedTable ? (selectedTable.name || `Table ${selectedTable.table_number}`) : null}
+          tableName={
+            selectedTable ? selectedTable.name || `Table ${selectedTable.table_number}` : null
+          }
           initialItem={selectedMinusStockItem}
           orderItems={cart.map((item) => ({
             name: item.name,

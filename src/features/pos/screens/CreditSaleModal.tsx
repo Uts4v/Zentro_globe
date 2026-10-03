@@ -12,13 +12,7 @@ interface Props {
   onClose: () => void;
 }
 
-export default function CreditSaleModal({
-  open,
-  account,
-  orderId,
-  onDone,
-  onClose,
-}: Props) {
+export default function CreditSaleModal({ open, account, orderId, onDone, onClose }: Props) {
   const worker = usePosStore((s) => s.currentWorker);
   const posSettings = usePosStore((s) => s.posSettings);
   const currencySymbol = posSettings?.currency_symbol || "Rs";

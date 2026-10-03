@@ -263,7 +263,10 @@ export interface CreateOrderPayload {
   /** A claimed Zentro Offer to apply (server validates and prices it). */
   claim_id?: number;
   /** The free item chosen for the offer, when it has one. */
-  reward_choice?: { menu_item_id: number; selections?: Array<{ group_id: number; option_id: number }> };
+  reward_choice?: {
+    menu_item_id: number;
+    selections?: Array<{ group_id: number; option_id: number }>;
+  };
 }
 
 export interface CreateGuestOrderPayload {
@@ -303,7 +306,12 @@ export interface OrderPreview {
     discount_amount?: string;
     error?: string;
     code?: string;
-    reward_options?: Array<{ menu_item_id: number; name: string; price: string; selections: Array<{ group_id: number; option_id: number }> }>;
+    reward_options?: Array<{
+      menu_item_id: number;
+      name: string;
+      price: string;
+      selections: Array<{ group_id: number; option_id: number }>;
+    }>;
   } | null;
   points_earned: number;
   lines: Array<{

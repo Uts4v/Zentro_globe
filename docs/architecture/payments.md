@@ -8,13 +8,13 @@
 
 ## Where money actually lives
 
-| Term | Meaning (verified) |
-|---|---|
-| `PosPayment` | per-order tendered amounts (cash/card/split) on a device |
-| `CashShift` | merchant cash drawer — opening/balancing per shift/worker |
-| `PosDevice` | device identity + PIN gating for POS payments |
-| `accounts.CustomerProfile.balance` / loyalty wallet | points ledger, not cash |
-| order payment / refund | orders table `payment_total`, `refunded_amount` |
+| Term                                                | Meaning (verified)                                        |
+| --------------------------------------------------- | --------------------------------------------------------- |
+| `PosPayment`                                        | per-order tendered amounts (cash/card/split) on a device  |
+| `CashShift`                                         | merchant cash drawer — opening/balancing per shift/worker |
+| `PosDevice`                                         | device identity + PIN gating for POS payments             |
+| `accounts.CustomerProfile.balance` / loyalty wallet | points ledger, not cash                                   |
+| order payment / refund                              | orders table `payment_total`, `refunded_amount`           |
 
 ```mermaid
 flowchart LR

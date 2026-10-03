@@ -191,8 +191,16 @@
   --shadow-ember: 0 10px 40px -10px color-mix(in oklab, var(--primary) 45%, transparent);
 
   --gradient-warm:
-    radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--butter) 14%, transparent) 0%, transparent 55%),
-    radial-gradient(100% 70% at 100% 100%, color-mix(in oklab, var(--periwinkle) 9%, transparent) 0%, transparent 50%);
+    radial-gradient(
+      120% 80% at 0% 0%,
+      color-mix(in oklab, var(--butter) 14%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      100% 70% at 100% 100%,
+      color-mix(in oklab, var(--periwinkle) 9%, transparent) 0%,
+      transparent 50%
+    );
   --gradient-ember: linear-gradient(135deg, #761c26, #651821);
   --gradient-teal: linear-gradient(135deg, #0f3d3a, #0b302e);
 
@@ -322,8 +330,16 @@
   --shadow-ember: 0 10px 40px -10px color-mix(in oklab, var(--primary) 25%, transparent);
 
   --gradient-warm:
-    radial-gradient(120% 80% at 0% 0%, color-mix(in oklab, var(--primary) 18%, transparent) 0%, transparent 55%),
-    radial-gradient(100% 70% at 100% 100%, color-mix(in oklab, var(--bordeaux) 12%, transparent) 0%, transparent 50%);
+    radial-gradient(
+      120% 80% at 0% 0%,
+      color-mix(in oklab, var(--primary) 18%, transparent) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      100% 70% at 100% 100%,
+      color-mix(in oklab, var(--bordeaux) 12%, transparent) 0%,
+      transparent 50%
+    );
   --gradient-ember: linear-gradient(135deg, #a94b57, #832f3b);
   --gradient-teal: linear-gradient(135deg, #6fa29a, #5d9189);
 }

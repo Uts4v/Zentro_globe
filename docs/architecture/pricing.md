@@ -8,17 +8,17 @@
 
 Every flow that creates or changes an order prices it with the same engine:
 
-| Flow | Entry point |
-|---|---|
-| Customer app order | `orders/views.py::create_order` |
-| Guest / table-QR order | `orders/views.py::guest_create_order`, `pos/views.py::table_order` |
-| Checkout preview | `orders/views.py::preview_order` |
-| POS order (online and synced offline) | `pos/views.py::create_pos_order` |
-| Add items to an open order | `orders/views.py::add_items_to_order` |
-| POS manual discount apply / remove | `pos/views.py::apply_discount`, `remove_discount` |
-| Offline conflict resolution | `pos/views.py::resolve_conflict` |
-| Loyalty reward / punch-card orders | `loyalty/views.py` (zero-price orders, same snapshot) |
-| AI Waiter | never prices totals; asks `config.menu_pricing` for line prices only |
+| Flow                                  | Entry point                                                          |
+| ------------------------------------- | -------------------------------------------------------------------- |
+| Customer app order                    | `orders/views.py::create_order`                                      |
+| Guest / table-QR order                | `orders/views.py::guest_create_order`, `pos/views.py::table_order`   |
+| Checkout preview                      | `orders/views.py::preview_order`                                     |
+| POS order (online and synced offline) | `pos/views.py::create_pos_order`                                     |
+| Add items to an open order            | `orders/views.py::add_items_to_order`                                |
+| POS manual discount apply / remove    | `pos/views.py::apply_discount`, `remove_discount`                    |
+| Offline conflict resolution           | `pos/views.py::resolve_conflict`                                     |
+| Loyalty reward / punch-card orders    | `loyalty/views.py` (zero-price orders, same snapshot)                |
+| AI Waiter                             | never prices totals; asks `config.menu_pricing` for line prices only |
 
 Client-sent subtotals, discounts, tax and totals are ignored everywhere.
 
@@ -36,16 +36,16 @@ flowchart LR
 
 ## 2. Modules (`backend/orders/pricing/`)
 
-| Module | Responsibility |
-|---|---|
-| `items.py` | Wraps the existing `config.menu_pricing.validate_and_price_line` (variants, modifiers, Today's Special, availability, cross-merchant checks). Existing order lines are re-priced from their **stored** price, never today's menu. |
-| `discounts.py` | Evaluates stored adjustments (manual discount, loyalty/punch reward, promotion) against line net amounts; min-spend and eligible-line rules; largest-remainder allocation to lines. |
-| `charges.py` | Service/delivery/packaging/other charges, percentage of the discounted goods value or fixed. |
-| `tax.py` | Tax policies (code-defined) and the TaxEngine. |
-| `service.py` | `calculate(ctx)` (pure), context builders, persistence, `reprice_order`, `attach_adjustment`, `remove_adjustments`. |
-| `snapshot.py` | Reads an order's stored breakdown for receipts, refunds, reports. Never recalculates. |
-| `split.py` | Split-bill allocation rule (no split-bill feature exists yet; this is the rule it must use). |
-| `money.py` | Decimal quantization per currency minor unit, ROUND_HALF_UP, largest-remainder allocation. |
+| Module         | Responsibility                                                                                                                                                                                                                    |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items.py`     | Wraps the existing `config.menu_pricing.validate_and_price_line` (variants, modifiers, Today's Special, availability, cross-merchant checks). Existing order lines are re-priced from their **stored** price, never today's menu. |
+| `discounts.py` | Evaluates stored adjustments (manual discount, loyalty/punch reward, promotion) against line net amounts; min-spend and eligible-line rules; largest-remainder allocation to lines.                                               |
+| `charges.py`   | Service/delivery/packaging/other charges, percentage of the discounted goods value or fixed.                                                                                                                                      |
+| `tax.py`       | Tax policies (code-defined) and the TaxEngine.                                                                                                                                                                                    |
+| `service.py`   | `calculate(ctx)` (pure), context builders, persistence, `reprice_order`, `attach_adjustment`, `remove_adjustments`.                                                                                                               |
+| `snapshot.py`  | Reads an order's stored breakdown for receipts, refunds, reports. Never recalculates.                                                                                                                                             |
+| `split.py`     | Split-bill allocation rule (no split-bill feature exists yet; this is the rule it must use).                                                                                                                                      |
+| `money.py`     | Decimal quantization per currency minor unit, ROUND_HALF_UP, largest-remainder allocation.                                                                                                                                        |
 
 ## 3. Rules
 
@@ -55,8 +55,8 @@ flowchart LR
 - **One discount/reward per order (V1 business rule).** Enforced in the service
   (`MAX_ORDER_ADJUSTMENTS = 1`) and in the database (partial unique constraint
   `one_active_order_adjustment_v1`). A cashier changing their own manual discount replaces
-  it; anything else in the slot is refused with *"Remove the current reward before applying
-  another offer."* Stacking later = raise the constant and drop the constraint.
+  it; anything else in the slot is refused with _"Remove the current reward before applying
+  another offer."_ Stacking later = raise the constant and drop the constraint.
 - **Discounts are stored as definitions**, not amounts, and re-evaluated on every order
   change. A percentage discount follows the basket; a minimum-spend rule that stops being
   met gives 0 and returns a structured message
@@ -82,15 +82,15 @@ flowchart LR
 
 ## 4. Tax policies
 
-Policies describe *behaviour*; rates come from the merchant's validated `tax_components`.
+Policies describe _behaviour_; rates come from the merchant's validated `tax_components`.
 `MerchantProfile.tax_policy` is read-only to merchants (Django admin only), because the
 calculation order is a legal question.
 
-| Code | Prices | Discount reduces taxable value | Charges taxed | Typical use |
-|---|---|---|---|---|
-| `legacy` (default) | tax added | **no** — tax on the pre-discount subtotal | no | exactly Zentro's pre-v1 behaviour |
-| `exclusive` | tax added | yes | yes | Nepal VAT, India GST, US sales tax |
-| `inclusive` | tax included, extracted | yes | yes | UK VAT, Australian GST |
+| Code               | Prices                  | Discount reduces taxable value            | Charges taxed | Typical use                        |
+| ------------------ | ----------------------- | ----------------------------------------- | ------------- | ---------------------------------- |
+| `legacy` (default) | tax added               | **no** — tax on the pre-discount subtotal | no            | exactly Zentro's pre-v1 behaviour  |
+| `exclusive`        | tax added               | yes                                       | yes           | Nepal VAT, India GST, US sales tax |
+| `inclusive`        | tax included, extracted | yes                                       | yes           | UK VAT, Australian GST             |
 
 **Decision pending:** every merchant is on `legacy` so no existing total changed. Moving a
 merchant (or all Nepal merchants) to `exclusive` is a one-field admin change once the

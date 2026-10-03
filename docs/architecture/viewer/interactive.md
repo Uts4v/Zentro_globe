@@ -37,12 +37,12 @@ flowchart LR
 
 ## Route + gating proposal
 
-| Concern | Proposal |
-|---|---|
-| Route | `src/routes/dev/architecture.tsx` (dev-only) |
-| Gate | server `loader` checks `is_staff`; 404 for normal users; strip from prod build via `import.meta.env.DEV` guard |
-| Data | load `zentro-graph.json` via Vite `?url` import (bundled as static asset) |
-| Gating even harder | hide unless `VITE_FEATURE_DEV_ARCHITECTURE=true` |
+| Concern            | Proposal                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------- |
+| Route              | `src/routes/dev/architecture.tsx` (dev-only)                                                                   |
+| Gate               | server `loader` checks `is_staff`; 404 for normal users; strip from prod build via `import.meta.env.DEV` guard |
+| Data               | load `zentro-graph.json` via Vite `?url` import (bundled as static asset)                                      |
+| Gating even harder | hide unless `VITE_FEATURE_DEV_ARCHITECTURE=true`                                                               |
 
 > Acceptance: opening `/dev/architecture` shows the full typed graph, filtering by
 > `realtime` shows only the 5 WS channel/broadcast edges, clicking `orders` shows its cone

@@ -31,9 +31,9 @@ function loadedAssets(): string[] {
     if (url) urls.add(url);
   }
   document
-    .querySelectorAll<HTMLScriptElement | HTMLLinkElement>(
-      'script[src], link[rel="stylesheet"], link[rel="modulepreload"]',
-    )
+    .querySelectorAll<
+      HTMLScriptElement | HTMLLinkElement
+    >('script[src], link[rel="stylesheet"], link[rel="modulepreload"]')
     .forEach((el) => {
       const url = sameOriginAsset("src" in el ? el.src : el.href);
       if (url) urls.add(url);

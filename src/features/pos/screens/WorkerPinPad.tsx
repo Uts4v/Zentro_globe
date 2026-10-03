@@ -182,7 +182,16 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
         return () => clearTimeout(timer);
       }
     }
-  }, [pin, loading, mode, staffCode, selectedWorker, maxPin, handleStaffCodeLogin, handleWorkerListLogin]);
+  }, [
+    pin,
+    loading,
+    mode,
+    staffCode,
+    selectedWorker,
+    maxPin,
+    handleStaffCodeLogin,
+    handleWorkerListLogin,
+  ]);
 
   // Keyboard navigation & typing
   useEffect(() => {
@@ -353,7 +362,11 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
           {codeStep === "code" ? (
             <div className="mb-6">
               <div className="flex h-16 items-center justify-center rounded-2xl border-2 border-primary/30 bg-card px-4 font-mono text-3xl font-bold tracking-widest text-foreground shadow-inner">
-                {staffCode || <span className="text-muted-foreground/40 font-normal text-xl tracking-normal">Staff Code</span>}
+                {staffCode || (
+                  <span className="text-muted-foreground/40 font-normal text-xl tracking-normal">
+                    Staff Code
+                  </span>
+                )}
               </div>
             </div>
           ) : (
@@ -363,7 +376,9 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
                   <div
                     key={i}
                     className={`h-4 w-4 rounded-full transition-all ${
-                      i < pin.length ? "bg-primary scale-125" : "border-2 border-muted-foreground/30"
+                      i < pin.length
+                        ? "bg-primary scale-125"
+                        : "border-2 border-muted-foreground/30"
                     }`}
                   />
                 ))}
@@ -385,7 +400,9 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
           )}
 
           {/* Error */}
-          {error && <p className="mb-4 text-center text-sm font-medium text-destructive">{error}</p>}
+          {error && (
+            <p className="mb-4 text-center text-sm font-medium text-destructive">{error}</p>
+          )}
 
           {/* Keypad */}
           {keypad}
@@ -468,7 +485,9 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
           </div>
 
           {/* Error */}
-          {error && <p className="mb-4 text-center text-sm font-medium text-destructive">{error}</p>}
+          {error && (
+            <p className="mb-4 text-center text-sm font-medium text-destructive">{error}</p>
+          )}
 
           {/* Keypad */}
           {keypad}

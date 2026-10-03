@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { usePosStore } from "../store";
-import { posListWorkers, posCreateWorker, posUpdateWorker, posDeleteWorker, ShiftWorker } from "../api";
+import {
+  posListWorkers,
+  posCreateWorker,
+  posUpdateWorker,
+  posDeleteWorker,
+  ShiftWorker,
+} from "../api";
 import { hasStaffPermission } from "@/lib/staff-session";
 import {
   listPreparationAreas,
@@ -215,7 +221,10 @@ export default function StaffManagementScreen() {
             You do not have permission to manage staff. Contact your administrator or manager.
           </p>
           <div className="mt-4 flex justify-center">
-            <Link to="/pos" className="rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-white">
+            <Link
+              to="/pos"
+              className="rounded-xl bg-ink px-5 py-2.5 text-sm font-semibold text-white"
+            >
               Back to Terminal
             </Link>
           </div>
@@ -632,8 +641,8 @@ export default function StaffManagementScreen() {
             <p className="mt-2 text-sm text-muted-foreground">
               Are you sure you want to remove{" "}
               <span className="font-semibold text-foreground">{deletingWorker.display_name}</span>
-              {deletingWorker.staff_code ? ` (Code: ${deletingWorker.staff_code})` : ""}? They will no
-              longer be able to log in or access POS features.
+              {deletingWorker.staff_code ? ` (Code: ${deletingWorker.staff_code})` : ""}? They will
+              no longer be able to log in or access POS features.
             </p>
             <div className="mt-6 flex gap-3">
               <button

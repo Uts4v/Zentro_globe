@@ -5,11 +5,7 @@ import { staffHeaders, staffSession } from "@/lib/staff-session";
 const headers = () => {
   const staff = staffSession.get();
   const bearer = tokenStore.getAccess();
-  const authHeader = bearer
-    ? `Bearer ${bearer}`
-    : staff?.token
-    ? `Staff ${staff.token}`
-    : "";
+  const authHeader = bearer ? `Bearer ${bearer}` : staff?.token ? `Staff ${staff.token}` : "";
 
   return {
     ...(authHeader ? { Authorization: authHeader } : {}),
@@ -143,11 +139,7 @@ export const posDeleteWorker = (workerId: string) =>
     headers: headers(),
   });
 
-export const posWorkerLogin = (
-  workerIdOrStaffCode: string,
-  pin: string,
-  isStaffCode = false,
-) => {
+export const posWorkerLogin = (workerIdOrStaffCode: string, pin: string, isStaffCode = false) => {
   const deviceId = localStorage.getItem("pos_device_id") || "";
   const deviceToken = localStorage.getItem("pos_device_token") || "";
   const payload = isStaffCode
@@ -653,7 +645,13 @@ export interface PosReceiptData {
   tax_breakdown: TaxBreakdownEntry[];
   prices_include_tax?: boolean;
   service_charge: string;
-  charges?: Array<{ kind: string; label: string; amount: string; taxable: boolean; tax_amount: string }>;
+  charges?: Array<{
+    kind: string;
+    label: string;
+    amount: string;
+    taxable: boolean;
+    tax_amount: string;
+  }>;
   total_amount: string;
   currency_code?: string;
   currency_symbol?: string;
@@ -1398,4 +1396,3 @@ export const posMinusStock = (data: PosMinusStockPayload) =>
     headers: headers(),
     body: JSON.stringify(data),
   });
-

@@ -313,8 +313,10 @@ export const usePosStore = create<PosState>((set, get) => ({
     }),
   setCartNotes: (n) => set({ cartNotes: n }),
   // One discount/reward per order (V1): choosing one replaces the other.
-  setPendingDiscount: (d) => set(d ? { pendingDiscount: d, pendingOffer: null } : { pendingDiscount: null }),
-  setPendingOffer: (o) => set(o ? { pendingOffer: o, pendingDiscount: null } : { pendingOffer: null }),
+  setPendingDiscount: (d) =>
+    set(d ? { pendingDiscount: d, pendingOffer: null } : { pendingDiscount: null }),
+  setPendingOffer: (o) =>
+    set(o ? { pendingOffer: o, pendingDiscount: null } : { pendingOffer: null }),
   setFulfillmentType: (t) => set({ fulfillmentType: t }),
   setSelectedTable: (id) => set({ selectedTableId: id }),
   setSelectedCustomer: (id) => set({ selectedCustomerId: id }),

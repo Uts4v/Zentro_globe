@@ -1,6 +1,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { useStore } from "@/lib/store";
-import { customerApi, missionApi, merchantApi, punchCardApi, transactionApi, type MissionView, type CustomerPunchCard, type PointTransaction } from "@/lib/api";
+import {
+  customerApi,
+  missionApi,
+  merchantApi,
+  punchCardApi,
+  transactionApi,
+  type MissionView,
+  type CustomerPunchCard,
+  type PointTransaction,
+} from "@/lib/api";
 import { MobileShell, TopBar } from "@/components/MobileShell";
 import { Flame, Sparkles, Gift } from "lucide-react";
 import { TodaySpecialPopup } from "@/features/merchant-management/components/TodaySpecialPopup";
@@ -23,7 +32,6 @@ const DEFAULT_WALLET: WalletView = {
   full_name: "Customer",
 };
 
-
 export function CustomerLoyaltyPage() {
   const { selectedMerchantId, setSelectedMerchant } = useStore();
   const [merchantSlug, setMerchantSlug] = useState<string | null>(null);
@@ -31,7 +39,10 @@ export function CustomerLoyaltyPage() {
   const [walletLoading, setWalletLoading] = useState(true);
   const [missions, setMissions] = useState<MissionView[]>([]);
   const [missionsLoading, setMissionsLoading] = useState(true);
-  const [punchCards, setPunchCards] = useState<{ active: CustomerPunchCard[]; completed: CustomerPunchCard[] }>({ active: [], completed: [] });
+  const [punchCards, setPunchCards] = useState<{
+    active: CustomerPunchCard[];
+    completed: CustomerPunchCard[];
+  }>({ active: [], completed: [] });
   const [punchLoading, setPunchLoading] = useState(false);
   const [proofCard, setProofCard] = useState<CustomerPunchCard | null>(null);
   const [punchError, setPunchError] = useState<string | null>(null);
@@ -131,7 +142,7 @@ export function CustomerLoyaltyPage() {
   }, [loadPunchCard]);
 
   function handleUseFreeReward(id: string) {
-    const card = [...punchCards.completed, ...punchCards.active].find(c => c.id === id);
+    const card = [...punchCards.completed, ...punchCards.active].find((c) => c.id === id);
     if (card) setProofCard(card);
   }
 
@@ -139,8 +150,8 @@ export function CustomerLoyaltyPage() {
   const displayPoints = walletView.points_balance;
   const displayStreak = walletView.streak_days;
   const displayName = walletView.full_name;
-  const displayTier = walletView.tier_level.charAt(0).toUpperCase() + walletView.tier_level.slice(1);
-
+  const displayTier =
+    walletView.tier_level.charAt(0).toUpperCase() + walletView.tier_level.slice(1);
 
   return (
     <MobileShell>
@@ -209,7 +220,8 @@ export function CustomerLoyaltyPage() {
                 </>
               )}
             </div>
-          </div>{/* end grid */}
+          </div>
+          {/* end grid */}
 
           <div className="relative mt-6 flex items-end justify-between">
             <div>
@@ -237,15 +249,13 @@ export function CustomerLoyaltyPage() {
           </div>
         ) : [...punchCards.completed, ...punchCards.active].length === 0 ? (
           <div className="glass-strong rounded-3xl p-5 text-center">
-            <p className="text-xs text-muted-foreground">No active punch cards for this merchant.</p>
+            <p className="text-xs text-muted-foreground">
+              No active punch cards for this merchant.
+            </p>
           </div>
         ) : (
           [...punchCards.completed, ...punchCards.active].map((card) => (
-            <FullBackgroundPunchCard
-              key={card.id}
-              card={card}
-              onRedeem={handleUseFreeReward}
-            />
+            <FullBackgroundPunchCard key={card.id} card={card} onRedeem={handleUseFreeReward} />
           ))
         )}
       </section>
@@ -277,7 +287,9 @@ export function CustomerLoyaltyPage() {
                       </div>
                       <p className="mt-0.5 text-xs text-muted-foreground">{m.description}</p>
                       {m.linked_menu_item_name && (
-                        <p className="mt-1 text-xs font-medium text-ember">Buy {m.linked_menu_item_name} {m.target_count}x</p>
+                        <p className="mt-1 text-xs font-medium text-ember">
+                          Buy {m.linked_menu_item_name} {m.target_count}x
+                        </p>
                       )}
                       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-mist">
                         <div
@@ -349,12 +361,19 @@ export function CustomerLoyaltyPage() {
             {transactions.slice(0, 5).map((tx) => (
               <div key={tx.id} className="glass rounded-2xl p-4 flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-foreground capitalize">{tx.transaction_type.toLowerCase().replace("_", " ")}</p>
-                  <p className="text-[10px] text-muted-foreground">{new Date(tx.created_at).toLocaleDateString()}</p>
+                  <p className="text-sm font-medium text-foreground capitalize">
+                    {tx.transaction_type.toLowerCase().replace("_", " ")}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {new Date(tx.created_at).toLocaleDateString()}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <p className={`text-sm font-bold ${tx.points >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
-                    {tx.points > 0 ? "+" : ""}{tx.points} pts
+                  <p
+                    className={`text-sm font-bold ${tx.points >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+                  >
+                    {tx.points > 0 ? "+" : ""}
+                    {tx.points} pts
                   </p>
                   <p className="text-[10px] text-muted-foreground">Balance: {tx.balance_after}</p>
                 </div>

@@ -1,10 +1,20 @@
-// business-profile/MerchantStore.tsx 
+// business-profile/MerchantStore.tsx
 import { useState, useEffect, useCallback, useRef } from "react";
 import { offersApi, type OfferCategory } from "@/lib/api/offers";
 import {
-  MapPin, Clock, Loader2, Save, Check, X,
-  ImageIcon, Upload, QrCode, ExternalLink, RefreshCw,
-  Palette, CreditCard,
+  MapPin,
+  Clock,
+  Loader2,
+  Save,
+  Check,
+  X,
+  ImageIcon,
+  Upload,
+  QrCode,
+  ExternalLink,
+  RefreshCw,
+  Palette,
+  CreditCard,
 } from "lucide-react";
 import { merchantApi, type MerchantProfile } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -22,9 +32,18 @@ type ImgStatus =
 
 // ── Inline image uploader ─────────────────────────────────────────────────────
 function InlineImageUploader({
-  label, hint, currentUrl, onUpload, onClear,
-  aspectClass = "aspect-video", shape = "square", disabled = false,
-  merchantId, bucket, storagePath, preset,
+  label,
+  hint,
+  currentUrl,
+  onUpload,
+  onClear,
+  aspectClass = "aspect-video",
+  shape = "square",
+  disabled = false,
+  merchantId,
+  bucket,
+  storagePath,
+  preset,
 }: {
   label: string;
   hint?: string;
@@ -40,7 +59,7 @@ function InlineImageUploader({
   preset: "logo" | "banner" | "profile" | "product";
 }) {
   const [imgState, setImgState] = useState<ImgStatus>(
-    currentUrl ? { status: "done", previewUrl: currentUrl } : { status: "idle" }
+    currentUrl ? { status: "done", previewUrl: currentUrl } : { status: "idle" },
   );
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -50,8 +69,7 @@ function InlineImageUploader({
     }
   }, [currentUrl]);
 
-  const imgUploading =
-    imgState.status === "processing" || imgState.status === "uploading";
+  const imgUploading = imgState.status === "processing" || imgState.status === "uploading";
   const displayUrl =
     imgState.status === "uploading" || imgState.status === "done"
       ? imgState.previewUrl
@@ -118,11 +136,7 @@ function InlineImageUploader({
         onDrop={handleDrop}
       >
         {displayUrl ? (
-          <img
-            src={displayUrl}
-            alt={label}
-            className={`h-full w-full object-cover ${radiusCls}`}
-          />
+          <img src={displayUrl} alt={label} className={`h-full w-full object-cover ${radiusCls}`} />
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-2 bg-mist p-4 text-center">
             <ImageIcon className="h-6 w-6 text-muted-foreground/40" />
@@ -131,7 +145,9 @@ function InlineImageUploader({
           </div>
         )}
         {imgUploading && (
-          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 ${radiusCls}`}>
+          <div
+            className={`absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 ${radiusCls}`}
+          >
             <Loader2 className="h-7 w-7 animate-spin text-white" />
             <p className="text-xs font-medium text-white">
               {imgState.status === "processing" ? "Optimising…" : "Uploading…"}
@@ -148,7 +164,10 @@ function InlineImageUploader({
         {displayUrl && !imgUploading && !disabled && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); handleClear(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClear();
+            }}
             className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80"
           >
             <X className="h-3.5 w-3.5" />
@@ -156,12 +175,8 @@ function InlineImageUploader({
         )}
       </div>
       <div className="flex min-h-[18px] items-center justify-between">
-        {imgState.status === "error" && (
-          <p className="text-xs text-rose-500">{imgState.error}</p>
-        )}
-        {imgState.status === "done" && (
-          <p className="text-xs text-emerald-600">Saved ✓</p>
-        )}
+        {imgState.status === "error" && <p className="text-xs text-rose-500">{imgState.error}</p>}
+        {imgState.status === "done" && <p className="text-xs text-emerald-600">Saved ✓</p>}
         {displayUrl && !imgUploading && (
           <button
             type="button"
@@ -211,7 +226,6 @@ function QRSection({
       </p>
 
       <div className="mt-6 flex flex-col items-center gap-6 sm:flex-row sm:items-start">
-
         {/* Left column — QR image + buttons */}
         <div className="flex shrink-0 flex-col items-center gap-3">
           {profile?.qr_code ? (
@@ -232,7 +246,8 @@ function QRSection({
           {/* Action buttons */}
           <div className="flex gap-2">
             {profile?.qr_code && (
-              <a href={profile.qr_code}
+              <a
+                href={profile.qr_code}
                 download={`${profile.slug}-qr.png`}
                 className="inline-flex items-center gap-1.5 rounded-full border border-border px-4 py-2 text-xs text-muted-foreground transition-colors hover:border-ink hover:text-ink"
               >
@@ -263,7 +278,8 @@ function QRSection({
             </p>
             <div className="mt-2 flex items-center gap-2 rounded-2xl bg-mist px-4 py-3">
               <span className="flex-1 truncate text-sm text-ink">{storeUrl}</span>
-              <a href={`/customer/merchant/${profile?.slug}`}
+              <a
+                href={`/customer/merchant/${profile?.slug}`}
                 target="_blank"
                 rel="noreferrer"
                 className="shrink-0 text-muted-foreground hover:text-ink"
@@ -287,12 +303,11 @@ function QRSection({
           </div>
 
           <div className="rounded-2xl bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-700">
-            The QR code points to your public customer page. It contains no
-            private tokens — safe to print and share anywhere.
+            The QR code points to your public customer page. It contains no private tokens — safe to
+            print and share anywhere.
           </div>
         </div>
         {/* End right column */}
-
       </div>
     </section>
   );
@@ -309,7 +324,10 @@ export function MerchantStorePage() {
 
   const [categoryOptions, setCategoryOptions] = useState<OfferCategory[]>([]);
   useEffect(() => {
-    offersApi.categories().then(setCategoryOptions).catch(() => setCategoryOptions([]));
+    offersApi
+      .categories()
+      .then(setCategoryOptions)
+      .catch(() => setCategoryOptions([]));
   }, []);
 
   const [form, setForm] = useState({
@@ -358,7 +376,9 @@ export function MerchantStorePage() {
     }
   }, []);
 
-  useEffect(() => { fetchProfile(); }, [fetchProfile]);
+  useEffect(() => {
+    fetchProfile();
+  }, [fetchProfile]);
 
   const handleSave = async () => {
     try {
@@ -440,7 +460,9 @@ export function MerchantStorePage() {
             form.is_open ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
           }`}
         >
-          <span className={`h-2 w-2 rounded-full ${form.is_open ? "bg-emerald-500" : "bg-red-500"}`} />
+          <span
+            className={`h-2 w-2 rounded-full ${form.is_open ? "bg-emerald-500" : "bg-red-500"}`}
+          />
           {form.is_open ? "Open" : "Closed"}
         </button>
         {profile && !profile.is_approved && (
@@ -490,7 +512,8 @@ export function MerchantStorePage() {
             </div>
             <p className="pt-8 text-xs leading-relaxed text-muted-foreground">
               Shown on the store listing card and in the customer app.
-              <br />Min 200 × 200 px recommended.
+              <br />
+              Min 200 × 200 px recommended.
             </p>
           </div>
         )}
@@ -508,20 +531,24 @@ export function MerchantStorePage() {
 
         {/* Theme color */}
         <div className="space-y-2">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Card color</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Card color
+          </p>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
-              {["#1A1A1A", "#1B5E3B", "#3E2723", "#B71C1C", "#1A237E", "#D4AF37", "#F5E6D0"].map((c) => (
-                <button
-                  key={c}
-                  onClick={() => updateField("store_theme_color", c)}
-                  className={`h-8 w-8 rounded-full border-2 transition-all ${
-                    form.store_theme_color === c ? "border-ink scale-110" : "border-transparent"
-                  }`}
-                  style={{ background: c }}
-                  aria-label={`Theme ${c}`}
-                />
-              ))}
+              {["#1A1A1A", "#1B5E3B", "#3E2723", "#B71C1C", "#1A237E", "#D4AF37", "#F5E6D0"].map(
+                (c) => (
+                  <button
+                    key={c}
+                    onClick={() => updateField("store_theme_color", c)}
+                    className={`h-8 w-8 rounded-full border-2 transition-all ${
+                      form.store_theme_color === c ? "border-ink scale-110" : "border-transparent"
+                    }`}
+                    style={{ background: c }}
+                    aria-label={`Theme ${c}`}
+                  />
+                ),
+              )}
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -542,7 +569,9 @@ export function MerchantStorePage() {
 
         {/* Text color */}
         <div className="space-y-2">
-          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">Text color</p>
+          <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+            Text color
+          </p>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               {["#FFFFFF", "#1A1A1A", "#F5E6D0", "#D4AF37", "#9FA8DA"].map((c) => (
@@ -634,12 +663,18 @@ export function MerchantStorePage() {
       {/* ── Live preview card ── */}
       {(form.logo_url || form.banner_url || form.business_name) && (
         <section className="glass-strong overflow-hidden rounded-3xl">
-          <p className="px-5 pt-4 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">Preview</p>
+          <p className="px-5 pt-4 text-[11px] uppercase tracking-[0.2em] text-muted-foreground">
+            Preview
+          </p>
           <div
             className="relative h-28 bg-gradient-to-br from-ember/40 via-ember-soft to-mist"
             style={
               form.banner_url
-                ? { backgroundImage: `url(${form.banner_url})`, backgroundSize: "cover", backgroundPosition: "center" }
+                ? {
+                    backgroundImage: `url(${form.banner_url})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
                 : undefined
             }
           />
@@ -649,14 +684,20 @@ export function MerchantStorePage() {
                 className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-ink text-3xl text-primary-foreground shadow-soft"
                 style={
                   form.logo_url
-                    ? { backgroundImage: `url(${form.logo_url})`, backgroundSize: "cover", backgroundPosition: "center" }
+                    ? {
+                        backgroundImage: `url(${form.logo_url})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center",
+                      }
                     : undefined
                 }
               >
                 {!form.logo_url && "☕"}
               </div>
               <div className="pb-1">
-                <p className="font-display text-lg text-ink">{form.business_name || "Your store name"}</p>
+                <p className="font-display text-lg text-ink">
+                  {form.business_name || "Your store name"}
+                </p>
                 <p className="text-xs text-muted-foreground">{form.business_type || "Café"}</p>
               </div>
             </div>
@@ -723,8 +764,18 @@ export function MerchantStorePage() {
               placeholder="42 Thamel Street, Kathmandu"
             />
             <div className="grid grid-cols-2 gap-3">
-              <Field label="City" value={form.city} onChange={(v) => updateField("city", v)} placeholder="Kathmandu" />
-              <Field label="Area" value={form.area} onChange={(v) => updateField("area", v)} placeholder="Thamel" />
+              <Field
+                label="City"
+                value={form.city}
+                onChange={(v) => updateField("city", v)}
+                placeholder="Kathmandu"
+              />
+              <Field
+                label="Area"
+                value={form.area}
+                onChange={(v) => updateField("area", v)}
+                placeholder="Thamel"
+              />
             </div>
             <Field
               label="Phone"
@@ -778,7 +829,11 @@ export function MerchantStorePage() {
 
 // ── Field component ───────────────────────────────────────────────────────────
 function Field({
-  label, value, onChange, placeholder, multiline = false,
+  label,
+  value,
+  onChange,
+  placeholder,
+  multiline = false,
 }: {
   label: string;
   value: string;

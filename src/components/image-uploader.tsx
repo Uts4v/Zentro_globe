@@ -52,14 +52,14 @@ export function ImageUploader({
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [status, setStatus]         = useState<Status>("idle");
+  const [status, setStatus] = useState<Status>("idle");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg]     = useState<string>("");
-  const [sizeInfo, setSizeInfo]     = useState<{ original: number; final: number } | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string>("");
+  const [sizeInfo, setSizeInfo] = useState<{ original: number; final: number } | null>(null);
 
   /** The URL to show: live preview > current saved URL > nothing */
   const displayUrl = previewUrl ?? currentUrl ?? null;
-  const isCircle   = shape === "circle";
+  const isCircle = shape === "circle";
 
   async function handleFile(file: File) {
     setStatus("previewing");
@@ -80,12 +80,7 @@ export function ImageUploader({
     setStatus("uploading");
 
     try {
-      const { publicUrl } = await uploadImage(
-        file,
-        preset,
-        bucket,
-        storagePath
-      );
+      const { publicUrl } = await uploadImage(file, preset, bucket, storagePath);
       setStatus("done");
       onUpload(publicUrl);
       // Keep preview showing — it matches what's now on the server
@@ -124,9 +119,7 @@ export function ImageUploader({
   return (
     <div className={`space-y-2 ${className}`}>
       {label && (
-        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-          {label}
-        </p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</p>
       )}
 
       {/* ── Drop / click zone ── */}
@@ -135,7 +128,7 @@ export function ImageUploader({
           ${radiusCls}
           ${disabled ? "cursor-not-allowed opacity-50 border-border" : "cursor-pointer border-border hover:border-ink/40"}
           ${status === "error" ? "border-rose-400" : ""}
-          ${status === "done"  ? "border-emerald-400" : ""}
+          ${status === "done" ? "border-emerald-400" : ""}
         `}
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
@@ -156,16 +149,16 @@ export function ImageUploader({
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-mist p-4 text-center">
             <ImageIcon className="h-8 w-8 text-muted-foreground/50" />
-            <p className="text-xs text-muted-foreground">
-              {hint ?? "Click or drag to upload"}
-            </p>
+            <p className="text-xs text-muted-foreground">{hint ?? "Click or drag to upload"}</p>
             <p className="text-[10px] text-muted-foreground/60">JPG · PNG · WebP · max 5 MB</p>
           </div>
         )}
 
         {/* Uploading overlay */}
         {uploading && (
-          <div className={`absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 ${radiusCls}`}>
+          <div
+            className={`absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 ${radiusCls}`}
+          >
             <Loader2 className="h-8 w-8 animate-spin text-white" />
             <p className="text-xs font-medium text-white">
               {status === "previewing" ? "Processing…" : "Uploading…"}
@@ -175,7 +168,9 @@ export function ImageUploader({
 
         {/* Done checkmark flash */}
         {status === "done" && (
-          <div className={`absolute inset-0 flex items-center justify-center bg-black/30 ${radiusCls}`}>
+          <div
+            className={`absolute inset-0 flex items-center justify-center bg-black/30 ${radiusCls}`}
+          >
             <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500">
               <Check className="h-5 w-5 text-white" />
             </span>
@@ -186,7 +181,10 @@ export function ImageUploader({
         {displayUrl && !uploading && !disabled && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); handleClear(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleClear();
+            }}
             className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white transition-opacity hover:bg-black/80"
             aria-label="Remove image"
           >
@@ -208,9 +206,7 @@ export function ImageUploader({
 
       {/* ── Status row ── */}
       <div className="flex items-center justify-between gap-2 min-h-[20px]">
-        {status === "error" && errorMsg && (
-          <p className="text-xs text-rose-500">{errorMsg}</p>
-        )}
+        {status === "error" && errorMsg && <p className="text-xs text-rose-500">{errorMsg}</p>}
 
         {status === "done" && sizeInfo && (
           <p className="text-xs text-emerald-600">

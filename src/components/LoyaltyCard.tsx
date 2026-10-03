@@ -15,10 +15,14 @@ function tierLabel(tier: string): string {
 
 function tierIcon(tier: string): string {
   switch (tier) {
-    case "platinum": return "✦";
-    case "gold": return "★";
-    case "silver": return "◆";
-    default: return "●";
+    case "platinum":
+      return "✦";
+    case "gold":
+      return "★";
+    case "silver":
+      return "◆";
+    default:
+      return "●";
   }
 }
 
@@ -41,17 +45,25 @@ function isLightColor(hex: string): boolean {
 function tierBadgeBg(tier: string, isDark: boolean) {
   if (isDark) {
     switch (tier) {
-      case "platinum": return "rgba(255,255,255,0.18)";
-      case "gold": return "rgba(217,169,78,0.25)";
-      case "silver": return "rgba(255,255,255,0.12)";
-      default: return "rgba(255,255,255,0.08)";
+      case "platinum":
+        return "rgba(255,255,255,0.18)";
+      case "gold":
+        return "rgba(217,169,78,0.25)";
+      case "silver":
+        return "rgba(255,255,255,0.12)";
+      default:
+        return "rgba(255,255,255,0.08)";
     }
   }
   switch (tier) {
-    case "platinum": return "rgba(255,255,255,0.22)";
-    case "gold": return "rgba(180,130,40,0.18)";
-    case "silver": return "rgba(255,255,255,0.15)";
-    default: return "rgba(255,255,255,0.10)";
+    case "platinum":
+      return "rgba(255,255,255,0.22)";
+    case "gold":
+      return "rgba(180,130,40,0.18)";
+    case "silver":
+      return "rgba(255,255,255,0.15)";
+    default:
+      return "rgba(255,255,255,0.10)";
   }
 }
 
@@ -151,7 +163,8 @@ export function LoyaltyCard({
   const resolvedTextColor = isLight ? "#1A1A1A" : "#FFFFFF";
 
   // Background image + overlay toggle
-  const resolvedBgImage = (cardDesign?.background_image && cardDesign.background_image.trim()) || null;
+  const resolvedBgImage =
+    (cardDesign?.background_image && cardDesign.background_image.trim()) || null;
   const showOverlay = cardDesign?.show_color_overlay !== false;
 
   // Card background style — single source of truth
@@ -224,11 +237,17 @@ export function LoyaltyCard({
           />
           <div className="relative">
             {merchantLogo && (
-              <img src={merchantLogo} alt="" className="mx-auto h-12 w-12 rounded-2xl object-cover mb-3" />
+              <img
+                src={merchantLogo}
+                alt=""
+                className="mx-auto h-12 w-12 rounded-2xl object-cover mb-3"
+              />
             )}
             <p className="font-display text-2xl">{merchantName}</p>
             {merchantCategory && (
-              <p className="mt-1 text-xs" style={{ color: textSecondary }}>{merchantCategory}</p>
+              <p className="mt-1 text-xs" style={{ color: textSecondary }}>
+                {merchantCategory}
+              </p>
             )}
             <p className="mt-4 text-sm" style={{ color: textSecondary }}>
               Join this store to earn points, track orders, and redeem rewards.
@@ -266,7 +285,9 @@ export function LoyaltyCard({
       {/* Decorative orb */}
       <div
         className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full opacity-20 blur-3xl"
-        style={{ background: `radial-gradient(circle, ${accent || hexToRGBA(primary, 0.4)}, transparent)` }}
+        style={{
+          background: `radial-gradient(circle, ${accent || hexToRGBA(primary, 0.4)}, transparent)`,
+        }}
       />
 
       {/* SIM chip */}
@@ -330,13 +351,17 @@ export function LoyaltyCard({
         {streak > 0 && (
           <div className="flex items-center gap-1.5">
             <Flame className="h-3 w-3" style={{ color: resolvedTextColor, opacity: 0.7 }} />
-            <span className="text-[10px] font-medium">{streak} <span style={{ color: textSecondary }}>day streak</span></span>
+            <span className="text-[10px] font-medium">
+              {streak} <span style={{ color: textSecondary }}>day streak</span>
+            </span>
           </div>
         )}
         {ordersCount !== undefined && ordersCount > 0 && (
           <div className="flex items-center gap-1.5">
             <ShoppingBag className="h-3 w-3" style={{ color: resolvedTextColor, opacity: 0.7 }} />
-            <span className="text-[10px] font-medium">{ordersCount} <span style={{ color: textSecondary }}>orders</span></span>
+            <span className="text-[10px] font-medium">
+              {ordersCount} <span style={{ color: textSecondary }}>orders</span>
+            </span>
           </div>
         )}
         {transferEnabled && (
@@ -353,19 +378,26 @@ export function LoyaltyCard({
           <p className="text-[8px] uppercase tracking-widest" style={{ color: textTertiary }}>
             {cardDesign?.membership_label || "Member"}
           </p>
-          <p className="mt-0.5 font-mono text-[10px] tracking-wider" style={{ color: textSecondary }}>
+          <p
+            className="mt-0.5 font-mono text-[10px] tracking-wider"
+            style={{ color: textSecondary }}
+          >
             {cardNumber}
           </p>
           {cardDesign?.show_joined_date && joinedAt && (
             <p className="mt-0.5 text-[10px]" style={{ color: textSecondary }}>
-              Joined {new Date(joinedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+              Joined{" "}
+              {new Date(joinedAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
             </p>
           )}
         </div>
         {onQrTap && (
           <button
             type="button"
-            onClick={(e) => { e.stopPropagation(); onQrTap(); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onQrTap();
+            }}
             className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[9px] font-medium uppercase tracking-wider active:scale-95 transition-transform"
             style={{ background: overlayBg }}
           >
@@ -375,7 +407,10 @@ export function LoyaltyCard({
       </div>
 
       {/* Powered by */}
-      <p className="relative mt-2 text-right text-[7px] tracking-wide" style={{ color: textTertiary }}>
+      <p
+        className="relative mt-2 text-right text-[7px] tracking-wide"
+        style={{ color: textTertiary }}
+      >
         Powered by Zentro
       </p>
     </div>

@@ -50,9 +50,10 @@ export function CartPage() {
   const { user } = useAuth();
   const [claims, setClaims] = useState<OfferClaim[]>([]);
   const [claimId, setClaimId] = useState<number | null>(null);
-  const [rewardChoice, setRewardChoice] = useState<
-    { menu_item_id: number; selections?: Array<{ group_id: number; option_id: number }> } | null
-  >(null);
+  const [rewardChoice, setRewardChoice] = useState<{
+    menu_item_id: number;
+    selections?: Array<{ group_id: number; option_id: number }>;
+  } | null>(null);
 
   // The customer's saved offers for this store, for checkout.
   useEffect(() => {
@@ -64,7 +65,9 @@ export function CartPage() {
     }
     offersApi
       .mine("available", selectedMerchantId)
-      .then((list) => setClaims(list.filter((c) => c.status === "available" && c.offer.channels !== "in_store")))
+      .then((list) =>
+        setClaims(list.filter((c) => c.status === "available" && c.offer.channels !== "in_store")),
+      )
       .catch(() => setClaims([]));
   }, [selectedMerchantId, user?.role]);
 
@@ -159,13 +162,18 @@ export function CartPage() {
       return;
     }
     if (claimId && preview?.offer && !preview.offer.eligible) {
-      setError(preview.offer.error || "This offer can't be used on this order. Remove it to continue.");
+      setError(
+        preview.offer.error || "This offer can't be used on this order. Remove it to continue.",
+      );
       return;
     }
     setPlacing(true);
     setError("");
     try {
-      const id = await placeOrder("", claimId ? { claimId, rewardChoice: rewardChoice ?? undefined } : null);
+      const id = await placeOrder(
+        "",
+        claimId ? { claimId, rewardChoice: rewardChoice ?? undefined } : null,
+      );
       nav({ to: "/orders/$id", params: { id } });
     } catch (e: unknown) {
       setError((e as { message?: string }).message || "Failed to place order");
@@ -366,7 +374,12 @@ export function CartPage() {
                     {preview.offer.reward_options!.map((o) => (
                       <button
                         key={`${o.menu_item_id}-${o.selections.map((x) => x.option_id).join(".")}`}
-                        onClick={() => setRewardChoice({ menu_item_id: o.menu_item_id, selections: o.selections })}
+                        onClick={() =>
+                          setRewardChoice({
+                            menu_item_id: o.menu_item_id,
+                            selections: o.selections,
+                          })
+                        }
                         className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground"
                       >
                         {o.name}
@@ -419,7 +432,11 @@ export function CartPage() {
             {preview?.charges
               ?.filter((c) => Number(c.amount) > 0)
               .map((c) => (
-                <Row key={c.kind} label={c.label} value={formatCurrency(c.amount, symFromCatalog, 0)} />
+                <Row
+                  key={c.kind}
+                  label={c.label}
+                  value={formatCurrency(c.amount, symFromCatalog, 0)}
+                />
               ))}
             {preview && taxValue > 0 && (
               <>

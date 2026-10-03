@@ -74,7 +74,11 @@ export default function ShiftCloseScreen({ onShiftClosed, onCancel }: ShiftClose
 
   // Use live summary data if available, fall back to stale store values
   const liveCashSales = summary ? Number(summary.total_cash_sales) : 0;
-  const liveOpeningCash = summary ? Number(summary.opening_cash) : activeShift ? Number(activeShift.opening_cash) : 0;
+  const liveOpeningCash = summary
+    ? Number(summary.opening_cash)
+    : activeShift
+      ? Number(activeShift.opening_cash)
+      : 0;
   const livePayouts = summary ? Number(summary.cash_payouts) : 0;
   const livePayins = summary ? Number(summary.cash_payins) : 0;
 
@@ -186,11 +190,15 @@ export default function ShiftCloseScreen({ onShiftClosed, onCancel }: ShiftClose
           <div className="space-y-2 text-sm">
             <div className="flex justify-between text-muted-foreground">
               <span>Opening Cash</span>
-              <span className="font-medium text-foreground">{formatCurrency(liveOpeningCash, currencySymbol)}</span>
+              <span className="font-medium text-foreground">
+                {formatCurrency(liveOpeningCash, currencySymbol)}
+              </span>
             </div>
             <div className="flex justify-between text-muted-foreground">
               <span>Cash Sales ({summary?.total_orders ?? 0} orders)</span>
-              <span className="font-medium text-green-600">+{formatCurrency(liveCashSales, currencySymbol)}</span>
+              <span className="font-medium text-green-600">
+                +{formatCurrency(liveCashSales, currencySymbol)}
+              </span>
             </div>
             {summary?.payment_methods
               ? summary.payment_methods
@@ -220,7 +228,9 @@ export default function ShiftCloseScreen({ onShiftClosed, onCancel }: ShiftClose
                   <ArrowUpFromLine className="h-3 w-3 text-red-500" />
                   Pay-outs
                 </span>
-                <span className="font-medium text-red-600">-{formatCurrency(totalPayouts, currencySymbol)}</span>
+                <span className="font-medium text-red-600">
+                  -{formatCurrency(totalPayouts, currencySymbol)}
+                </span>
               </div>
             )}
             {totalPayins > 0 && (
@@ -229,7 +239,9 @@ export default function ShiftCloseScreen({ onShiftClosed, onCancel }: ShiftClose
                   <ArrowDownToLine className="h-3 w-3 text-green-500" />
                   Pay-ins
                 </span>
-                <span className="font-medium text-green-600">+{formatCurrency(totalPayins, currencySymbol)}</span>
+                <span className="font-medium text-green-600">
+                  +{formatCurrency(totalPayins, currencySymbol)}
+                </span>
               </div>
             )}
             <div className="border-t border-border pt-2 flex justify-between font-bold text-foreground">
@@ -251,9 +263,7 @@ export default function ShiftCloseScreen({ onShiftClosed, onCancel }: ShiftClose
         {/* Recent movements */}
         {movements.length > 0 && (
           <div className="mb-4 rounded-xl bg-muted/30 px-3 py-2">
-            <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">
-              Cash Movements
-            </p>
+            <p className="mb-1 text-xs font-bold uppercase text-muted-foreground">Cash Movements</p>
             {movements.slice(0, 5).map((m) => (
               <div key={m.id} className="flex items-center justify-between py-1 text-xs">
                 <span className="flex items-center gap-1 text-muted-foreground">
@@ -265,7 +275,8 @@ export default function ShiftCloseScreen({ onShiftClosed, onCancel }: ShiftClose
                   {m.reason || m.movement_type}
                 </span>
                 <span className={m.movement_type === "payout" ? "text-red-600" : "text-green-600"}>
-                  {m.movement_type === "payout" ? "-" : "+"} {formatCurrency(m.amount, currencySymbol)}
+                  {m.movement_type === "payout" ? "-" : "+"}{" "}
+                  {formatCurrency(m.amount, currencySymbol)}
                 </span>
               </div>
             ))}

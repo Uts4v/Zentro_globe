@@ -28,12 +28,14 @@ function decodeJwt(token: string): Record<string, any> | null {
 export const authReady: Promise<{ user: { role: string } } | null> =
   typeof window === "undefined"
     ? Promise.resolve(null)
-    : Promise.resolve((() => {
-        const access = tokenStore.getAccess();
-        if (!access) return null;
-        const payload = decodeJwt(access);
-        if (!payload) return null;
-        // Treat expired tokens as no session (refresh happens in AuthProvider)
-        if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
-        return { user: { role: payload.role ?? "customer" } };
-      })());
+    : Promise.resolve(
+        (() => {
+          const access = tokenStore.getAccess();
+          if (!access) return null;
+          const payload = decodeJwt(access);
+          if (!payload) return null;
+          // Treat expired tokens as no session (refresh happens in AuthProvider)
+          if (payload.exp && payload.exp < Math.floor(Date.now() / 1000)) return null;
+          return { user: { role: payload.role ?? "customer" } };
+        })(),
+      );

@@ -27,21 +27,21 @@ The brief gets the fundamentals right, and they stay:
 What it misses is mostly about **how Zentro already works**. Those gaps would cause real
 bugs if the brief were built as written:
 
-| # | Gap in the brief | Why it matters in Zentro | Fix (section) |
-|---|---|---|---|
-| 1 | No single place that computes an order's total | The final total formula was re-implemented in about six places in `orders/views.py` and `pos/views.py` (line pricing and the tax function were already shared). Tax was taken on the **pre-discount** subtotal, and discounts were frozen amounts. **Now fixed:** see `pricing.md`. | §3 Pricing pipeline |
-| 2 | "Redeemed after successful payment" | Zentro has **no payment gateway**. Payments are internal POS records. The success point has to be defined in Zentro's own order lifecycle. | §5 Lifecycle |
-| 3 | Cancellations and refunds after redemption | An order can be cancelled after it's confirmed. The brief never says whether the voucher comes back. | §5 Lifecycle |
-| 4 | Order changes after a promotion is applied | Items can be added to an open dine-in order, and bills can be split. Minimum spend or qualifying items can stop being true. | §5.3 Re-evaluation |
-| 5 | Existing discounts | Zentro already has Today's Special item discounts, POS manual discounts (`PosDiscount`), loyalty reward redemptions and punch-card redemptions on `Order`. "One promotion per order" has to say how these combine. | §6 Stacking policy |
-| 6 | Offline POS | The POS works offline (IndexedDB queue). A voucher redeemed offline can't be checked for double use. | §8.4 Offline |
-| 7 | Guests | Table-QR orders can be placed by guests with no account, but a claim belongs to a customer. | §8.5 Guests |
-| 8 | Campaign edits after launch | If a merchant edits "20% off" to "10% off" after customers claimed it, what do claims and history show? | §4.2 Versioning |
-| 9 | "Eligible branch" | Zentro has **no branch model**. One `MerchantProfile` is one location (inventory reserves a `branch` FK "for future multi-branch"). | §9 Location |
-| 10 | Merchant category | `business_type` is free text today. | §9 Taxonomy |
-| 11 | Where the order discount lands on each line | Partial refunds, split bills, per-line tax and item analytics all need to know how much discount each line got. | §3.2 Allocation |
-| 12 | View analytics at scale | Storing one row per offer view gets expensive. | §10 Analytics |
-| 13 | Future targeted offers (birthday, win-back) | These need offers **pushed** to a customer without them tapping "Get Offer". | §11 Retention |
+| #   | Gap in the brief                               | Why it matters in Zentro                                                                                                                                                                                                                                                            | Fix (section)       |
+| --- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| 1   | No single place that computes an order's total | The final total formula was re-implemented in about six places in `orders/views.py` and `pos/views.py` (line pricing and the tax function were already shared). Tax was taken on the **pre-discount** subtotal, and discounts were frozen amounts. **Now fixed:** see `pricing.md`. | §3 Pricing pipeline |
+| 2   | "Redeemed after successful payment"            | Zentro has **no payment gateway**. Payments are internal POS records. The success point has to be defined in Zentro's own order lifecycle.                                                                                                                                          | §5 Lifecycle        |
+| 3   | Cancellations and refunds after redemption     | An order can be cancelled after it's confirmed. The brief never says whether the voucher comes back.                                                                                                                                                                                | §5 Lifecycle        |
+| 4   | Order changes after a promotion is applied     | Items can be added to an open dine-in order, and bills can be split. Minimum spend or qualifying items can stop being true.                                                                                                                                                         | §5.3 Re-evaluation  |
+| 5   | Existing discounts                             | Zentro already has Today's Special item discounts, POS manual discounts (`PosDiscount`), loyalty reward redemptions and punch-card redemptions on `Order`. "One promotion per order" has to say how these combine.                                                                  | §6 Stacking policy  |
+| 6   | Offline POS                                    | The POS works offline (IndexedDB queue). A voucher redeemed offline can't be checked for double use.                                                                                                                                                                                | §8.4 Offline        |
+| 7   | Guests                                         | Table-QR orders can be placed by guests with no account, but a claim belongs to a customer.                                                                                                                                                                                         | §8.5 Guests         |
+| 8   | Campaign edits after launch                    | If a merchant edits "20% off" to "10% off" after customers claimed it, what do claims and history show?                                                                                                                                                                             | §4.2 Versioning     |
+| 9   | "Eligible branch"                              | Zentro has **no branch model**. One `MerchantProfile` is one location (inventory reserves a `branch` FK "for future multi-branch").                                                                                                                                                 | §9 Location         |
+| 10  | Merchant category                              | `business_type` is free text today.                                                                                                                                                                                                                                                 | §9 Taxonomy         |
+| 11  | Where the order discount lands on each line    | Partial refunds, split bills, per-line tax and item analytics all need to know how much discount each line got.                                                                                                                                                                     | §3.2 Allocation     |
+| 12  | View analytics at scale                        | Storing one row per offer view gets expensive.                                                                                                                                                                                                                                      | §10 Analytics       |
+| 13  | Future targeted offers (birthday, win-back)    | These need offers **pushed** to a customer without them tapping "Get Offer".                                                                                                                                                                                                        | §11 Retention       |
 
 ## 2. Domain boundaries
 
@@ -64,7 +64,7 @@ flowchart LR
 
 - **New Django app `offers`**. It owns campaigns, claims, redemptions and the engine.
   It must not import `orders.views` or `pos.views`.
-- **The engine never writes order totals itself.** It returns a *priced result*, and the
+- **The engine never writes order totals itself.** It returns a _priced result_, and the
   pricing service (§3) applies it. That keeps "what is the total" in exactly one place.
 - **Offers and Loyalty talk through events, not direct calls.** After a redemption the
   engine emits `promotion_redeemed` (a Django signal, sent on commit). Loyalty and
@@ -138,6 +138,7 @@ erDiagram
 ### 4.1 Models
 
 **`PromotionCampaign`**: the offer and its rules.
+
 - `merchant` (FK), `title`, `description`, `terms` (plain text shown to customers),
   `image_url`
 - `status`: `draft → scheduled → active → paused → ended → archived`
@@ -160,11 +161,13 @@ erDiagram
   `redemptions_count`
 
 **`PromotionCondition`**: typed rows, AND-ed together.
+
 - `kind`: `min_subtotal` · `qualifying_items` (at least N units from a target set) ·
   later `first_visit`, `visit_count`, `loyalty_tier`
 - `quantity`, `amount`
 
 **`PromotionBenefit`**: what the customer gets. Exactly one per campaign in v1.
+
 - `kind`: `percent_off` · `amount_off` · `free_item` · `buy_x_get_y`
 - `scope`: `order` · `targets` (only the targeted lines)
 - `value` (percent or amount), `max_discount_amount`
@@ -176,12 +179,14 @@ erDiagram
 
 **`PromotionTarget`**: product, category or variant sets, with **real foreign keys**
 (not a GenericFK) so the database protects integrity.
+
 - `condition` or `benefit` (exactly one set, enforced by a check constraint)
 - one of `menu_item` · `category` (MenuCategory) · `option` (MenuOption, for a variant)
 - Validation: every target's merchant **must equal** the campaign's merchant. This is
   enforced in the service and re-checked in a model `clean()`.
 
 **`VoucherClaim`**: one customer's entitlement.
+
 - `campaign`, `customer`, `merchant` (denormalized for scoped lookups)
 - `code`: short human code, for example `ZNT-8K4M-7QX2` (§8.1), unique
 - `qr_token`: separate opaque 128-bit token, unique, rotatable
@@ -194,6 +199,7 @@ erDiagram
   campaign. Repeated uses are counted in `uses_count` instead of creating new claims.
 
 **`VoucherRedemption`**: permanent proof of use. Never deleted.
+
 - `claim`, `campaign`, `merchant`, `customer`, `order` (FK), `channel` (`online` /
   `pos`)
 - `status`: `applied` · `voided`, with `voided_at` and `void_reason`
@@ -250,11 +256,11 @@ back to `available` after a redemption.
 There's no payment gateway, so the success point is the moment Zentro already treats
 as a committed sale. That's the same place loyalty points are awarded today:
 
-| Flow | Reserve (claim → `reserved`) | Redeem (→ `redeemed`) | Release (→ `available`) |
-|---|---|---|---|
-| Customer app / table-QR order | Order is placed (`pending`) with the claim applied | Merchant confirms (`pending → confirmed`) | Order cancelled or rejected, or not confirmed within `reserved_until` (default 30 min; a sweeper job releases it) |
-| POS order | Staff applies the claim to the open order | POS payment confirm (`select_for_update` on the order, as today) | Offer removed from the order, or the order is voided before payment |
-| POS "Redeem Offer" in person, no order lines | not used | Staff confirms after seeing the server's validation result | not used |
+| Flow                                         | Reserve (claim → `reserved`)                       | Redeem (→ `redeemed`)                                            | Release (→ `available`)                                                                                           |
+| -------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Customer app / table-QR order                | Order is placed (`pending`) with the claim applied | Merchant confirms (`pending → confirmed`)                        | Order cancelled or rejected, or not confirmed within `reserved_until` (default 30 min; a sweeper job releases it) |
+| POS order                                    | Staff applies the claim to the open order          | POS payment confirm (`select_for_update` on the order, as today) | Offer removed from the order, or the order is voided before payment                                               |
+| POS "Redeem Offer" in person, no order lines | not used                                           | Staff confirms after seeing the server's validation result       | not used                                                                                                          |
 
 **Cancellation after redemption.** The redemption is marked `voided`, with a reason and
 the actor. If the campaign has `restore_on_cancel` and the claim hasn't expired, the use
@@ -282,6 +288,7 @@ quantities and splitting the bill.
 ## 6. Stacking policy (v1)
 
 An order has **one "order-level benefit" slot**. It can hold exactly one of:
+
 - a Zentro Offer claim
 - a POS manual discount (`PosDiscount`)
 - a loyalty reward redemption or punch-card redemption
@@ -338,6 +345,7 @@ resolve_code(merchant, code_or_qr_token)           -> VoucherClaim | InvalidCode
 ### 7.1 Buy X Get Y and free-item algorithm
 
 For "Buy 1 Pizza, get 1 Cold Drink free":
+
 1. Expand order lines into units. Remove units excluded by
    `exclude_discounted_items`, and units already used as a reward.
 2. Qualifying units: from the condition's target set (Pizza category). The number of
@@ -463,6 +471,7 @@ Zentro issues, instead of the customer tapping "Get Offer":
 ## 12. API surface (v1)
 
 Customer (authenticated):
+
 - `GET  /api/offers/?q=&category=&lat=&lng=&radius_km=&area=`: discovery
 - `GET  /api/offers/<campaign_id>/`: detail (records a view)
 - `POST /api/offers/<campaign_id>/claim/`: returns the claim with code and QR token
@@ -471,6 +480,7 @@ Customer (authenticated):
 - Checkout: the existing order-create endpoints accept `claim_id` (and `reward_choice`)
 
 Merchant (authenticated merchant or POS device):
+
 - `CRUD /api/merchants/offers/`: wizard steps save a `draft`; `POST …/publish/`,
   `…/pause/`, `…/end/`, `…/duplicate/`
 - `GET  /api/merchants/offers/<id>/stats/`
@@ -490,13 +500,13 @@ Merchant (authenticated merchant or POS device):
 
 ## 14. Phasing
 
-| Phase | Scope |
-|---|---|
-| **0: Pricing foundation** | `orders/services/pricing.py`, move every total calculation onto it, line allocation fields, confirm the tax-base rule, one-benefit-slot constraint. Adds no features, but everything after depends on it. |
-| **1: Core offers** | Models, `PromotionEngine`, wizard, claim, My Offers with QR, POS lookup/apply/redeem, online checkout reserve/redeem/release, reservation sweeper, void on cancel, rate limits, tenant tests, concurrency tests (two devices, one claim). |
-| **2: Marketplace** | `MerchantCategory` migration, areas, near-me query, Offers page, search, admin moderation. |
-| **3: Analytics** | Daily stats, merchant dashboard, new vs returning, nightly return-rate job. |
-| **4: Retention (later)** | Audiences, automations, birthday / win-back / tier offers, then stacking rules and A/B tests. |
+| Phase                     | Scope                                                                                                                                                                                                                                     |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0: Pricing foundation** | `orders/services/pricing.py`, move every total calculation onto it, line allocation fields, confirm the tax-base rule, one-benefit-slot constraint. Adds no features, but everything after depends on it.                                 |
+| **1: Core offers**        | Models, `PromotionEngine`, wizard, claim, My Offers with QR, POS lookup/apply/redeem, online checkout reserve/redeem/release, reservation sweeper, void on cancel, rate limits, tenant tests, concurrency tests (two devices, one claim). |
+| **2: Marketplace**        | `MerchantCategory` migration, areas, near-me query, Offers page, search, admin moderation.                                                                                                                                                |
+| **3: Analytics**          | Daily stats, merchant dashboard, new vs returning, nightly return-rate job.                                                                                                                                                               |
+| **4: Retention (later)**  | Audiences, automations, birthday / win-back / tier offers, then stacking rules and A/B tests.                                                                                                                                             |
 
 ## 15. Tests that must exist before launch
 
@@ -518,15 +528,15 @@ Merchant (authenticated merchant or POS device):
 
 **Backend (`backend/offers/`)**
 
-| Module | Contents |
-|---|---|
-| `models.py` | `PromotionCampaign`, `PromotionBenefit`, `PromotionCondition`, `PromotionTarget`, `VoucherClaim`, `VoucherRedemption`, `PromotionDailyStats` |
-| `codes.py` | Crockford-base32 codes with a check character (every single-character typo is rejected), 128-bit QR tokens (`zentro://offer/<token>`) |
-| `engine.py` | claim, `check_usable`, `build_spec` (all four benefit kinds), reserve / release / redeem / void, in-store redemption, code lookup, nightly upkeep |
-| `checkout.py` | the shared "apply an offer to a basket" step used by order preview and order creation |
-| `signals.py` | redeem / release / void from the `Order` lifecycle (fires whenever an order's pricing locks), release on order delete |
-| `views.py`, `pos_views.py` | customer, merchant and POS APIs (`/api/offers/…`) |
-| `management/commands/offers_maintenance.py`, `tasks.py` | nightly: expire claims, end campaigns, fill 7/30-day return rates (schedule with cron or Celery beat) |
+| Module                                                  | Contents                                                                                                                                          |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `models.py`                                             | `PromotionCampaign`, `PromotionBenefit`, `PromotionCondition`, `PromotionTarget`, `VoucherClaim`, `VoucherRedemption`, `PromotionDailyStats`      |
+| `codes.py`                                              | Crockford-base32 codes with a check character (every single-character typo is rejected), 128-bit QR tokens (`zentro://offer/<token>`)             |
+| `engine.py`                                             | claim, `check_usable`, `build_spec` (all four benefit kinds), reserve / release / redeem / void, in-store redemption, code lookup, nightly upkeep |
+| `checkout.py`                                           | the shared "apply an offer to a basket" step used by order preview and order creation                                                             |
+| `signals.py`                                            | redeem / release / void from the `Order` lifecycle (fires whenever an order's pricing locks), release on order delete                             |
+| `views.py`, `pos_views.py`                              | customer, merchant and POS APIs (`/api/offers/…`)                                                                                                 |
+| `management/commands/offers_maintenance.py`, `tasks.py` | nightly: expire claims, end campaigns, fill 7/30-day return rates (schedule with cron or Celery beat)                                             |
 
 Merchant taxonomy lives in `merchants` (`MerchantCategory`, seeded by migration
 `0026_seed_merchant_categories`, which also maps existing `business_type` text by whole

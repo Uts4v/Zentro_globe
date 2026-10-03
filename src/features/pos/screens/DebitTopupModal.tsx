@@ -14,12 +14,7 @@ interface DebitTopupModalProps {
 
 const QUICK_AMOUNTS = [10, 20, 50, 100, 200];
 
-export default function DebitTopupModal({
-  open,
-  account,
-  onDone,
-  onClose,
-}: DebitTopupModalProps) {
+export default function DebitTopupModal({ open, account, onDone, onClose }: DebitTopupModalProps) {
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
   const posSettings = usePosStore((s) => s.posSettings);
@@ -113,7 +108,8 @@ export default function DebitTopupModal({
               Top-up Wallet
             </h3>
             <p className="numeric text-xs text-muted-foreground">
-              {account.contact_name || "Walk-in"} — Balance: {formatCurrency(account.balance, currencySymbol)}
+              {account.contact_name || "Walk-in"} — Balance:{" "}
+              {formatCurrency(account.balance, currencySymbol)}
             </p>
           </div>
           <button
@@ -171,11 +167,7 @@ export default function DebitTopupModal({
         </div>
 
         {/* Error */}
-        {error && (
-          <div className="mb-4 rounded-xl bg-red-50 p-3 text-xs text-red-600">
-            {error}
-          </div>
-        )}
+        {error && <div className="mb-4 rounded-xl bg-red-50 p-3 text-xs text-red-600">{error}</div>}
 
         {/* Submit */}
         <button

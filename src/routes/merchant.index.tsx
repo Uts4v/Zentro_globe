@@ -126,7 +126,7 @@ function Overview() {
         setRefreshing(false);
       }
     },
-    [merchantProfile?.id]
+    [merchantProfile?.id],
   );
 
   useEffect(() => {
@@ -208,7 +208,8 @@ function Overview() {
             <p className="mt-3 max-w-xl text-sm leading-6 text-muted-foreground">
               Your store has received <span className="font-medium text-ink">{today.orders}</span>{" "}
               orders today with{" "}
-              <span className="font-medium text-ink">{formatMoney(today.revenue, sym)}</span> in revenue.
+              <span className="font-medium text-ink">{formatMoney(today.revenue, sym)}</span> in
+              revenue.
             </p>
           </div>
 

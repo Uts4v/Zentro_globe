@@ -84,7 +84,9 @@ export function MerchantSpecialsPage() {
       <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Promotions</p>
-          <h1 className="font-display mt-1 text-3xl sm:text-4xl text-foreground">Today's Special</h1>
+          <h1 className="font-display mt-1 text-3xl sm:text-4xl text-foreground">
+            Today's Special
+          </h1>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
             A popup banner shown to customers when they first open your store page. Add multiple
             specials — customers can swipe through them all.

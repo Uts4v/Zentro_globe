@@ -109,12 +109,12 @@ type AuthContextType = {
       confirmPassword?: string;
       phone?: string;
       phoneToken?: string;
-    }
+    },
   ) => Promise<{ error: string | null }>;
   signIn: (
     email: string,
     password: string,
-    meta?: { role?: Role }
+    meta?: { role?: Role },
   ) => Promise<{ error: string | null }>;
   googleAuth: (
     idToken: string,
@@ -123,23 +123,23 @@ type AuthContextType = {
       phone?: string;
       phoneToken?: string;
       store_name?: string;
-    }
+    },
   ) => Promise<{ error: string | null }>;
   sendOtp: (
     phone: string,
-    purpose?: "signup" | "login" | "verify_phone"
+    purpose?: "signup" | "login" | "verify_phone",
   ) => Promise<{ error: string | null; debugCode?: string }>;
   verifyOtp: (
     phone: string,
     code: string,
-    purpose?: "signup" | "login" | "verify_phone"
+    purpose?: "signup" | "login" | "verify_phone",
   ) => Promise<{ error: string | null; phoneToken?: string }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   refreshMerchantProfile: () => Promise<void>;
   changePassword: (
     oldPassword: string,
-    newPassword: string
+    newPassword: string,
   ) => Promise<{ error: string | null; noUsablePassword?: boolean }>;
 };
 
@@ -202,7 +202,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchMe = useCallback(async () => {
     const token = tokenStore.getAccess();
-    if (!token) { setUser(null); setMerchantProfile(null); return; }
+    if (!token) {
+      setUser(null);
+      setMerchantProfile(null);
+      return;
+    }
 
     try {
       const me = await djangoFetch<AuthUser>(apiUrl("/auth/me/"), {
@@ -213,7 +217,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (me.role === "merchant") {
         djangoFetch<MerchantProfile>(apiUrl("/merchants/me/"), {
           headers: { Authorization: `Bearer ${token}` },
-        }).then(setMerchantProfile).catch(() => setMerchantProfile(null));
+        })
+          .then(setMerchantProfile)
+          .catch(() => setMerchantProfile(null));
       } else {
         setMerchantProfile(null);
       }
@@ -233,36 +239,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Auto-refresh token ─────────────────────────────────────────────────────
 
-  const scheduleRefresh = useCallback((accessToken: string) => {
-    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    const secs = secondsUntilExpiry(accessToken);
-    // Refresh 2 minutes before expiry, or immediately if < 2 min remain
-    const delay = Math.max((secs - 120) * 1000, 0);
-    refreshTimerRef.current = setTimeout(async () => {
-      if (!tokenStore.getRefresh()) return;
-      const outcome = await refreshAccessToken();
-      const fresh = tokenStore.getAccess();
-      if (outcome === "refreshed" && fresh) {
-        scheduleRefresh(fresh);
-        if (profilePendingRef.current) {
-          profilePendingRef.current = false;
-          void fetchMe();
+  const scheduleRefresh = useCallback(
+    (accessToken: string) => {
+      if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+      const secs = secondsUntilExpiry(accessToken);
+      // Refresh 2 minutes before expiry, or immediately if < 2 min remain
+      const delay = Math.max((secs - 120) * 1000, 0);
+      refreshTimerRef.current = setTimeout(async () => {
+        if (!tokenStore.getRefresh()) return;
+        const outcome = await refreshAccessToken();
+        const fresh = tokenStore.getAccess();
+        if (outcome === "refreshed" && fresh) {
+          scheduleRefresh(fresh);
+          if (profilePendingRef.current) {
+            profilePendingRef.current = false;
+            void fetchMe();
+          }
+        } else if (outcome === "unreachable") {
+          // No answer is not a refusal. Signing out here would throw the POS to
+          // the login page mid-service and strand every order waiting to sync,
+          // so keep the session and ask again once the server can be reached.
+          refreshTimerRef.current = setTimeout(
+            () => scheduleRefresh(tokenStore.getAccess() ?? accessToken),
+            REFRESH_RETRY_MS,
+          );
+        } else {
+          tokenStore.clear();
+          setUser(null);
+          setMerchantProfile(null);
         }
-      } else if (outcome === "unreachable") {
-        // No answer is not a refusal. Signing out here would throw the POS to
-        // the login page mid-service and strand every order waiting to sync,
-        // so keep the session and ask again once the server can be reached.
-        refreshTimerRef.current = setTimeout(
-          () => scheduleRefresh(tokenStore.getAccess() ?? accessToken),
-          REFRESH_RETRY_MS,
-        );
-      } else {
-        tokenStore.clear();
-        setUser(null);
-        setMerchantProfile(null);
-      }
-    }, delay);
-  }, [fetchMe]);
+      }, delay);
+    },
+    [fetchMe],
+  );
 
   // ── Initialise from localStorage on mount ─────────────────────────────────
 
@@ -318,7 +327,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         confirmPassword?: string;
         phone?: string;
         phoneToken?: string;
-      }
+      },
     ): Promise<{ error: string | null }> => {
       try {
         const data = await djangoFetch<{
@@ -349,7 +358,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: e.message };
       }
     },
-    [fetchMe, scheduleRefresh]
+    [fetchMe, scheduleRefresh],
   );
 
   // ── Sign in ────────────────────────────────────────────────────────────────
@@ -358,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (
       email: string,
       password: string,
-      meta?: { role?: Role }
+      meta?: { role?: Role },
     ): Promise<{ error: string | null }> => {
       try {
         const data = await djangoFetch<{
@@ -384,7 +393,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: e.message };
       }
     },
-    [fetchMe, scheduleRefresh]
+    [fetchMe, scheduleRefresh],
   );
 
   // ── Continue with Google ──────────────────────────────────────────────────
@@ -397,7 +406,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         phone?: string;
         phoneToken?: string;
         store_name?: string;
-      }
+      },
     ): Promise<{ error: string | null }> => {
       try {
         const data = await djangoFetch<{
@@ -425,7 +434,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: e.message };
       }
     },
-    [fetchMe, scheduleRefresh]
+    [fetchMe, scheduleRefresh],
   );
 
   // ── OTP (mobile verification) ─────────────────────────────────────────────
@@ -433,7 +442,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendOtp = useCallback(
     async (
       phone: string,
-      purpose: "signup" | "login" | "verify_phone" = "signup"
+      purpose: "signup" | "login" | "verify_phone" = "signup",
     ): Promise<{ error: string | null; debugCode?: string }> => {
       try {
         const res = await djangoFetch<{
@@ -450,14 +459,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: e.message };
       }
     },
-    []
+    [],
   );
 
   const verifyOtp = useCallback(
     async (
       phone: string,
       code: string,
-      purpose: "signup" | "login" | "verify_phone" = "signup"
+      purpose: "signup" | "login" | "verify_phone" = "signup",
     ): Promise<{ error: string | null; phoneToken?: string }> => {
       try {
         const res = await djangoFetch<{ verified: boolean; phone_token: string }>(
@@ -466,14 +475,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ phone, code, purpose }),
-          }
+          },
         );
         return { error: null, phoneToken: res.phone_token };
       } catch (e: any) {
         return { error: e.message };
       }
     },
-    []
+    [],
   );
 
   // ── Sign out ───────────────────────────────────────────────────────────────
@@ -487,7 +496,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
         body: JSON.stringify({ refresh }),
-      }).catch(() => { });
+      }).catch(() => {});
     }
     tokenStore.clear();
     useStore.getState().resetSession();
@@ -520,7 +529,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const changePassword = useCallback(
     async (
       oldPassword: string,
-      newPassword: string
+      newPassword: string,
     ): Promise<{ error: string | null; noUsablePassword?: boolean }> => {
       const token = tokenStore.getAccess();
       if (!token) return { error: "Please log in again to change your password." };
@@ -536,7 +545,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: err.message, noUsablePassword: err.code === "no_usable_password" };
       }
     },
-    []
+    [],
   );
 
   return (

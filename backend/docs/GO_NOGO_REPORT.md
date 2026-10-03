@@ -51,13 +51,13 @@ H-1..H-14 hardening list), and the money/auth Medium sweep, the platform is:
 
 ## 4. Phase C summary
 
-| Item | Fix | Commit |
-|---|---|---|
-| C-1 media hardening | extension-derived content types, traversal-safe serve, nosniff/CSP `sandbox`, safest fallback | `99f6621` |
-| C-2 redemption atomicity | reward redemption deducts held points financially atomically at complete | `d397047` |
-| C-3 conflict resolution | `resolve_conflict` validates financial state (Decimal/Precision/Integrity guards) | `e26a873` |
-| C-4 leaderboard | auth required + `LeaderboardThrottle` (300/hr) + public `LeaderboardEntrySerializer`, limit 1..50 | `2ab13fe` |
-| C-5 quantities | `parse_quantity` (1..999, int-only, rejects bool/fractional/0/neg) wired into create/guest/add-items + table order | `81bfebe` |
+| Item                     | Fix                                                                                                                | Commit    |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------ | --------- |
+| C-1 media hardening      | extension-derived content types, traversal-safe serve, nosniff/CSP `sandbox`, safest fallback                      | `99f6621` |
+| C-2 redemption atomicity | reward redemption deducts held points financially atomically at complete                                           | `d397047` |
+| C-3 conflict resolution  | `resolve_conflict` validates financial state (Decimal/Precision/Integrity guards)                                  | `e26a873` |
+| C-4 leaderboard          | auth required + `LeaderboardThrottle` (300/hr) + public `LeaderboardEntrySerializer`, limit 1..50                  | `2ab13fe` |
+| C-5 quantities           | `parse_quantity` (1..999, int-only, rejects bool/fractional/0/neg) wired into create/guest/add-items + table order | `81bfebe` |
 
 ---
 
@@ -121,8 +121,7 @@ float+Decimal TypeError, `guest_name_snapshot` (not `customer_name_snapshot`),
 ## 11. H-4 — customer order idempotency
 
 Optionally provided `client_mutation_id` enforces reuse of an existing order
-(conditional unique constraint `uniq_customer_merchant_mutation`, migration
-0023) with an `IntegrityError` race guard. `orders/test_idempotency.py` (4
+(conditional unique constraint `uniq_customer_merchant_mutation`, migration 0023) with an `IntegrityError` race guard. `orders/test_idempotency.py` (4
 tests) green on SQLite and Postgres. Commit `ddf70f9`.
 
 ---
@@ -233,7 +232,7 @@ Commit `a505547`.
 - **SQLite (default)**: `python manage.py test` → **232 OK, 2 skipped**
   (skips are the Postgres-gated money-concurrency tests).
 - **PostgreSQL 16 (local)**: `DATABASE_URL=… DB_SSLMODE=disable
-  python manage.py test` → **232 OK, 0 skipped**.
+python manage.py test` → **232 OK, 0 skipped**.
 - **Query-count guards**: `orders/test_query_counts.py` + the leaderboard guard
   bound serializer-stage query growth (1 vs 25 rows). Negative control: the
   optimized queryset delta is 0, while the same serialization on an
@@ -291,6 +290,7 @@ visibility gate; bounded/authenticated/throttled endpoints; 232 green
 health probe; option for S3 media.
 
 **Pilot-gating conditions (must be satisfied before first café goes live):**
+
 1. H-10 JWT cookie migration (documented, not yet implemented) —
    refresh-token HttpOnly cookie; until then refresh remains in `localStorage`.
 2. Staging E2E + load test on the staging environment (no staging env yet)

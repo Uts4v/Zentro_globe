@@ -44,15 +44,15 @@ flowchart LR
 
 ## Stack details
 
-| Concern | Choice |
-|---|---|
-| Frontend | TanStack Start (SSR) + React 19, Tailwind v4, shadcn/ui, TanStack Router + Query |
-| Auth | Django JWT (SimpleJWT) via Django API — **Supabase removed** (migration doc in README) |
-| Realtime | Django Channels (Daphne/ASGI), RedisChannelLayer, JWTAuth WS middleware |
-| Background | Celery + Redis broker; bonus: Celery beat — see `background.md` |
-| Realtime data bus | Orders/PreP (KDS) + notifications, see `realtime.md` |
-| AI | `ai_core` app: rule + LLM hybrid for merchant assistant + AI waiter (see `ai.md`) |
-| Storage | Local filesystem / S3 via Django Storage + media-upload view |
+| Concern           | Choice                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| Frontend          | TanStack Start (SSR) + React 19, Tailwind v4, shadcn/ui, TanStack Router + Query       |
+| Auth              | Django JWT (SimpleJWT) via Django API — **Supabase removed** (migration doc in README) |
+| Realtime          | Django Channels (Daphne/ASGI), RedisChannelLayer, JWTAuth WS middleware                |
+| Background        | Celery + Redis broker; bonus: Celery beat — see `background.md`                        |
+| Realtime data bus | Orders/PreP (KDS) + notifications, see `realtime.md`                                   |
+| AI                | `ai_core` app: rule + LLM hybrid for merchant assistant + AI waiter (see `ai.md`)      |
+| Storage           | Local filesystem / S3 via Django Storage + media-upload view                           |
 
 ## End-to-end: a guest QR order (zoom of the pillars)
 

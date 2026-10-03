@@ -34,10 +34,14 @@ function tierLabel(tier: string): string {
 
 function tierIcon(tier: string): string {
   switch (tier) {
-    case "platinum": return "✦";
-    case "gold": return "★";
-    case "silver": return "◆";
-    default: return "●";
+    case "platinum":
+      return "✦";
+    case "gold":
+      return "★";
+    case "silver":
+      return "◆";
+    default:
+      return "●";
   }
 }
 
@@ -85,12 +89,17 @@ export function HeroLoyaltyCard({
 
   // Resolve text color: card_design text_mode > merchant custom > preset > auto-detect
   const resolvedTextColor = cardDesign
-    ? (cardDesign.text_mode === "dark" ? "#1A1A1A" : "#FFFFFF")
-    : (cardTextColor || "#FFFFFF");
+    ? cardDesign.text_mode === "dark"
+      ? "#1A1A1A"
+      : "#FFFFFF"
+    : cardTextColor || "#FFFFFF";
   const isLight = cardDesign ? cardDesign.text_mode === "dark" : isLightColor(resolvedTextColor);
 
   // Background image: card_design > merchant profile
-  const resolvedBgImage = (cardDesign?.background_image && cardDesign.background_image.trim()) || cardBackgroundImage || null;
+  const resolvedBgImage =
+    (cardDesign?.background_image && cardDesign.background_image.trim()) ||
+    cardBackgroundImage ||
+    null;
 
   // Gradient — match MembershipCardStack exactly
   const cardStyle: React.CSSProperties = useMemo(() => {
@@ -142,11 +151,17 @@ export function HeroLoyaltyCard({
 
           <div className="relative">
             {merchantLogo && (
-              <img src={merchantLogo} alt="" className="mx-auto h-12 w-12 rounded-2xl object-cover mb-3" />
+              <img
+                src={merchantLogo}
+                alt=""
+                className="mx-auto h-12 w-12 rounded-2xl object-cover mb-3"
+              />
             )}
             <p className="font-display text-2xl">{merchantName}</p>
             {merchantCategory && (
-              <p className="mt-1 text-xs" style={{ color: textSecondary }}>{merchantCategory}</p>
+              <p className="mt-1 text-xs" style={{ color: textSecondary }}>
+                {merchantCategory}
+              </p>
             )}
             <p className="mt-4 text-sm" style={{ color: textSecondary }}>
               Join this store to earn points, track orders, and redeem rewards.
@@ -194,7 +209,9 @@ export function HeroLoyaltyCard({
         {/* Subtle decorative orb — gradient accent */}
         <div
           className="pointer-events-none absolute -right-20 -top-20 h-56 w-56 rounded-full opacity-20 blur-3xl"
-          style={{ background: `radial-gradient(circle, ${accent || hexToRGBA(primary, 0.4)}, transparent)` }}
+          style={{
+            background: `radial-gradient(circle, ${accent || hexToRGBA(primary, 0.4)}, transparent)`,
+          }}
         />
 
         {/* SIM chip — right side middle */}
@@ -256,18 +273,24 @@ export function HeroLoyaltyCard({
         <div className="relative mt-2 flex items-center gap-4">
           <div className="flex items-center gap-1.5">
             <Flame className="h-3 w-3" style={{ color: accent || resolvedTextColor }} />
-            <span className="text-[10px] font-medium">{streak} <span style={{ color: textSecondary }}>day streak</span></span>
+            <span className="text-[10px] font-medium">
+              {streak} <span style={{ color: textSecondary }}>day streak</span>
+            </span>
           </div>
           <div className="flex items-center gap-1.5">
             <ShoppingBag className="h-3 w-3" style={{ color: accent || resolvedTextColor }} />
-            <span className="text-[10px] font-medium">{ordersCount} <span style={{ color: textSecondary }}>orders</span></span>
+            <span className="text-[10px] font-medium">
+              {ordersCount} <span style={{ color: textSecondary }}>orders</span>
+            </span>
           </div>
         </div>
 
         {/* Bottom row: member + card number */}
         <div className="relative mt-auto flex items-end justify-between">
           <div>
-            <p className="text-[8px] uppercase tracking-widest" style={{ color: textTertiary }}>Member</p>
+            <p className="text-[8px] uppercase tracking-widest" style={{ color: textTertiary }}>
+              Member
+            </p>
             <p className="mt-0.5 text-xs font-medium">{memberName}</p>
           </div>
           <p className="font-mono text-[10px] tracking-wider" style={{ color: textSecondary }}>

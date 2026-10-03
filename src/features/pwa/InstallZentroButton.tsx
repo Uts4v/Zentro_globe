@@ -24,11 +24,7 @@ export function InstallZentroButton({ className }: { className?: string }) {
   }
 
   return (
-    <button
-      onClick={handleInstall}
-      disabled={loading}
-      className={className}
-    >
+    <button onClick={handleInstall} disabled={loading} className={className}>
       <Download className="h-4 w-4" />
       Install Zentro
     </button>
@@ -36,7 +32,8 @@ export function InstallZentroButton({ className }: { className?: string }) {
 }
 
 export function InstallBanner() {
-  const { promptInstall, platform, isInstallable, isInstalled, isStandalone, dismissInstall } = usePwa();
+  const { promptInstall, platform, isInstallable, isInstalled, isStandalone, dismissInstall } =
+    usePwa();
   const eligible = useInstallEligible();
   const [dismissed, setDismissed] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -72,7 +69,9 @@ export function InstallBanner() {
           </div>
           <div className="flex-1">
             <p className="text-sm font-medium text-foreground">Zentro installed!</p>
-            <p className="text-xs text-muted-foreground">You can now open Zentro from your home screen.</p>
+            <p className="text-xs text-muted-foreground">
+              You can now open Zentro from your home screen.
+            </p>
           </div>
         </div>
       </div>
@@ -96,7 +95,8 @@ export function InstallBanner() {
           </p>
           {platform === "ios" ? (
             <p className="mt-2 text-[11px] text-muted-foreground">
-              Tap <span className="font-medium">Share</span> → <span className="font-medium">Add to Home Screen</span> in Safari.
+              Tap <span className="font-medium">Share</span> →{" "}
+              <span className="font-medium">Add to Home Screen</span> in Safari.
             </p>
           ) : (
             <div className="mt-3 flex gap-2">

@@ -53,12 +53,12 @@ flowchart LR
 
 ## What AI can do today (twist: read-only vs write)
 
-| Capability | Tool/Use-case | Writes? |
-|---|---|---|
+| Capability                                   | Tool/Use-case                                                                | Writes?                                             |
+| -------------------------------------------- | ---------------------------------------------------------------------------- | --------------------------------------------------- |
 | Merchant assistant (chat with merchant data) | `use_cases/merchant_assistant` + `tools/menu_tools` + `tools/guidance_tools` | **read-only** (until user asks to change something) |
-| AI waiter (customer-facing ordering chat) | `ai_waiter_chat` / gateway tools | writes **orders/cart** via domain services only |
-| Daily merchant insights report | `async generate_merchant_report` (Celery) | writes `AIRequest`/artifact rows |
-| AI mission/rewards suggestions | `tools/sales_tools` (verify) | read-only |
+| AI waiter (customer-facing ordering chat)    | `ai_waiter_chat` / gateway tools                                             | writes **orders/cart** via domain services only     |
+| Daily merchant insights report               | `async generate_merchant_report` (Celery)                                    | writes `AIRequest`/artifact rows                    |
+| AI mission/rewards suggestions               | `tools/sales_tools` (verify)                                                 | read-only                                           |
 
-> Providing the merchant assistant can *suggest* but not *commit* is a deliberate boundary:
+> Providing the merchant assistant can _suggest_ but not _commit_ is a deliberate boundary:
 > anything that mutates must go through the same POS/merchant/loyalty routes a human uses.

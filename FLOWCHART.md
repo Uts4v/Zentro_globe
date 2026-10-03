@@ -1,6 +1,7 @@
 # Zentro Glow Loyalty - Complete System Flowchart
 
 ## Table of Contents
+
 1. [System Architecture Overview](#1-system-architecture-overview)
 2. [Authentication & User Roles](#2-authentication--user-roles)
 3. [Merchant Onboarding Flow](#3-merchant-onboarding-flow)
@@ -76,6 +77,7 @@ Tech Stack:
 ```
 
 ### Django Apps
+
 ```
 backend/
 ├── config/       → Settings, Celery app, RequestContextMiddleware (request_id/logging)
@@ -89,6 +91,7 @@ backend/
 ```
 
 ### Frontend Route Structure (47 Routes)
+
 ```
 src/
 ├── __root.tsx              → Root layout (providers, auth gate, WebSocket, PWA)
@@ -127,6 +130,7 @@ src/
 ## 2. Authentication & User Roles
 
 ### 2.1 User Types
+
 ```
                     ┌──────────┐
                     │   User   │
@@ -155,6 +159,7 @@ src/
 ### 2.2 Authentication Flows
 
 #### Customer Auth
+
 ```
 /auth/signup → POST /auth/register/ {email, password, full_name, role:"customer"}
      ↓
@@ -168,6 +173,7 @@ src/
 ```
 
 #### Merchant Auth
+
 ```
 /auth/merchant/signup → POST /auth/register/ {email, password, full_name, role:"merchant", store_name}
      ↓
@@ -179,6 +185,7 @@ src/
 ```
 
 #### WebSocket Token (WS-Auth)
+
 ```
 GET /api/auth/ws-token/  (logged-in user, 60s lifetime)
       │
@@ -196,11 +203,13 @@ notifications/middleware.py:
   ├── Rejects tokens lacking the ws_auth claim → AnonymousUser
   └── Validates expiry (60s) → re-fetch on reconnect/reload
 ```
+
 **Rate limiting (scoped DRF throttles):**
 `anon 500/hr · user 1000/day · pos 1200/hr · pin 20/min · login 10/min · otp 5/min · transfer 10/hr · redeem 10/min · guest 60/hr`
 Applied to: register, login, forgot/reset/change-password, worker PIN login, transfers, reward redemptions, guest order create, table QR ordering.
 
 #### POS Device Auth (Dual Path)
+
 ```
 ┌──────────────────────────────────────────────────────┐
 │  PATH 1: Device-Token (Survives Refresh)             │
@@ -257,6 +266,7 @@ Redirect to /merchant/ (dashboard)
 ```
 
 ### Post-Onboarding Setup Flow
+
 ```
 /merchant/store → Configure:
   ├── Upload Logo + Banner (WebP optimized)
@@ -285,6 +295,7 @@ Redirect to /merchant/ (dashboard)
 ## 4. Customer Journey
 
 ### 4.1 New Customer Discovery
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  ENTRY POINTS                                               │
@@ -307,6 +318,7 @@ Redirect to /merchant/ (dashboard)
 ```
 
 ### 4.2 Customer Onboarding
+
 ```
 /auth/login → Redirect to /
      │
@@ -355,6 +367,7 @@ Redirect to /merchant/ (dashboard)
 ## 5. Customer App - Ordering Flow
 
 ### 5.1 Dine-In Order (Table QR)
+
 ```
 Customer scans Table QR at cafe
          │
@@ -414,6 +427,7 @@ _award_loyalty() fires → Points, Streak, Punch Card, Missions
 ```
 
 ### 5.2 Pickup Order
+
 ```
 Same as Dine-In but:
   • fulfillment_type = "pickup"
@@ -422,6 +436,7 @@ Same as Dine-In but:
 ```
 
 ### 5.3 Delivery Order
+
 ```
 Same as Pickup but:
   • fulfillment_type = "delivery"
@@ -434,6 +449,7 @@ Same as Pickup but:
 ## 6. Guest Ordering Flow
 
 ### 6.1 Guest Entry Points
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  GUEST ENTRY POINTS                                         │
@@ -453,6 +469,7 @@ Same as Pickup but:
 ```
 
 ### 6.2 Guest Ordering Process
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  1. BROWSE MENU (no auth required)                          │
@@ -490,6 +507,7 @@ Same as Pickup but:
 ```
 
 ### 6.3 Smart Entry Point (/m/{slug})
+
 ```
 /m/{slug} → Smart Router
       │
@@ -508,6 +526,7 @@ Same as Pickup but:
 ## 7. POS System - Complete Flow
 
 ### 7.0 POS Route Map
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  /pos  POS SIDEBAR NAV                                       │
@@ -527,6 +546,7 @@ Same as Pickup but:
 ```
 
 ### 7.1 POS Boot Sequence
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Navigate to /pos                                           │
@@ -577,6 +597,7 @@ Same as Pickup but:
 ```
 
 ### 7.2 POS Ordering Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  1. BROWSE MENU                                             │
@@ -683,6 +704,7 @@ Same as Pickup but:
 ```
 
 ### 7.3 Incoming Orders (from Customer App / Table QR)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  INCOMING ORDERS PANEL (top of POS order screen)            │
@@ -711,6 +733,7 @@ Same as Pickup but:
 ## 8. Loyalty System - Complete Flow
 
 ### 8.1 Points Earning Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  TRIGGER: Order status transitions to COMPLETED             │
@@ -774,6 +797,7 @@ Same as Pickup but:
 ```
 
 ### 8.2 Tier Progression
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  TIER THRESHOLDS (based on LIFETIME POINTS, per merchant)  │
@@ -794,6 +818,7 @@ Same as Pickup but:
 ```
 
 ### 8.3 Punch Card Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  MERCHANT CREATES PUNCH CARD TEMPLATE                       │
@@ -833,7 +858,7 @@ Same as Pickup but:
 └─────────────────────────┬───────────────────────────────────┘
                           │
                           ▼
-                          
+
 ┌─────────────────────────────────────────────────────────────┐
 │  MERCHANT CONFIRMS                                          │
 │  POST /loyalty/punch-cards/confirm-proof/                   │
@@ -846,6 +871,7 @@ Same as Pickup but:
 ```
 
 ### 8.4 Reward Redemption Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  CUSTOMER BROWSES REWARDS                                   │
@@ -891,6 +917,7 @@ Same as Pickup but:
 ```
 
 ### 8.5 Missions Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  MERCHANT CREATES MISSIONS                                  │
@@ -930,6 +957,7 @@ Same as Pickup but:
 ## 9. Order Lifecycle (All Sources)
 
 ### 9.1 Order Sources
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  SOURCE          │ CREATED BY     │ AUTH REQUIRED          │
@@ -945,6 +973,7 @@ Same as Pickup but:
 ### 9.2 Order Status Machine
 
 #### Order-Level Status
+
 ```
                     ┌──────────┐
                     │ pending  │ (initial status)
@@ -989,6 +1018,7 @@ Valid Transitions:
 ```
 
 #### Item-Level Preparation Status (when preparation_routing_enabled)
+
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │  Each OrderItem has its own preparation_status:              │
@@ -1021,6 +1051,7 @@ Valid Transitions:
 ```
 
 ### 9.3 Order Creation by Source
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  CUSTOMER APP ORDER                                         │
@@ -1039,7 +1070,7 @@ Valid Transitions:
   │  → Notifies merchant via Notification                      │
   │  → Order starts as "pending"                               │
   └─────────────────────────────────────────────────────────────┘
- 
+
  ┌─────────────────────────────────────────────────────────────┐
  │  TABLE QR ORDER                                             │
  │  POST /pos/table/{token}/order/                             │
@@ -1075,6 +1106,7 @@ Valid Transitions:
 ## 10. Payment Processing
 
 ### 10.1 POS Payment Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  PAYMENT METHODS                                            │
@@ -1121,6 +1153,7 @@ Valid Transitions:
 ```
 
 ### 10.2 Discount Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  POST /pos/discount/apply/                                  │
@@ -1146,6 +1179,7 @@ Valid Transitions:
 ```
 
 ### 10.3 Refund Flow
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  POST /pos/refund/                                          │
@@ -1171,6 +1205,7 @@ Valid Transitions:
 ## 11. Shift Management & Cash Reconciliation
 
 ### 11.1 Shift Lifecycle
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  SHIFT OPEN                                                 │
@@ -1230,6 +1265,7 @@ Valid Transitions:
 ```
 
 ### 11.2 Z-Report (End of Day)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  GET /pos/z-report/?date=YYYY-MM-DD                        │
@@ -1411,6 +1447,7 @@ Valid Transitions:
 ```
 
 ### Order Management (Merchant)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  /merchant/orders                                           │
@@ -1442,6 +1479,7 @@ Valid Transitions:
 ## 14. Table QR Ordering Flow
 
 ### 14.1 Table Setup (Merchant Side)
+
 ```
 /merchant/tables
      │
@@ -1465,6 +1503,7 @@ Valid Transitions:
 ```
 
 ### 14.2 Customer Table Ordering
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  CUSTOMER SCANS TABLE QR                                    │
@@ -1498,6 +1537,7 @@ Valid Transitions:
 ```
 
 ### 14.3 POS Table Order (alternative path)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  POST /pos/table/{token}/order/                             │
@@ -1606,6 +1646,7 @@ QR SCANNER FLOW:
 ## 17. Membership Card Design & QR Tokens
 
 ### 17.1 Card Design System
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  MERCHANT DESIGNS MEMBERSHIP CARD                           │
@@ -1652,6 +1693,7 @@ QR SCANNER FLOW:
 ```
 
 ### 17.2 Membership QR Tokens
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  QR TOKEN SYSTEM                                            │
@@ -1676,6 +1718,7 @@ QR SCANNER FLOW:
 ```
 
 ### 17.3 Customer Management (Merchant)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  MERCHANT CUSTOMER LIST                                     │
@@ -1792,6 +1835,7 @@ QR SCANNER FLOW:
 ## 20. PWA & Real-Time Features
 
 ### 20.1 Progressive Web App
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  PWA FEATURES                                               │
@@ -1819,6 +1863,7 @@ QR SCANNER FLOW:
 ```
 
 ### 20.2 Real-Time WebSocket Notifications
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  WEBSOCKET ARCHITECTURE                                     │
@@ -1901,6 +1946,7 @@ User (AUTH_USER_MODEL)
 ```
 
 ### Entity Count by Domain
+
 ```
 Domain                      │ Models │ Count
 ────────────────────────────┼────────┼──────
@@ -1931,6 +1977,7 @@ POS Infrastructure          │ PosAuditLog, ProcessedClientMutation,
 ## 22. API Endpoint Map
 
 ### Summary by Feature Area
+
 ```
 ┌──────────────────────────────────┬────────────┬──────────┐
 │ Feature Area                     │ Base URL   │ Endpoints│
@@ -1952,6 +1999,7 @@ New /api/auth/ws-token/ → issues 60s WS-only JWT (ws_auth claim) for WebSocket
 ```
 
 ### Loyalty Endpoint Groups (Updated)
+
 ```
 Group                    │ Endpoints │ Key URLs
 ─────────────────────────┼───────────┼─────────────────────────────
@@ -1975,6 +2023,7 @@ LOYALTY TOTAL            │ 55        │
 ```
 
 ### Customer Membership Endpoints (Updated)
+
 ```
 Group                    │ Endpoints │ Key URLs
 ─────────────────────────┼───────────┼─────────────────────────────
@@ -1988,6 +2037,7 @@ CUSTOMER MEMBERSHIP TOTAL│ 6         │
 ```
 
 ### Order Endpoints (Updated)
+
 ```
 Group                    │ Endpoints │ Key URLs
 ─────────────────────────┼───────────┼─────────────────────────────
@@ -2012,6 +2062,7 @@ ORDER TOTAL              │ 16        │
 ```
 
 ### POS Endpoint Groups (Updated)
+
 ```
 Group               │ Endpoints │ Key URLs
 ────────────────────┼───────────┼─────────────────────────────
@@ -2047,6 +2098,7 @@ POS TOTAL           │ 58        │
 ## 23. Production Hardening & Operations
 
 ### Concurrency & Correctness
+
 ```
 ✓ Transactional wallets   — transaction.atomic() + row locks (_lock_wallet)
 ✓ Transfer safety         — both wallets locked in ascending pk order (no deadlock)
@@ -2063,6 +2115,7 @@ POS TOTAL           │ 58        │
 ```
 
 ### Security
+
 ```
 ✓ WS token auth (P0)      — 60s WS-only JWT (ws_auth claim), never long-lived
                             access tokens in WS query strings
@@ -2072,6 +2125,7 @@ POS TOTAL           │ 58        │
 ```
 
 ### Query Performance
+
 ```
 ✓ N+1 elimination         — order lists select_related; menu lookups batched;
                             merchant customers single bulk wallet query
@@ -2084,6 +2138,7 @@ POS TOTAL           │ 58        │
 ```
 
 ### Observability
+
 ```
 ✓ RequestContextMiddleware — per-request request_id, structured log line
   (path, method, status, duration_ms, user), X-Request-ID + X-Duration-Ms
@@ -2093,6 +2148,7 @@ POS TOTAL           │ 58        │
 ```
 
 ### Frontend Efficiency
+
 ```
 ✓ QueryClient defaults    — staleTime 30s, retry 1 (realtime hooks override)
 ✓ Customer search         — 350ms debounce + AbortController + stale guard
@@ -2104,6 +2160,7 @@ POS TOTAL           │ 58        │
 ## Complete User Journey Summary
 
 ### Customer Flow
+
 ```
 Sign Up → Login → Browse Stores → Join Merchant → Browse Menu
 → Add to Cart → Checkout (Dine-in/Pickup/Delivery)
@@ -2118,6 +2175,7 @@ Sign Up → Login → Browse Stores → Join Merchant → Browse Menu
 ```
 
 ### Guest Flow
+
 ```
 Scan Table QR / Visit /guest/merchant/{slug}
 → Browse Menu (no auth) → Add to Cart
@@ -2127,6 +2185,7 @@ Scan Table QR / Visit /guest/merchant/{slug}
 ```
 
 ### Merchant Flow
+
 ```
 Sign Up → Onboarding → Configure Store → Upload Logo/Banner
 → Set Theme Color → Generate QR → Design Membership Card
@@ -2143,6 +2202,7 @@ Sign Up → Onboarding → Configure Store → Upload Logo/Banner
 ```
 
 ### POS Flow
+
 ```
 Device Registration → Worker PIN Login → Open Shift
 → Browse Menu → Add to Cart → Link Customer

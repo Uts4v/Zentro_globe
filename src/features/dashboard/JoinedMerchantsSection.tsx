@@ -24,14 +24,10 @@ function MerchantCard({ merchant }: { merchant: JoinedMerchant }) {
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-ink">
-            {merchant.business_name}
-          </p>
+          <p className="truncate text-sm font-semibold text-ink">{merchant.business_name}</p>
           <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-              merchant.is_open
-                ? "bg-emerald-100 text-emerald-700"
-                : "bg-mist text-muted-foreground"
+              merchant.is_open ? "bg-emerald-100 text-emerald-700" : "bg-mist text-muted-foreground"
             }`}
           >
             {merchant.is_open ? "Open" : "Closed"}
@@ -52,8 +48,7 @@ function MerchantCard({ merchant }: { merchant: JoinedMerchant }) {
           </span>
           {merchant.pending_orders_count > 0 && (
             <span className="inline-flex items-center gap-1 text-ember">
-              <ShoppingBag className="h-3 w-3" /> {merchant.pending_orders_count}{" "}
-              pending
+              <ShoppingBag className="h-3 w-3" /> {merchant.pending_orders_count} pending
             </span>
           )}
         </div>
@@ -97,9 +92,7 @@ export function JoinedMerchantsSection() {
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-2xl text-ink">Your cafés</h2>
-        <span className="text-xs text-muted-foreground">
-          {merchants.length} joined
-        </span>
+        <span className="text-xs text-muted-foreground">{merchants.length} joined</span>
       </div>
 
       {loading ? (
@@ -113,9 +106,7 @@ export function JoinedMerchantsSection() {
       ) : merchants.length === 0 ? (
         <div className="glass rounded-3xl py-12 text-center">
           <p className="text-3xl">☕</p>
-          <p className="mt-2 text-sm text-muted-foreground">
-            You haven't joined any cafés yet.
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">You haven't joined any cafés yet.</p>
           <Link
             to="/stores"
             className="mt-4 inline-flex h-10 items-center rounded-full bg-ink px-5 text-xs font-medium text-primary-foreground"

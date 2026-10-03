@@ -1,8 +1,9 @@
 # Architecture Scanner / Automation Scripts — Zentro
 
 > READ-ONLY, **no-install** design: these scripts turn the codebase into `zentro-graph.json`
-> + per-domain facts. They are **proposals** — the `.md` docs were written from human
-> verification; the scanner is the *someday* auto-regenerator so facts never rot.
+>
+> - per-domain facts. They are **proposals** — the `.md` docs were written from human
+>   verification; the scanner is the _someday_ auto-regenerator so facts never rot.
 >
 > Nothing here is required to understand the architecture. Nothing here installs packages.
 
@@ -49,12 +50,14 @@ flowchart LR
 ## What each scanner pulls
 
 ### scan-frontend.ts
+
 - Route files under `src/routes/` → node `route:<file>`; group by feature dir under
   `src/features/` → node `feature:<name>`.
 - Static imports (`import ... from "@/features/..."`) → edge `uses`.
 - API clients under `src/lib/api` + `src/lib/ws.ts` → edges to backend method names.
 
 ### scan-backend.py
+
 - `backend/*/apps.py` name + Django apps.py → `app:<name>`.
 - `models.py` class bases + `models.ForeignKey/OneToOne/M2M` → `model:<Name>`,
   edge `fk` model→model.
@@ -63,6 +66,7 @@ flowchart LR
   (e.g. `import loyalty` from `orders/views.py`) → edge `couples`.
 
 ### scan-realtime.py
+
 - `consumers.py` classes × `routing.py` path regex → `group:<group>` nodes.
 - `group_send(group, ...)` in services → edges `realtime` service→group→consumer.
 - Celery `@app.task`/`@shared_task` + `config/celery.py` beat schedule → node

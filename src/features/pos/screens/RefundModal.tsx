@@ -24,7 +24,8 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
 
   const orderTotal = Number(order.total_amount);
   const refundAmount = refundType === "full" ? orderTotal : parseFloat(amount) || 0;
-  const canSubmit = refundAmount > 0 && refundAmount <= orderTotal && reason.trim() && !loading && currentWorker;
+  const canSubmit =
+    refundAmount > 0 && refundAmount <= orderTotal && reason.trim() && !loading && currentWorker;
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -63,7 +64,10 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={onClose}
     >
-      <div className="w-full max-w-md rounded-2xl bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="w-full max-w-md rounded-2xl bg-card shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div className="flex items-center gap-2">
@@ -86,7 +90,9 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
           <div className="rounded-xl bg-muted/50 p-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Order #{order.id}</span>
-              <span className="numeric font-bold text-foreground">{formatCurrency(orderTotal, currencySymbol)}</span>
+              <span className="numeric font-bold text-foreground">
+                {formatCurrency(orderTotal, currencySymbol)}
+              </span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               {order.items?.length || 0} items &middot; {paymentMethodLabel(order.payment_method)}
@@ -123,7 +129,9 @@ export default function RefundModal({ order, onClose, onRefunded }: RefundModalP
           {/* Partial amount input */}
           {refundType === "partial" && (
             <div>
-              <label className="mb-1 block text-xs font-medium text-muted-foreground">Amount ({currencySymbol})</label>
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                Amount ({currencySymbol})
+              </label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input

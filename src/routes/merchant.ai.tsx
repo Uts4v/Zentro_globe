@@ -16,8 +16,7 @@ export const Route = createFileRoute("/merchant/ai")({
 function AIPage() {
   const { data: conversations, isLoading: convsLoading } = useConversations();
   const [activeConvId, setActiveConvId] = useState<string | undefined>();
-  const { data: activeConv, isLoading: msgsLoading } =
-    useConversation(activeConvId);
+  const { data: activeConv, isLoading: msgsLoading } = useConversation(activeConvId);
   const sendMutation = useSendMessage();
   const deleteMutation = useDeleteConversation();
   const [input, setInput] = useState("");
@@ -121,9 +120,7 @@ function AIPage() {
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
-              <h3 className="truncate text-sm font-medium">
-                {activeConv.conversation.title}
-              </h3>
+              <h3 className="truncate text-sm font-medium">{activeConv.conversation.title}</h3>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {msgsLoading && (
@@ -184,9 +181,7 @@ function AIPage() {
         ) : (
           <div className="flex flex-1 flex-col items-center justify-center text-center text-sm text-muted-foreground">
             <MessageCircle className="mb-3 h-10 w-10 opacity-30" />
-            <p className="mb-1 font-medium text-foreground">
-              Merchant Assistant
-            </p>
+            <p className="mb-1 font-medium text-foreground">Merchant Assistant</p>
             <p className="max-w-xs">
               Select a conversation or start a new one to ask about your store.
             </p>

@@ -311,7 +311,9 @@ function CustomerMerchantDashboard() {
                 <ShoppingBag className="h-5 w-5" />
               </div>
               <span className="text-sm font-medium text-foreground">Table Menu</span>
-              <span className="text-[11px] text-muted-foreground">Order at {activeTable.tableName}</span>
+              <span className="text-[11px] text-muted-foreground">
+                Order at {activeTable.tableName}
+              </span>
             </Link>
           ) : (
             <Link

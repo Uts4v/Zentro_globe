@@ -1,11 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
-import {
-  posCreateCashMovement,
-  posListCashMovements,
-  PosCashMovement,
-} from "../api";
+import { posCreateCashMovement, posListCashMovements, PosCashMovement } from "../api";
 import {
   HandCoins,
   ArrowUpRight,
@@ -20,7 +16,12 @@ type MovementType = "payin" | "payout" | "cashdrop";
 
 const TYPE_CONFIG: Record<MovementType, { label: string; icon: any; color: string; bg: string }> = {
   payin: { label: "Pay-in", icon: ArrowDownToLine, color: "text-success", bg: "bg-success/10" },
-  payout: { label: "Pay-out", icon: ArrowUpRight, color: "text-destructive", bg: "bg-destructive/10" },
+  payout: {
+    label: "Pay-out",
+    icon: ArrowUpRight,
+    color: "text-destructive",
+    bg: "bg-destructive/10",
+  },
   cashdrop: { label: "Cash Drop", icon: Banknote, color: "text-info", bg: "bg-info/10" },
 };
 
@@ -126,9 +127,7 @@ export default function CashMovementsScreen() {
           <div>
             <h1 className="text-xl font-bold text-foreground">Cash In/Out</h1>
             <p className="text-xs text-muted-foreground">
-              {activeShift
-                ? `Shift #${String(activeShift.id).slice(0, 8)}`
-                : "No active shift"}
+              {activeShift ? `Shift #${String(activeShift.id).slice(0, 8)}` : "No active shift"}
             </p>
           </div>
         </div>
@@ -164,7 +163,9 @@ export default function CashMovementsScreen() {
           </div>
           <div className="rounded-2xl border border-border bg-card p-4">
             <p className="text-xs font-bold uppercase text-muted-foreground">Net</p>
-            <p className={`numeric mt-1 text-lg font-bold ${totalPayins - totalPayouts >= 0 ? "text-success" : "text-destructive"}`}>
+            <p
+              className={`numeric mt-1 text-lg font-bold ${totalPayins - totalPayouts >= 0 ? "text-success" : "text-destructive"}`}
+            >
               {formatCurrency(totalPayins - totalPayouts, currencySymbol)}
             </p>
           </div>
@@ -202,14 +203,14 @@ export default function CashMovementsScreen() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-foreground">{cfg.label}</p>
-                  {m.reason && (
-                    <p className="text-xs text-muted-foreground truncate">{m.reason}</p>
-                  )}
+                  {m.reason && <p className="text-xs text-muted-foreground truncate">{m.reason}</p>}
                   <p className="text-xs text-muted-foreground">
                     {new Date(m.created_at).toLocaleTimeString()} · {m.worker_name || "Unknown"}
                   </p>
                 </div>
-                <p className={`numeric text-lg font-bold ${isPositive ? "text-success" : "text-destructive"}`}>
+                <p
+                  className={`numeric text-lg font-bold ${isPositive ? "text-success" : "text-destructive"}`}
+                >
                   {isPositive ? "+" : "-"} {formatCurrency(m.amount, currencySymbol)}
                 </p>
               </div>
@@ -316,11 +317,7 @@ export default function CashMovementsScreen() {
                     disabled={submitting || !amount}
                     className="flex-1 rounded-xl bg-ink px-4 py-3 text-sm font-bold text-white hover:bg-ink/90 disabled:opacity-50"
                   >
-                    {submitting ? (
-                      <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-                    ) : (
-                      "Record"
-                    )}
+                    {submitting ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Record"}
                   </button>
                 </div>
               </>

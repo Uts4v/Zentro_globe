@@ -7,9 +7,7 @@ function hasValidToken(): boolean {
   const access = tokenStore.getAccess();
   if (!access) return false;
   try {
-    const payload = JSON.parse(
-      atob(access.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
-    );
+    const payload = JSON.parse(atob(access.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     return payload.exp > Math.floor(Date.now() / 1000);
   } catch {
     return false;
@@ -21,9 +19,7 @@ function getUserRole(): string | null {
   const access = tokenStore.getAccess();
   if (!access) return null;
   try {
-    const payload = JSON.parse(
-      atob(access.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
-    );
+    const payload = JSON.parse(atob(access.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
     return payload.role ?? null;
   } catch {
     return null;

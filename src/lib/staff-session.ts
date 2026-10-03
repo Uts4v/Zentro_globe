@@ -63,4 +63,3 @@ export function hasStaffPermission(permCode: string): boolean {
   if (!session || !session.permissions) return true; // Merchant owner or admin session
   return session.permissions.includes(permCode);
 }
-

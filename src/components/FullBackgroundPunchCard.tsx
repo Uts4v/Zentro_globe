@@ -7,7 +7,11 @@ interface FullBackgroundPunchCardProps {
   redeeming?: boolean;
 }
 
-export function FullBackgroundPunchCard({ card, onRedeem, redeeming }: FullBackgroundPunchCardProps) {
+export function FullBackgroundPunchCard({
+  card,
+  onRedeem,
+  redeeming,
+}: FullBackgroundPunchCardProps) {
   const config = card.punch_card;
   if (!config) return null;
 

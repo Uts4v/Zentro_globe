@@ -18,11 +18,7 @@ function withAlpha(color: string | undefined, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export function PremiumPunchCard({
-  card,
-  onRedeem,
-  redeeming,
-}: PremiumPunchCardProps) {
+export function PremiumPunchCard({ card, onRedeem, redeeming }: PremiumPunchCardProps) {
   const config = card.punch_card;
   if (!config) return null;
 
@@ -37,9 +33,10 @@ export function PremiumPunchCard({
     <article
       className="relative overflow-hidden rounded-[30px] border border-black/[0.04] bg-card p-5 dark:border-white/[0.07]"
       style={{
-        backgroundImage: config.animated_gif_background || config.background_image
-          ? `linear-gradient(120deg, rgba(255,255,255,0.93), rgba(255,255,255,0.78)), url(${config.animated_gif_background || config.background_image})`
-          : `linear-gradient(135deg, ${withAlpha(accent, 0.14)} 0%, rgba(255,255,255,0.96) 58%, ${withAlpha("#B7FF8A", 0.22)} 100%)`,
+        backgroundImage:
+          config.animated_gif_background || config.background_image
+            ? `linear-gradient(120deg, rgba(255,255,255,0.93), rgba(255,255,255,0.78)), url(${config.animated_gif_background || config.background_image})`
+            : `linear-gradient(135deg, ${withAlpha(accent, 0.14)} 0%, rgba(255,255,255,0.96) 58%, ${withAlpha("#B7FF8A", 0.22)} 100%)`,
         backgroundSize: "cover",
         backgroundPosition: "center",
         boxShadow: "0 22px 55px -38px rgba(31, 26, 54, 0.55)",
@@ -68,11 +65,7 @@ export function PremiumPunchCard({
           className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl text-white shadow-lg"
           style={{ background: accent }}
         >
-          {freeRewardReady ? (
-            <Gift className="h-5 w-5" />
-          ) : (
-            <Sparkles className="h-5 w-5" />
-          )}
+          {freeRewardReady ? <Gift className="h-5 w-5" /> : <Sparkles className="h-5 w-5" />}
         </div>
       </div>
 

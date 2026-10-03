@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { posGetSettings, posUpdateSettings, PosSettings } from "../api";
-import { Settings, Save, Loader2 } from "lucide-react";
+import { Settings, Save, Loader2, Trash2, Wifi, WifiOff } from "lucide-react";
+import { ClearCacheDialog } from "@/components/ClearCacheControl";
+import { useOnlineStatus } from "../offline/hooks";
 
 export default function PosSettingsScreen() {
   const posSettings = usePosStore((s) => s.posSettings);
@@ -9,6 +11,8 @@ export default function PosSettingsScreen() {
   const [settings, setSettings] = useState<PosSettings | null>(posSettings);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [clearCacheOpen, setClearCacheOpen] = useState(false);
+  const isOnline = useOnlineStatus();
 
   useEffect(() => {
     let cancelled = false;
@@ -142,58 +146,97 @@ export default function PosSettingsScreen() {
             </div>
             <label className="flex items-center justify-between">
               <span className="text-sm text-foreground">Offline Discounts Allowed</span>
-                <button
-                  role="switch"
-                  aria-checked={settings.offline_discounts_allowed}
-                  aria-label="Offline Discounts Allowed"
-                  onClick={() =>
-                    setSettings((s) =>
-                      s
-                        ? {
-                            ...s,
-                            offline_discounts_allowed: !s.offline_discounts_allowed,
-                          }
-                        : s,
-                    )
-                  }
-                  className={`relative h-6 w-11 rounded-full transition-colors ${
-                    settings.offline_discounts_allowed ? "bg-ink" : "bg-muted"
+              <button
+                role="switch"
+                aria-checked={settings.offline_discounts_allowed}
+                aria-label="Offline Discounts Allowed"
+                onClick={() =>
+                  setSettings((s) =>
+                    s
+                      ? {
+                          ...s,
+                          offline_discounts_allowed: !s.offline_discounts_allowed,
+                        }
+                      : s,
+                  )
+                }
+                className={`relative h-6 w-11 rounded-full transition-colors ${
+                  settings.offline_discounts_allowed ? "bg-ink" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-[left] ${
+                    settings.offline_discounts_allowed ? "left-[22px]" : "left-0.5"
                   }`}
-                >
-                  <span
-                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-[left] ${
-                      settings.offline_discounts_allowed ? "left-[22px]" : "left-0.5"
-                    }`}
-                  />
+                />
               </button>
             </label>
             <label className="flex items-center justify-between">
               <span className="text-sm text-foreground">Offline Credit Allowed</span>
-                <button
-                  role="switch"
-                  aria-checked={settings.offline_credit_allowed}
-                  aria-label="Offline Credit Allowed"
-                  onClick={() =>
-                    setSettings((s) =>
-                      s
-                        ? {
-                            ...s,
-                            offline_credit_allowed: !s.offline_credit_allowed,
-                          }
-                        : s,
-                    )
-                  }
-                  className={`relative h-6 w-11 rounded-full transition-colors ${
-                    settings.offline_credit_allowed ? "bg-ink" : "bg-muted"
+              <button
+                role="switch"
+                aria-checked={settings.offline_credit_allowed}
+                aria-label="Offline Credit Allowed"
+                onClick={() =>
+                  setSettings((s) =>
+                    s
+                      ? {
+                          ...s,
+                          offline_credit_allowed: !s.offline_credit_allowed,
+                        }
+                      : s,
+                  )
+                }
+                className={`relative h-6 w-11 rounded-full transition-colors ${
+                  settings.offline_credit_allowed ? "bg-ink" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-[left] ${
+                    settings.offline_credit_allowed ? "left-[22px]" : "left-0.5"
                   }`}
-                >
-                  <span
-                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-[left] ${
-                      settings.offline_credit_allowed ? "left-[22px]" : "left-0.5"
-                    }`}
-                  />
+                />
               </button>
             </label>
+          </div>
+        </section>
+
+        {/* System */}
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <h2 className="mb-4 text-sm font-bold text-foreground">System</h2>
+          <div className="space-y-4">
+            <div className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-muted/30 p-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">Clear app cache</p>
+                <p className="text-xs text-muted-foreground">
+                  Clears saved POS menu, cached files and service worker while keeping your session
+                  and any unsent offline orders safe.
+                </p>
+                <div className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
+                  {isOnline ? (
+                    <>
+                      <Wifi className="h-3.5 w-3.5 text-green-500" />
+                      <span>Available while online</span>
+                    </>
+                  ) : (
+                    <>
+                      <WifiOff className="h-3.5 w-3.5 text-amber-500" />
+                      <span className="text-amber-600">Needs internet connection</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClearCacheOpen(true)}
+                disabled={!isOnline}
+                title={!isOnline ? "Needs an internet connection to clear cache safely" : undefined}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-border bg-background px-3 text-xs font-semibold text-foreground shadow-sm transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Clear cache
+              </button>
+            </div>
           </div>
         </section>
 
@@ -207,6 +250,7 @@ export default function PosSettingsScreen() {
           {saved ? "Saved!" : "Save Settings"}
         </button>
       </div>
+      <ClearCacheDialog open={clearCacheOpen} onOpenChange={setClearCacheOpen} />
     </div>
   );
 }

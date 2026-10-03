@@ -18,7 +18,10 @@ clientsClaim();
 
 // ── Cache-first: static assets ────────────────────────────────────────────────
 registerRoute(
-  ({ request }) => request.destination === "style" || request.destination === "script" || request.destination === "worker",
+  ({ request }) =>
+    request.destination === "style" ||
+    request.destination === "script" ||
+    request.destination === "worker",
   new CacheFirst({
     cacheName: STATIC_CACHE,
     plugins: [
@@ -27,7 +30,7 @@ registerRoute(
       // be reopened offline.
       new ExpirationPlugin({ maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 }),
     ],
-  })
+  }),
 );
 
 // ── Cache-first: images ───────────────────────────────────────────────────────
@@ -35,21 +38,18 @@ registerRoute(
   ({ request }) => request.destination === "image",
   new CacheFirst({
     cacheName: "zentro-images-v1",
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 }),
-    ],
-  })
+    plugins: [new ExpirationPlugin({ maxEntries: 80, maxAgeSeconds: 60 * 60 * 24 * 30 })],
+  }),
 );
 
 // ── Cache-first: Google Fonts ─────────────────────────────────────────────────
 registerRoute(
-  ({ url }) => url.origin === "https://fonts.googleapis.com" || url.origin === "https://fonts.gstatic.com",
+  ({ url }) =>
+    url.origin === "https://fonts.googleapis.com" || url.origin === "https://fonts.gstatic.com",
   new CacheFirst({
     cacheName: "zentro-fonts-v1",
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 }),
-    ],
-  })
+    plugins: [new ExpirationPlugin({ maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 })],
+  }),
 );
 
 // ── Network-first: public API (merchant profiles, menus, etc.) ────────────────
@@ -66,10 +66,8 @@ registerRoute(
   new NetworkFirst({
     cacheName: "zentro-public-api-v1",
     networkTimeoutSeconds: 5,
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 30, maxAgeSeconds: 60 * 60 }),
-    ],
-  })
+    plugins: [new ExpirationPlugin({ maxEntries: 30, maxAgeSeconds: 60 * 60 })],
+  }),
 );
 
 // ── NEVER cache private routes ────────────────────────────────────────────────
@@ -82,10 +80,8 @@ registerRoute(
   new NetworkFirst({
     cacheName: NAVIGATION_CACHE,
     networkTimeoutSeconds: 10,
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 }),
-    ],
-  })
+    plugins: [new ExpirationPlugin({ maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 7 })],
+  }),
 );
 
 // Graceful fallback for navigation requests when network and cache both miss
@@ -130,7 +126,7 @@ setCatchHandler(async ({ request }) => {
 </html>`,
       {
         headers: { "Content-Type": "text/html; charset=utf-8" },
-      }
+      },
     );
   }
   return Response.error();
@@ -140,7 +136,14 @@ setCatchHandler(async ({ request }) => {
 self.addEventListener("push", (event) => {
   if (!event.data) return;
 
-  let payload: { title: string; body: string; icon?: string; badge?: string; url?: string; data?: any };
+  let payload: {
+    title: string;
+    body: string;
+    icon?: string;
+    badge?: string;
+    url?: string;
+    data?: any;
+  };
 
   try {
     payload = event.data.json();
@@ -158,9 +161,7 @@ self.addEventListener("push", (event) => {
     renotify: true,
   };
 
-  event.waitUntil(
-    self.registration.showNotification(payload.title || "Zentro", options)
-  );
+  event.waitUntil(self.registration.showNotification(payload.title || "Zentro", options));
 });
 
 // ── Notification click events ─────────────────────────────────────────────────
@@ -181,7 +182,7 @@ self.addEventListener("notificationclick", (event) => {
       }
       // Open new window
       return self.clients.openWindow(query);
-    })
+    }),
   );
 });
 

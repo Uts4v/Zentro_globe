@@ -53,11 +53,19 @@ for (const v of vectors) {
       assert.equal(line.lineTotal, lineExp.line_total, `${key}.line_total`);
     }
     if (exp.taxes) {
-      assert.deepEqual(result.taxes.map((t) => t.amount), exp.taxes);
+      assert.deepEqual(
+        result.taxes.map((t) => t.amount),
+        exp.taxes,
+      );
     }
     if (exp.messages) {
       assert.deepEqual(
-        result.messages.map((m) => ({ code: m.code, required: m.required, current: m.current, shortfall: m.shortfall })),
+        result.messages.map((m) => ({
+          code: m.code,
+          required: m.required,
+          current: m.current,
+          shortfall: m.shortfall,
+        })),
         exp.messages,
       );
     }
@@ -65,9 +73,15 @@ for (const v of vectors) {
 }
 
 test("tax components resolve like the backend", () => {
-  assert.deepEqual(resolveTaxComponents({ tax_enabled: false, tax_components: [{ name: "VAT", rate: 13 }] }), []);
+  assert.deepEqual(
+    resolveTaxComponents({ tax_enabled: false, tax_components: [{ name: "VAT", rate: 13 }] }),
+    [],
+  );
   assert.deepEqual(resolveTaxComponents({ tax_components: [], tax_rate_percent: "6.00" }), [
     { name: "VAT", rate: "6.00" },
   ]);
-  assert.deepEqual(resolveTaxComponents({ tax_components: [{ name: "VAT", rate: 0 }], tax_rate_percent: "6" }), []);
+  assert.deepEqual(
+    resolveTaxComponents({ tax_components: [{ name: "VAT", rate: 0 }], tax_rate_percent: "6" }),
+    [],
+  );
 });

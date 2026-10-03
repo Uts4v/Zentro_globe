@@ -37,9 +37,7 @@ export function ReportsTrendChart({
 }: ReportsTrendChartProps) {
   const [viewMetric, setViewMetric] = useState<"sales" | "orders" | "tax">("sales");
 
-  const hasTaxOrDiscount = data.some(
-    (d) => (d.tax ?? 0) > 0 || (d.discount ?? 0) > 0
-  );
+  const hasTaxOrDiscount = data.some((d) => (d.tax ?? 0) > 0 || (d.discount ?? 0) > 0);
   const totalSales = data.reduce((acc, d) => acc + (d.revenue || 0), 0);
   const totalOrders = data.reduce((acc, d) => acc + (d.orders || 0), 0);
   const hasData = data.some((d) => (d.revenue || 0) > 0 || (d.orders || 0) > 0);
@@ -171,8 +169,8 @@ export function ReportsTrendChart({
                   viewMetric === "orders"
                     ? `${val}`
                     : val >= 1000
-                    ? `${currencySymbol} ${(val / 1000).toFixed(0)}k`
-                    : `${currencySymbol} ${val}`
+                      ? `${currencySymbol} ${(val / 1000).toFixed(0)}k`
+                      : `${currencySymbol} ${val}`
                 }
               />
 

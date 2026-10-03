@@ -20,7 +20,8 @@ export function PunchCardProofModal({ card, onClose, onRedeemed }: Props) {
   const [timeLeft, setTimeLeft] = useState(0);
 
   useEffect(() => {
-    punchCardApi.generateProof(card.id)
+    punchCardApi
+      .generateProof(card.id)
       .then((data) => {
         setProofData(data);
         const expiresAt = new Date(data.expires_at).getTime();
@@ -62,9 +63,7 @@ export function PunchCardProofModal({ card, onClose, onRedeemed }: Props) {
             Show this to your merchant
           </p>
           <p className="font-display mt-2 text-3xl">Claim your reward</p>
-          {proofData && (
-            <p className="mt-1 text-sm text-white/70">{proofData.store_name}</p>
-          )}
+          {proofData && <p className="mt-1 text-sm text-white/70">{proofData.store_name}</p>}
         </div>
 
         {/* Proof code */}
@@ -96,7 +95,9 @@ export function PunchCardProofModal({ card, onClose, onRedeemed }: Props) {
 
               {/* Timer */}
               <div className="mt-4 flex items-center justify-center gap-2">
-                <span className={`h-2 w-2 rounded-full ${timeLeft > 60 ? "bg-emerald-500" : "bg-amber-500"} animate-pulse`} />
+                <span
+                  className={`h-2 w-2 rounded-full ${timeLeft > 60 ? "bg-emerald-500" : "bg-amber-500"} animate-pulse`}
+                />
                 <p className="text-sm text-muted-foreground">
                   Expires in{" "}
                   <span className={`font-medium ${timeLeft <= 60 ? "text-amber-600" : "text-ink"}`}>

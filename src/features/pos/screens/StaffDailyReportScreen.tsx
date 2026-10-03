@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
-import {
-  posStaffDailyReport,
-  posListWorkers,
-  PosStaffDailyReportData,
-  ShiftWorker,
-} from "../api";
+import { posStaffDailyReport, posListWorkers, PosStaffDailyReportData, ShiftWorker } from "../api";
 import {
   Users,
   Loader2,
@@ -32,9 +27,7 @@ export default function StaffDailyReportScreen() {
   const [workers, setWorkers] = useState<ShiftWorker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState(
-    dateParam || new Date().toISOString().split("T")[0]
-  );
+  const [dateFilter, setDateFilter] = useState(dateParam || new Date().toISOString().split("T")[0]);
   const [workerFilter, setWorkerFilter] = useState<string>(workerIdParam || "");
 
   useEffect(() => {
@@ -101,9 +94,7 @@ export default function StaffDailyReportScreen() {
           <Users className="h-5 w-5 text-ink" />
           <div>
             <h1 className="text-xl font-bold text-foreground">Staff Daily Report</h1>
-            <p className="text-xs text-muted-foreground">
-              Performance breakdown by staff member
-            </p>
+            <p className="text-xs text-muted-foreground">Performance breakdown by staff member</p>
           </div>
         </div>
         <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
@@ -194,29 +185,20 @@ export default function StaffDailyReportScreen() {
                   <tbody>
                     {data.staff.map((s, i) => {
                       const avgOrder =
-                        s.order_count > 0
-                          ? Number(s.total_revenue) / s.order_count
-                          : 0;
+                        s.order_count > 0 ? Number(s.total_revenue) / s.order_count : 0;
                       const revPct =
                         Number(data.totals.total_revenue) > 0
-                          ? (Number(s.total_revenue) /
-                              Number(data.totals.total_revenue)) *
-                            100
+                          ? (Number(s.total_revenue) / Number(data.totals.total_revenue)) * 100
                           : 0;
                       return (
-                        <tr
-                          key={s.worker_id}
-                          className="border-b border-border/50 last:border-0"
-                        >
+                        <tr key={s.worker_id} className="border-b border-border/50 last:border-0">
                           <td className="p-4">
                             <div className="flex items-center gap-3">
                               <div className="grid h-9 w-9 place-items-center rounded-full bg-ink text-xs font-bold text-white">
                                 {s.worker_name?.charAt(0) || "?"}
                               </div>
                               <div>
-                                <p className="font-medium text-foreground">
-                                  {s.worker_name}
-                                </p>
+                                <p className="font-medium text-foreground">{s.worker_name}</p>
                                 <p className="text-xs text-muted-foreground">
                                   {s.payment_count} payment{s.payment_count !== 1 ? "s" : ""} ·{" "}
                                   {revPct.toFixed(1)}% of revenue
@@ -224,12 +206,8 @@ export default function StaffDailyReportScreen() {
                               </div>
                             </div>
                           </td>
-                          <td className="p-4 text-right font-medium">
-                            {s.order_count}
-                          </td>
-                          <td className="p-4 text-right font-medium">
-                            {s.items_sold}
-                          </td>
+                          <td className="p-4 text-right font-medium">{s.order_count}</td>
+                          <td className="p-4 text-right font-medium">{s.items_sold}</td>
                           <td className="p-4 text-right font-bold text-foreground">
                             {formatCurrency(s.total_revenue, currencySymbol)}
                           </td>
@@ -266,31 +244,31 @@ export default function StaffDailyReportScreen() {
                       <td className="hidden p-4 text-right sm:table-cell">
                         {formatCurrency(
                           data.staff.reduce((s, w) => s + Number(w.cash_amount), 0),
-                          currencySymbol
+                          currencySymbol,
                         )}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
                         {formatCurrency(
                           data.staff.reduce((s, w) => s + Number(w.card_amount), 0),
-                          currencySymbol
+                          currencySymbol,
                         )}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
                         {formatCurrency(
                           data.staff.reduce((s, w) => s + Number(w.qr_amount ?? 0), 0),
-                          currencySymbol
+                          currencySymbol,
                         )}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
                         {formatCurrency(
                           data.staff.reduce((s, w) => s + Number(w.digital_amount ?? 0), 0),
-                          currencySymbol
+                          currencySymbol,
                         )}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
                         {formatCurrency(
                           data.staff.reduce((s, w) => s + Number(w.credit_amount), 0),
-                          currencySymbol
+                          currencySymbol,
                         )}
                       </td>
                       <td className="hidden p-4 text-right sm:table-cell">
@@ -306,10 +284,7 @@ export default function StaffDailyReportScreen() {
           {/* Per-staff detail cards (mobile) */}
           <div className="mt-6 space-y-3 sm:hidden">
             {data.staff.map((s) => (
-              <div
-                key={s.worker_id}
-                className="rounded-2xl border border-border bg-card p-4"
-              >
+              <div key={s.worker_id} className="rounded-2xl border border-border bg-card p-4">
                 <div className="mb-3 flex items-center gap-3">
                   <div className="grid h-10 w-10 place-items-center rounded-full bg-ink text-sm font-bold text-white">
                     {s.worker_name?.charAt(0) || "?"}

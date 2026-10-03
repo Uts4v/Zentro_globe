@@ -52,7 +52,7 @@ export function DashboardOrderChart({ data, currencySymbol = "Rs" }: DashboardOr
 
   const maxVal = Math.max(
     ...formattedData.map((d) => (metric === "orders" ? d.orders : d.revenue)),
-    1
+    1,
   );
 
   return (
@@ -84,9 +84,7 @@ export function DashboardOrderChart({ data, currencySymbol = "Rs" }: DashboardOr
           </button>
         </div>
 
-        <span className="text-[11px] text-muted-foreground">
-          Showing last {data.length} days
-        </span>
+        <span className="text-[11px] text-muted-foreground">Showing last {data.length} days</span>
       </div>
 
       {/* Chart Canvas */}
@@ -109,7 +107,12 @@ export function DashboardOrderChart({ data, currencySymbol = "Rs" }: DashboardOr
                     <stop offset="100%" stopColor="#E85D3A" stopOpacity="0.5" />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border/40" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="currentColor"
+                  className="text-border/40"
+                />
                 <XAxis
                   dataKey="displayDate"
                   tickLine={false}
@@ -138,7 +141,11 @@ export function DashboardOrderChart({ data, currencySymbol = "Rs" }: DashboardOr
                   {formattedData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
-                      fill={entry.orders === maxVal && maxVal > 0 ? "#E85D3A" : "url(#dashboard-bar-grad)"}
+                      fill={
+                        entry.orders === maxVal && maxVal > 0
+                          ? "#E85D3A"
+                          : "url(#dashboard-bar-grad)"
+                      }
                       opacity={entry.orders > 0 ? 0.95 : 0.25}
                     />
                   ))}
@@ -152,7 +159,12 @@ export function DashboardOrderChart({ data, currencySymbol = "Rs" }: DashboardOr
                     <stop offset="100%" stopColor="#E85D3A" stopOpacity="0.0" />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border/40" />
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="currentColor"
+                  className="text-border/40"
+                />
                 <XAxis
                   dataKey="displayDate"
                   tickLine={false}
@@ -166,7 +178,9 @@ export function DashboardOrderChart({ data, currencySymbol = "Rs" }: DashboardOr
                   tick={{ fontSize: 10, fill: "currentColor" }}
                   className="text-muted-foreground"
                   tickFormatter={(val) =>
-                    val >= 1000 ? `${currencySymbol} ${(val / 1000).toFixed(0)}k` : `${currencySymbol} ${val}`
+                    val >= 1000
+                      ? `${currencySymbol} ${(val / 1000).toFixed(0)}k`
+                      : `${currencySymbol} ${val}`
                   }
                 />
                 <Tooltip

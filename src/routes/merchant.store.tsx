@@ -1433,7 +1433,11 @@ function StoreConfig() {
                     disabled={savingLocation}
                     className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-full bg-ink text-sm font-medium text-primary-foreground disabled:opacity-50"
                   >
-                    {savingLocation ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {savingLocation ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
                     Save location
                   </button>
                   <button
@@ -1467,7 +1471,11 @@ function StoreConfig() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (window.confirm("Remove your map pin? You won't appear in Discover until you set it again.")) {
+                      if (
+                        window.confirm(
+                          "Remove your map pin? You won't appear in Discover until you set it again.",
+                        )
+                      ) {
                         void saveLocation(null);
                       }
                     }}

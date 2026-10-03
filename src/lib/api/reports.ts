@@ -253,34 +253,29 @@ function qs(params?: Record<string, any>): string {
 
 export const reportsApi = {
   sales: (params?: SalesReportParams) =>
-    djangoFetch<SalesReportResponse>(
-      apiUrl(`/pos/reports/sales/${qs(params)}`),
-      { headers: authHeaders() }
-    ),
+    djangoFetch<SalesReportResponse>(apiUrl(`/pos/reports/sales/${qs(params)}`), {
+      headers: authHeaders(),
+    }),
 
   fiscal: (params?: ReportDateParams) =>
-    djangoFetch<FiscalReportResponse>(
-      apiUrl(`/pos/reports/fiscal/${qs(params)}`),
-      { headers: authHeaders() }
-    ),
+    djangoFetch<FiscalReportResponse>(apiUrl(`/pos/reports/fiscal/${qs(params)}`), {
+      headers: authHeaders(),
+    }),
 
   items: (params?: ReportDateParams & { payment_method?: string; category?: string }) =>
-    djangoFetch<ItemAnalyticsResponse>(
-      apiUrl(`/pos/reports/items/${qs(params)}`),
-      { headers: authHeaders() }
-    ),
+    djangoFetch<ItemAnalyticsResponse>(apiUrl(`/pos/reports/items/${qs(params)}`), {
+      headers: authHeaders(),
+    }),
 
   payments: (params?: ReportDateParams) =>
-    djangoFetch<PaymentAnalyticsResponse>(
-      apiUrl(`/pos/reports/payments/${qs(params)}`),
-      { headers: authHeaders() }
-    ),
+    djangoFetch<PaymentAnalyticsResponse>(apiUrl(`/pos/reports/payments/${qs(params)}`), {
+      headers: authHeaders(),
+    }),
 
   analytics: (params?: ReportDateParams) =>
-    djangoFetch<EnhancedAnalyticsResponse>(
-      apiUrl(`/pos/reports/analytics/${qs(params)}`),
-      { headers: authHeaders() }
-    ),
+    djangoFetch<EnhancedAnalyticsResponse>(apiUrl(`/pos/reports/analytics/${qs(params)}`), {
+      headers: authHeaders(),
+    }),
 
   history: () =>
     djangoFetch<ReportHistoryItem[]>(apiUrl("/pos/reports/history/"), {

@@ -49,7 +49,9 @@ export function PersonalQR({ compact }: PersonalQRProps) {
       </div>
       <div className="flex min-w-0 items-center gap-2">
         <span className="text-xs text-muted-foreground">Code:</span>
-        <span className="min-w-0 truncate font-mono text-lg font-bold text-ink tracking-[0.15em] select-all">{transferCode}</span>
+        <span className="min-w-0 truncate font-mono text-lg font-bold text-ink tracking-[0.15em] select-all">
+          {transferCode}
+        </span>
         <button
           onClick={copyCode}
           className="grid h-8 w-8 place-items-center rounded-full bg-mist text-muted-foreground hover:text-ink transition-colors"

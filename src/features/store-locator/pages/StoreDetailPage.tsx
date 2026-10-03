@@ -54,7 +54,7 @@ export function StoreDetailPage() {
         is_available: i.is_available,
         image_url: i.image_url,
       })),
-    [items]
+    [items],
   );
 
   const total = cartTotal(cart, storeMenuItems);
@@ -110,7 +110,9 @@ export function StoreDetailPage() {
         <div className="px-5">
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error || "Store not found"}
-            <button onClick={load} className="ml-2 underline">Retry</button>
+            <button onClick={load} className="ml-2 underline">
+              Retry
+            </button>
           </div>
         </div>
       </MobileShell>
@@ -128,10 +130,7 @@ export function StoreDetailPage() {
     <MobileShell>
       {/* Today's Special popup — shown once per session per merchant */}
       {merchant.slug && (
-        <TodaySpecialPopup
-          slug={merchant.slug}
-          onOrderItem={handleOrderFromSpecial}
-        />
+        <TodaySpecialPopup slug={merchant.slug} onOrderItem={handleOrderFromSpecial} />
       )}
 
       <TopBar
@@ -153,14 +152,19 @@ export function StoreDetailPage() {
           </div>
         )}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-background/80 to-transparent p-4">
-          <h1 className="font-display text-2xl text-white drop-shadow-md">{merchant.business_name}</h1>
+          <h1 className="font-display text-2xl text-white drop-shadow-md">
+            {merchant.business_name}
+          </h1>
           <p className="text-xs text-white/80">{merchant.business_type}</p>
         </div>
         <span
-          className={`absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${merchant.is_open ? "bg-emerald-500/90 text-white" : "bg-black/40 text-white/80"
-            }`}
+          className={`absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+            merchant.is_open ? "bg-emerald-500/90 text-white" : "bg-black/40 text-white/80"
+          }`}
         >
-          <span className={`h-1.5 w-1.5 rounded-full ${merchant.is_open ? "bg-white" : "bg-white/50"}`} />
+          <span
+            className={`h-1.5 w-1.5 rounded-full ${merchant.is_open ? "bg-white" : "bg-white/50"}`}
+          />
           {merchant.is_open ? "Open" : "Closed"}
         </span>
       </div>
@@ -199,9 +203,13 @@ export function StoreDetailPage() {
                         {item.emoji || "🍽️"}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
+                        <p className="truncate text-sm font-semibold text-foreground">
+                          {item.name}
+                        </p>
                         {item.description && (
-                          <p className="line-clamp-1 text-xs text-muted-foreground">{item.description}</p>
+                          <p className="line-clamp-1 text-xs text-muted-foreground">
+                            {item.description}
+                          </p>
                         )}
                         <div className="mt-1 flex items-center gap-2">
                           <span className="font-display text-base text-foreground">
@@ -216,12 +224,13 @@ export function StoreDetailPage() {
                       </div>
                       <button
                         onClick={() => handleAdd(item)}
-                        className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all ${justAdded
-                          ? "bg-emerald-500 text-white scale-110"
-                          : inCart
-                            ? "bg-ink text-primary-foreground"
-                            : "glass hover:bg-ink hover:text-primary-foreground"
-                          }`}
+                        className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full transition-all ${
+                          justAdded
+                            ? "bg-emerald-500 text-white scale-110"
+                            : inCart
+                              ? "bg-ink text-primary-foreground"
+                              : "glass hover:bg-ink hover:text-primary-foreground"
+                        }`}
                       >
                         {justAdded ? (
                           <span className="text-sm">✓</span>

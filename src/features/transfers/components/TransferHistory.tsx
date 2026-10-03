@@ -32,9 +32,7 @@ export function TransferHistory({ merchantId, refreshKey }: TransferHistoryProps
     return (
       <div className="glass rounded-3xl py-10 text-center">
         <p className="text-3xl">📭</p>
-        <p className="mt-2 text-sm text-muted-foreground">
-          No transfers yet.
-        </p>
+        <p className="mt-2 text-sm text-muted-foreground">No transfers yet.</p>
       </div>
     );
   }
@@ -44,15 +42,10 @@ export function TransferHistory({ merchantId, refreshKey }: TransferHistoryProps
       {transactions.map((tx) => {
         const isSent = tx.transaction_type === "TRANSFER_SENT";
         return (
-          <div
-            key={tx.id}
-            className="glass flex items-center gap-4 rounded-2xl px-4 py-3"
-          >
+          <div key={tx.id} className="glass flex items-center gap-4 rounded-2xl px-4 py-3">
             <div
               className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${
-                isSent
-                  ? "bg-rose-100 text-rose-600"
-                  : "bg-emerald-100 text-emerald-600"
+                isSent ? "bg-rose-100 text-rose-600" : "bg-emerald-100 text-emerald-600"
               }`}
             >
               {isSent ? (
@@ -62,20 +55,17 @@ export function TransferHistory({ merchantId, refreshKey }: TransferHistoryProps
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-ink">
-                {isSent ? "Sent" : "Received"}
-              </p>
+              <p className="text-sm font-medium text-ink">{isSent ? "Sent" : "Received"}</p>
               <p className="text-xs text-muted-foreground truncate">
                 {tx.description || tx.merchant_name}
               </p>
             </div>
             <div className="text-right">
               <p
-                className={`text-sm font-semibold ${
-                  isSent ? "text-rose-600" : "text-emerald-600"
-                }`}
+                className={`text-sm font-semibold ${isSent ? "text-rose-600" : "text-emerald-600"}`}
               >
-                {isSent ? "" : "+"}{tx.points}
+                {isSent ? "" : "+"}
+                {tx.points}
               </p>
               <p className="text-[10px] text-muted-foreground">
                 {new Date(tx.created_at).toLocaleDateString()}

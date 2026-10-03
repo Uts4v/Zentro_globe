@@ -94,7 +94,16 @@ export interface OfflinePayment {
 
 export interface SyncQueueItem {
   id: string;
-  type: "order" | "payment" | "discount" | "credit_sale" | "credit_repayment" | "debit_topup" | "debit_purchase" | "debit_adjustment" | "order_status";
+  type:
+    | "order"
+    | "payment"
+    | "discount"
+    | "credit_sale"
+    | "credit_repayment"
+    | "debit_topup"
+    | "debit_purchase"
+    | "debit_adjustment"
+    | "order_status";
   endpoint: string;
   method: "POST" | "PATCH" | "PUT";
   body: Record<string, any>;

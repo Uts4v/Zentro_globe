@@ -24,7 +24,7 @@ export function CustomerAvatarUploader({
   onSaved,
   disabled,
 }: CustomerAvatarUploaderProps) {
-  const [saving, setSaving]       = useState(false);
+  const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
 
   async function handleUpload(publicUrl: string) {
@@ -52,7 +52,9 @@ export function CustomerAvatarUploader({
         body: JSON.stringify({ avatar_url: "" }),
       });
       onSaved?.("");
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
   }
 
   return (

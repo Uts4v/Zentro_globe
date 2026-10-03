@@ -58,13 +58,13 @@ database + WS + web push all originate from ONE call site: notifications/service
 
 ## Realtime channels used today (verified group/consumer table)
 
-| Channel layer group | Consumer | Source of data | Frontend consumer |
-|---|---|---|---|
-| `user_{user_id}` | `NotificationConsumer` | `Notification` rows + web push | `src/lib/ws.ts` + `useUnreadCount` |
-| `merchant_{merchant_id}_preparation_{preparation_area_id}` | `PreparationConsumer` | `OrderItem` (KDS lane) | `PreparationAreaFilter` map |
-| `merchant_{merchant_id}_preparation_all` | `PreparationConsumer` | `OrderItem` (all areas) | KDS "all" view |
-| `ws/notifications/` | — (HTTP→WS bootstrap) | — | `useNotificationsWs` |
-| `ws/preparation/merchant/{mid}/area/{area}` | — | — | KDS consumer |
+| Channel layer group                                        | Consumer               | Source of data                 | Frontend consumer                  |
+| ---------------------------------------------------------- | ---------------------- | ------------------------------ | ---------------------------------- |
+| `user_{user_id}`                                           | `NotificationConsumer` | `Notification` rows + web push | `src/lib/ws.ts` + `useUnreadCount` |
+| `merchant_{merchant_id}_preparation_{preparation_area_id}` | `PreparationConsumer`  | `OrderItem` (KDS lane)         | `PreparationAreaFilter` map        |
+| `merchant_{merchant_id}_preparation_all`                   | `PreparationConsumer`  | `OrderItem` (all areas)        | KDS "all" view                     |
+| `ws/notifications/`                                        | — (HTTP→WS bootstrap)  | —                              | `useNotificationsWs`               |
+| `ws/preparation/merchant/{mid}/area/{area}`                | —                      | —                              | KDS consumer                       |
 
 ## Realtime health flags (see health.md for full list)
 

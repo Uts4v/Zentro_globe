@@ -96,7 +96,9 @@ export function CustomerOrdersPage() {
       {orders.length === 0 ? (
         <div className="glass rounded-3xl py-20 text-center">
           <p className="text-4xl">🛍️</p>
-          <p className="mt-3 text-sm text-muted-foreground">No orders yet — place your first one!</p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            No orders yet — place your first one!
+          </p>
         </div>
       ) : (
         <>
@@ -138,7 +140,11 @@ export function CustomerOrdersPage() {
       {/* Cancel Confirmation Modal */}
       {confirmCancelId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div role="dialog" aria-modal="true" className="w-full max-w-sm rounded-3xl border border-border bg-background p-6 shadow-xl space-y-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-sm rounded-3xl border border-border bg-background p-6 shadow-xl space-y-4"
+          >
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
               <AlertTriangle className="h-6 w-6" />
             </div>
@@ -200,8 +206,12 @@ function OrderRow({
       <button onClick={onToggle} className="flex w-full items-center gap-4 p-5 text-left">
         <div className="flex-1">
           <div className="flex items-center gap-2">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">#{order.id}</p>
-            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase ${STATUS_COLOR[order.status]}`}>
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">
+              #{order.id}
+            </p>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium uppercase ${STATUS_COLOR[order.status]}`}
+            >
               {order.status}
             </span>
             {order.points_earned > 0 && order.status === "completed" && (
@@ -214,8 +224,12 @@ function OrderRow({
           <p className="text-xs text-muted-foreground">{date}</p>
         </div>
         <div className="text-right">
-          <p className="font-display text-xl text-foreground">NPR {Number(order.total_amount).toLocaleString()}</p>
-          <p className="mt-1 text-xs text-muted-foreground">{(order.items ?? []).length} item{(order.items ?? []).length !== 1 ? "s" : ""}</p>
+          <p className="font-display text-xl text-foreground">
+            NPR {Number(order.total_amount).toLocaleString()}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {(order.items ?? []).length} item{(order.items ?? []).length !== 1 ? "s" : ""}
+          </p>
         </div>
         {expanded ? (
           <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -234,17 +248,20 @@ function OrderRow({
                 <div key={label} className="flex flex-1 items-center">
                   <div className="flex flex-col items-center">
                     <div
-                      className={`h-6 w-6 rounded-full text-[10px] font-bold grid place-items-center transition-colors ${i <= step
+                      className={`h-6 w-6 rounded-full text-[10px] font-bold grid place-items-center transition-colors ${
+                        i <= step
                           ? "bg-ink text-primary-foreground"
                           : "bg-mist text-muted-foreground"
-                        }`}
+                      }`}
                     >
                       {i < step ? "✓" : i + 1}
                     </div>
                     <span className="mt-1 text-[9px] text-muted-foreground">{label}</span>
                   </div>
                   {i < STEPS.length - 1 && (
-                    <div className={`h-0.5 flex-1 mx-1 rounded transition-colors ${i < step ? "bg-ink" : "bg-mist"}`} />
+                    <div
+                      className={`h-0.5 flex-1 mx-1 rounded transition-colors ${i < step ? "bg-ink" : "bg-mist"}`}
+                    />
                   )}
                 </div>
               ))}
@@ -255,8 +272,12 @@ function OrderRow({
           <ul className="space-y-1.5">
             {(order.items ?? []).map((item) => (
               <li key={item.id} className="flex justify-between text-sm">
-                <span className="text-foreground">{item.quantity}× {item.name}</span>
-                <span className="text-muted-foreground">NPR {Number(item.subtotal).toLocaleString()}</span>
+                <span className="text-foreground">
+                  {item.quantity}× {item.name}
+                </span>
+                <span className="text-muted-foreground">
+                  NPR {Number(item.subtotal).toLocaleString()}
+                </span>
               </li>
             ))}
           </ul>

@@ -3,15 +3,7 @@ import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
 import { posWorkerLogin, ShiftWorker } from "../api";
 import { usePosCartPricing } from "../pricing";
-import {
-  X,
-  Percent,
-  DollarSign,
-  Lock,
-  AlertTriangle,
-  Check,
-  Loader2,
-} from "lucide-react";
+import { X, Percent, DollarSign, Lock, AlertTriangle, Check, Loader2 } from "lucide-react";
 
 interface DiscountModalProps {
   open: boolean;
@@ -55,12 +47,8 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
   if (!open) return null;
 
   const numValue = parseFloat(value) || 0;
-  const maxDiscount = posSettings
-    ? parseFloat(posSettings.max_worker_discount_percent)
-    : 0;
-  const approvalThreshold = posSettings
-    ? parseFloat(posSettings.manager_approval_threshold)
-    : 0;
+  const maxDiscount = posSettings ? parseFloat(posSettings.max_worker_discount_percent) : 0;
+  const approvalThreshold = posSettings ? parseFloat(posSettings.manager_approval_threshold) : 0;
 
   const exceedsLimit =
     type === "percentage"
@@ -144,9 +132,7 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
 
           {/* Manager selection */}
           <div className="mb-3">
-            <label className="mb-1 block text-xs font-medium text-muted-foreground">
-              Manager
-            </label>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">Manager</label>
             <select
               onChange={(e) => {
                 const workers = usePosStore.getState().workers;
@@ -184,9 +170,7 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
           </div>
 
           {managerError && (
-            <p className="mb-3 text-center text-xs text-destructive">
-              {managerError}
-            </p>
+            <p className="mb-3 text-center text-xs text-destructive">{managerError}</p>
           )}
 
           <div className="flex gap-2">
@@ -206,11 +190,7 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
               disabled={!managerWorker || managerPin.length < 4 || verifyingManager}
               className="flex-1 rounded-xl bg-ink py-2.5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-40"
             >
-              {verifyingManager ? (
-                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
-              ) : (
-                "Approve"
-              )}
+              {verifyingManager ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Approve"}
             </button>
           </div>
         </div>
@@ -288,9 +268,7 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
             />
           </div>
           {type === "percentage" && maxDiscount > 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Your limit: {maxDiscount}%
-            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Your limit: {maxDiscount}%</p>
           )}
         </div>
 
@@ -313,18 +291,13 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
           <div className="mb-4 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-700">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
-              This discount exceeds your limit. A manager will need to approve
-              it with their PIN.
+              This discount exceeds your limit. A manager will need to approve it with their PIN.
             </p>
           </div>
         )}
 
         {/* Error */}
-        {error && (
-          <div className="mb-4 rounded-xl bg-red-50 p-3 text-xs text-red-600">
-            {error}
-          </div>
-        )}
+        {error && <div className="mb-4 rounded-xl bg-red-50 p-3 text-xs text-red-600">{error}</div>}
 
         {/* Submit */}
         <button

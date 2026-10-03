@@ -82,7 +82,9 @@ export const MERCHANT_THEME_PRESETS: MerchantThemePreset[] = [
   },
 ];
 
-export function resolveMerchantPreset(businessType: string | null | undefined): MerchantThemePreset | null {
+export function resolveMerchantPreset(
+  businessType: string | null | undefined,
+): MerchantThemePreset | null {
   if (!businessType) return null;
   const lower = businessType.toLowerCase();
   return MERCHANT_THEME_PRESETS.find((p) => lower.includes(p.businessType)) ?? null;

@@ -97,7 +97,9 @@ export default function PaymentQrModal({
             ) : (
               <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-6 text-sm text-amber-800">
                 <p className="font-semibold">
-                  {imageFailed ? "The QR code image couldn't be loaded." : "No payment QR code set up yet."}
+                  {imageFailed
+                    ? "The QR code image couldn't be loaded."
+                    : "No payment QR code set up yet."}
                 </p>
                 <p className="mt-1 text-xs">
                   Add one in Merchant → Settings → Payment QR Code. You can still record a QR
@@ -127,7 +129,11 @@ export default function PaymentQrModal({
             disabled={confirming}
             className="flex flex-[2] items-center justify-center gap-2 rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
           >
-            {confirming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+            {confirming ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
             Payment Received
           </button>
         </div>

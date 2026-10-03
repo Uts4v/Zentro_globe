@@ -24,8 +24,8 @@ export interface UploadResult {
 export async function uploadImage(
   file: File,
   preset: ImagePreset,
-  _bucket: string,        // kept for API compat — not used with Django
-  storagePath: string     // used as the filename hint
+  _bucket: string, // kept for API compat — not used with Django
+  storagePath: string, // used as the filename hint
 ): Promise<UploadResult> {
   const { blob } = await optimizeImage(file, preset);
 
@@ -57,7 +57,10 @@ export async function uploadMerchantBanner(file: File, merchantId: string): Prom
 }
 
 /** @deprecated Use {@link uploadPaymentQr} - it posts to the payment-QR endpoint. */
-export async function uploadMerchantPaymentQr(file: File, merchantId: string): Promise<UploadResult> {
+export async function uploadMerchantPaymentQr(
+  file: File,
+  merchantId: string,
+): Promise<UploadResult> {
   return { publicUrl: await uploadPaymentQr(file), path: `${merchantId}/payment_qr` };
 }
 
@@ -65,7 +68,11 @@ export async function uploadCustomerProfile(file: File, customerId: string): Pro
   return uploadImage(file, "profile", "customer-images", `${customerId}/profile`);
 }
 
-export async function uploadProductImage(file: File, merchantId: string, productId: string): Promise<UploadResult> {
+export async function uploadProductImage(
+  file: File,
+  merchantId: string,
+  productId: string,
+): Promise<UploadResult> {
   return uploadImage(file, "product", "product-images", `${merchantId}/${productId}`);
 }
 
@@ -104,10 +111,7 @@ const QR_ACCEPTED_TYPES = [
  */
 function preflightPaymentQr(file: File): void {
   const type = (file.type || "").toLowerCase();
-  const isSvg =
-    type === "image/svg+xml" ||
-    type === "image/svg" ||
-    /\.svg$/i.test(file.name || "");
+  const isSvg = type === "image/svg+xml" || type === "image/svg" || /\.svg$/i.test(file.name || "");
 
   if (type && !QR_ACCEPTED_TYPES.includes(type) && !isSvg) {
     throw new Error(
@@ -150,6 +154,6 @@ export async function deleteImage(_bucket: string, _path: string): Promise<void>
 export const BUCKETS = {
   merchant: "merchant-images",
   customer: "customer-images",
-  product:  "product-images",
-  banner:   "banner-images",
+  product: "product-images",
+  banner: "banner-images",
 } as const;

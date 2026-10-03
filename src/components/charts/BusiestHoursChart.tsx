@@ -76,7 +76,8 @@ export function BusiestHoursChart({ hours }: BusiestHoursChartProps) {
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 text-ember" />
-            Peak: <strong className="text-foreground">{peakHour.label}</strong> ({peakHour.orders} orders)
+            Peak: <strong className="text-foreground">{peakHour.label}</strong> ({peakHour.orders}{" "}
+            orders)
           </span>
           <span>{totalCount} total orders</span>
         </div>
@@ -92,7 +93,12 @@ export function BusiestHoursChart({ hours }: BusiestHoursChartProps) {
         <div className="h-36 w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={formattedHours} margin={{ top: 5, right: 5, left: -25, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="currentColor" className="text-border/30" />
+              <CartesianGrid
+                strokeDasharray="3 3"
+                vertical={false}
+                stroke="currentColor"
+                className="text-border/30"
+              />
               <XAxis
                 dataKey="label"
                 interval={2}

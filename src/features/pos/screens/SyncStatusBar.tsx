@@ -56,9 +56,7 @@ export default function SyncStatusBar() {
       ) : !isOnline ? (
         <>
           <WifiOff className="h-3.5 w-3.5" />
-          <span>
-            Offline — {waiting === 0 ? "nothing to sync" : `${waiting} waiting to sync`}
-          </span>
+          <span>Offline — {waiting === 0 ? "nothing to sync" : `${waiting} waiting to sync`}</span>
         </>
       ) : needsSignIn ? (
         <>

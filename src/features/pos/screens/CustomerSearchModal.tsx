@@ -15,10 +15,7 @@ const TIER_COLORS: Record<string, string> = {
   platinum: "bg-purple-100 text-purple-700",
 };
 
-export default function CustomerSearchModal({
-  onSelect,
-  onClose,
-}: CustomerSearchModalProps) {
+export default function CustomerSearchModal({ onSelect, onClose }: CustomerSearchModalProps) {
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 350);
   const [results, setResults] = useState<PosCustomer[]>([]);
@@ -85,8 +82,7 @@ export default function CustomerSearchModal({
       })
       .catch((err) => {
         setCreateError(
-          (err as { data?: { error?: string } })?.data?.error ||
-            "Could not add customer"
+          (err as { data?: { error?: string } })?.data?.error || "Could not add customer",
         );
         setCreating(false);
       });
@@ -147,9 +143,7 @@ export default function CustomerSearchModal({
             </p>
           ) : results.length === 0 && !loading ? (
             <div className="py-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                No customers found
-              </p>
+              <p className="text-sm text-muted-foreground">No customers found</p>
               <button
                 onClick={() => {
                   setShowNewForm(true);
@@ -195,9 +189,7 @@ export default function CustomerSearchModal({
                       </span>
                       <span className="text-xs text-muted-foreground">
                         {customer.total_orders}{" "}
-                        {customer.total_orders === 1
-                          ? "previous order"
-                          : "previous orders"}
+                        {customer.total_orders === 1 ? "previous order" : "previous orders"}
                       </span>
                       {customer.membership_number && (
                         <span className="rounded bg-ink/10 px-1.5 py-0.5 text-xs font-mono font-bold text-ink">
@@ -242,13 +234,9 @@ export default function CustomerSearchModal({
                 ) : (
                   <Check className="h-4 w-4" strokeWidth={2.5} />
                 )}
-                {creating
-                  ? "Adding..."
-                  : `Link ${newName.trim() || "Walk-in Customer"}`}
+                {creating ? "Adding..." : `Link ${newName.trim() || "Walk-in Customer"}`}
               </button>
-              {createError && (
-                <p className="text-xs font-medium text-red-500">{createError}</p>
-              )}
+              {createError && <p className="text-xs font-medium text-red-500">{createError}</p>}
             </div>
           ) : (
             <button

@@ -124,18 +124,18 @@ export function AnalyticsTrendChart({
       ) : !hasData ? (
         <div className="flex h-56 flex-col items-center justify-center rounded-2xl bg-mist/30 px-4 text-center">
           <Calendar className="mb-2 h-8 w-8 text-muted-foreground/40" />
-          <p className="font-display text-base text-foreground">No orders or revenue in this period</p>
+          <p className="font-display text-base text-foreground">
+            No orders or revenue in this period
+          </p>
           <p className="mt-1 max-w-sm text-xs text-muted-foreground">
-            Try choosing a broader date range such as This Month or This Year from the date selector above.
+            Try choosing a broader date range such as This Month or This Year from the date selector
+            above.
           </p>
         </div>
       ) : (
         <div className="h-56 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart
-              data={formattedData}
-              margin={{ top: 10, right: 10, left: 0, bottom: 0 }}
-            >
+            <ComposedChart data={formattedData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="analytics-rev-gradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#E85D3A" stopOpacity="0.45" />
@@ -216,7 +216,9 @@ export function AnalyticsTrendChart({
                   stroke="#E85D3A"
                   strokeWidth={2.5}
                   fill="url(#analytics-rev-gradient)"
-                  dot={formattedData.length <= 15 ? { r: 3, fill: "#E85D3A", strokeWidth: 0 } : false}
+                  dot={
+                    formattedData.length <= 15 ? { r: 3, fill: "#E85D3A", strokeWidth: 0 } : false
+                  }
                   activeDot={{ r: 6, fill: "#E85D3A", stroke: "#FFFFFF", strokeWidth: 2 }}
                 />
               )}

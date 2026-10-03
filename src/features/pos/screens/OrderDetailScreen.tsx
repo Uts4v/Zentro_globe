@@ -311,8 +311,7 @@ export default function OrderDetailScreen({
             ...kotFromOrder(order, merchant),
             merchantLogoUrl: merchantLogoUrl ?? null,
           });
-        }
-        else toast.error(err?.message || "Could not load the KOT.");
+        } else toast.error(err?.message || "Could not load the KOT.");
       }
     } catch {
       toast.error("Could not print the KOT.");
@@ -575,25 +574,27 @@ export default function OrderDetailScreen({
                     <p className="text-sm font-bold text-ink">
                       {formatCurrency(Number(item.subtotal), currencySymbol)}
                     </p>
-                    {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && !isLocalOrder(order) && (
-                      <button
-                        type="button"
-                        disabled={isOffline}
-                        onClick={() => {
-                          setSelectedMinusItem({
-                            name: item.name,
-                            menu_item_id: (item as any).menu_item_id ?? null,
-                            quantity: item.quantity,
-                          });
-                          setShowMinusStock(true);
-                        }}
-                        title={isOffline ? NEEDS_CONNECTION : "Minus stock for this item"}
-                        className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-                      >
-                        <PackageMinus className="h-3.5 w-3.5" />
-                        <span>Minus Stock</span>
-                      </button>
-                    )}
+                    {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) &&
+                      order.status !== "cancelled" &&
+                      !isLocalOrder(order) && (
+                        <button
+                          type="button"
+                          disabled={isOffline}
+                          onClick={() => {
+                            setSelectedMinusItem({
+                              name: item.name,
+                              menu_item_id: (item as any).menu_item_id ?? null,
+                              quantity: item.quantity,
+                            });
+                            setShowMinusStock(true);
+                          }}
+                          title={isOffline ? NEEDS_CONNECTION : "Minus stock for this item"}
+                          className="flex items-center gap-1 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 py-1.5 text-xs font-semibold text-destructive hover:bg-destructive/20 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          <PackageMinus className="h-3.5 w-3.5" />
+                          <span>Minus Stock</span>
+                        </button>
+                      )}
                   </div>
                 </div>
               ))}
@@ -642,21 +643,23 @@ export default function OrderDetailScreen({
             )}
 
             {/* Minus Stock button for Dine-In orders */}
-            {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) && order.status !== "cancelled" && !isLocalOrder(order) && (
-              <button
-                type="button"
-                disabled={isOffline}
-                title={isOffline ? NEEDS_CONNECTION : undefined}
-                onClick={() => {
-                  setSelectedMinusItem(null);
-                  setShowMinusStock(true);
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 py-3 text-sm font-bold text-destructive transition-colors hover:bg-destructive/20 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <PackageMinus className="h-4 w-4" />
-                Minus Stock
-              </button>
-            )}
+            {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) &&
+              order.status !== "cancelled" &&
+              !isLocalOrder(order) && (
+                <button
+                  type="button"
+                  disabled={isOffline}
+                  title={isOffline ? NEEDS_CONNECTION : undefined}
+                  onClick={() => {
+                    setSelectedMinusItem(null);
+                    setShowMinusStock(true);
+                  }}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 py-3 text-sm font-bold text-destructive transition-colors hover:bg-destructive/20 shadow-sm disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <PackageMinus className="h-4 w-4" />
+                  Minus Stock
+                </button>
+              )}
 
             {/* Status transition buttons */}
             {canEditOrders && getNextActions(order.status).length > 0 && (
@@ -731,20 +734,21 @@ export default function OrderDetailScreen({
                   Refund
                 </button>
               )}
-              {!["cancelled", "completed", "refunded"].includes(order.status) && canCancelOrders && (
-                <button
-                  onClick={() => {
-                    if (window.confirm("Are you sure you want to cancel this order?")) {
-                      handleStatusChange(order, "cancelled");
-                    }
-                  }}
-                  disabled={statusLoading || isOffline}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/30 py-3 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Cancel Order
-                </button>
-              )}
+              {!["cancelled", "completed", "refunded"].includes(order.status) &&
+                canCancelOrders && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm("Are you sure you want to cancel this order?")) {
+                        handleStatusChange(order, "cancelled");
+                      }
+                    }}
+                    disabled={statusLoading || isOffline}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-destructive/30 py-3 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Cancel Order
+                  </button>
+                )}
             </div>
           </div>
         </div>
@@ -915,9 +919,9 @@ export default function OrderDetailScreen({
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-bold text-foreground">
-                        <span className="text-sm font-bold text-foreground">
-                          {orderNumber(order)}
-                        </span>
+                          <span className="text-sm font-bold text-foreground">
+                            {orderNumber(order)}
+                          </span>
                         </span>
                         {isOfflineOrder &&
                           (syncFailed ? (

@@ -304,9 +304,7 @@ export function MembershipCardDetail({ merchantSlug }: { merchantSlug: string })
                 </div>
               ) : (
                 <div className="flex flex-col items-center gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    No transfer code available
-                  </p>
+                  <p className="text-sm text-muted-foreground">No transfer code available</p>
                   <button
                     onClick={() => setShowQr(false)}
                     className="rounded-full bg-ember px-4 py-2 text-xs font-medium text-white active:scale-95"
@@ -440,7 +438,9 @@ export function MembershipCardDetail({ merchantSlug }: { merchantSlug: string })
                         </div>
                         <p className="mt-0.5 text-[11px] text-muted-foreground">{m.description}</p>
                         {m.linked_menu_item_name && (
-                          <p className="mt-1 text-[11px] font-medium text-ember">Buy {m.linked_menu_item_name} {m.target_count}x</p>
+                          <p className="mt-1 text-[11px] font-medium text-ember">
+                            Buy {m.linked_menu_item_name} {m.target_count}x
+                          </p>
                         )}
                         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-mist">
                           <div

@@ -6,12 +6,7 @@ import { membershipCardApi, type MembershipCard } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { QRCodeSVG } from "qrcode.react";
 import { LoyaltyCard } from "@/components/LoyaltyCard";
-import {
-  QrCode,
-  ChevronRight,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { QrCode, ChevronRight, Sparkles, X } from "lucide-react";
 
 /* ── Card peek height constants (px) ───────────────────────────────────── */
 
@@ -421,4 +416,3 @@ export function MembershipCardStack() {
     </section>
   );
 }
-

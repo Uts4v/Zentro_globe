@@ -57,6 +57,6 @@ flowchart TB
 ```
 
 > Coupling flag: loyalty awarding + mission progress + punch are triggered from
-> **orders** on confirm. Loyalty engine then *reads* those orders to build missions,
+> **orders** on confirm. Loyalty engine then _reads_ those orders to build missions,
 > punch cards, leaderboard, streak. This is a control-flow inversion — see `health.md`
 > dependency risk #ORD-LOY.

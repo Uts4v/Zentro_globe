@@ -19,9 +19,27 @@ const MOVEMENT_TYPES: Array<{
   icon: React.ComponentType<{ className?: string }>;
   color: string;
 }> = [
-  { key: "payin", label: "Pay-in", description: "Cash added to drawer", icon: ArrowDownToLine, color: "bg-green-100 text-green-700" },
-  { key: "payout", label: "Pay-out", description: "Cash removed from drawer", icon: ArrowUpFromLine, color: "bg-red-100 text-red-700" },
-  { key: "cashdrop", label: "Cash Drop", description: "Bank deposit from drawer", icon: Landmark, color: "bg-blue-100 text-blue-700" },
+  {
+    key: "payin",
+    label: "Pay-in",
+    description: "Cash added to drawer",
+    icon: ArrowDownToLine,
+    color: "bg-green-100 text-green-700",
+  },
+  {
+    key: "payout",
+    label: "Pay-out",
+    description: "Cash removed from drawer",
+    icon: ArrowUpFromLine,
+    color: "bg-red-100 text-red-700",
+  },
+  {
+    key: "cashdrop",
+    label: "Cash Drop",
+    description: "Bank deposit from drawer",
+    icon: Landmark,
+    color: "bg-blue-100 text-blue-700",
+  },
 ];
 
 export default function CashMovementModal({ open, onClose, onRecorded }: CashMovementModalProps) {
@@ -81,11 +99,20 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
       onClick={onClose}
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div className="relative w-full max-w-md rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="relative w-full max-w-md rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
-          <h3 id="cash-movement-title" className="text-base font-bold text-foreground">Record Cash Movement</h3>
-          <button aria-label="Close" onClick={onClose} className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted">
+          <h3 id="cash-movement-title" className="text-base font-bold text-foreground">
+            Record Cash Movement
+          </h3>
+          <button
+            aria-label="Close"
+            onClick={onClose}
+            className="grid h-9 w-9 place-items-center rounded-full text-muted-foreground hover:bg-muted"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -112,7 +139,9 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
 
         {/* Amount */}
         <div className="px-6 pb-3">
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Amount ({currencySymbol})</label>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            Amount ({currencySymbol})
+          </label>
           <input
             type="number"
             value={amount}
@@ -140,15 +169,19 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
 
         {/* Reason */}
         <div className="px-6 pb-4">
-          <label className="mb-1 block text-xs font-medium text-muted-foreground">Reason (optional)</label>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            Reason (optional)
+          </label>
           <input
             type="text"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             placeholder={
-              type === "payout" ? "e.g. Bought cigarettes for customer" :
-              type === "payin" ? "e.g. Added personal cash to drawer" :
-              "e.g. End of shift bank deposit"
+              type === "payout"
+                ? "e.g. Bought cigarettes for customer"
+                : type === "payin"
+                  ? "e.g. Added personal cash to drawer"
+                  : "e.g. End of shift bank deposit"
             }
             className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
           />
@@ -167,9 +200,14 @@ export default function CashMovementModal({ open, onClose, onRecorded }: CashMov
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3.5 text-sm font-bold text-white transition-colors hover:opacity-90 disabled:opacity-40"
           >
             {loading ? (
-              <><Loader2 className="h-4 w-4 animate-spin" /> Recording...</>
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Recording...
+              </>
             ) : (
-              <>Record {type === "payout" ? "Pay-out" : type === "payin" ? "Pay-in" : "Cash Drop"} — {formatCurrency(amt, currencySymbol)}</>
+              <>
+                Record {type === "payout" ? "Pay-out" : type === "payin" ? "Pay-in" : "Cash Drop"} —{" "}
+                {formatCurrency(amt, currencySymbol)}
+              </>
             )}
           </button>
         </div>

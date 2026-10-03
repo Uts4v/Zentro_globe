@@ -14,12 +14,12 @@ interface PresetConfig {
 }
 
 const PRESETS: Record<ImagePreset, PresetConfig> = {
-  profile: { maxWidth: 300,  maxHeight: 300,  quality: 0.82, maxBytes: 150_000 },
-  logo:    { maxWidth: 500,  maxHeight: 500,  quality: 0.82, maxBytes: 250_000 },
-  product: { maxWidth: 800,  maxHeight: 800,  quality: 0.80, maxBytes: 300_000 },
-  banner:  { maxWidth: 1200, maxHeight: 500,  quality: 0.78, maxBytes: 450_000 },
+  profile: { maxWidth: 300, maxHeight: 300, quality: 0.82, maxBytes: 150_000 },
+  logo: { maxWidth: 500, maxHeight: 500, quality: 0.82, maxBytes: 250_000 },
+  product: { maxWidth: 800, maxHeight: 800, quality: 0.8, maxBytes: 300_000 },
+  banner: { maxWidth: 1200, maxHeight: 500, quality: 0.78, maxBytes: 450_000 },
   // Payment QR codes must stay sharp enough to scan: bigger and near-lossless.
-  qr:      { maxWidth: 1000, maxHeight: 1000, quality: 0.95, maxBytes: 900_000 },
+  qr: { maxWidth: 1000, maxHeight: 1000, quality: 0.95, maxBytes: 900_000 },
 };
 
 /** Allowed input MIME types. */
@@ -44,10 +44,7 @@ export interface OptimizeResult {
  * // result.blob   → upload to Supabase Storage
  * // result.previewUrl → show <img src={result.previewUrl} />
  */
-export async function optimizeImage(
-  file: File,
-  preset: ImagePreset
-): Promise<OptimizeResult> {
+export async function optimizeImage(file: File, preset: ImagePreset): Promise<OptimizeResult> {
   // ── 1. Validate ──────────────────────────────────────────────────────────
   if (!ALLOWED_TYPES.has(file.type)) {
     throw new Error(`Unsupported file type "${file.type}". Please upload a JPG, PNG, or WebP.`);
@@ -64,9 +61,9 @@ export async function optimizeImage(
   // ── 3. Calculate target dimensions (contain, no upscale) ─────────────────
   const { width: srcW, height: srcH } = bitmap;
   const scale = Math.min(
-    1,                          // never upscale
-    cfg.maxWidth  / srcW,
-    cfg.maxHeight / srcH
+    1, // never upscale
+    cfg.maxWidth / srcW,
+    cfg.maxHeight / srcH,
   );
   const dstW = Math.round(srcW * scale);
   const dstH = Math.round(srcH * scale);
@@ -80,7 +77,7 @@ export async function optimizeImage(
     ctx = canvas.getContext("2d") as OffscreenCanvasRenderingContext2D;
   } else {
     canvas = document.createElement("canvas");
-    (canvas as HTMLCanvasElement).width  = dstW;
+    (canvas as HTMLCanvasElement).width = dstW;
     (canvas as HTMLCanvasElement).height = dstH;
     ctx = (canvas as HTMLCanvasElement).getContext("2d") as CanvasRenderingContext2D;
   }
@@ -95,7 +92,7 @@ export async function optimizeImage(
   for (let attempt = 0; attempt < 6; attempt++) {
     blob = await canvasToBlob(canvas, "image/webp", quality);
     if (blob.size <= cfg.maxBytes) break;
-    quality = Math.max(0.40, quality - 0.08);
+    quality = Math.max(0.4, quality - 0.08);
   }
 
   blob = blob!;
@@ -121,14 +118,14 @@ export async function optimizeImage(
 function canvasToBlob(
   canvas: HTMLCanvasElement | OffscreenCanvas,
   type: string,
-  quality: number
+  quality: number,
 ): Promise<Blob> {
   if (canvas instanceof HTMLCanvasElement) {
     return new Promise((resolve, reject) => {
       canvas.toBlob(
         (b) => (b ? resolve(b) : reject(new Error("Canvas toBlob failed"))),
         type,
-        quality
+        quality,
       );
     });
   }

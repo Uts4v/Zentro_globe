@@ -1,4 +1,4 @@
-﻿// routes/orders.$id.tsx 
+﻿// routes/orders.$id.tsx
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { type OrderStatus } from "@/lib/store";
 import { MobileShell, TopBar } from "@/components/MobileShell";
@@ -106,7 +106,9 @@ function OrderPage() {
         <div className="px-5">
           <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
             {error || "Order not found"}
-            <button onClick={load} className="ml-2 underline">Retry</button>
+            <button onClick={load} className="ml-2 underline">
+              Retry
+            </button>
           </div>
         </div>
       </MobileShell>
@@ -137,19 +139,20 @@ function OrderPage() {
         <h1 className="font-display mt-1 text-4xl text-foreground">
           {isCancelled ? "Order cancelled" : isCompleted ? "Enjoy your order" : "We're on it"}
         </h1>
-        {merchantName && (
-          <p className="mt-1 text-sm text-muted-foreground">from {merchantName}</p>
-        )}
+        {merchantName && <p className="mt-1 text-sm text-muted-foreground">from {merchantName}</p>}
 
         {/* Live status message */}
-        <div className={`mt-4 rounded-2xl px-4 py-3 text-sm transition-all ${justUpdated
-            ? "bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200"
-            : isCancelled
-              ? "bg-rose-50 text-rose-700"
-              : isCompleted
-                ? "bg-emerald-50 text-emerald-700"
-                : "bg-ember-soft text-foreground"
-          }`}>
+        <div
+          className={`mt-4 rounded-2xl px-4 py-3 text-sm transition-all ${
+            justUpdated
+              ? "bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200"
+              : isCancelled
+                ? "bg-rose-50 text-rose-700"
+                : isCompleted
+                  ? "bg-emerald-50 text-emerald-700"
+                  : "bg-ember-soft text-foreground"
+          }`}
+        >
           {justUpdated && <span className="mr-1.5">✨</span>}
           {STATUS_MESSAGE[order.status]}
         </div>
@@ -165,10 +168,11 @@ function OrderPage() {
                 const active = i === currentIdx && !isCompleted;
                 return (
                   <li key={s.key} className="flex items-center gap-4">
-                    <div className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg transition-all duration-500 ${done
-                        ? "bg-ink text-primary-foreground"
-                        : "bg-mist text-muted-foreground"
-                      } ${active ? "ring-4 ring-ember/30 scale-110" : ""}`}>
+                    <div
+                      className={`relative grid h-10 w-10 shrink-0 place-items-center rounded-full text-lg transition-all duration-500 ${
+                        done ? "bg-ink text-primary-foreground" : "bg-mist text-muted-foreground"
+                      } ${active ? "ring-4 ring-ember/30 scale-110" : ""}`}
+                    >
                       {done && !active ? <Check className="h-4 w-4" /> : s.emoji}
                       {/* Pulse dot for active step */}
                       {active && (
@@ -178,13 +182,14 @@ function OrderPage() {
                       )}
                     </div>
                     <div className="flex-1">
-                      <p className={`text-sm font-medium transition-colors ${done ? "text-foreground" : "text-muted-foreground"
-                        }`}>
+                      <p
+                        className={`text-sm font-medium transition-colors ${
+                          done ? "text-foreground" : "text-muted-foreground"
+                        }`}
+                      >
                         {s.label}
                       </p>
-                      {active && (
-                        <p className="mt-0.5 text-xs text-ember">In progress…</p>
-                      )}
+                      {active && <p className="mt-0.5 text-xs text-ember">In progress…</p>}
                     </div>
                     {done && !active && (
                       <span className="text-[10px] text-muted-foreground">Done</span>

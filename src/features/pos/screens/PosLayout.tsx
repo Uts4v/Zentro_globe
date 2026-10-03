@@ -34,7 +34,8 @@ const NEEDS_CONNECTION = "Needs a connection — not available offline";
 
 export function hasRoutePermission(path: string): boolean {
   if (path.startsWith("/pos/reports")) return hasStaffPermission("reports.view");
-  if (path.startsWith("/pos/staff") || path.startsWith("/pos/schedule")) return hasStaffPermission("staff.manage");
+  if (path.startsWith("/pos/staff") || path.startsWith("/pos/schedule"))
+    return hasStaffPermission("staff.manage");
   if (path.startsWith("/pos/settings")) return hasStaffPermission("settings.manage");
   if (path.startsWith("/pos/orders")) return hasStaffPermission("orders.view");
   if (path.startsWith("/pos/accounts")) return hasStaffPermission("payments.take");
@@ -43,7 +44,8 @@ export function hasRoutePermission(path: string): boolean {
     const session = staffSession.get();
     return !session || session.role === "Admin" || session.role === "Owner";
   }
-  if (path === "/pos" || path === "/pos/") return hasStaffPermission("pos.access") && hasStaffPermission("orders.create");
+  if (path === "/pos" || path === "/pos/")
+    return hasStaffPermission("pos.access") && hasStaffPermission("orders.create");
   return true;
 }
 
@@ -70,8 +72,8 @@ function NavItem({
     disabled
       ? "cursor-not-allowed text-muted-foreground/40"
       : active
-      ? "bg-ember-soft font-semibold text-ember transition-colors"
-      : "font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        ? "bg-ember-soft font-semibold text-ember transition-colors"
+        : "font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
   }`;
 
   const badgeNode =
@@ -517,11 +519,7 @@ export default function PosLayout() {
             <button
               onClick={() => navigate({ to: "/pos" })}
               disabled={!isOnline}
-              title={
-                isOnline
-                  ? undefined
-                  : "Opening a shift needs an internet connection."
-              }
+              title={isOnline ? undefined : "Opening a shift needs an internet connection."}
               className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
             >
               <Wallet className="h-4 w-4" />
@@ -683,7 +681,11 @@ export default function PosLayout() {
                   <LogOut className="h-4 w-4" />
                   <span>Sign out</span>
                 </button>
-                <ClearCacheNavButton className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground" />
+                <ClearCacheNavButton
+                  disabled={!isOnline}
+                  disabledReason="Needs an internet connection to clear cache safely"
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                />
               </div>
             </aside>
           </div>
@@ -709,7 +711,9 @@ export default function PosLayout() {
             className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900"
           >
             <span>
-              <strong>Can&apos;t reach the server.</strong> Showing data saved on this device{savedLabel(savedDataFrom)}. New tables, menu changes and customer orders may be missing. Orders you take are saved here and sent when the connection is back.
+              <strong>Can&apos;t reach the server.</strong> Showing data saved on this device
+              {savedLabel(savedDataFrom)}. New tables, menu changes and customer orders may be
+              missing. Orders you take are saved here and sent when the connection is back.
             </span>
             <button
               type="button"
@@ -732,7 +736,8 @@ export default function PosLayout() {
                 <ShieldAlert className="mx-auto mb-3 h-12 w-12 text-amber-500" />
                 <h2 className="text-xl font-bold text-foreground">Access Restricted</h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Your staff account ({currentWorker?.display_name}) does not have permission to access this section. Please contact your administrator.
+                  Your staff account ({currentWorker?.display_name}) does not have permission to
+                  access this section. Please contact your administrator.
                 </p>
                 <div className="mt-5 flex justify-center gap-3">
                   <Link

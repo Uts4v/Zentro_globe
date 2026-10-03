@@ -51,7 +51,9 @@ export const tableApi = {
     if (slug) {
       try {
         return await djangoFetch<TableResolution>(
-          apiUrl(`/merchants/public/${encodeURIComponent(slug)}/tables/${encodeURIComponent(token)}/`),
+          apiUrl(
+            `/merchants/public/${encodeURIComponent(slug)}/tables/${encodeURIComponent(token)}/`,
+          ),
         );
       } catch {
         // Fall back to token-only resolution if slug was invalid/outdated

@@ -3,11 +3,35 @@ import { MerchantPunchCard } from "@/lib/api";
 import { Modal, FL, inputCls } from "@/components/LoyaltyShared";
 import { Upload, Image as ImageIcon, Smile, Palette } from "lucide-react";
 
-const EMOJI_PRESETS = ["☕", "🍵", "🥐", "🍕", "🍔", "🧁", "🍩", "🌮", "🎁", "⭐", "🔥", "💎", "🎯", "🎉", "❤️", "✨"];
+const EMOJI_PRESETS = [
+  "☕",
+  "🍵",
+  "🥐",
+  "🍕",
+  "🍔",
+  "🧁",
+  "🍩",
+  "🌮",
+  "🎁",
+  "⭐",
+  "🔥",
+  "💎",
+  "🎯",
+  "🎉",
+  "❤️",
+  "✨",
+];
 
-export function PunchCardModal({ initial, saving, onSave, onClose }: {
-  initial: MerchantPunchCard | null; saving: boolean;
-  onSave: (d: Partial<MerchantPunchCard>) => void; onClose: () => void;
+export function PunchCardModal({
+  initial,
+  saving,
+  onSave,
+  onClose,
+}: {
+  initial: MerchantPunchCard | null;
+  saving: boolean;
+  onSave: (d: Partial<MerchantPunchCard>) => void;
+  onClose: () => void;
 }) {
   const [name, setName] = useState(initial?.name ?? "");
   const [mode, setMode] = useState(initial?.mode ?? "per_order");
@@ -27,9 +51,11 @@ export function PunchCardModal({ initial, saving, onSave, onClose }: {
   return (
     <Modal title={initial ? "Edit punch card" : "New punch card"} onClose={onClose}>
       <div className="space-y-4 max-h-[80vh] overflow-y-auto px-1 pb-1">
-
         {/* Live Preview */}
-        <div className="rounded-3xl bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.06)]" style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}>
+        <div
+          className="rounded-3xl bg-white p-5 shadow-[0_8px_30px_rgba(0,0,0,0.06)]"
+          style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
+        >
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="h-5 w-5 rounded border border-gray-200 flex items-center justify-center">
@@ -37,14 +63,19 @@ export function PunchCardModal({ initial, saving, onSave, onClose }: {
               </div>
               <span className="text-[15px] font-semibold text-[#202124]">Punch Card</span>
             </div>
-            <span className="text-[15px] font-medium text-[#6B7280]">{previewFilled} / {previewStamps} punches</span>
+            <span className="text-[15px] font-medium text-[#6B7280]">
+              {previewFilled} / {previewStamps} punches
+            </span>
           </div>
 
           {/* Punch strip with background */}
           <div
             className="relative h-[52px] rounded-full overflow-hidden"
             style={{
-              backgroundImage: backgroundImage || animatedGif ? `url(${animatedGif || backgroundImage})` : undefined,
+              backgroundImage:
+                backgroundImage || animatedGif
+                  ? `url(${animatedGif || backgroundImage})`
+                  : undefined,
               backgroundSize: "cover",
               backgroundPosition: "center",
               backgroundColor: animatedGif || backgroundImage ? undefined : colorScheme,
@@ -68,7 +99,15 @@ export function PunchCardModal({ initial, saving, onSave, onClose }: {
                     }}
                   >
                     {filled ? (
-                      stampGifUrl ? <img src={stampGifUrl} alt="" className="w-5 h-5 rounded-full object-cover" /> : stampIcon
+                      stampGifUrl ? (
+                        <img
+                          src={stampGifUrl}
+                          alt=""
+                          className="w-5 h-5 rounded-full object-cover"
+                        />
+                      ) : (
+                        stampIcon
+                      )
                     ) : (
                       i + 1
                     )}
@@ -93,7 +132,9 @@ export function PunchCardModal({ initial, saving, onSave, onClose }: {
                 {rewardText || "Get a reward"}
               </span>
               <span className="text-[15px] font-medium text-gray-500">
-                {previewStamps - previewFilled > 0 ? `${previewStamps - previewFilled} more` : "Done!"}
+                {previewStamps - previewFilled > 0
+                  ? `${previewStamps - previewFilled} more`
+                  : "Done!"}
               </span>
             </div>
             <p className="mt-1 text-[14px] text-[#7B7B7B]">
@@ -104,21 +145,42 @@ export function PunchCardModal({ initial, saving, onSave, onClose }: {
 
         {/* ── Basic Info ── */}
         <FL label="Card name">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Free Coffee Card" className={inputCls} />
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Free Coffee Card"
+            className={inputCls}
+          />
         </FL>
         <FL label="Reward text">
-          <input value={rewardText} onChange={(e) => setRewardText(e.target.value)} placeholder="e.g. Free Iced Latte" className={inputCls} />
+          <input
+            value={rewardText}
+            onChange={(e) => setRewardText(e.target.value)}
+            placeholder="e.g. Free Iced Latte"
+            className={inputCls}
+          />
         </FL>
 
         <div className="grid grid-cols-2 gap-3">
           <FL label="Mode">
-            <select value={mode} onChange={(e) => setMode(e.target.value as any)} className={inputCls}>
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value as any)}
+              className={inputCls}
+            >
               <option value="per_order">Per Order</option>
               <option value="per_streak">Per Streak (12h gap)</option>
             </select>
           </FL>
           <FL label="Stamps required">
-            <input type="number" min={1} max={20} value={stampsRequired} onChange={(e) => setStamps(e.target.value)} className={inputCls} />
+            <input
+              type="number"
+              min={1}
+              max={20}
+              value={stampsRequired}
+              onChange={(e) => setStamps(e.target.value)}
+              className={inputCls}
+            />
           </FL>
         </div>
 
@@ -151,9 +213,14 @@ export function PunchCardModal({ initial, saving, onSave, onClose }: {
                   <button
                     key={emoji}
                     type="button"
-                    onClick={() => { setStampIcon(emoji); setShowEmojiPicker(false); }}
+                    onClick={() => {
+                      setStampIcon(emoji);
+                      setShowEmojiPicker(false);
+                    }}
                     className={`h-9 w-9 rounded-xl flex items-center justify-center text-lg transition-all ${
-                      stampIcon === emoji ? "bg-ink text-white scale-110" : "bg-mist hover:bg-gray-200"
+                      stampIcon === emoji
+                        ? "bg-ink text-white scale-110"
+                        : "bg-mist hover:bg-gray-200"
                     }`}
                   >
                     {emoji}
@@ -233,23 +300,28 @@ export function PunchCardModal({ initial, saving, onSave, onClose }: {
 
         {/* ── Actions ── */}
         <div className="flex gap-2 pt-2">
-          <button onClick={onClose} className="h-10 flex-1 rounded-2xl border border-border text-sm text-muted-foreground">
+          <button
+            onClick={onClose}
+            className="h-10 flex-1 rounded-2xl border border-border text-sm text-muted-foreground"
+          >
             Cancel
           </button>
           <button
-            onClick={() => onSave({
-              name,
-              mode: mode as any,
-              stamps_required: Number(stampsRequired),
-              reward_text: rewardText,
-              stamp_icon: stampIcon,
-              stamp_gif_url: stampGifUrl,
-              color_scheme: colorScheme,
-              background_image: backgroundImage,
-              animated_gif_background: animatedGif,
-              logo,
-              is_active: initial?.is_active ?? true,
-            })}
+            onClick={() =>
+              onSave({
+                name,
+                mode: mode as any,
+                stamps_required: Number(stampsRequired),
+                reward_text: rewardText,
+                stamp_icon: stampIcon,
+                stamp_gif_url: stampGifUrl,
+                color_scheme: colorScheme,
+                background_image: backgroundImage,
+                animated_gif_background: animatedGif,
+                logo,
+                is_active: initial?.is_active ?? true,
+              })
+            }
             disabled={saving || !name.trim() || !rewardText.trim()}
             className="h-10 flex-1 rounded-2xl bg-ink text-sm font-medium text-primary-foreground disabled:opacity-50"
           >

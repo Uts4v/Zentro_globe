@@ -1,23 +1,23 @@
 # Visualization Decision Record — Zentro (canvas vs React Flow, graphify integration)
 
 > A short ADR for the `/dev/architecture` viewer proposal. See `interactive.md` for the
-> concrete proposal; this file is *why* the choices below were made.
+> concrete proposal; this file is _why_ the choices below were made.
 
 ## Decision
 
 **Use React Flow + deterministic domain-layer layout as the baseline**, and keep **graphify
-(`https://github.com/Graphify-Labs/graphify`)** as an *optional* second layer that ingests
+(`https://github.com/Graphify-Labs/graphify`)** as an _optional_ second layer that ingests
 the same codebase and cross-checks the JSON — it is **not** required and is **not** part of
 the baseline this pass (read-only, no-install rule).
 
 ## Options considered
 
-| Option | Verdict | Why |
-|---|---|---|
-| A. One giant React Flow canvas, force-directed (d3-force / dagre) | ❌ | Repeats the "giant diagram" anti-pattern we deliberately avoided in the `.md` docs; forces chaotic relayout each load |
-| B. React Flow + **layered layout** (domain on X, tier on Y), no physics | ✅ | Deterministic, zoomable, honors "many focused views" by filtering |
-| C. Fully-autonomous generated SVG per doc (no viewer) | ⚠️ fallback | Zero new deps; see `interactive.md` `gitbook`-style links — but loses filter/highlight |
-| D. Depend on graphify CLI in CI to publish a graph | ⏸️ later | First validate graphify against THIS repo shape; it's a cross-check, not the source of truth |
+| Option                                                                  | Verdict     | Why                                                                                                                   |
+| ----------------------------------------------------------------------- | ----------- | --------------------------------------------------------------------------------------------------------------------- |
+| A. One giant React Flow canvas, force-directed (d3-force / dagre)       | ❌          | Repeats the "giant diagram" anti-pattern we deliberately avoided in the `.md` docs; forces chaotic relayout each load |
+| B. React Flow + **layered layout** (domain on X, tier on Y), no physics | ✅          | Deterministic, zoomable, honors "many focused views" by filtering                                                     |
+| C. Fully-autonomous generated SVG per doc (no viewer)                   | ⚠️ fallback | Zero new deps; see `interactive.md` `gitbook`-style links — but loses filter/highlight                                |
+| D. Depend on graphify CLI in CI to publish a graph                      | ⏸️ later    | First validate graphify against THIS repo shape; it's a cross-check, not the source of truth                          |
 
 ## Why the JSON stays the single source of truth
 
