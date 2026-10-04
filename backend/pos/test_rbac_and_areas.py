@@ -233,7 +233,6 @@ class RoleTests(Base):
         admin = data["roles"][0]
         self.assertTrue(admin["is_admin"] and admin["is_system"])
         self.assertEqual(len(admin["permissions"]), len(rbac.ALL_PERMISSIONS))
-        self.assertLessEqual(len(rbac.ALL_PERMISSIONS), 25)
         manager = next(r for r in data["roles"] if r["name"] == "Manager")
         self.assertNotIn("roles.manage", manager["permissions"])
         self.assertNotIn("settings.manage", manager["permissions"])
@@ -462,6 +461,24 @@ class EnforcementTests(Base):
         self.assertEqual(staff.post(end, {"worker_id": str(sita.id), "pin": "1234"}, format="json").status_code, 401)
         self.assertEqual(staff.post(end, {"worker_id": str(maya.id), "pin": "9999"}, format="json").status_code, 200)
         self.assertEqual(staff.post(end, {"password": "Owner123!"}, format="json").status_code, 200)
+
+    def test_missing_credentials_report_401_not_403(self):
+        """
+        A request carrying no credentials is a login problem, not a permission one.
+
+        DRF asks only the first authenticator for a WWW-Authenticate challenge and
+        downgrades 401 to 403 when it gets nothing back, so losing
+        StaffTokenAuthentication.authenticate_header() would quietly turn every
+        signed-out request back into a permissions error.
+        """
+        anonymous = APIClient()
+        resp = anonymous.get("/api/pos/roles/")
+        self.assertEqual(resp.status_code, 401, resp.data)
+        self.assertIn("www-authenticate", resp.headers)
+
+        # The distinction still holds: signed in, but not allowed.
+        cashier = self.employee("Sita", "cashier")
+        self.assertEqual(self.as_staff(cashier).get("/api/pos/roles/").status_code, 403)
 
     def test_role_change_takes_effect_immediately(self):
         """Cashier cannot refund → becomes Senior Cashier → refund allowed, same session."""

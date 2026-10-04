@@ -52,3 +52,15 @@ class StaffTokenAuthentication(authentication.BaseAuthentication):
         request.is_staff_mode = True
 
         return (worker.merchant.user, token)
+
+    def authenticate_header(self, request):
+        """
+        Advertise this scheme so DRF answers 401 rather than downgrading to 403.
+
+        DRF asks only the *first* authenticator for the challenge string, and
+        falls back to 403 Forbidden when there is none. Without this line every
+        unauthenticated request was reported as a permission problem instead of
+        a login problem, which is what the connectivity probe and any status-
+        based monitoring key off.
+        """
+        return 'Staff realm="zentro-pos"'

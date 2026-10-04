@@ -1954,6 +1954,7 @@ def update_order_status_uuid(request):
         except ShiftWorker.DoesNotExist:
             pass
     if worker is None:
+        from . import rbac
         worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
 
     if new_status == Order.STATUS_CANCELLED:
@@ -2014,6 +2015,7 @@ def pos_orders(request):
             status=status.HTTP_403_FORBIDDEN,
         )
 
+    from . import rbac
     worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
     denied = _perm_denied(worker, "orders.view", request)
     if denied:
