@@ -333,7 +333,9 @@ export function TablesAreasPage() {
             }`}
           >
             <span
-              className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${profile.data.table_ordering_enabled ? "translate-x-7" : "translate-x-1"}`}
+              className={`absolute top-1 left-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                profile.data.table_ordering_enabled ? "translate-x-6" : "translate-x-0"
+              }`}
             />
           </button>
         </div>

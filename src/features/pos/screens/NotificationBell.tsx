@@ -2,6 +2,11 @@ import { useEffect, useState, useRef } from "react";
 import { posNotifications, posMarkNotificationRead, PosNotification } from "../api";
 import { Bell, X, Check } from "lucide-react";
 import { playWaiterCallChime } from "@/lib/audio";
+import { useAnchoredPopover } from "@/lib/use-anchored-popover";
+
+const PANEL_WIDTH = 320; // w-80
+// Header (~49px) + scroll area capped at max-h-80, used only for clamping.
+const PANEL_ESTIMATED_HEIGHT = 370;
 
 export default function NotificationBell() {
   const [notifications, setNotifications] = useState<PosNotification[]>([]);
@@ -11,6 +16,15 @@ export default function NotificationBell() {
   const panelRef = useRef<HTMLDivElement>(null);
   const knownNotificationIds = useRef<Set<number> | null>(null);
   const hiddenNotificationIds = useRef<Set<number>>(new Set());
+
+  // The bell can sit in a narrow sidebar, so the panel is clamped to the
+  // viewport instead of overflowing off the left edge.
+  const { position, ready } = useAnchoredPopover({
+    open,
+    anchorRef: panelRef,
+    width: PANEL_WIDTH,
+    height: PANEL_ESTIMATED_HEIGHT,
+  });
 
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -102,8 +116,11 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 max-w-[calc(100vw-1rem)] rounded-2xl border border-border bg-card shadow-xl">
+      {open && ready && position && (
+        <div
+          style={{ top: position.top, left: position.left }}
+          className="fixed z-50 w-80 max-w-[calc(100vw-1rem)] rounded-2xl border border-border bg-card shadow-xl"
+        >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <h3 className="text-sm font-bold text-foreground">Notifications</h3>
             <div className="flex items-center gap-1">

@@ -55,7 +55,7 @@ function Switch({
         }`}
       >
         <span
-          className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-7" : "translate-x-1"}`}
+          className={`absolute top-1 left-1 h-6 w-6 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-6" : "translate-x-0"}`}
         />
         <span className="sr-only">{checked ? "On" : "Off"}</span>
       </button>

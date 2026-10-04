@@ -3,6 +3,11 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { Bell, X, Check, BellRing, CheckCheck } from "lucide-react";
 import { notificationApi, type Notification } from "@/lib/api";
+import { useAnchoredPopover } from "@/lib/use-anchored-popover";
+
+const PANEL_WIDTH = 384; // w-96
+// Header + scroll area capped at max-h-96, used only for clamping.
+const PANEL_ESTIMATED_HEIGHT = 432;
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -24,20 +29,18 @@ export default function MerchantNotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const knownIds = useRef<Set<string> | null>(null);
   const navigate = useNavigate();
 
+  const { position: panelPos, ready } = useAnchoredPopover({
+    open,
+    anchorRef: panelRef,
+    width: PANEL_WIDTH,
+    height: PANEL_ESTIMATED_HEIGHT,
+  });
+
   function toggleOpen() {
-    if (!open && panelRef.current) {
-      const rect = panelRef.current.getBoundingClientRect();
-      const panelWidth = Math.min(384, window.innerWidth - 16);
-      const panelHeight = Math.min(432, window.innerHeight - 16);
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - panelWidth - 8));
-      const top = Math.min(rect.bottom + 8, window.innerHeight - panelHeight - 8);
-      setPanelPos({ top, left });
-    }
     setOpen((v) => !v);
   }
 
@@ -129,9 +132,9 @@ export default function MerchantNotificationBell() {
         )}
       </button>
 
-      {open && (
+      {open && ready && panelPos && (
         <div
-          style={{ top: panelPos?.top ?? 0, left: panelPos?.left ?? 0 }}
+          style={{ top: panelPos.top, left: panelPos.left }}
           className="fixed z-50 w-96 max-w-[calc(100vw-1rem)] rounded-2xl border border-border bg-card shadow-xl"
         >
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
