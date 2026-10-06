@@ -7,7 +7,7 @@ import MenuGrid from "./MenuGrid";
 import CartPanel from "./CartPanel";
 import PaymentSheet from "./PaymentSheet";
 import DiscountModal from "./DiscountModal";
-import RedeemOfferModal from "./RedeemOfferModal";
+import LoyaltyRedeemModal from "./LoyaltyRedeemModal";
 import IncomingOrdersPanel from "./IncomingOrdersPanel";
 import WaiterCallPanel from "./WaiterCallPanel";
 import { Loader2, AlertTriangle, Armchair, ArrowLeft, ShoppingBag } from "lucide-react";
@@ -19,7 +19,7 @@ export default function PosOrderScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showDiscount, setShowDiscount] = useState(false);
-  const [showOffer, setShowOffer] = useState(false);
+  const [showRedeem, setShowRedeem] = useState(false);
 
   useEffect(() => {
     if (merchant) {
@@ -94,7 +94,7 @@ export default function PosOrderScreen() {
         <CartPanel
           onCheckout={() => setShowPayment(true)}
           onDiscount={() => setShowDiscount(true)}
-          onRedeemOffer={() => setShowOffer(true)}
+          onRedeemOffer={() => setShowRedeem(true)}
         />
       </div>
 
@@ -102,10 +102,10 @@ export default function PosOrderScreen() {
       <MobileCartButton
         onCheckout={() => setShowPayment(true)}
         onDiscount={() => setShowDiscount(true)}
-        onRedeemOffer={() => setShowOffer(true)}
+        onRedeemOffer={() => setShowRedeem(true)}
       />
 
-      <RedeemOfferModal open={showOffer} onClose={() => setShowOffer(false)} />
+      <LoyaltyRedeemModal open={showRedeem} onClose={() => setShowRedeem(false)} />
 
       {/* Payment sheet */}
       <PaymentSheet

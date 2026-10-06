@@ -19,11 +19,17 @@ import {
 
 interface WorkerPinPadProps {
   onLoggedIn: (worker: ShiftWorker) => void;
+  /**
+   * The login just registered this device, so whatever bootstrap failed on the
+   * way in here can now succeed with the device token alone. PosLayout uses
+   * this instead of leaving a fresh phone stuck on a half-loaded store.
+   */
+  onRegistered?: () => void;
 }
 
 type Mode = "code" | "list";
 
-export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
+export default function WorkerPinPad({ onLoggedIn, onRegistered }: WorkerPinPadProps) {
   const workers = usePosStore((s) => s.workers);
   const currentMerchant = usePosStore((s) => s.merchant);
   const setMerchant = usePosStore((s) => s.setMerchant);
@@ -47,11 +53,38 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const maxPin = 4;
+  /**
+   * True once this browser holds a registered device. Kept in state rather than
+   * read from storage at call time so the login handlers below can depend on
+   * it, and so `onRegistered` fires only for a genuinely new registration.
+   */
+  const [deviceRegistered, setDeviceRegistered] = useState(
+    () => Boolean(localStorage.getItem("pos_device_id") && localStorage.getItem("pos_device_token")),
+  );
+
+  /**
+   * Run once when a login registers a device this browser did not have before.
+   * That is the moment a failed bootstrap becomes retryable, so it must fire
+   * after the credentials are stored rather than on a timer.
+   */
+  const announceRegistration = useCallback(() => {
+    if (deviceRegistered || !onRegistered) return;
+    setDeviceRegistered(true);
+    onRegistered();
+  }, [deviceRegistered, onRegistered]);
+
+  /**
+   * Must match the backend (`pos.serializers` allows 4-8 digits) and the hint
+   * the Team page gives merchants. Capping this below 8 silently submitted the
+   * first four digits of a longer PIN, which counted as a wrong attempt and
+   * locked the employee out after five tries.
+   */
+  const MIN_PIN = 4;
+  const MAX_PIN = 8;
 
   // ── Handle Staff Code + PIN Submission ──
   const handleStaffCodeLogin = useCallback(async () => {
-    if (!staffCode || pin.length < maxPin || loading) return;
+    if (!staffCode || pin.length < MIN_PIN || loading) return;
     setLoading(true);
     setError(null);
 
@@ -87,27 +120,35 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
         setMerchant(res.merchant);
       }
 
+      // The server registers the device during this login, so a bootstrap that
+      // failed on the way to this screen can now run on the device token alone.
+      if (res.device && res.device_token) announceRegistration();
+
       onLoggedIn(res.worker);
     } catch (err: any) {
       if (err?.code === "store_required") {
         setShowStoreInput(true);
         setError("Multiple stores have this code. Please enter your store name or slug.");
       } else {
+        // The server counts down remaining tries and locks the account for 15
+        // minutes after five. Passing that on matters: without it a staff
+        // member locked out by a mistyped PIN sees only "try again" and keeps
+        // trying, which is how a till becomes unusable mid-shift.
         setError(
           isConnectionError(err)
             ? "No connection — login requires server access. Check your internet connection."
-            : err?.message || "Invalid Staff Code or PIN. Please try again.",
+            : (err?.message ?? "Invalid Staff Code or PIN. Please try again."),
         );
       }
       setPin("");
     } finally {
       setLoading(false);
     }
-  }, [staffCode, pin, storeSlug, loading, onLoggedIn, setDevice, setMerchant]);
+  }, [staffCode, pin, storeSlug, loading, onLoggedIn, setDevice, setMerchant, announceRegistration]);
 
   // ── Handle Selected Worker + PIN Submission ──
   const handleWorkerListLogin = useCallback(async () => {
-    if (!selectedWorker || pin.length < maxPin || loading) return;
+    if (!selectedWorker || pin.length < MIN_PIN || loading) return;
     setLoading(true);
     setError(null);
 
@@ -145,12 +186,12 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
         setStaffCode((prev) => (prev + d).slice(0, 8));
         setError(null);
       } else {
-        if (pin.length >= maxPin) return;
-        setPin((prev) => (prev + d).slice(0, maxPin));
+        if (pin.length >= MAX_PIN) return;
+        setPin((prev) => (prev + d).slice(0, MAX_PIN));
         setError(null);
       }
     },
-    [loading, mode, codeStep, pin.length, maxPin],
+    [loading, mode, codeStep, pin.length],
   );
 
   const handleDelete = useCallback(() => {
@@ -171,27 +212,25 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
     setError(null);
   }, [mode, codeStep]);
 
-  // Auto-submit PIN when 4 digits entered
+  const hasPin = pin.length >= MIN_PIN;
+
+  /** Whichever login the current mode/step expects. */
+  const submit = useCallback(() => {
+    if (loading || !hasPin) return;
+    if (mode === "code" && staffCode) handleStaffCodeLogin();
+    else if (mode === "list" && selectedWorker) handleWorkerListLogin();
+  }, [loading, hasPin, mode, staffCode, selectedWorker, handleStaffCodeLogin, handleWorkerListLogin]);
+
+  /**
+   * Auto-submit only once the PIN cannot get any longer. Before MAX_PIN the
+   * employee is still typing, so submitting would test a prefix of their PIN
+   * — that is what locked staff with 5-8 digit PINs out of their own till.
+   */
   useEffect(() => {
-    if (pin.length === maxPin && !loading) {
-      if (mode === "code" && staffCode) {
-        const timer = setTimeout(() => handleStaffCodeLogin(), 50);
-        return () => clearTimeout(timer);
-      } else if (mode === "list" && selectedWorker) {
-        const timer = setTimeout(() => handleWorkerListLogin(), 50);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [
-    pin,
-    loading,
-    mode,
-    staffCode,
-    selectedWorker,
-    maxPin,
-    handleStaffCodeLogin,
-    handleWorkerListLogin,
-  ]);
+    if (pin.length !== MAX_PIN || loading) return;
+    const timer = setTimeout(submit, 50);
+    return () => clearTimeout(timer);
+  }, [pin, loading, submit]);
 
   // Keyboard navigation & typing
   useEffect(() => {
@@ -210,14 +249,14 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
         if (mode === "code") {
           if (codeStep === "code" && staffCode.length >= 3) {
             setCodeStep("pin");
-          } else if (codeStep === "pin" && pin.length >= maxPin) {
-            handleStaffCodeLogin();
+          } else if (codeStep === "pin") {
+            submit();
           }
         } else if (mode === "list") {
           if (!selectedWorker && workers.length > 0) {
             setSelectedWorker(workers[selectedIndex]);
-          } else if (selectedWorker && pin.length >= maxPin) {
-            handleWorkerListLogin();
+          } else {
+            submit();
           }
         }
       } else if (e.key === "Escape") {
@@ -253,8 +292,7 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
     selectedIndex,
     handleDigit,
     handleDelete,
-    handleStaffCodeLogin,
-    handleWorkerListLogin,
+    submit,
   ]);
 
   // Keypad numbers grid
@@ -319,8 +357,8 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {codeStep === "code"
-                ? "Enter your 4-digit Staff Code to begin"
-                : `Staff Code: ${staffCode}`}
+                ? "Enter your Staff Code to begin"
+                : `Staff Code: ${staffCode} · PIN is ${MIN_PIN}-${MAX_PIN} digits`}
             </p>
           </div>
 
@@ -372,7 +410,9 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
           ) : (
             <div className="mb-6">
               <div className="flex justify-center gap-3 py-3">
-                {Array.from({ length: maxPin }).map((_, i) => (
+                {/* Dots grow with the entry, up to the maximum, so a longer
+                    PIN reads as progress rather than looking truncated. */}
+                {Array.from({ length: Math.max(MIN_PIN, pin.length) }).map((_, i) => (
                   <div
                     key={i}
                     className={`h-4 w-4 rounded-full transition-all ${
@@ -406,6 +446,19 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
 
           {/* Keypad */}
           {keypad}
+
+          {/* Sign in. A PIN shorter than MAX_PIN no longer submits itself, so
+              this is how a 4-digit PIN is confirmed on a touch terminal. */}
+          {codeStep === "pin" && (
+            <button
+              type="button"
+              disabled={!hasPin || loading}
+              onClick={submit}
+              className="mt-4 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-sm transition hover:bg-primary-hover disabled:opacity-40"
+            >
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign in"}
+            </button>
+          )}
 
           {/* Next Button for Code step */}
           {codeStep === "code" && (
@@ -473,8 +526,8 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
           </div>
 
           {/* PIN dots */}
-          <div className="mb-6 flex justify-center gap-3 py-2">
-            {Array.from({ length: maxPin }).map((_, i) => (
+          <div className="mb-6 flex flex-wrap justify-center gap-3 py-2">
+            {Array.from({ length: Math.max(MIN_PIN, pin.length) }).map((_, i) => (
               <div
                 key={i}
                 className={`h-4 w-4 rounded-full transition-all ${
@@ -491,6 +544,15 @@ export default function WorkerPinPad({ onLoggedIn }: WorkerPinPadProps) {
 
           {/* Keypad */}
           {keypad}
+
+          <button
+            type="button"
+            disabled={!hasPin || loading}
+            onClick={submit}
+            className="mt-4 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-primary text-base font-bold text-primary-foreground shadow-sm transition hover:bg-primary-hover disabled:opacity-40"
+          >
+            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Sign in"}
+          </button>
 
           <p className="mt-6 flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
             <Keyboard className="h-3.5 w-3.5" />

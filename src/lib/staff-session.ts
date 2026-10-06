@@ -55,11 +55,25 @@ export function staffHeaders(): Record<string, string> {
   return token ? { "X-Zentro-Staff": token } : {};
 }
 
-/** Check if the currently logged-in staff member has a specific permission.
- * If no staff session is active (e.g. merchant owner logged in directly), returns true.
+/**
+ * Whether the acting user may do something, for hiding UI.
+ *
+ * Only ever a filter: the server decides (`pos.rbac.worker_can`, and
+ * `StaffModeMiddleware` for every `/api/` path carrying a staff token), so
+ * getting this wrong cannot grant anybody access.
+ *
+ * No staff session at all means the merchant owner is acting directly, who is
+ * Admin of their own business and is allowed everything. That is the one case
+ * that returns true by default.
+ *
+ * A session that exists but carries no permission list is NOT the owner — it is
+ * a staff session whose payload did not include permissions. Treating that as
+ * "allow everything" hid controls the employee cannot use, which is how a
+ * cashier ends up tapping Refund and being refused. Fail closed instead.
  */
 export function hasStaffPermission(permCode: string): boolean {
   const session = read();
-  if (!session || !session.permissions) return true; // Merchant owner or admin session
+  if (!session) return true; // Merchant owner acting directly
+  if (!session.permissions) return false;
   return session.permissions.includes(permCode);
 }

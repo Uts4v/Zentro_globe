@@ -740,7 +740,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Ticket className="h-3.5 w-3.5" />
-              Redeem Offer
+              Redeem
             </button>
           )}
           {!isEmpty && canCreateOrders && (

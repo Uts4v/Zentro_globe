@@ -133,10 +133,6 @@ export function PwaProvider({ children }: { children: ReactNode }) {
         .catch((err) => {
           console.warn("SW registration failed:", err);
         });
-
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        window.location.reload();
-      });
     };
 
     if (document.readyState === "complete") {
@@ -176,12 +172,23 @@ export function PwaProvider({ children }: { children: ReactNode }) {
     setDeferredPrompt(null);
   }, []);
 
+  /**
+   * Swap in the waiting update and reload once it has taken over.
+   *
+   * Reloading on `controllerchange` is safe *only* because the worker no longer
+   * calls skipWaiting() on its own: control changes here because the user asked
+   * for it, not because a deploy happened. An open till therefore keeps its cart
+   * until someone accepts the update.
+   */
   const applyUpdate = useCallback(async () => {
     if (!isBrowser()) return;
     if (!navigator.serviceWorker.controller) {
       window.location.reload();
       return;
     }
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      window.location.reload();
+    });
     navigator.serviceWorker.controller.postMessage({ type: "SKIP_WAITING" });
   }, []);
 

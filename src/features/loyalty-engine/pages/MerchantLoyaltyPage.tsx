@@ -13,6 +13,7 @@ import {
   type PointTransaction,
   type MenuItem,
 } from "@/lib/api";
+import type { RewardConfirmation } from "@/lib/api/rewards";
 import { ErrorBanner, EmptyState, Toggle, IconBtn, Chip } from "@/components/LoyaltyShared";
 import { MissionModal } from "@/features/missions/components/MissionModal";
 import { RewardModal } from "@/features/rewards/components/RewardModal";
@@ -298,79 +299,84 @@ export function MerchantLoyaltyPage() {
 
       {/* ── Rewards ── */}
       {tab === "rewards" && (
-        <section>
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="font-display text-2xl text-foreground">Rewards</h2>
-              <p className="text-xs text-muted-foreground">
-                Items customers can redeem with points.
-              </p>
+        <section className="space-y-6">
+          {/* Hand a customer the reward they paid points for */}
+          <ConfirmRewardSection />
+
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-2xl text-foreground">Rewards</h2>
+                <p className="text-xs text-muted-foreground">
+                  Items customers can redeem with points.
+                </p>
+              </div>
+              <button
+                onClick={() => setRewardModal("new")}
+                className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-4 text-xs font-medium text-primary-foreground"
+              >
+                <Plus className="h-3.5 w-3.5" /> New
+              </button>
             </div>
-            <button
-              onClick={() => setRewardModal("new")}
-              className="inline-flex h-9 items-center gap-1.5 rounded-full bg-ink px-4 text-xs font-medium text-primary-foreground"
-            >
-              <Plus className="h-3.5 w-3.5" /> New
-            </button>
-          </div>
-          {rewardsError && <ErrorBanner message={rewardsError} />}
-          {rewardsLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            </div>
-          ) : rewards.length === 0 ? (
-            <EmptyState
-              icon="🎁"
-              title="No rewards yet"
-              sub="Add a reward so customers can redeem their points."
-            />
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {rewards.map((r) => (
-                <div
-                  key={r.id}
-                  className={`glass rounded-3xl p-5 transition-opacity ${r.is_active ? "" : "opacity-60"}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-12 w-12 place-items-center rounded-xl bg-mist text-2xl">
-                        {r.emoji || <Gift className="h-5 w-5 text-ember" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{r.name}</p>
-                        <p className="text-xs text-muted-foreground line-clamp-1">
-                          {r.description}
-                        </p>
-                        {r.linked_menu_item_name && (
-                          <p className="mt-0.5 text-xs font-medium text-ember">
-                            Linked: {r.linked_menu_item_name}
+            {rewardsError && <ErrorBanner message={rewardsError} />}
+            {rewardsLoading ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : rewards.length === 0 ? (
+              <EmptyState
+                icon="🎁"
+                title="No rewards yet"
+                sub="Add a reward so customers can redeem their points."
+              />
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2">
+                {rewards.map((r) => (
+                  <div
+                    key={r.id}
+                    className={`glass rounded-3xl p-5 transition-opacity ${r.is_active ? "" : "opacity-60"}`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-12 w-12 place-items-center rounded-xl bg-mist text-2xl">
+                          {r.emoji || <Gift className="h-5 w-5 text-ember" />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foreground">{r.name}</p>
+                          <p className="text-xs text-muted-foreground line-clamp-1">
+                            {r.description}
                           </p>
-                        )}
+                          {r.linked_menu_item_name && (
+                            <p className="mt-0.5 text-xs font-medium text-ember">
+                              Linked: {r.linked_menu_item_name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <IconBtn onClick={() => setRewardModal(r)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </IconBtn>
+                        <IconBtn onClick={() => deleteReward(r.id)} danger>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </IconBtn>
                       </div>
                     </div>
-                    <div className="flex shrink-0 gap-1">
-                      <IconBtn onClick={() => setRewardModal(r)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </IconBtn>
-                      <IconBtn onClick={() => deleteReward(r.id)} danger>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </IconBtn>
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="flex gap-3">
+                        <Chip label="Cost" value={`${r.points_cost} pts`} />
+                        <Chip
+                          label="Stock"
+                          value={r.stock === -1 ? "Unlimited" : `${r.stock} left`}
+                        />
+                      </div>
+                      <Toggle active={r.is_active} onToggle={() => toggleReward(r)} />
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center justify-between">
-                    <div className="flex gap-3">
-                      <Chip label="Cost" value={`${r.points_cost} pts`} />
-                      <Chip
-                        label="Stock"
-                        value={r.stock === -1 ? "Unlimited" : `${r.stock} left`}
-                      />
-                    </div>
-                    <Toggle active={r.is_active} onToggle={() => toggleReward(r)} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       )}
 
@@ -532,6 +538,88 @@ export function MerchantLoyaltyPage() {
           onSave={savePunchCard}
           onClose={() => setPunchCardModal(null)}
         />
+      )}
+    </div>
+  );
+}
+
+// ── Confirm reward redemption section ─────────────────────────────────────────
+// A customer spends their points in the app and gets a 6-character code. This is
+// where the merchant checks that reward off against the person standing at the
+// counter.
+function ConfirmRewardSection() {
+  const [code, setCode] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<RewardConfirmation | null>(null);
+  const [error, setError] = useState("");
+
+  async function handleConfirm() {
+    const trimmed = code.trim().toUpperCase();
+    if (trimmed.length < 4) return;
+    setLoading(true);
+    setError("");
+    setResult(null);
+    try {
+      const data = await loyaltyApi.confirmRedemption(trimmed);
+      setResult(data);
+      setCode("");
+    } catch (e: unknown) {
+      setError((e as Error).message || "Couldn't confirm that code.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="glass-strong rounded-3xl p-6">
+      <h2 className="font-display text-2xl text-foreground">Confirm reward redemption</h2>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Enter the code from the customer's app to hand over the reward they paid points for.
+      </p>
+
+      <div className="mt-4 flex gap-2">
+        <input
+          value={code}
+          onChange={(e) => setCode(e.target.value.toUpperCase())}
+          onKeyDown={(e) => e.key === "Enter" && handleConfirm()}
+          placeholder="AB12CD"
+          maxLength={12}
+          aria-label="Reward redemption code"
+          className="flex-1 rounded-xl border border-border bg-background px-4 py-2.5 font-mono text-lg uppercase tracking-[0.25em] text-foreground placeholder:normal-case placeholder:tracking-normal placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ink/20"
+        />
+        <button
+          onClick={handleConfirm}
+          disabled={loading || code.trim().length < 4}
+          className="inline-flex h-12 items-center gap-2 rounded-xl bg-ink px-5 text-sm font-medium text-primary-foreground disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+          Confirm
+        </button>
+      </div>
+
+      {result && (
+        <div className="mt-4 rounded-2xl bg-emerald-50 p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🎁</span>
+            <div>
+              <p className="font-medium text-emerald-700">Reward confirmed!</p>
+              <p className="mt-0.5 text-sm text-emerald-600">
+                {result.customer_name} receives:{" "}
+                <span className="font-medium">{result.reward_name}</span>
+              </p>
+              <p className="mt-1 text-xs text-emerald-600">
+                {result.points_spent} points spent · code {result.code} is now used.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="mt-4 flex items-start gap-3 rounded-2xl bg-rose-50 p-4">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-rose-500" />
+          <p className="text-sm text-rose-600">{error}</p>
+        </div>
       )}
     </div>
   );

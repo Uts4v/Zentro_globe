@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { rewriteManifestLink } from "./features/pwa/pos-manifest";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -40,7 +41,7 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
 // Makes runtime config configurable on the server so deployed frontends don't
 // require a full rebuild whenever environment variables change: supports
 // DJANGO_API_BASE_URL/VITE_DJANGO_API_BASE_URL and VITE_GOOGLE_CLIENT_ID/GOOGLE_OAUTH_CLIENT_IDS.
-async function injectRuntimeConfig(response: Response): Promise<Response> {
+async function injectRuntimeConfig(response: Response, request: Request): Promise<Response> {
   if (!(response.headers.get("content-type") ?? "").includes("text/html")) {
     return response;
   }
@@ -68,9 +69,13 @@ async function injectRuntimeConfig(response: Response): Promise<Response> {
     scripts += `<script>window.__GOOGLE_CLIENT_ID__=${JSON.stringify(googleClientId.trim())};</script>`;
   }
 
-  const injected = html.includes("</head>")
-    ? html.replace(/<\/head>/, `${scripts}</head>`)
-    : `${html}${scripts}`;
+  // A staff member installs the terminal from /pos, which serves its own
+  // manifest so the icon opens on the till. See features/pwa/pos-manifest.ts.
+  const injected = rewriteManifestLink(
+    html.includes("</head>") ? html.replace(/<\/head>/, `${scripts}</head>`) : `${html}${scripts}`,
+    new URL(request.url).pathname,
+  );
+
   return new Response(injected, {
     status: response.status,
     headers,
@@ -82,7 +87,7 @@ export default {
     try {
       const handler = await getServerEntry();
       let response = await handler.fetch(request, env, ctx);
-      response = await injectRuntimeConfig(response);
+      response = await injectRuntimeConfig(response, request);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);

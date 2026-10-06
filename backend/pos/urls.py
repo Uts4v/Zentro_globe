@@ -137,6 +137,11 @@ urlpatterns = [
     path("schedules/create/", views.create_schedule, name="pos-schedule-create"),
     path("schedules/<int:schedule_id>/delete/", views.delete_schedule, name="pos-schedule-delete"),
 
+    # Loyalty redemption at the counter
+    path("loyalty/punch-cards/confirm/", views.redeem_punch_card, name="pos-loyalty-punch-card-confirm"),
+    path("loyalty/rewards/confirm/", views.redeem_reward, name="pos-loyalty-reward-confirm"),
+    path("loyalty/transactions/", views.loyalty_transactions, name="pos-loyalty-transactions"),
+
     # ── Reporting & Analytics ─────────────────────────────────────────────────
     path("reports/sales/", reporting_views.sales_report, name="pos-reports-sales"),
     path("reports/fiscal/", reporting_views.fiscal_report, name="pos-reports-fiscal"),

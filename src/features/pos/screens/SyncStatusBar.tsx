@@ -1,6 +1,8 @@
 import { useSyncStatus, useOnlineStatus } from "../offline/hooks";
 import { processSyncQueue, retryDead } from "../offline/sync";
 import { checkConnectivity } from "@/lib/connectivity";
+import { staffSession } from "@/lib/staff-session";
+import { usePosStore } from "../store";
 import { Wifi, WifiOff, AlertCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 
@@ -8,9 +10,22 @@ export default function SyncStatusBar() {
   const isOnline = useOnlineStatus();
   const { pending, failed, dead = 0, isSyncing, needsSignIn, refresh } = useSyncStatus();
   const [syncing, setSyncing] = useState(false);
+  const setCurrentWorker = usePosStore((s) => s.setCurrentWorker);
 
   const waiting = pending + failed + dead;
   const hasIssues = waiting > 0;
+
+  /**
+   * The bar says "sign in with your PIN", so it had better offer that. Retrying
+   * the sync cannot work — the token was refused — and sending the employee to
+   * a merchant login page is a dead end they have no credentials for. Clearing
+   * the staff session puts `PosLayout` back on the PIN pad, and the queue is
+   * untouched, so signing in again uploads it.
+   */
+  function handleReauthenticate() {
+    staffSession.set(null);
+    setCurrentWorker(null);
+  }
 
   async function handleSync() {
     setSyncing(true);
@@ -61,7 +76,12 @@ export default function SyncStatusBar() {
       ) : needsSignIn ? (
         <>
           <AlertCircle className="h-3.5 w-3.5" />
-          <span>Sign in again to sync {waiting} saved change(s)</span>
+          {/* The staff session was refused, so the fix is a fresh PIN rather
+              than a merchant login — an employee cannot do the latter. */}
+          <span>
+            Session expired — sign in with your PIN to send {waiting} saved change
+            {waiting === 1 ? "" : "s"}
+          </span>
         </>
       ) : failed > 0 || dead > 0 ? (
         <>
@@ -79,10 +99,16 @@ export default function SyncStatusBar() {
       )}
       {!busy && (
         <button
-          onClick={handleSync}
+          onClick={needsSignIn && isOnline ? handleReauthenticate : handleSync}
           className={`ml-auto min-h-[36px] rounded-lg px-3 py-1.5 text-xs font-semibold ${buttonTone}`}
         >
-          {!isOnline ? "Try again" : failed > 0 || dead > 0 ? "Retry" : "Sync now"}
+          {needsSignIn && isOnline
+            ? "Sign in with PIN"
+            : !isOnline
+              ? "Try again"
+              : failed > 0 || dead > 0
+                ? "Retry"
+                : "Sync now"}
         </button>
       )}
     </div>

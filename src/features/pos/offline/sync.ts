@@ -3,9 +3,10 @@
  * Processes the sync queue when online, with retry logic.
  */
 
-import { djangoFetch, apiUrl, tokenStore } from "@/lib/django-api-base";
-import { refreshAccessToken, secondsUntilExpiry } from "@/lib/auth-tokens";
+import { djangoFetch, apiUrl } from "@/lib/django-api-base";
+import { refreshAccessToken } from "@/lib/auth-tokens";
 import { isGatewayError, isOnline, subscribeConnectivity } from "@/lib/connectivity";
+import { posAuthHeaders, posSessionState } from "./pos-auth";
 import { posListOrders } from "../api";
 import { syncQueue, offlineOrders, offlinePayments, cachedServerOrders, SyncQueueItem } from "./db";
 
@@ -23,12 +24,10 @@ let needsSignIn = false;
 let syncInterval: ReturnType<typeof setInterval> | null = null;
 let stopWatchingConnection: (() => void) | null = null;
 
-function headers() {
-  return {
-    Authorization: `Bearer ${tokenStore.getAccess()}`,
-    "Content-Type": "application/json",
-  };
-}
+// Auth and the "may this till talk to the server?" decision live in
+// pos-auth.ts: the same two identities apply to every POS call, and they are
+// tested on their own there.
+const headers = posAuthHeaders;
 
 // ── Change notifications ────────────────────────────────────────────────────
 // Screens showing queued work (sync bar, offline tickets, orders) re-read it
@@ -201,14 +200,7 @@ async function processItem(queued: SyncQueueItem): Promise<Outcome> {
 
 // ── Process entire queue ────────────────────────────────────────────────────
 
-/** A usable access token, refreshed first if it ran out while offline. */
-async function ensureSignedIn(): Promise<"ok" | "offline" | "signed_out"> {
-  const access = tokenStore.getAccess();
-  if (access && secondsUntilExpiry(access) > 30) return "ok";
-  const outcome = await refreshAccessToken();
-  if (outcome === "refreshed") return "ok";
-  return outcome === "unreachable" ? "offline" : "signed_out";
-}
+const ensureSignedIn = posSessionState;
 
 /**
  * Orders that just synced now live on the server. Save the fresh list so they

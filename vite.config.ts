@@ -79,6 +79,10 @@ export default defineConfig({
             },
           ],
           shortcuts: [
+            // No POS entry here on purpose: the terminal has its own manifest
+            // (public/pos/manifest.webmanifest, served for /pos by
+            // src/server.ts). A shortcut would offer employees a second,
+            // customer-branded way into the same screen.
             {
               name: "My Cards",
               short_name: "Cards",

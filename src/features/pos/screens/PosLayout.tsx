@@ -1,6 +1,12 @@
-import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useAuth } from "@/lib/auth";
+import {
+  Link,
+  Outlet,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
 import { usePosStore } from "../store";
+import { posWorkerLogout } from "../api";
 import WorkerPinPad from "./WorkerPinPad";
 import ShiftOpenScreen from "./ShiftOpenScreen";
 import ShiftCloseScreen from "./ShiftCloseScreen";
@@ -11,6 +17,7 @@ import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { useBackgroundSync, useOnlineStatus } from "../offline/hooks";
 import { isPosPathOfflineSafe, POS_NAV_SECTIONS } from "../offline/permissions";
 import { fetchLiveBootstrap, loadPosBootstrap, POS_REFRESH_EVENT } from "../offline/loader";
+import { warmPosOfflineCache } from "../offline/warm-cache";
 import { ClearCacheNavButton } from "@/components/ClearCacheControl";
 import { hasStaffPermission, staffSession } from "@/lib/staff-session";
 import {
@@ -206,8 +213,8 @@ function OfflineUnavailable() {
 }
 
 export default function PosLayout() {
-  const { signOut } = useAuth();
   const navigate = useNavigate();
+  const router = useRouter();
   const routerState = useRouterState();
   const merchant = usePosStore((s) => s.merchant);
   const device = usePosStore((s) => s.device);
@@ -216,7 +223,6 @@ export default function PosLayout() {
   const cart = usePosStore((s) => s.cart);
   const setCurrentWorker = usePosStore((s) => s.setCurrentWorker);
   const setActiveShift = usePosStore((s) => s.setActiveShift);
-  const resetPos = usePosStore((s) => s.reset);
   const [showShiftClose, setShowShiftClose] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [initializing, setInitializing] = useState(true);
@@ -228,27 +234,33 @@ export default function PosLayout() {
   // Initialize POS, then keep it current. A terminal left open all day must
   // show a dish added in the merchant dashboard an hour ago, not the menu as it
   // was when the till was switched on.
+  const runInit = useCallback(async () => {
+    setInitializing(true);
+    setInitError(null);
+    try {
+      const loaded = await loadPosBootstrap();
+      const opts = loaded.source === "saved" ? { savedAt: loaded.savedAt! } : undefined;
+      bootstrap(loaded.data, opts);
+    } catch (err: unknown) {
+      setInitError(err instanceof Error ? err.message : "Failed to initialize POS");
+    } finally {
+      setInitializing(false);
+    }
+  }, [bootstrap]);
+
+  // Called once the employee's first login has registered this device, which
+  // is the credential the failed bootstrap was missing.
+  const retryInit = useCallback(() => {
+    void runInit();
+  }, [runInit]);
+
   useEffect(() => {
     if (merchant && device) {
       setInitializing(false);
       return;
     }
 
-    async function init() {
-      setInitializing(true);
-      setInitError(null);
-      try {
-        const loaded = await loadPosBootstrap();
-        const opts = loaded.source === "saved" ? { savedAt: loaded.savedAt! } : undefined;
-        bootstrap(loaded.data, opts);
-      } catch (err: unknown) {
-        setInitError(err instanceof Error ? err.message : "Failed to initialize POS");
-      } finally {
-        setInitializing(false);
-      }
-    }
-
-    init();
+    void runInit();
     // Mount-only on purpose. `merchant` and `device` are read solely to skip a
     // second bootstrap when the store is already hydrated; listing them would
     // re-run this and re-place every POS screen on each hydration.
@@ -257,6 +269,21 @@ export default function PosLayout() {
 
   // Start background sync
   useBackgroundSync();
+
+  // Save the code and pages of the two screens that work offline while the
+  // connection is still up. Without this the service worker caches only what
+  // the browser happened to fetch, so a reload with no connection works only
+  // if every needed script had been loaded on some earlier visit — and the
+  // Orders screen only if someone had opened it before the outage.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      void warmPosOfflineCache(async () => {
+        await router.preloadRoute({ to: "/pos/orders" });
+        await router.preloadRoute({ to: "/pos" });
+      });
+    }, 5_000);
+    return () => clearTimeout(timer);
+  }, [router]);
 
   const savedDataFrom = usePosStore((s) => s.savedDataFrom);
   const offlineCacheUnavailable = usePosStore((s) => s.offlineCacheUnavailable);
@@ -330,15 +357,28 @@ export default function PosLayout() {
     navigate({ to: "/pos", replace: true });
   }, [isOnline, routerState.location.pathname, navigate]);
 
+  /**
+   * End the employee's session and hand the till over.
+   *
+   * This deliberately does NOT call the merchant sign-out. On a staff-only
+   * terminal there is no merchant session to end, and calling it did two
+   * harmful things: it sent the owner to a login page an employee cannot use,
+   * and `resetPos()` wiped the offline menu copy, leaving the next cashier with
+   * a till that cannot reach the network and has nothing cached to serve.
+   */
   async function handleSignOut() {
+    const workerId = currentWorker?.id;
     staffSession.set(null);
     setCurrentWorker(null);
-    // A shared till must not leave the next cashier with this one's menu,
-    // tables and staff — and no device can be signed in to POS with none of
-    // them being reachable.
-    resetPos();
-    await signOut();
-    navigate({ to: "/auth/merchant" as any, replace: true });
+    // Tell the server this device is no longer that employee's. Best effort: a
+    // till still has queued work to upload, so a failure here must not block
+    // the handover.
+    if (workerId) await posWorkerLogout(workerId).catch(() => {});
+    // The cached menu, tables and staff list stay. The device is still
+    // registered to this business, and clearing them would leave the next
+    // cashier with a till that cannot reach the network and has nothing to
+    // serve from.
+    setInitError(null);
   }
 
   function handleSwitchStaff() {
@@ -361,7 +401,13 @@ export default function PosLayout() {
   }
 
   // ── Init error ──
-  if (initError) {
+  //
+  // Deliberately after the PIN pad. A brand-new phone has no device token, and
+  // registering one needs the owner's account, so the first bootstrap fails
+  // with an auth error that the PIN pad resolves: `pos_staff_login` registers
+  // the device itself. Showing this screen first meant a fresh staff phone
+  // could never reach the only login it has.
+  if (initError && currentWorker) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background px-4">
         <div className="text-center">
@@ -388,7 +434,12 @@ export default function PosLayout() {
     if (workers.length === 0 && pathname === "/pos/staff") {
       return <Outlet />;
     }
-    return <WorkerPinPad onLoggedIn={(worker) => setCurrentWorker(worker)} />;
+    return (
+      <WorkerPinPad
+        onLoggedIn={(worker) => setCurrentWorker(worker)}
+        onRegistered={retryInit}
+      />
+    );
   }
 
   // ── Determine which page the user is on ──

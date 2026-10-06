@@ -157,17 +157,28 @@ class ShiftWorker(models.Model):
         code_str = f" #{self.staff_code}" if self.staff_code else ""
         return f"{self.display_name}{code_str} ({self.role})"
 
+    # Staff codes are looked up before the merchant is known: an employee types
+    # a code and a PIN on a phone that has never spoken to this business. Two
+    # businesses both starting at 1001 therefore made the same code ambiguous,
+    # and the employee was asked for a store name as well. Codes are drawn from
+    # a wide random range so they are unique across the whole install instead.
+    STAFF_CODE_SPACE = 10_000_000
+
     @classmethod
     def generate_staff_code(cls, merchant) -> str:
-        """Generate the next available numeric staff code for this merchant."""
-        existing_codes = set(
-            cls.objects.filter(merchant=merchant)
-            .exclude(staff_code="")
-            .values_list("staff_code", flat=True)
+        """Generate a staff code that is free everywhere, not just in this merchant."""
+        taken = set(
+            cls.objects.exclude(staff_code="").values_list("staff_code", flat=True)
         )
-        base = 1001
-        while str(base) in existing_codes:
-            base += 1
+        for _ in range(100):
+            code = str(secrets.randbelow(cls.STAFF_CODE_SPACE - 1_000_000) + 1_000_000)
+            if code not in taken:
+                return code
+        # Effectively unreachable, but never hand back a code already in use:
+        # fall back to scanning upwards rather than risking a duplicate.
+        base = cls.STAFF_CODE_SPACE - 1
+        while str(base) in taken:
+            base -= 1
         return str(base)
 
     def set_pin(self, pin: str):
@@ -461,6 +472,8 @@ class PosAuditLog(models.Model):
     ACTION_TABLE_AREA_UPDATE = "table_area_update"
     ACTION_TABLE_MOVE = "table_move"
     ACTION_STAFF_MODE = "staff_mode"
+    ACTION_PUNCH_CARD_REDEEM = "punch_card_redeem"
+    ACTION_REWARD_REDEEM = "reward_redeem"
 
     ACTION_CHOICES = [
         (ACTION_DEVICE_REGISTER, "Device Register"),
@@ -498,6 +511,8 @@ class PosAuditLog(models.Model):
         (ACTION_TABLE_AREA_UPDATE, "Table Area Update"),
         (ACTION_TABLE_MOVE, "Table Move"),
         (ACTION_STAFF_MODE, "Staff Mode"),
+        (ACTION_PUNCH_CARD_REDEEM, "Punch Card Redeem"),
+        (ACTION_REWARD_REDEEM, "Reward Redeem"),
     ]
 
     id = models.BigAutoField(primary_key=True)

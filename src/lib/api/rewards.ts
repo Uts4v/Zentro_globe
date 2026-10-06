@@ -2,6 +2,15 @@ import { apiUrl, djangoFetch } from "@/lib/django-api-base";
 import { djangoHeaders as authHeaders } from "@/lib/auth";
 import type { Reward, Redemption, LoyaltyRules } from "./types";
 
+/** What the merchant sees after confirming a customer's points redemption. */
+export interface RewardConfirmation {
+  success: boolean;
+  customer_name: string;
+  reward_name: string;
+  points_spent: number;
+  code: string;
+}
+
 export const rewardApi = {
   list: async (merchantId?: string): Promise<Reward[]> => {
     const qs = merchantId ? `?merchant=${merchantId}` : "";
@@ -72,17 +81,25 @@ export const loyaltyApi = {
     });
   },
 
-  confirmRedemption: async (
-    code: string,
-  ): Promise<{ customer_name: string; points_deducted: number }> => {
-    const data = await djangoFetch<any>(apiUrl("/loyalty/redemptions/confirm/"), {
-      method: "POST",
-      headers: authHeaders(true),
-      body: JSON.stringify({ code }),
-    });
+  confirmRedemption: async (code: string): Promise<RewardConfirmation> => {
+    const data = await djangoFetch<Partial<RewardConfirmation> & { reward_name?: string }>(
+      apiUrl("/loyalty/redemptions/confirm/"),
+      {
+        method: "POST",
+        headers: authHeaders(true),
+        body: JSON.stringify({ code }),
+      },
+    );
+    // The server returns every field a confirmation receipt needs. Passing them
+    // all through used to throw away the reward name and the code itself,
+    // which left the merchant reading "Customer spent 50 points" and having to
+    // work out what they had just handed over.
     return {
+      success: true,
       customer_name: data.customer_name ?? "Customer",
-      points_deducted: data.points_spent ?? 0,
+      reward_name: data.reward_name ?? "",
+      points_spent: data.points_spent ?? 0,
+      code: data.code ?? code.trim().toUpperCase(),
     };
   },
 

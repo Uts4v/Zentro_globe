@@ -12,8 +12,14 @@ declare let self: ServiceWorkerGlobalScope;
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
-// ── Skip waiting & claim clients ──────────────────────────────────────────────
-self.skipWaiting();
+// ── Claim clients ─────────────────────────────────────────────────────────────
+// Deliberately NOT calling skipWaiting() here.
+//
+// A till is open all day and mid-service when a deploy lands. Taking over
+// immediately reloaded every open POS terminal at once, losing the cart on
+// screen. Instead a new worker waits, the page is told an update is ready
+// (`updatefound` in PwaProvider), and the swap happens only when the user
+// accepts — PwaProvider.applyUpdate() posts SKIP_WAITING below.
 clientsClaim();
 
 // ── Cache-first: static assets ────────────────────────────────────────────────

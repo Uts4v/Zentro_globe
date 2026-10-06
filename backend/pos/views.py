@@ -5431,3 +5431,184 @@ def pos_minus_stock(request):
         "movement_id": movement.id,
     }, status=status.HTTP_200_OK)
 
+
+# ── Loyalty redemption at the counter ─────────────────────────────────────────
+#
+# Staff working a POS terminal are not signed in to the merchant dashboard, so
+# the dashboard redemption endpoints are not reachable for them by habit even
+# though the staff token technically authenticates against them. These routes
+# are the supported way to redeem from a terminal: same rules, but scoped by
+# device + employee, audited on the POS log, and permission-checked with
+# ``rewards.manage`` so a free item can never be handed out by a role that
+# cannot already authorise a discount.
+
+
+def _loyalty_worker(request, merchant):
+    """The employee performing a POS redemption.
+
+    A terminal always sends ``worker_id`` so the audit trail names the person
+    who actually pressed confirm, not whoever opened the shift. Falls back to
+    the authenticated staff token when the field is absent (owner sessions).
+    """
+    from . import rbac
+
+    worker_id = request.data.get("worker_id")
+    if worker_id:
+        try:
+            return ShiftWorker.objects.get(
+                id=worker_id, merchant=merchant, is_active=True,
+            )
+        except (ShiftWorker.DoesNotExist, ValueError):
+            return None
+    return getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+
+
+def _loyalty_guard(request, permission="rewards.manage"):
+    """Merchant, POS-enabled and permission checks shared by redemption routes.
+
+    Returns ``(merchant, worker, error_response)``; ``error_response`` is None
+    when the call may proceed.
+    """
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return None, None, Response(
+            {"error": "POS is not enabled."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    worker = _loyalty_worker(request, merchant)
+    if worker is None:
+        return merchant, None, Response(
+            {"error": "Worker not found.", "code": "worker_not_found"},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    denied = _perm_denied(worker, permission, request)
+    if denied:
+        return merchant, worker, denied
+
+    return merchant, worker, None
+
+
+def _redemption_response(exc):
+    """Turn a shared-service redemption failure into an API response."""
+    return Response(
+        {"error": exc.message, "code": exc.code}, status=exc.status,
+    )
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def redeem_punch_card(request):
+    """POST /api/pos/loyalty/punch-cards/confirm/
+
+    Body: {proof_code, worker_id}. Confirms a customer's completed punch card,
+    creates the zero-value reward order and starts their next card. Same rules
+    as the dashboard flow - both call loyalty.redemption.
+    """
+    from loyalty import redemption as redemption_service
+
+    merchant, worker, error = _loyalty_guard(request)
+    if error:
+        return error
+
+    code = (request.data.get("proof_code") or "").strip().upper()
+
+    try:
+        payload = redemption_service.confirm_punch_proof(merchant, code)
+    except redemption_service.RedemptionError as exc:
+        return _redemption_response(exc)
+
+    _audit(
+        merchant,
+        PosAuditLog.ACTION_PUNCH_CARD_REDEEM,
+        device=getattr(request, "pos_device", None),
+        worker=worker,
+        user=request.user,
+        entity_type="order",
+        entity_id=payload.get("order_id", ""),
+        metadata={
+            "proof_code": code,
+            "customer_name": payload.get("customer_name", ""),
+            "reward_text": payload.get("reward_text", ""),
+        },
+    )
+
+    return Response(payload)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def redeem_reward(request):
+    """POST /api/pos/loyalty/rewards/confirm/
+
+    Body: {code, worker_id}. Confirms a points redemption the customer already
+    paid for in the app. Mirrors loyalty.views.confirm_redemption.
+    """
+    from loyalty import redemption as redemption_service
+
+    merchant, worker, error = _loyalty_guard(request)
+    if error:
+        return error
+
+    code = (request.data.get("code") or "").strip().upper()
+
+    try:
+        payload = redemption_service.confirm_reward(merchant, code)
+    except redemption_service.RedemptionError as exc:
+        return _redemption_response(exc)
+
+    _audit(
+        merchant,
+        PosAuditLog.ACTION_REWARD_REDEEM,
+        device=getattr(request, "pos_device", None),
+        worker=worker,
+        user=request.user,
+        entity_type="redemption",
+        entity_id=payload.get("code", code),
+        metadata={
+            "customer_name": payload.get("customer_name", ""),
+            "reward_name": payload.get("reward_name", ""),
+            "points_spent": payload.get("points_spent", 0),
+        },
+    )
+
+    return Response(payload)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def loyalty_transactions(request):
+    """GET /api/pos/loyalty/transactions/
+
+    Recent point activity for this merchant so staff can answer "what did that
+    customer just spend?" without a dashboard login. Read-only, so any employee
+    who can use the terminal may look.
+    """
+    from loyalty.models import PointTransaction
+    from loyalty.serializers import PointTransactionSerializer
+
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response(
+            {"error": "POS is not enabled."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    try:
+        limit = min(max(int(request.query_params.get("limit", 25)), 1), 100)
+    except (TypeError, ValueError):
+        limit = 25
+
+    customer_id = request.query_params.get("customer_id", "").strip()
+    qs = (
+        PointTransaction.objects
+        .filter(merchant=merchant)
+        .select_related("customer")
+        .order_by("-created_at")
+    )
+    if customer_id:
+        qs = qs.filter(customer_id=customer_id)
+
+    return Response(PointTransactionSerializer(qs[:limit], many=True).data)
+

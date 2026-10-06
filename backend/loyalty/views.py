@@ -859,92 +859,18 @@ def confirm_punch_proof(request):
     except PermissionError as e:
         return _merchant_error(str(e))
 
-    code = (request.data.get("proof_code") or "").strip().upper()
-    if not code:
-        return Response({"error": "proof_code is required."}, status=status.HTTP_400_BAD_REQUEST)
+    from . import redemption as redemption_service
 
     try:
-        card = CustomerPunchCard.objects.select_related(
-            "customer__user", "punch_card", "merchant"
-        ).get(
-            proof_code=code,
-            merchant=merchant,
-            is_completed=True,
-            proof_code_used=False,
+        payload = redemption_service.confirm_punch_proof(
+            merchant, request.data.get("proof_code"),
         )
-    except CustomerPunchCard.DoesNotExist:
+    except redemption_service.RedemptionError as exc:
         return Response(
-            {"error": "Invalid code or already used."},
-            status=status.HTTP_404_NOT_FOUND,
+            {"error": exc.message, "code": exc.code}, status=exc.status,
         )
 
-    if card.proof_code_expires_at and timezone.now() > card.proof_code_expires_at:
-        return Response({"error": "This code has expired."}, status=status.HTTP_400_BAD_REQUEST)
-
-    card.proof_code_used = True
-    card.save(update_fields=["proof_code_used", "updated_at"])
-
-    from orders.models import Order, OrderItem
-    redemption_order = Order.objects.create(
-        customer=card.customer,
-        merchant=merchant,
-        status=Order.STATUS_PENDING,
-        order_type=Order.ORDER_TYPE_PUNCH_REDEMPTION,
-        total_amount=0,
-        points_earned=0,
-        loyalty_spend_rate=0,
-        is_reward_order=True,
-        notes=f"Punch card reward: {card.punch_card.reward_text}",
-        punch_card_redemption=card,
-    )
-    OrderItem.objects.create(
-        order=redemption_order,
-        name=f"🎁 {card.punch_card.reward_text} (Punch Card Reward)",
-        price=0,
-        quantity=1,
-        subtotal=0,
-        # The free product is a real line for KDS/receipts, but a reward line:
-        # it never earns points, punches or order count (loyalty.earning).
-        is_promotion_reward=True,
-    )
-    # Reward orders are free, but priced through the same engine so they carry
-    # the same pricing snapshot as every other order.
-    from orders.pricing import reprice_order
-    reprice_order(redemption_order)
-
-    card.redeem(order=redemption_order)
-
-    new_card, created = CustomerPunchCard.objects.get_or_create(
-        customer=card.customer,
-        punch_card=card.punch_card,
-        merchant=merchant,
-        is_completed=False,
-        defaults={"current_stamps": 0},
-    )
-    if created:
-        new_card.record_event(
-            PunchCardEvent.EVENT_STARTED,
-            note="New card started after claiming reward",
-        )
-
-    customer_name = card.customer.full_name or card.customer.user.email
-    transaction.on_commit(lambda: _notify_safe(
-        user=card.customer.user,
-        title="Reward confirmed! 🎉",
-        message=f"Your '{card.punch_card.reward_text}' has been confirmed at {merchant.business_name}. A new stamp card has started!",
-        notification_type=Notification.TYPE_PUNCH_CARD,
-        merchant_name=merchant.business_name,
-        context_url=f"/customer/merchant/{merchant.slug}",
-        merchant_id=merchant.id,
-    ))
-
-    return Response({
-        "success": True,
-        "customer_name": customer_name,
-        "reward_text": card.punch_card.reward_text,
-        "order_id": redemption_order.id,
-        "new_card_started": True,
-    })
+    return Response(payload)
 
 
 # ── Redemptions ───────────────────────────────────────────────────────────────
@@ -1098,35 +1024,18 @@ def confirm_redemption(request):
     except PermissionError as e:
         return _merchant_error(str(e))
 
-    code = (request.data.get("code") or "").strip().upper()
-    if not code:
-        return Response({"error": "code is required"}, status=status.HTTP_400_BAD_REQUEST)
+    from . import redemption as redemption_service
 
     try:
-        redemption = Redemption.objects.select_related("customer", "reward__merchant").get(
-            code=code,
-            status=Redemption.STATUS_PENDING,
-            reward__merchant=merchant,
+        payload = redemption_service.confirm_reward(
+            merchant, request.data.get("code"),
         )
-    except Redemption.DoesNotExist:
-        return Response({"error": "Invalid code or already used."}, status=status.HTTP_404_NOT_FOUND)
+    except redemption_service.RedemptionError as exc:
+        return Response(
+            {"error": exc.message, "code": exc.code}, status=exc.status,
+        )
 
-    if redemption.expires_at and timezone.now() > redemption.expires_at:
-        redemption.status = Redemption.STATUS_EXPIRED
-        redemption.save(update_fields=["status"])
-        return Response({"error": "This code has expired."}, status=status.HTTP_400_BAD_REQUEST)
-
-    redemption.status = Redemption.STATUS_CONFIRMED
-    redemption.confirmed_at = timezone.now()
-    redemption.save(update_fields=["status", "confirmed_at"])
-
-    return Response({
-        "success": True,
-        "customer_name": redemption.customer.full_name or "Customer",
-        "reward_name": redemption.reward.name,
-        "points_spent": redemption.points_spent,
-        "code": redemption.code,
-    })
+    return Response(payload)
 
 
 @api_view(["GET"])

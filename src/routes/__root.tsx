@@ -15,6 +15,7 @@ import { AuthProvider, useAuth } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 import { MerchantThemeProvider } from "@/lib/merchant-theme";
 import { PwaProvider } from "@/features/pwa/PwaProvider";
+import { applyManifestLink } from "@/features/pwa/pos-manifest";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ZentroSplashScreen } from "@/components/brand/ZentroSplashScreen";
@@ -29,6 +30,14 @@ import { DJANGO_BASE } from "@/lib/django-api-base";
 // Routes that never require auth
 const PUBLIC_ROUTES = ["/auth", "/auth/merchant", "/auth/forgot-password", "/auth/reset-password"];
 
+// The POS signs an employee in with their own Staff Code + PIN (see
+// features/pos/screens/WorkerPinPad.tsx), so it must not sit behind the
+// merchant/customer gate: a till is registered by that first staff login, and
+// requiring the owner's account here would mean handing the owner's password
+// to every employee. Inside the POS, PosLayout is what decides whether the
+// device has a usable identity yet.
+const STANDALONE_ROUTES = ["/pos"];
+
 // ── Auth gate ─────────────────────────────────────────────────────────────────
 // Renders children immediately; redirects to /auth once auth finishes loading
 // and no user is found. This avoids blocking FCP with a spinner.
@@ -37,7 +46,9 @@ function AuthGate() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
-  const isPublic = PUBLIC_ROUTES.some((r) => pathname.startsWith(r));
+  const isPublic =
+    PUBLIC_ROUTES.some((r) => pathname.startsWith(r)) ||
+    STANDALONE_ROUTES.some((r) => pathname === r || pathname.startsWith(`${r}/`));
   const isMerchant = pathname.startsWith("/merchant");
 
   useEffect(() => {
@@ -197,10 +208,18 @@ function InnerRoot() {
   const auth = useAuth();
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useMemo(() => {
     router.options.context = { ...router.options.context, auth };
   }, [auth, router]);
+
+  // The POS has its own manifest so a till installs as the terminal rather than
+  // as the customer app. The server sets that on a full page load; this covers
+  // arriving by an in-app link, where no new document is rendered.
+  useEffect(() => {
+    applyManifestLink(pathname);
+  }, [pathname]);
 
   return <Outlet />;
 }

@@ -13,10 +13,12 @@
     "start": "node .output/server/index.mjs",
     "preview": "node .output/server/index.mjs",
     "lint": "eslint .",
-    "test": "npm run test:pricing && npm run test:offline-permissions && npm run test:offline-cache",
+    "test": "npm run test:pricing && npm run test:offline-permissions && npm run test:offline-cache && npm run test:staff-only-sync && npm run test:pos-manifest",
     "test:pricing": "node --test src/lib/pricing/preview.test.ts",
     "test:offline-permissions": "node --test src/features/pos/offline/permissions.test.ts",
     "test:offline-cache": "node --test src/features/pos/offline/cache.test.ts",
+    "test:staff-only-sync": "node --test src/features/pos/offline/sync.test.ts",
+    "test:pos-manifest": "node --test src/features/pwa/pos-manifest.test.ts",
     "format": "prettier --write ."
   },
   "dependencies": {
