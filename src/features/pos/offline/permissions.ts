@@ -38,9 +38,16 @@ import {
 const OFFLINE_SAFE_EXACT = new Set(["/pos"]);
 
 /** Matched exactly or as an ancestor, so nested order screens stay reachable. */
-const OFFLINE_SAFE_PREFIXES = ["/pos/orders"];
+const OFFLINE_SAFE_PREFIXES = ["/pos/orders", "/pos/settings"];
 
-/** True when `pathname` is one of the two screens that work with no server. */
+/**
+ * True when `pathname` is one of the screens that work with no server.
+ *
+ * `/pos/settings` is included even though most of it is server-backed: the
+ * Printers & Routing section reads terminal-local printer config and probes
+ * the local print agent (both device-only), so a new printer can be wired up
+ * mid-outage. The screen itself warns which controls need the network.
+ */
 export function isPosPathOfflineSafe(pathname: string): boolean {
   const path = pathname.replace(/\/+$/, "") || "/";
   if (OFFLINE_SAFE_EXACT.has(path)) return true;

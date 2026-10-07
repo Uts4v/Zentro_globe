@@ -30,12 +30,19 @@ test("every other POS screen is blocked", () => {
     "/pos/reports/z-report",
     "/pos/schedule",
     "/pos/staff",
-    "/pos/settings",
     "/merchant",
   ];
   for (const path of blocked) {
     assert.equal(isPosPathOfflineSafe(path), false, `${path} must not be reachable offline`);
   }
+});
+
+test("/pos/settings is allowed for terminal-local printer setup", () => {
+  // Most of Settings is a server round-trip, but Printers & Routing reads
+  // terminal-local config and probes the local agent, so a new printer can be
+  // wired up mid-outage. The screen itself warns which controls need the net.
+  assert.equal(isPosPathOfflineSafe("/pos/settings"), true);
+  assert.equal(isPosPathOfflineSafe("/pos/settings/"), true);
 });
 
 test("/pos is matched exactly, never as a prefix", () => {
@@ -45,12 +52,12 @@ test("/pos is matched exactly, never as a prefix", () => {
   assert.equal(isPosPathOfflineSafe("/pos/ordersandmore"), false);
 });
 
-test("only Order and Orders stay enabled in the sidebar when offline", () => {
+test("only Order, Orders and Settings stay enabled in the sidebar when offline", () => {
   const offlineSafe = POS_NAV_SECTIONS.flatMap((s) => s.items)
     .filter((item) => isPosPathOfflineSafe(item.to))
     .map((item) => item.label)
     .sort();
-  assert.deepEqual(offlineSafe, ["Order", "Orders"]);
+  assert.deepEqual(offlineSafe, ["Order", "Orders", "Settings"]);
 });
 
 test("every sidebar entry has a unique route", () => {

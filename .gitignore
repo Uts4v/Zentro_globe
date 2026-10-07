@@ -16,6 +16,8 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+build
+*.spec
 .output
 .vinxi
 .tanstack/**

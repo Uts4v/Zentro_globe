@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import { usePosStore } from "../store";
 import { posGetSettings, posUpdateSettings, PosSettings } from "../api";
-import { Settings, Save, Loader2, Trash2, Wifi, WifiOff } from "lucide-react";
+import { Info, Settings, Save, Loader2, Trash2, Wifi, WifiOff } from "lucide-react";
 import { ClearCacheDialog } from "@/components/ClearCacheControl";
 import { useOnlineStatus } from "../offline/hooks";
 import { PrinterSettingsSection } from "../printing/PrinterSettingsSection";
@@ -41,8 +42,9 @@ export default function PosSettingsScreen() {
       setPosSettings(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
-    } catch {
-      // ignore
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Could not reach the server.";
+      toast.error(`Could not save settings — ${detail}`);
     } finally {
       setSaving(false);
     }
@@ -62,6 +64,17 @@ export default function PosSettingsScreen() {
         <Settings className="h-5 w-5 text-ink" />
         <h1 className="text-xl font-bold text-foreground">POS Settings</h1>
       </div>
+
+      {!isOnline && (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3">
+          <Info className="h-4 w-4 shrink-0 text-amber-700" />
+          <p className="text-xs leading-relaxed text-amber-800">
+            <span className="font-semibold">You're offline.</span> Feature toggles, Discount Limits
+            and Save Settings need an internet connection. Printers &amp; Routing works offline — it
+            saves to this terminal and prints through the local agent.
+          </p>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Feature toggles */}
@@ -247,8 +260,9 @@ export default function PosSettingsScreen() {
         {/* Save */}
         <button
           onClick={handleSave}
-          disabled={saving}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90 disabled:opacity-50"
+          disabled={saving || !isOnline}
+          title={!isOnline ? "Needs an internet connection to save settings" : undefined}
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-ink py-3 text-sm font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
           {saved ? "Saved!" : "Save Settings"}
