@@ -16,7 +16,7 @@ import ProductDetailSheet, {
   type ProductDraft,
 } from "@/features/catalog/components/ProductDetailSheet";
 import Receipt from "../printing/Receipt";
-import { printKOT, kotTicketFromReceipt } from "../printing/kot-markup";
+import { printKOT, kotTicketFromReceipt, kotTicketFromKOT } from "../printing/kot-markup";
 import RefundModal from "./RefundModal";
 import CollectPaymentSheet from "./CollectPaymentSheet";
 import {
@@ -41,6 +41,7 @@ import {
   Ticket,
   PackageMinus,
   WifiOff,
+  Utensils,
 } from "lucide-react";
 import CustomerSearchModal from "./CustomerSearchModal";
 import MinusStockModal from "./MinusStockModal";
@@ -101,6 +102,21 @@ function canAddItems(order: PosOrder) {
     !["paid", "partially_paid", "refunded"].includes(order.payment_status) &&
     order.status !== "cancelled"
   );
+}
+
+function getOrderDetailTableDisplay(order: PosOrder): string | null {
+  const name = order.table_name_snapshot?.trim();
+  const num = order.table_number_snapshot;
+  if (name && num != null) {
+    if (name.toLowerCase().includes(String(num))) {
+      return name;
+    }
+    return `${name} (Table ${num})`;
+  }
+  if (name) return name;
+  if (num != null) return `Table ${num}`;
+  if (order.table_id != null) return `Table ${order.table_id}`;
+  return null;
 }
 
 function offlineOrderToPosOrder(off: OfflineOrder): PosOrder {
@@ -300,11 +316,24 @@ export default function OrderDetailScreen({
         return;
       }
       try {
-        const ticket = kotTicketFromReceipt(await posReceiptData(String(order.uuid)));
-        printKOT({
-          ...ticket,
-          merchantLogoUrl: merchantLogoUrl ?? null,
-        });
+        const receipt = await posReceiptData(String(order.uuid));
+        if (receipt.kots && receipt.kots.length > 0) {
+          const latestKot = receipt.kots[receipt.kots.length - 1];
+          printKOT(
+            kotTicketFromKOT(latestKot, {
+              id: order.id,
+              merchant_name: receipt.merchant?.name,
+              merchant_logo_url: merchantLogoUrl ?? null,
+              worker_name: receipt.worker_name ?? undefined,
+            }),
+          );
+        } else {
+          const ticket = kotTicketFromReceipt(receipt);
+          printKOT({
+            ...ticket,
+            merchantLogoUrl: merchantLogoUrl ?? null,
+          });
+        }
       } catch (err: any) {
         if (!serverReachable()) {
           printKOT({
@@ -469,6 +498,7 @@ export default function OrderDetailScreen({
   // ── Single order detail view ──
   if (selectedOrder) {
     const order = selectedOrder;
+    const tableDisplay = getOrderDetailTableDisplay(order);
     return (
       <div className="mx-auto max-w-2xl p-4 lg:p-6">
         <button
@@ -485,6 +515,12 @@ export default function OrderDetailScreen({
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-xl font-bold text-foreground">Order {orderNumber(order)}</h2>
+                {tableDisplay && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                    <Utensils className="h-3.5 w-3.5" />
+                    {tableDisplay}
+                  </span>
+                )}
                 {isLocalOrder(order) &&
                   (order.uuid in syncErrors ? (
                     <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-0.5 text-xs font-bold text-destructive">
@@ -542,10 +578,10 @@ export default function OrderDetailScreen({
                 <p className="font-medium">{order.customer_name}</p>
               </div>
             )}
-            {order.table_name_snapshot && (
-              <div className="rounded-xl bg-muted/50 p-3">
-                <p className="text-xs uppercase text-muted-foreground">Table</p>
-                <p className="font-medium">{order.table_name_snapshot}</p>
+            {tableDisplay && (
+              <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
+                <p className="text-xs uppercase font-bold text-amber-700 dark:text-amber-400">Table</p>
+                <p className="font-bold text-foreground">{tableDisplay}</p>
               </div>
             )}
             <div className="rounded-xl bg-muted/50 p-3">
@@ -697,7 +733,7 @@ export default function OrderDetailScreen({
             )}
 
             <div className="flex gap-3">
-              {(order.kot_number || isLocalOrder(order)) && (
+              {Boolean(order.kot_number || isLocalOrder(order) || (order as any).kots?.length) && (
                 <button
                   onClick={() => handlePrintKOT(order)}
                   disabled={loadingReceipt}
@@ -903,12 +939,15 @@ export default function OrderDetailScreen({
               return (
                 String(o.id).includes(q) ||
                 (o.uuid ?? "").toLowerCase().includes(q) ||
-                (o.customer_name ?? "").toLowerCase().includes(q)
+                (o.customer_name ?? "").toLowerCase().includes(q) ||
+                (o.table_name_snapshot ?? "").toLowerCase().includes(q) ||
+                String(o.table_number_snapshot ?? "").includes(q)
               );
             })
             .map((order) => {
               const isOfflineOrder = isLocalOrder(order);
               const syncFailed = isOfflineOrder && order.uuid in syncErrors;
+              const tableDisplay = getOrderDetailTableDisplay(order);
               return (
                 <button
                   key={order.uuid || order.id}
@@ -919,10 +958,14 @@ export default function OrderDetailScreen({
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-bold text-foreground">
-                          <span className="text-sm font-bold text-foreground">
-                            {orderNumber(order)}
-                          </span>
+                          {orderNumber(order)}
                         </span>
+                        {tableDisplay && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                            <Utensils className="h-3.5 w-3.5" />
+                            {tableDisplay}
+                          </span>
+                        )}
                         {isOfflineOrder &&
                           (syncFailed ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-bold text-destructive">
@@ -952,6 +995,12 @@ export default function OrderDetailScreen({
                           </span>
                         )}
                       </div>
+                      {tableDisplay && (
+                        <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-foreground">
+                          <Utensils className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                          <span>{tableDisplay}</span>
+                        </div>
+                      )}
                       <p className="mt-1 text-xs text-muted-foreground">
                         {order.customer_name || "Walk-in"} · {order.items.length} item(s) —{" "}
                         {formatCurrency(Number(order.total_amount), currencySymbol)}

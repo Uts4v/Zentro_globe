@@ -348,6 +348,7 @@ function TableQRScanPage() {
       }
       setOrderSuccess({ orderId });
       setShowCheckout(false);
+      tableApi.resolve(slug, token).then((r) => setResolution(r)).catch(() => {});
     } catch (err: any) {
       alert(err?.message || "Failed to place order");
     } finally {
@@ -441,9 +442,16 @@ function TableQRScanPage() {
             </span>
           </div>
         )}
-        <p className="mt-2 text-xs text-muted-foreground">Order #{orderSuccess.orderId}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {resolution?.active_session
+            ? `Added to Open Bill #${orderSuccess.orderId}`
+            : `Bill #${orderSuccess.orderId}`}
+        </p>
         <button
-          onClick={() => setOrderSuccess(null)}
+          onClick={() => {
+            setOrderSuccess(null);
+            tableApi.resolve(slug, token).then((r) => setResolution(r)).catch(() => {});
+          }}
           className="mt-8 flex h-12 items-center gap-2 rounded-2xl bg-foreground px-8 text-sm font-medium text-background active:scale-[0.98]"
         >
           Order More <ArrowRight className="h-4 w-4" />
@@ -487,6 +495,18 @@ function TableQRScanPage() {
             <span className="text-sm font-medium text-foreground">
               {merchant.name} · Table {activeTable.tableName}
             </span>
+          </div>
+        )}
+
+        {resolution?.active_session && (
+          <div className="mt-3 rounded-2xl border border-ember/20 bg-ember/5 p-3.5 text-xs text-foreground">
+            <div className="flex items-center gap-2 font-semibold text-ember">
+              <Sparkles className="h-4 w-4" />
+              Adding to Active Dining Session
+            </div>
+            <p className="mt-1 text-muted-foreground leading-relaxed">
+              These items will be added to <strong className="text-foreground">Open Bill #{resolution.active_session.bill_order_number}</strong>. A new KOT ticket will be generated and printed for the kitchen.
+            </p>
           </div>
         )}
 
@@ -599,6 +619,11 @@ function TableQRScanPage() {
           >
             {placing ? (
               <Loader2 className="h-5 w-5 animate-spin" />
+            ) : resolution?.active_session ? (
+              <>
+                <SendHorizontal className="h-5 w-5" />
+                Add to Bill — {formatCurrency(total, currencySymbol)}
+              </>
             ) : (
               <>
                 <SendHorizontal className="h-5 w-5" />
@@ -699,6 +724,26 @@ function TableQRScanPage() {
             </button>
           </div>
         </div>
+
+        {resolution?.active_session && (
+          <div className="mt-2.5 flex items-center justify-between rounded-xl border border-ember/20 bg-ember/10 px-3 py-1.5 text-xs text-foreground">
+            <div className="flex items-center gap-1.5">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-ember opacity-75"></span>
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-ember"></span>
+              </span>
+              <span className="font-semibold text-ember">
+                Open Bill #{resolution.active_session.bill_order_number}
+              </span>
+              <span className="text-muted-foreground">
+                · {resolution.active_session.items_count} items
+              </span>
+            </div>
+            <span className="font-bold text-foreground">
+              {currencySymbol} {Number(resolution.active_session.total_amount).toFixed(2)}
+            </span>
+          </div>
+        )}
 
         {/* Search */}
         <div className="relative mt-3">

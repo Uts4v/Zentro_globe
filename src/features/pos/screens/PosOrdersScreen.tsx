@@ -12,6 +12,7 @@ import {
   Ticket,
   WifiOff,
   X,
+  Utensils,
 } from "lucide-react";
 import { usePendingOfflineOrders, useOnlineStatus } from "../offline/hooks";
 import { printKOT, type KOTTicketData } from "../printing/kot-markup";
@@ -19,6 +20,21 @@ import { tableLabel } from "../printing/table-label";
 import { OfflineKOT, OfflineOrder } from "../offline/db";
 import { offlineOrderPaid } from "../offline/documents";
 import Receipt from "../printing/Receipt";
+
+function getPosOrderTableDisplay(order: PosOrder): string | null {
+  const name = order.table_name_snapshot?.trim();
+  const num = order.table_number_snapshot;
+  if (name && num != null) {
+    if (name.toLowerCase().includes(String(num))) {
+      return name;
+    }
+    return `${name} (Table ${num})`;
+  }
+  if (name) return name;
+  if (num != null) return `Table ${num}`;
+  if (order.table_id != null) return `Table ${order.table_id}`;
+  return null;
+}
 
 /**
  * The stored offline ticket has no KOT number — the server assigns that on
@@ -206,15 +222,23 @@ export default function PosOrdersScreen() {
                   Synced orders ({filtered.length})
                 </h2>
               )}
-              {filtered.map((order) => (
+              {filtered.map((order) => {
+                const tableDisplay = getPosOrderTableDisplay(order);
+                return (
                 <div
                   key={order.uuid ?? order.id}
                   className="rounded-2xl border border-border bg-card p-4 transition-shadow hover:shadow-sm"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-bold text-foreground">#{order.id}</span>
+                        {tableDisplay && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                            <Utensils className="h-3.5 w-3.5" />
+                            {tableDisplay}
+                          </span>
+                        )}
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                             STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
@@ -227,9 +251,15 @@ export default function PosOrdersScreen() {
                         </span>
                       </div>
 
+                      {tableDisplay && (
+                        <div className="mt-2 inline-flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-foreground">
+                          <Utensils className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                          <span>{tableDisplay}</span>
+                        </div>
+                      )}
+
                       <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
                         {order.customer_name && <p>Customer: {order.customer_name}</p>}
-                        {order.table_name_snapshot && <p>Table: {order.table_name_snapshot}</p>}
                         <p>
                           {order.items.length} item(s) —{" "}
                           <span className="numeric">
@@ -255,7 +285,8 @@ export default function PosOrdersScreen() {
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </>
           )}
         </div>
@@ -315,6 +346,12 @@ function OfflineOrderCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-bold text-foreground">{reference}</span>
+            {table && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                <Utensils className="h-3.5 w-3.5" />
+                {table}
+              </span>
+            )}
             <span
               className={`rounded-full px-2 py-0.5 text-xs font-bold ${
                 failed ? "bg-destructive/10 text-destructive" : "bg-warning/15 text-warning"
@@ -327,12 +364,14 @@ function OfflineOrderCard({
             </span>
           </div>
 
+          {table && (
+            <div className="mt-2 inline-flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-foreground">
+              <Utensils className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+              <span>{table}</span>
+            </div>
+          )}
+
           <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-            {table && (
-              <p>
-                Table: <span className="font-medium text-foreground">{table}</span>
-              </p>
-            )}
             {order.notes && <p>Notes: {order.notes}</p>}
             <p>
               {time

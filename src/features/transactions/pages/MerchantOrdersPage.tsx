@@ -17,7 +17,7 @@ import { orderApi, type Order, type OrderStatus, type FulfillmentType } from "@/
 import { useAuth } from "@/lib/auth";
 import { toast } from "sonner";
 import { playOrderChime } from "@/lib/audio";
-import { printKOT, kotTicketFromOrder } from "@/features/pos/printing/kot-markup";
+import { printKOT, kotTicketFromOrder, kotTicketFromKOT } from "@/features/pos/printing/kot-markup";
 
 const NEXT_STATUS: Record<OrderStatus, OrderStatus | null> = {
   pending: "confirmed",
@@ -443,6 +443,32 @@ function CancelOrderModal({
   );
 }
 
+function getOrderTableDisplay(order: {
+  table_name_snapshot?: string | null;
+  table_number_snapshot?: number | null;
+  table_id?: number | null;
+  [key: string]: any;
+}): string | null {
+  const name = order.table_name_snapshot?.trim();
+  const num = order.table_number_snapshot ?? (order as any).table_number;
+  if (name && num != null) {
+    if (name.toLowerCase().includes(String(num))) {
+      return name;
+    }
+    return `${name} (Table ${num})`;
+  }
+  if (name) return name;
+  if (num != null) return `Table ${num}`;
+  if (order.table_id != null) return `Table ${order.table_id}`;
+  if ((order as any).table != null) {
+    if (typeof (order as any).table === "object" && (order as any).table.table_number) {
+      return `Table ${(order as any).table.table_number}`;
+    }
+    return `Table ${(order as any).table}`;
+  }
+  return null;
+}
+
 function OrderCard({
   order,
   onAdvance,
@@ -476,10 +502,13 @@ function OrderCard({
   const isDineIn = order.fulfillment_type === "dine_in";
   const isPickup = order.fulfillment_type === "pickup";
   const isDelivery = order.fulfillment_type === "delivery";
-  const tableNum = order.table_number_snapshot;
-  const tableName = order.table_name_snapshot;
+  const tableDisplay = getOrderTableDisplay(order);
 
-  const fulfillmentBadge = isDineIn
+  const [showKotMenu, setShowKotMenu] = useState(false);
+  const kots = (order as any).kots || [];
+  const hasKots = kots.length > 0 || !!(order as any).kot_number;
+
+  const fulfillmentBadge = isDineIn || !!tableDisplay
     ? { label: "Dine-in", icon: "🍽️", color: "bg-info/15 text-info" }
     : isDelivery
       ? { label: "Delivery", icon: "🚗", color: "bg-warning/15 text-warning" }
@@ -491,6 +520,28 @@ function OrderCard({
         isNew ? "ring-2 ring-ember shadow-ember animate-pulse" : ""
       } ${isPunchCard ? "ring-2 ring-info/40" : ""}`}
     >
+      {/* Prominent Table Banner visible immediately on the outside */}
+      {tableDisplay && (
+        <div className="mb-3.5 flex items-center justify-between rounded-2xl border-2 border-amber-500/30 bg-amber-500/10 px-3.5 py-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-amber-500 text-sm font-bold text-white shadow-xs">
+              <Utensils className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                Table Service
+              </p>
+              <p className="font-display text-lg font-bold leading-none text-foreground">
+                {tableDisplay}
+              </p>
+            </div>
+          </div>
+          <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-[10px] font-bold tracking-wide text-amber-700 dark:text-amber-300">
+            DINE-IN
+          </span>
+        </div>
+      )}
+
       <div className="flex items-start justify-between">
         <div>
           {isNew && (
@@ -509,24 +560,25 @@ function OrderCard({
             </div>
           )}
 
-          {/* Table number - prominently displayed for dine-in */}
-          {isDineIn && tableName && (
-            <div className="mb-2 inline-flex items-center gap-2 rounded-xl bg-info/10 border border-info/20 px-3 py-1.5">
-              <Utensils className="h-4 w-4 text-info" />
-              <span className="font-display text-sm font-bold text-info">{tableName}</span>
-              {tableNum && <span className="text-xs text-info">#{tableNum}</span>}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <p className="text-xs uppercase tracking-widest text-muted-foreground">
               #{String(order.id).slice(0, 8)}
             </p>
-            {(order as any).kot_number && (
+            {tableDisplay && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-300">
+                <Utensils className="h-3 w-3" />
+                {tableDisplay}
+              </span>
+            )}
+            {kots.length > 1 ? (
+              <span className="inline-flex items-center rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
+                {kots.length} KOTs
+              </span>
+            ) : (order as any).kot_number ? (
               <span className="inline-flex items-center rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
                 KOT #{String((order as any).kot_number).padStart(3, "0")}
               </span>
-            )}
+            ) : null}
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${fulfillmentBadge.color}`}
             >
@@ -586,18 +638,90 @@ function OrderCard({
       </div>
 
       <div className="mt-3 flex gap-2">
-        {order.kot_number && (
-          <button
-            onClick={() =>
-              printKOT(
-                kotTicketFromOrder({ ...order, merchant_logo_url: merchantLogoUrl }, "order_items"),
-              )
-            }
-            className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-border px-4 text-xs font-medium text-muted-foreground hover:bg-mist"
-          >
-            <Ticket className="h-3.5 w-3.5" />
-            Print KOT
-          </button>
+        {hasKots && (
+          kots.length > 1 ? (
+            <div className="relative inline-block">
+              <button
+                type="button"
+                onClick={() => setShowKotMenu((v) => !v)}
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-border px-3 text-xs font-medium text-foreground hover:bg-mist"
+              >
+                <Ticket className="h-3.5 w-3.5" />
+                Print KOT ({kots.length})
+              </button>
+              {showKotMenu && (
+                <div className="absolute bottom-12 left-0 z-30 min-w-[220px] rounded-2xl border border-border bg-card p-2 shadow-xl backdrop-blur-md">
+                  <div className="px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Kitchen Order Tickets
+                  </div>
+                  {kots.map((k: any) => (
+                    <button
+                      key={k.id || k.kot_number}
+                      type="button"
+                      onClick={() => {
+                        setShowKotMenu(false);
+                        printKOT(
+                          kotTicketFromKOT(k, {
+                            id: order.id,
+                            merchant_name: order.merchant_name,
+                            merchant_logo_url: merchantLogoUrl,
+                          }),
+                        );
+                      }}
+                      className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-xs font-medium text-foreground hover:bg-muted text-left"
+                    >
+                      <span>KOT #{String(k.kot_number).padStart(3, "0")}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {k.items_data?.length || 0} item(s)
+                      </span>
+                    </button>
+                  ))}
+                  <div className="my-1 border-t border-border" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowKotMenu(false);
+                      kots.forEach((k: any) => {
+                        printKOT(
+                          kotTicketFromKOT(k, {
+                            id: order.id,
+                            merchant_name: order.merchant_name,
+                            merchant_logo_url: merchantLogoUrl,
+                          }),
+                        );
+                      });
+                    }}
+                    className="flex w-full items-center justify-center rounded-xl px-2.5 py-1.5 text-xs font-bold text-foreground bg-muted hover:bg-muted/80"
+                  >
+                    Print All KOTs
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                if (kots.length === 1) {
+                  printKOT(
+                    kotTicketFromKOT(kots[0], {
+                      id: order.id,
+                      merchant_name: order.merchant_name,
+                      merchant_logo_url: merchantLogoUrl,
+                    }),
+                  );
+                } else {
+                  printKOT(
+                    kotTicketFromOrder({ ...order, merchant_logo_url: merchantLogoUrl }, "order_items"),
+                  );
+                }
+              }}
+              className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-2xl border border-border px-4 text-xs font-medium text-muted-foreground hover:bg-mist"
+            >
+              <Ticket className="h-3.5 w-3.5" />
+              Print KOT
+            </button>
+          )
         )}
         {next && onAdvance && (
           <button

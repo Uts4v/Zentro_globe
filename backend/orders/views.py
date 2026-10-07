@@ -40,9 +40,18 @@ from notifications.services import send_notification
 from notifications.models import Notification
 from inventory.order_stock import safe_deduct_stock_for_order, safe_restore_stock_for_order
 
-from .models import Order, OrderItem, OrderItemOption
+from .models import Order, OrderItem, OrderItemOption, DiningSession, KitchenOrderTicket
 from .serializers import CustomerOrderSerializer, OrderSerializer, CreateOrderSerializer, CreateGuestOrderSerializer, AddItemsToOrderSerializer
 from .services.preparation import prepare_order_items_for_routing
+from .services.dining import (
+    generate_next_kot_number,
+    serialize_kot_items_data,
+    get_active_dining_session,
+    create_dining_session,
+    create_kot_for_order,
+    consolidate_items_into_bill,
+    close_dining_session_for_order,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -124,7 +133,9 @@ def _order_qs():
         "processed_by_worker",
         "pos_device",
         "cash_shift",
-    ).prefetch_related("items__menu_item", "items__options")
+        "dining_session",
+        "parent_bill",
+    ).prefetch_related("items__menu_item", "items__options", "kots")
 
 
 def _notify_safe(**kwargs):
@@ -465,7 +476,7 @@ def store_orders(request):
 
     qs = (
         _order_qs()
-        .filter(merchant=merchant)
+        .filter(merchant=merchant, is_bill=True)
         .order_by("-created_at")
     )
 
@@ -580,9 +591,45 @@ def create_order(request):
         except OfferError as exc:
             return Response(exc.as_response_data(), status=exc.status)
 
+    # Check for active dining session if dine-in with table
+    active_session = None
+    if fulfillment_type == Order.FULFILLMENT_DINE_IN and table_instance:
+        active_session = get_active_dining_session(
+            merchant,
+            table=table_instance,
+            session_id=data.get("dining_session_id"),
+        )
+
+    if active_session and active_session.bill_order:
+        bill_order = Order.objects.select_for_update(of=("self",)).get(pk=active_session.bill_order_id)
+        kot, created_items = consolidate_items_into_bill(
+            bill_order=bill_order,
+            dining_session=active_session,
+            priced_lines=priced,
+            customer=customer,
+            notes=data.get("notes", ""),
+            performed_by=request.user,
+        )
+
+        table_label = table_name_snap or (f"Table {table_number_snap}" if table_number_snap else "Table")
+        transaction.on_commit(lambda: _notify_safe(
+            user=merchant.user,
+            title="Order items added 🍽️",
+            message=f"Additional items for {table_label} (Bill #{bill_order.id}) — KOT #{kot.kot_number}",
+            notification_type=Notification.TYPE_NEW_ORDER,
+            merchant_name=merchant.business_name,
+            context_url="/merchant/orders",
+            order_id=bill_order.id,
+            merchant_id=merchant.id,
+        ))
+
+        return Response(OrderSerializer(bill_order, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
     pricing_ctx, pricing = price_new_order_lines(
         merchant, priced, fulfillment_type=fulfillment_type, order_type=Order.ORDER_TYPE_REGULAR,
     )
+
+    kot_number = generate_next_kot_number(merchant)
 
     order = Order.objects.create(
         customer=customer,
@@ -599,11 +646,36 @@ def create_order(request):
         table_name_snapshot=table_name_snap,
         table_number_snapshot=table_number_snap,
         client_mutation_id=client_mutation_id,
+        kot_number=kot_number,
+        is_bill=True,
+    )
+
+    dining_session = None
+    if fulfillment_type == Order.FULFILLMENT_DINE_IN and table_instance:
+        dining_session = create_dining_session(
+            merchant=merchant,
+            table=table_instance,
+            bill_order=order,
+            customer=customer,
+        )
+        order.dining_session = dining_session
+        order.save(update_fields=["dining_session", "updated_at"])
+
+    kot = create_kot_for_order(
+        merchant=merchant,
+        order=order,
+        dining_session=dining_session,
+        kot_number=kot_number,
+        notes=order.notes,
+        customer_name=customer.full_name or "Customer",
+        items_data=serialize_kot_items_data(priced_lines=priced),
     )
 
     try:
         # Apply preparation routing
         order_items_data = prepare_order_items_for_routing(order, _item_rows(priced))
+        for item_dict in order_items_data:
+            item_dict["kot"] = kot
 
         created_items = _bulk_create_items_with_options(order, order_items_data, _option_rows(priced))
         persist_new_order(order, pricing_ctx, pricing, created_items)
@@ -700,15 +772,39 @@ def guest_create_order(request):
     except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Generate KOT number. Lock the merchant row so concurrent guest orders
-    # can't compute the same count+1.
-    from django.utils import timezone as tz
-    merchant = MerchantProfile.objects.select_for_update().get(pk=merchant.pk)
-    today_start = tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_count = Order.objects.filter(
-        merchant=merchant, created_at__gte=today_start, kot_number__isnull=False,
-    ).count()
-    kot_number = today_count + 1
+    # Check for active dining session on this table
+    active_session = get_active_dining_session(
+        merchant,
+        table=table_instance,
+        session_id=data.get("dining_session_id"),
+    )
+
+    if active_session and active_session.bill_order:
+        bill_order = Order.objects.select_for_update(of=("self",)).get(pk=active_session.bill_order_id)
+        kot, created_items = consolidate_items_into_bill(
+            bill_order=bill_order,
+            dining_session=active_session,
+            priced_lines=priced,
+            guest_name=data.get("guest_name", ""),
+            notes=data.get("notes", ""),
+        )
+
+        table_label = table_instance.name or f"Table {table_instance.table_number}"
+        transaction.on_commit(lambda: _notify_safe(
+            user=merchant.user,
+            title="Guest order items added 🍽️",
+            message=f"Additional items for {table_label} (Bill #{bill_order.id}) — KOT #{kot.kot_number}",
+            notification_type=Notification.TYPE_NEW_ORDER,
+            merchant_name=merchant.business_name,
+            context_url="/merchant/orders",
+            order_id=bill_order.id,
+            merchant_id=merchant.id,
+        ))
+
+        return Response(OrderSerializer(bill_order).data, status=status.HTTP_201_CREATED)
+
+    # Otherwise, start new bill and dining session for this table
+    kot_number = generate_next_kot_number(merchant)
 
     pricing_ctx, pricing = price_new_order_lines(
         merchant, priced, fulfillment_type=Order.FULFILLMENT_DINE_IN, order_type=Order.ORDER_TYPE_REGULAR,
@@ -731,10 +827,33 @@ def guest_create_order(request):
         guest_session_id=data.get("guest_session_id", ""),
         guest_name_snapshot=data.get("guest_name", ""),
         kot_number=kot_number,
+        is_bill=True,
+    )
+
+    dining_session = create_dining_session(
+        merchant=merchant,
+        table=table_instance,
+        bill_order=order,
+        guest_session_id=data.get("guest_session_id", ""),
+        guest_name=data.get("guest_name", ""),
+    )
+    order.dining_session = dining_session
+    order.save(update_fields=["dining_session", "updated_at"])
+
+    kot = create_kot_for_order(
+        merchant=merchant,
+        order=order,
+        dining_session=dining_session,
+        kot_number=kot_number,
+        notes=order.notes,
+        customer_name=data.get("guest_name", "") or "Guest",
+        items_data=serialize_kot_items_data(priced_lines=priced),
     )
 
     # Apply preparation routing
     order_items_data = prepare_order_items_for_routing(order, _item_rows(priced))
+    for item_dict in order_items_data:
+        item_dict["kot"] = kot
 
     created_items = _bulk_create_items_with_options(order, order_items_data, _option_rows(priced))
     persist_new_order(order, pricing_ctx, pricing, created_items)
@@ -1111,6 +1230,12 @@ def update_order_status(request, pk):
     elif new_status == Order.STATUS_CANCELLED:
         safe_restore_stock_for_order(order, performed_by=request.user)
 
+    if new_status in (Order.STATUS_COMPLETED, Order.STATUS_CANCELLED):
+        close_dining_session_for_order(
+            order,
+            DiningSession.STATUS_COMPLETED if new_status == Order.STATUS_COMPLETED else DiningSession.STATUS_CANCELLED,
+        )
+
     try:
         _audit_order(
             order, "order_status_change",
@@ -1201,6 +1326,7 @@ def cancel_order(request, pk):
     order.save(update_fields=["status", "cancelled_by", "cancellation_reason", "updated_at"])
 
     safe_restore_stock_for_order(order, performed_by=request.user)
+    close_dining_session_for_order(order, DiningSession.STATUS_CANCELLED)
 
     _audit_order(
         order,
@@ -1323,8 +1449,28 @@ def add_items_to_order(request, pk):
     except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
+    # Generate next KOT number and create KitchenOrderTicket for newly added items
+    kot_number = generate_next_kot_number(merchant)
+    items_data = serialize_kot_items_data(priced_lines=priced)
+    customer_name = (
+        (order.customer.full_name if order.customer else "")
+        or order.guest_name_snapshot
+        or "Customer"
+    )
+    kot = create_kot_for_order(
+        merchant=merchant,
+        order=order,
+        dining_session=order.dining_session,
+        kot_number=kot_number,
+        notes=data.get("notes", ""),
+        customer_name=customer_name,
+        items_data=items_data,
+    )
+
     # Apply preparation routing for new items
     new_items_data = prepare_order_items_for_routing(order, _item_rows(priced))
+    for item_dict in new_items_data:
+        item_dict["kot"] = kot
 
     created_items = _bulk_create_items_with_options(order, new_items_data, _option_rows(priced))
 
@@ -1334,14 +1480,16 @@ def add_items_to_order(request, pk):
         safe_deduct_stock_for_order(order, lines=created_items, performed_by=request.user)
 
     # Drop the stale prefetch cache so the re-price sees the new rows.
-    order._prefetched_objects_cache.pop("items", None)
+    if hasattr(order, "_prefetched_objects_cache"):
+        order._prefetched_objects_cache.pop("items", None)
 
     # Re-price the whole bill: tax, charges and any attached discount are
     # recalculated (and the discount re-validated) for the new basket.
     pricing = reprice_order(order)
     order.points_earned += estimate_points(priced, order.loyalty_spend_rate)
+    order.kot_number = kot_number
     order.version += 1
-    order.save(update_fields=["points_earned", "version", "updated_at"])
+    order.save(update_fields=["points_earned", "kot_number", "version", "updated_at"])
 
     # Append notes if provided
     new_notes = data.get("notes", "").strip()

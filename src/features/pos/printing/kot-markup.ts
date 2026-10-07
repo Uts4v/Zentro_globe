@@ -121,6 +121,57 @@ export function kotTicketFromOrder(
   };
 }
 
+/**
+ * Build a KOT ticket from an individual KitchenOrderTicket record (from order.kots).
+ * This ensures that when a dine-in customer places multiple orders / adds items,
+ * the kitchen prints only the newly added items on this specific ticket.
+ */
+export function kotTicketFromKOT(
+  kot: {
+    id?: number;
+    uuid?: string;
+    kot_number: number;
+    notes?: string;
+    table_name_snapshot?: string;
+    table_number_snapshot?: number | null;
+    customer_name_snapshot?: string;
+    fulfillment_type_snapshot?: string;
+    items_data: Array<{
+      name: string;
+      quantity: number;
+      special_instructions?: string;
+      options?: Array<{ group_name: string; option_name: string }>;
+    }>;
+    created_at?: string;
+  },
+  orderContext?: {
+    id?: string | number;
+    merchant_name?: string;
+    merchant_logo_url?: string | null;
+    worker_name?: string;
+  },
+): KOTTicketData {
+  return {
+    merchantName: orderContext?.merchant_name ?? "",
+    merchantLogoUrl: orderContext?.merchant_logo_url ?? null,
+    kotNumber: kot.kot_number ?? null,
+    orderNumber: orderContext?.id ? `#${String(orderContext.id).slice(-6)}` : "",
+    createdAt: kot.created_at ?? null,
+    fulfillmentType: kot.fulfillment_type_snapshot ?? "",
+    tableName: kot.table_name_snapshot,
+    tableNumber: kot.table_number_snapshot,
+    customerName: kot.customer_name_snapshot,
+    workerName: orderContext?.worker_name,
+    notes: kot.notes ?? "",
+    items: (kot.items_data ?? []).map((i) => ({
+      name: i.name,
+      quantity: i.quantity,
+      special_instructions: i.special_instructions ?? "",
+      options: i.options,
+    })),
+  };
+}
+
 const DASH = `<hr style="border:none;border-top:1px dashed #000;margin:5px 0;">`;
 const SOLID = `<hr style="border:none;border-top:2px solid #000;margin:7px 0;">`;
 

@@ -249,6 +249,17 @@ export default function IncomingOrdersPanel() {
             const createdAgo = order.created_at ? formatTimeAgo(order.created_at) : "";
             const hasCustomer = !!order.customer;
             const isLinking = linkingOrderId === order.id;
+            const tableName = order.table_name_snapshot?.trim();
+            const tableNum = order.table_number_snapshot;
+            const tableDisplay = tableName && tableNum != null
+              ? tableName.toLowerCase().includes(String(tableNum)) ? tableName : `${tableName} (Table ${tableNum})`
+              : tableName
+                ? tableName
+                : tableNum != null
+                  ? `Table ${tableNum}`
+                  : order.table_id != null
+                    ? `Table ${order.table_id}`
+                    : null;
 
             return (
               <div
@@ -258,8 +269,14 @@ export default function IncomingOrdersPanel() {
                 {/* Order summary row */}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-bold text-foreground">#{order.id}</span>
+                      {tableDisplay && (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/15 px-2 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                          <Utensils className="h-3 w-3" />
+                          {tableDisplay}
+                        </span>
+                      )}
                       <span
                         className={`rounded-full px-2 py-0.5 text-xs font-bold ${STATUS_COLORS[order.status] || "bg-muted text-muted-foreground"}`}
                       >
@@ -276,12 +293,12 @@ export default function IncomingOrdersPanel() {
                       </span>
                       <span className="flex items-center gap-1 capitalize">
                         <Utensils className="h-3 w-3" />
-                        {order.fulfillment_type}
+                        {tableDisplay ? "Dine-in" : order.fulfillment_type}
                       </span>
-                      {order.table_name_snapshot && (
-                        <span className="flex items-center gap-1">
-                          <ShoppingBag className="h-3 w-3" />
-                          {order.table_name_snapshot}
+                      {tableDisplay && (
+                        <span className="flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400">
+                          <Utensils className="h-3 w-3" />
+                          {tableDisplay}
                         </span>
                       )}
                       {hasCustomer ? (

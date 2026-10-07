@@ -1176,6 +1176,18 @@ def public_resolve_table(request, slug, public_token):
             status=status.HTTP_404_NOT_FOUND,
         )
 
+    from orders.services.dining import get_active_dining_session
+    session = get_active_dining_session(merchant, table=table)
+    active_session_data = None
+    if session and session.bill_order:
+        active_session_data = {
+            "session_id": str(session.session_id),
+            "bill_order_id": session.bill_order.id,
+            "bill_order_number": f"#{session.bill_order.id}",
+            "total_amount": str(session.bill_order.total_amount),
+            "items_count": session.bill_order.items.count(),
+        }
+
     return Response({
         "merchant": {
             "id": merchant.id,
@@ -1190,6 +1202,7 @@ def public_resolve_table(request, slug, public_token):
             "table_number": table.table_number,
             "public_token": table.public_token,
         },
+        "active_session": active_session_data,
     })
 
 
@@ -1212,6 +1225,18 @@ def public_resolve_table_by_token(request, public_token):
         )
 
     merchant = table.merchant
+    from orders.services.dining import get_active_dining_session
+    session = get_active_dining_session(merchant, table=table)
+    active_session_data = None
+    if session and session.bill_order:
+        active_session_data = {
+            "session_id": str(session.session_id),
+            "bill_order_id": session.bill_order.id,
+            "bill_order_number": f"#{session.bill_order.id}",
+            "total_amount": str(session.bill_order.total_amount),
+            "items_count": session.bill_order.items.count(),
+        }
+
     return Response({
         "merchant": {
             "id": merchant.id,
@@ -1226,6 +1251,7 @@ def public_resolve_table_by_token(request, public_token):
             "table_number": table.table_number,
             "public_token": table.public_token,
         },
+        "active_session": active_session_data,
     })
 
 # ── PDF Menu ─────────────────────────────────────────────────────────────────

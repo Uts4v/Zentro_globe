@@ -17,7 +17,17 @@ from rest_framework.throttling import ScopedRateThrottle
 
 from merchants.models import MerchantProfile, MenuItem
 from merchants.serializers import MenuOptionGroupSerializer
-from orders.models import Order, OrderItem, OrderItemOption
+from orders.models import Order, OrderItem, OrderItemOption, DiningSession, KitchenOrderTicket
+from orders.serializers import KitchenOrderTicketSerializer
+from orders.services.dining import (
+    generate_next_kot_number,
+    serialize_kot_items_data,
+    get_active_dining_session,
+    create_dining_session,
+    create_kot_for_order,
+    consolidate_items_into_bill,
+    close_dining_session_for_order,
+)
 from accounts.models import CustomerProfile, User
 from notifications.services import send_notification
 from notifications.models import Notification
@@ -1790,16 +1800,37 @@ def create_pos_order(request):
     if source not in ("pos_online", "pos_offline"):
         source = "pos_online"
 
+    # Check for active dining session if dine-in with table
+    active_session = None
+    if fulfillment == Order.FULFILLMENT_DINE_IN and table_instance:
+        active_session = get_active_dining_session(merchant, table=table_instance)
+
+    if active_session and active_session.bill_order:
+        bill_order = Order.objects.select_for_update(of=("self",)).get(pk=active_session.bill_order_id)
+        kot, created_items = consolidate_items_into_bill(
+            bill_order=bill_order,
+            dining_session=active_session,
+            priced_lines=priced,
+            customer=customer,
+            notes=data.get("notes", ""),
+            performed_by=request.user,
+        )
+
+        if client_mutation_id:
+            ProcessedClientMutation.objects.create(
+                merchant=merchant,
+                device=device or PosDevice.objects.filter(merchant=merchant).first(),
+                client_mutation_id=client_mutation_id,
+                entity_type="order",
+                operation="create",
+                server_object_id=bill_order.id,
+            )
+
+        from orders.serializers import OrderSerializer
+        return Response(OrderSerializer(bill_order, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
     # Generate sequential KOT number per merchant per day (resets at midnight).
-    # Lock the merchant row so two devices can't compute the same count+1.
-    from django.utils import timezone as tz
-    from merchants.models import MerchantProfile as _MP
-    merchant = _MP.objects.select_for_update().get(pk=merchant.pk)
-    today_start = tz.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_count = Order.objects.filter(
-        merchant=merchant, created_at__gte=today_start, kot_number__isnull=False,
-    ).count()
-    kot_number = today_count + 1
+    kot_number = generate_next_kot_number(merchant)
 
     try:
         with transaction.atomic():
@@ -1827,7 +1858,29 @@ def create_pos_order(request):
                 table_number_snapshot=table_number_snap,
                 cash_shift=shift,
                 kot_number=kot_number,
+                is_bill=True,
                 client_mutation_id=client_mutation_id if client_mutation_id else None,
+            )
+
+            dining_session = None
+            if fulfillment == Order.FULFILLMENT_DINE_IN and table_instance:
+                dining_session = create_dining_session(
+                    merchant=merchant,
+                    table=table_instance,
+                    bill_order=order,
+                    customer=customer,
+                )
+                order.dining_session = dining_session
+                order.save(update_fields=["dining_session", "updated_at"])
+
+            kot = create_kot_for_order(
+                merchant=merchant,
+                order=order,
+                dining_session=dining_session,
+                kot_number=kot_number,
+                notes=order.notes,
+                customer_name=customer.full_name if customer else (worker.display_name if worker else "POS Customer"),
+                items_data=serialize_kot_items_data(priced_lines=priced),
             )
 
             # Apply preparation routing
@@ -1835,6 +1888,8 @@ def create_pos_order(request):
             order_items_data = prepare_order_items_for_routing(
                 order, [dict(p.item_fields) for p in priced],
             )
+            for item_dict in order_items_data:
+                item_dict["kot"] = kot
 
             created_items = OrderItem.objects.bulk_create(
                 [OrderItem(order=order, **item) for item in order_items_data],
@@ -1995,6 +2050,12 @@ def update_order_status_uuid(request):
         safe_deduct_stock_for_order(order, performed_by=request.user)
     elif new_status == Order.STATUS_CANCELLED:
         safe_restore_stock_for_order(order, performed_by=request.user)
+
+    if new_status in (Order.STATUS_COMPLETED, Order.STATUS_CANCELLED):
+        close_dining_session_for_order(
+            order,
+            DiningSession.STATUS_COMPLETED if new_status == Order.STATUS_COMPLETED else DiningSession.STATUS_CANCELLED,
+        )
 
     _audit(merchant, PosAuditLog.ACTION_ORDER_UPDATE,
            device=device, worker=worker, user=request.user,
@@ -2225,6 +2286,7 @@ def create_payment(request):
                         order.loyalty_awarded = True
                 order.version += 1
                 order.save(update_fields=["payment_status", "payment_method", "status", "loyalty_awarded", "version", "updated_at"])
+                close_dining_session_for_order(order, DiningSession.STATUS_COMPLETED)
             elif total_paid > 0:
                 order.payment_status = "partially_paid"
                 order.version += 1
@@ -3292,8 +3354,8 @@ def receipt_data(request, order_id):
         order = (
             Order.objects
             .select_related("customer__user", "merchant", "table",
-                            "processed_by_worker", "pos_device", "cash_shift")
-            .prefetch_related("items", "pos_payments", "pos_discounts", "charges")
+                            "processed_by_worker", "pos_device", "cash_shift", "dining_session")
+            .prefetch_related("items", "pos_payments", "pos_discounts", "charges", "kots")
             .get(uuid=order_id, merchant=merchant)
         )
     except Order.DoesNotExist:
@@ -3399,6 +3461,8 @@ def receipt_data(request, order_id):
         "order_uuid": str(order.uuid),
         "order_number": f"#{order.id}",
         "kot_number": order.kot_number,
+        "kots": KitchenOrderTicketSerializer(order.kots.all(), many=True).data,
+        "dining_session_id": str(order.dining_session.session_id) if order.dining_session else None,
         "status": order.status,
         "source": order.source,
         "created_at": order.created_at.isoformat() if order.created_at else None,
@@ -4604,6 +4668,39 @@ def table_order(request, token):
     spend_rate = _loyalty_spend_rate(merchant)
     points_earned = estimate_points(priced, spend_rate)
 
+    # Check for active dining session on this table
+    active_session = get_active_dining_session(merchant, table=table)
+    if active_session and active_session.bill_order:
+        bill_order = Order.objects.select_for_update(of=("self",)).get(pk=active_session.bill_order_id)
+        kot, created_items = consolidate_items_into_bill(
+            bill_order=bill_order,
+            dining_session=active_session,
+            priced_lines=priced,
+            customer=customer,
+            guest_name=customer_name,
+            notes=notes,
+        )
+
+        _notify_safe(
+            user=merchant.user,
+            title=f"Additional items — {table.name}",
+            message=f"Table {table.table_number}: {len(items_data)} items (Bill #{bill_order.id}) — KOT #{kot.kot_number}",
+            notification_type="pos_new_order",
+            merchant_name=merchant.business_name,
+        )
+
+        return Response({
+            "message": "Order placed successfully",
+            "order_id": bill_order.id,
+            "table": table.name,
+            "subtotal": str(bill_order.subtotal or bill_order.total_amount),
+            "total": str(bill_order.total_amount),
+            "kot_number": kot.kot_number,
+        }, status=status.HTTP_201_CREATED)
+
+    # Otherwise, start new bill and dining session for this table
+    kot_number = generate_next_kot_number(merchant)
+
     order = Order.objects.create(
         customer=customer,
         merchant=merchant,
@@ -4618,11 +4715,33 @@ def table_order(request, token):
         points_earned=points_earned,
         loyalty_spend_rate=spend_rate,
         guest_name_snapshot=customer_name,
+        kot_number=kot_number,
+        is_bill=True,
         **pricing_order_fields(pricing_ctx, pricing, merchant),
     )
 
+    dining_session = create_dining_session(
+        merchant=merchant,
+        table=table,
+        bill_order=order,
+        customer=customer,
+        guest_name=customer_name,
+    )
+    order.dining_session = dining_session
+    order.save(update_fields=["dining_session", "updated_at"])
+
+    kot = create_kot_for_order(
+        merchant=merchant,
+        order=order,
+        dining_session=dining_session,
+        kot_number=kot_number,
+        notes=order.notes,
+        customer_name=customer_name or "Guest",
+        items_data=serialize_kot_items_data(priced_lines=priced),
+    )
+
     created_items = OrderItem.objects.bulk_create(
-        [OrderItem(order=order, **p.item_fields) for p in priced], batch_size=200,
+        [OrderItem(order=order, kot=kot, **p.item_fields) for p in priced], batch_size=200,
     )
     OrderItemOption.objects.bulk_create([
         OrderItemOption(
@@ -4657,6 +4776,7 @@ def table_order(request, token):
         "table": table.name,
         "subtotal": str(pricing.subtotal),
         "total": str(pricing.grand_total),
+        "kot_number": kot.kot_number,
     }, status=status.HTTP_201_CREATED)
 
 

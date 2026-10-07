@@ -593,12 +593,33 @@ export interface PosDiscount {
   created_at: string;
 }
 
+export interface KitchenOrderTicketSnapshot {
+  id: number;
+  uuid: string;
+  kot_number: number;
+  status: string;
+  notes?: string;
+  table_name_snapshot?: string;
+  table_number_snapshot?: number | null;
+  customer_name_snapshot?: string;
+  fulfillment_type_snapshot?: string;
+  items_data: Array<{
+    name: string;
+    quantity: number;
+    special_instructions?: string;
+    options?: Array<{ group_name: string; option_name: string }>;
+  }>;
+  created_at: string;
+}
+
 export interface PosReceiptData {
   type: "bill" | "receipt";
   order_id: number;
   order_uuid: string;
   order_number: string;
   kot_number: number | null;
+  kots?: KitchenOrderTicketSnapshot[];
+  dining_session_id?: string | null;
   status: string;
   source: string;
   created_at: string | null;

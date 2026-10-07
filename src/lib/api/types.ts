@@ -229,6 +229,10 @@ export interface Order {
   guest_session_id?: string;
   guest_name_snapshot?: string;
   kot_number?: number | null;
+  kots?: KitchenOrderTicketSnapshot[];
+  dining_session_id?: string | null;
+  parent_bill_id?: number | null;
+  is_bill?: boolean;
   can_add_items?: boolean;
   created_at: string;
   updated_at: string;
@@ -238,6 +242,25 @@ export interface Order {
   items?: OrderItem[];
   customer_name?: string;
   merchant_name?: string;
+}
+
+export interface KitchenOrderTicketSnapshot {
+  id: number;
+  uuid: string;
+  kot_number: number;
+  status: string;
+  notes?: string;
+  table_name_snapshot?: string;
+  table_number_snapshot?: number | null;
+  customer_name_snapshot?: string;
+  fulfillment_type_snapshot?: string;
+  items_data: Array<{
+    name: string;
+    quantity: number;
+    special_instructions?: string;
+    options?: Array<{ group_name: string; option_name: string }>;
+  }>;
+  created_at: string;
 }
 
 /** Selection payload sent with an order line: [{ "group_id": 1, "option_id": 2 }, ...]. */
@@ -429,6 +452,13 @@ export interface TableResolution {
     table_number: number;
     public_token: string;
   };
+  active_session?: {
+    session_id: string;
+    bill_order_id: number;
+    bill_order_number: string;
+    total_amount: string;
+    items_count: number;
+  } | null;
 }
 
 export interface JoinedMerchant {

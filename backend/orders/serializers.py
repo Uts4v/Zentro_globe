@@ -1,6 +1,6 @@
 # orders/serializers.py
 from rest_framework import serializers
-from .models import Order, OrderItem, OrderItemOption
+from .models import Order, OrderItem, OrderItemOption, DiningSession, KitchenOrderTicket
 
 
 class OrderItemOptionSerializer(serializers.ModelSerializer):
@@ -101,11 +101,103 @@ class OrderItemSerializer(serializers.ModelSerializer):
         ]
 
 
+class KitchenOrderTicketSerializer(serializers.ModelSerializer):
+    items = serializers.SerializerMethodField()
+    order_id = serializers.IntegerField(source="order.id", read_only=True)
+    dining_session_id = serializers.SerializerMethodField()
+
+    def get_dining_session_id(self, obj):
+        return str(obj.dining_session.session_id) if obj.dining_session else None
+
+    def get_items(self, obj):
+        if obj.items_data:
+            return obj.items_data
+        return [
+            {
+                "name": item.name,
+                "quantity": item.quantity,
+                "special_instructions": item.special_instructions or "",
+                "options": [
+                    {"group_name": o.group_name, "option_name": o.option_name}
+                    for o in item.options.all()
+                ],
+            }
+            for item in obj.order_items.all()
+        ]
+
+    class Meta:
+        model = KitchenOrderTicket
+        fields = [
+            "id", "uuid", "kot_number", "order_id",
+            "dining_session_id", "status", "notes",
+            "table_name_snapshot", "table_number_snapshot",
+            "customer_name_snapshot", "fulfillment_type_snapshot",
+            "items", "created_at",
+        ]
+        read_only_fields = fields
+
+
 class OrderSerializer(serializers.ModelSerializer):
     items         = OrderItemSerializer(many=True, read_only=True)
     merchant_name = serializers.CharField(source="merchant.business_name", read_only=True)
     customer_name = serializers.SerializerMethodField()
     merchant_id   = serializers.IntegerField(source="merchant.id",         read_only=True)
+    kots          = serializers.SerializerMethodField()
+    dining_session_id = serializers.SerializerMethodField()
+    parent_bill_id = serializers.IntegerField(source="parent_bill.id", read_only=True, default=None)
+    is_bill       = serializers.BooleanField(read_only=True)
+    table_name_snapshot = serializers.SerializerMethodField()
+    table_number_snapshot = serializers.SerializerMethodField()
+
+    def get_table_name_snapshot(self, obj):
+        if obj.table_name_snapshot:
+            return obj.table_name_snapshot
+        if obj.table:
+            return obj.table.name or f"Table {obj.table.table_number}"
+        return ""
+
+    def get_table_number_snapshot(self, obj):
+        if obj.table_number_snapshot is not None:
+            return obj.table_number_snapshot
+        if obj.table:
+            return obj.table.table_number
+        return None
+
+    def get_dining_session_id(self, obj):
+        return str(obj.dining_session.session_id) if obj.dining_session else None
+
+    def get_kots(self, obj):
+        qs = obj.kots.all()
+        if qs.exists():
+            return KitchenOrderTicketSerializer(qs, many=True).data
+        if obj.kot_number:
+            return [{
+                "id": obj.id,
+                "uuid": str(obj.uuid),
+                "kot_number": obj.kot_number,
+                "order_id": obj.id,
+                "dining_session_id": str(obj.dining_session.session_id) if obj.dining_session else None,
+                "status": obj.status,
+                "notes": obj.notes,
+                "table_name_snapshot": obj.table_name_snapshot,
+                "table_number_snapshot": obj.table_number_snapshot,
+                "customer_name_snapshot": obj.customer.full_name if obj.customer else obj.guest_name_snapshot,
+                "fulfillment_type_snapshot": obj.fulfillment_type,
+                "items": [
+                    {
+                        "name": i.name,
+                        "quantity": i.quantity,
+                        "special_instructions": i.special_instructions or "",
+                        "options": [
+                            {"group_name": o.group_name, "option_name": o.option_name}
+                            for o in i.options.all()
+                        ],
+                    }
+                    for i in obj.items.all()
+                ],
+                "created_at": obj.created_at.isoformat() if obj.created_at else None,
+            }]
+        return []
 
     def get_customer_name(self, obj):
         if obj.customer:
@@ -166,7 +258,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "processed_by_worker", "worker_name",
             "pos_device", "cash_shift",
             "guest_session_id", "guest_name_snapshot",
-            "kot_number",
+            "kot_number", "kots", "dining_session_id", "parent_bill_id", "is_bill",
             "version", "client_mutation_id", "client_created_at",
             "can_add_items",
             "created_at", "updated_at",
@@ -190,6 +282,60 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
     merchant_name = serializers.CharField(source="merchant.business_name", read_only=True)
     customer_name = serializers.SerializerMethodField()
     merchant_id   = serializers.IntegerField(source="merchant.id",         read_only=True)
+    kots          = serializers.SerializerMethodField()
+    dining_session_id = serializers.SerializerMethodField()
+    is_bill       = serializers.BooleanField(read_only=True)
+    table_name_snapshot = serializers.SerializerMethodField()
+    table_number_snapshot = serializers.SerializerMethodField()
+
+    def get_table_name_snapshot(self, obj):
+        if obj.table_name_snapshot:
+            return obj.table_name_snapshot
+        if obj.table:
+            return obj.table.name or f"Table {obj.table.table_number}"
+        return ""
+
+    def get_table_number_snapshot(self, obj):
+        if obj.table_number_snapshot is not None:
+            return obj.table_number_snapshot
+        if obj.table:
+            return obj.table.table_number
+        return None
+
+    def get_dining_session_id(self, obj):
+        return str(obj.dining_session.session_id) if obj.dining_session else None
+
+    def get_kots(self, obj):
+        qs = obj.kots.all()
+        if qs.exists():
+            return KitchenOrderTicketSerializer(qs, many=True).data
+        if obj.kot_number:
+            return [{
+                "id": obj.id,
+                "uuid": str(obj.uuid),
+                "kot_number": obj.kot_number,
+                "order_id": obj.id,
+                "status": obj.status,
+                "notes": obj.notes,
+                "table_name_snapshot": obj.table_name_snapshot,
+                "table_number_snapshot": obj.table_number_snapshot,
+                "customer_name_snapshot": obj.customer.full_name if obj.customer else obj.guest_name_snapshot,
+                "fulfillment_type_snapshot": obj.fulfillment_type,
+                "items": [
+                    {
+                        "name": i.name,
+                        "quantity": i.quantity,
+                        "special_instructions": i.special_instructions or "",
+                        "options": [
+                            {"group_name": o.group_name, "option_name": o.option_name}
+                            for o in i.options.all()
+                        ],
+                    }
+                    for i in obj.items.all()
+                ],
+                "created_at": obj.created_at.isoformat() if obj.created_at else None,
+            }]
+        return []
 
     def get_customer_name(self, obj):
         if obj.customer:
@@ -226,6 +372,7 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
             "cancellation_reason", "cancelled_by",
             "reward_name", "punch_card_name",
             "table_id", "table_name_snapshot", "table_number_snapshot",
+            "kot_number", "kots", "dining_session_id", "is_bill",
             "created_at", "updated_at",
         ]
         read_only_fields = [
@@ -277,6 +424,10 @@ class CreateOrderSerializer(serializers.Serializer):
         required=False, allow_null=True,
         help_text='The free item for the offer: {"menu_item_id": 1, "selections": [...]}',
     )
+    dining_session_id = serializers.UUIDField(
+        required=False, allow_null=True,
+        help_text="Optional existing dining session to attach to",
+    )
 
     def validate_items(self, value):
         if not value:
@@ -291,6 +442,10 @@ class CreateGuestOrderSerializer(serializers.Serializer):
     table_token = serializers.CharField()
     guest_session_id = serializers.CharField(max_length=64)
     guest_name  = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+    dining_session_id = serializers.UUIDField(
+        required=False, allow_null=True,
+        help_text="Optional existing dining session to attach to",
+    )
 
     def validate_items(self, value):
         if not value:

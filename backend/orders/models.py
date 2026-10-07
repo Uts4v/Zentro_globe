@@ -45,6 +45,66 @@ class PreparationArea(models.Model):
         return f"{self.name} ({self.merchant.business_name})"
 
 
+class DiningSession(models.Model):
+    STATUS_ACTIVE    = "active"
+    STATUS_COMPLETED = "completed"
+    STATUS_CANCELLED = "cancelled"
+
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE,    "Active"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+    session_id = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True)
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="dining_sessions",
+    )
+    table = models.ForeignKey(
+        "merchants.MerchantTable",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="dining_sessions",
+    )
+    bill_order = models.ForeignKey(
+        "Order",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="session_as_bill",
+        help_text="The primary open bill / order consolidating this dining session",
+    )
+    customer = models.ForeignKey(
+        "accounts.CustomerProfile",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="dining_sessions",
+    )
+    guest_session_id = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="Client-generated UUID for guest session",
+    )
+    guest_name = models.CharField(max_length=255, blank=True, default="")
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_ACTIVE, db_index=True,
+    )
+    opened_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    closed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "dining_sessions"
+        ordering = ["-opened_at"]
+        indexes = [
+            models.Index(fields=["merchant", "table", "status"], name="dining_sess_m_t_s_idx"),
+        ]
+
+    def __str__(self):
+        table_str = f"Table {self.table.table_number}" if self.table else "No Table"
+        return f"DiningSession #{self.id} [{self.status}] — {table_str}"
+
+
 class Order(models.Model):
     STATUS_PENDING   = "pending"
     STATUS_CONFIRMED = "confirmed"
@@ -67,7 +127,7 @@ class Order(models.Model):
         STATUS_PENDING:   {STATUS_CONFIRMED, STATUS_CANCELLED},
         STATUS_CONFIRMED: {STATUS_PREPARING, STATUS_CANCELLED, STATUS_READY, STATUS_COMPLETED},
         STATUS_PREPARING: {STATUS_READY, STATUS_CANCELLED},
-        STATUS_READY:     {STATUS_COMPLETED, STATUS_CANCELLED},
+        STATUS_READY:     {STATUS_COMPLETED, STATUS_CANCELLED, STATUS_PREPARING},
         STATUS_COMPLETED: set(),
         STATUS_CANCELLED: set(),
     }
@@ -223,6 +283,26 @@ class Order(models.Model):
         blank=True, default="",
     )
     cancelled_by = models.CharField(max_length=20, blank=True, default="")
+
+    # ── Dining session & bill consolidation ────────────────────────────────────
+    dining_session = models.ForeignKey(
+        DiningSession,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="orders",
+        help_text="Dining session this order belongs to",
+    )
+    parent_bill = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="sub_orders",
+        help_text="Consolidated parent bill if this is an additional order in a session",
+    )
+    is_bill = models.BooleanField(
+        default=True,
+        help_text="True if this order acts as the primary consolidated bill",
+    )
 
     # For punch card redemption orders — link back to the card
     punch_card_redemption = models.ForeignKey(
@@ -399,6 +479,70 @@ class Order(models.Model):
         self.version += 1
 
 
+class KitchenOrderTicket(models.Model):
+    STATUS_PENDING    = "pending"
+    STATUS_PREPARING  = "preparing"
+    STATUS_READY      = "ready"
+    STATUS_COMPLETED  = "completed"
+    STATUS_CANCELLED  = "cancelled"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING,   "Pending"),
+        (STATUS_PREPARING, "Preparing"),
+        (STATUS_READY,     "Ready"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+    uuid = models.UUIDField(default=uuid.uuid4, unique=True, db_index=True)
+    kot_number = models.PositiveIntegerField(
+        db_index=True,
+        help_text="Sequential KOT number per merchant per day",
+    )
+    merchant = models.ForeignKey(
+        "merchants.MerchantProfile",
+        on_delete=models.CASCADE,
+        related_name="kitchen_order_tickets",
+    )
+    order = models.ForeignKey(
+        Order,
+        on_delete=models.CASCADE,
+        related_name="kots",
+        help_text="The bill order or specific order this ticket belongs to",
+    )
+    dining_session = models.ForeignKey(
+        DiningSession,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="kots",
+    )
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING, db_index=True,
+    )
+    notes = models.TextField(blank=True, default="")
+    table_name_snapshot = models.CharField(max_length=100, blank=True, default="")
+    table_number_snapshot = models.PositiveIntegerField(null=True, blank=True)
+    customer_name_snapshot = models.CharField(max_length=255, blank=True, default="")
+    fulfillment_type_snapshot = models.CharField(max_length=20, blank=True, default="dine_in")
+    items_data = models.JSONField(
+        default=list,
+        help_text="Snapshot of items in this KOT ticket for printing",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        db_table = "kitchen_order_tickets"
+        ordering = ["created_at"]
+        indexes = [
+            models.Index(fields=["merchant", "-created_at"], name="kot_merchant_created_idx"),
+            models.Index(fields=["order", "kot_number"], name="kot_order_number_idx"),
+        ]
+
+    def __str__(self):
+        return f"KOT #{self.kot_number} (Order #{self.order_id})"
+
+
 class OrderItem(models.Model):
     PENDING = "pending"
     PREPARING = "preparing"
@@ -420,6 +564,13 @@ class OrderItem(models.Model):
     }
 
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="items")
+    kot = models.ForeignKey(
+        KitchenOrderTicket,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="order_items",
+        help_text="Kitchen order ticket this item was submitted under",
+    )
     menu_item = models.ForeignKey(
         "merchants.MenuItem",
         on_delete=models.SET_NULL,
