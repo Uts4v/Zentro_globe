@@ -1,4 +1,6 @@
 import { PosReceiptData } from "../api";
+import { kotToEscPos } from "./escpos";
+import { dispatchPrint } from "./print-bridge";
 import { tableLabel } from "./table-label";
 import {
   escapeHtml,
@@ -225,15 +227,20 @@ export function kotPrintDocument(ticket: KOTTicketData, paper: TicketPaper): str
 }
 
 /**
- * Open the KOT in its own window, ready to print.
+ * Open the KOT in its own window, ready to print — or, when the terminal has
+ * printers configured and the print bridge is up, send it to them silently.
  *
- * The window carries its own "Print KOT" button rather than printing on open.
- * A KOT goes to a shared thermal printer behind the counter, and unlike the
- * customer receipt — which auto-prints because it is a by-product of taking
- * payment — a mis-fired ticket means a wasted re-print for the kitchen. Making
- * the cashier confirm is the same trade the draft bill makes.
+ * Routing first: a KOT configured for kitchen + reception prints on both with
+ * no dialog. The window below is the fallback — it carries its own "Print KOT"
+ * button rather than printing on open. A KOT goes to a shared thermal printer
+ * behind the counter, and unlike the customer receipt — which auto-prints
+ * because it is a by-product of taking payment — a mis-fired ticket means a
+ * wasted re-print for the kitchen. Making the cashier confirm is the same
+ * trade the draft bill makes.
  */
-export function printKOT(ticket: KOTTicketData, printSize: TicketPaper = "58mm") {
+export async function printKOT(ticket: KOTTicketData, printSize: TicketPaper = "58mm") {
+  const { mode } = await dispatchPrint("kot", (paper) => kotToEscPos(ticket, paper));
+  if (mode === "bridge") return;
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
   printWindow.document.write(kotPrintDocument(ticket, printSize));

@@ -17,6 +17,8 @@ import {
   Users,
 } from "lucide-react";
 import { paymentMethodLabel } from "@/lib/payment-methods";
+import { zReportToEscPos } from "../printing/escpos";
+import { dispatchPrint } from "../printing/print-bridge";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
@@ -70,7 +72,16 @@ export default function ZReportScreen() {
     }
   }
 
-  function handlePrint() {
+  async function handlePrint() {
+    // Routed printers get the report silently via the print bridge with an
+    // ESC/POS layout; the popup below is the fallback path.
+    if (data) {
+      const { mode } = await dispatchPrint("zreport", (paper) =>
+        zReportToEscPos(data, paper, currencySymbol),
+      );
+      if (mode === "bridge") return;
+    }
+
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;
 

@@ -8,6 +8,7 @@
     "dev:all": "concurrently -n \"backend,frontend\" -c \"cyan,magenta\" \"npm:dev:backend\" \"npm:dev:frontend\"",
     "dev:backend": "node scripts/run-backend.mjs",
     "dev:frontend": "vite dev",
+    "dev:print-agent": "python printer-agent/print_agent.py",
     "build": "vite build && node scripts/copy-sw.mjs",
     "build:dev": "vite build --mode development",
     "start": "node .output/server/index.mjs",

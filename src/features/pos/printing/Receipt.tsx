@@ -2,6 +2,8 @@ import { useRef } from "react";
 import { PosReceiptData } from "../api";
 import { formatCurrency } from "@/lib/currency";
 import { paymentMethodLabel } from "@/lib/payment-methods";
+import { receiptToEscPos } from "./escpos";
+import { dispatchPrint } from "./print-bridge";
 import { tableLabel } from "./table-label";
 import {
   LOGO_PX,
@@ -40,7 +42,12 @@ export default function Receipt({
 }: ReceiptProps) {
   const receiptRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    // Routed printers (e.g. reception only) get the bill silently via the
+    // print bridge; the popup below is the fallback when none are configured.
+    const { mode } = await dispatchPrint("bill", (paper) => receiptToEscPos(data, paper));
+    if (mode === "bridge") return;
+
     if (!receiptRef.current) return;
     const printWindow = window.open("", "_blank");
     if (!printWindow) return;

@@ -35,6 +35,9 @@ const KEEP_KEYS = new Set([
   "pos_worker_id",
   "pos_worker",
   "pos_active_shift",
+  // Printer setup is terminal hardware configuration, not a cache — clearing
+  // it would silently drop every printer back to the browser print dialog.
+  "pos_printer_settings",
 ]);
 
 export interface ClearCacheOptions {

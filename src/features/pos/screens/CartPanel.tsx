@@ -32,6 +32,8 @@ import type { MenuItemSelectable } from "@/lib/api/types";
 import MinusStockModal from "./MinusStockModal";
 import { useOnlineStatus } from "../offline/hooks";
 import { hasStaffPermission } from "@/lib/staff-session";
+import { receiptToEscPos } from "../printing/escpos";
+import { dispatchPrint } from "../printing/print-bridge";
 
 interface CartPanelProps {
   onCheckout: () => void;
@@ -149,7 +151,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
     setEditingKey(null);
   }
 
-  function handlePrintBill() {
+  async function handlePrintBill() {
     if (isEmpty) return;
     setPrintingBill(true);
 
@@ -209,13 +211,25 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
       sync_status: "synced",
     };
 
+    // Routed printers (e.g. reception only) get the draft bill silently via
+    // the print bridge; the popup below is the fallback path.
+    try {
+      const { mode } = await dispatchPrint("bill", (paper) => receiptToEscPos(billData, paper));
+      if (mode === "bridge") {
+        setPrintingBill(false);
+        return;
+      }
+    } catch {
+      // bridge dispatch never throws — kept defensive so a broken settings
+      // payload can never take the draft bill down with it
+    }
+
     // Open print window with bill content
     const printWindow = window.open("", "_blank");
     if (!printWindow) {
       setPrintingBill(false);
       return;
     }
-
     const receiptHtml = `
       <div style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.35; width: 72mm; padding: 4mm; color: #000; background: #fff;">
         <div style="text-align: center; margin-bottom: 8px;">

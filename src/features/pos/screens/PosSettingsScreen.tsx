@@ -4,6 +4,7 @@ import { posGetSettings, posUpdateSettings, PosSettings } from "../api";
 import { Settings, Save, Loader2, Trash2, Wifi, WifiOff } from "lucide-react";
 import { ClearCacheDialog } from "@/components/ClearCacheControl";
 import { useOnlineStatus } from "../offline/hooks";
+import { PrinterSettingsSection } from "../printing/PrinterSettingsSection";
 
 export default function PosSettingsScreen() {
   const posSettings = usePosStore((s) => s.posSettings);
@@ -99,6 +100,9 @@ export default function PosSettingsScreen() {
             ))}
           </div>
         </section>
+
+        {/* Printers — stored per terminal, saved immediately (not via Save Settings). */}
+        <PrinterSettingsSection />
 
         {/* Discount Limits */}
         <section className="rounded-2xl border border-border bg-card p-5">
