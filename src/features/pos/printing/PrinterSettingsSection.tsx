@@ -47,6 +47,7 @@ import {
   type BridgePrinterDevice,
 } from "./print-bridge";
 import { testTicketToEscPos } from "./escpos";
+import { makeAgentInstallerBat } from "./agent-installer";
 import type { TicketPaper } from "./ticket-style";
 
 const DOC_TYPES: PrintDocType[] = ["kot", "bill", "zreport"];
@@ -83,7 +84,6 @@ export function PrinterSettingsSection() {
   const [netHosts, setNetHosts] = useState<BridgeNetworkHost[]>([]);
   const [netSubnets, setNetSubnets] = useState<string[]>([]);
   const [netScanning, setNetScanning] = useState(false);
-  const [downloadingInstaller, setDownloadingInstaller] = useState(false);
 
   const persist = useCallback((next: PrinterSettings) => {
     setSettings(next);
@@ -134,15 +134,11 @@ export function PrinterSettingsSection() {
     void checkBridge();
   }, [checkBridge]);
 
-  /** Download the terminal's one-click agent installer, filled with this app's address. */
-  const downloadAgentInstaller = useCallback(async () => {
-    setDownloadingInstaller(true);
+  /** Generate and download the terminal's one-click agent installer locally. */
+  const downloadAgentInstaller = useCallback(() => {
     try {
-      const res = await fetch("/printer-agent/setup-print-agent.bat");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const template = await res.text();
-      const filled = template.replaceAll("__APP_ORIGIN__", window.location.origin);
-      const blob = new Blob([filled], { type: "application/octet-stream" });
+      const bat = makeAgentInstallerBat(window.location.origin);
+      const blob = new Blob([bat], { type: "application/octet-stream" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -154,8 +150,6 @@ export function PrinterSettingsSection() {
       toast.success("Downloaded setup-print-agent.bat — double-click it on this PC.");
     } catch (err) {
       toast.error(`Could not prepare the download: ${(err as Error).message}`);
-    } finally {
-      setDownloadingInstaller(false);
     }
   }, []);
 
@@ -325,16 +319,11 @@ export function PrinterSettingsSection() {
           </p>
           <button
             type="button"
-            onClick={() => void downloadAgentInstaller()}
-            disabled={downloadingInstaller}
-            className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-xs font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={downloadAgentInstaller}
+            className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-xs font-bold text-white transition hover:opacity-90"
           >
-            {downloadingInstaller ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Download className="h-3.5 w-3.5" />
-            )}
-            {downloadingInstaller ? "Preparing…" : "Download print agent (Windows)"}
+            <Download className="h-3.5 w-3.5" />
+            Download print agent (Windows)
           </button>
           <p className="mt-2 text-xs text-amber-800">
             Run the downloaded <code className="font-semibold">setup-print-agent.bat</code> on this
