@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import {
   Bluetooth,
   Check,
+  Download,
   Loader2,
   Network,
   Pencil,
@@ -42,7 +43,6 @@ import {
   bridgePrintJob,
   bridgeScanNetwork,
   bridgeStatus,
-  PRINT_BRIDGE_URL,
   type BridgeNetworkHost,
   type BridgePrinterDevice,
 } from "./print-bridge";
@@ -83,6 +83,7 @@ export function PrinterSettingsSection() {
   const [netHosts, setNetHosts] = useState<BridgeNetworkHost[]>([]);
   const [netSubnets, setNetSubnets] = useState<string[]>([]);
   const [netScanning, setNetScanning] = useState(false);
+  const [downloadingInstaller, setDownloadingInstaller] = useState(false);
 
   const persist = useCallback((next: PrinterSettings) => {
     setSettings(next);
@@ -132,6 +133,31 @@ export function PrinterSettingsSection() {
     setSettings(loadPrinterSettings());
     void checkBridge();
   }, [checkBridge]);
+
+  /** Download the terminal's one-click agent installer, filled with this app's address. */
+  const downloadAgentInstaller = useCallback(async () => {
+    setDownloadingInstaller(true);
+    try {
+      const res = await fetch("/printer-agent/setup-print-agent.bat");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const template = await res.text();
+      const filled = template.replaceAll("__APP_ORIGIN__", window.location.origin);
+      const blob = new Blob([filled], { type: "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "setup-print-agent.bat";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success("Downloaded setup-print-agent.bat — double-click it on this PC.");
+    } catch (err) {
+      toast.error(`Could not prepare the download: ${(err as Error).message}`);
+    } finally {
+      setDownloadingInstaller(false);
+    }
+  }, []);
 
   function startAdd() {
     setForm(EMPTY_FORM);
@@ -292,11 +318,29 @@ export function PrinterSettingsSection() {
       </div>
 
       {bridge === "offline" && (
-        <p className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Silent multi-printer printing needs the local print agent on this terminal. Start it with{" "}
-          <code className="font-semibold">npm run dev:print-agent</code> (listens on{" "}
-          {PRINT_BRIDGE_URL}). Until then, prints use the browser dialog as before.
-        </p>
+        <div className="mb-4 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3">
+          <p className="text-xs text-amber-800">
+            Silent multi-printer printing needs the local print agent on this terminal. Until it's
+            installed, prints use the browser dialog as before.
+          </p>
+          <button
+            type="button"
+            onClick={() => void downloadAgentInstaller()}
+            disabled={downloadingInstaller}
+            className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-lg bg-ink px-3 text-xs font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {downloadingInstaller ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5" />
+            )}
+            {downloadingInstaller ? "Preparing…" : "Download print agent (Windows)"}
+          </button>
+          <p className="mt-2 text-xs text-amber-800">
+            Run the downloaded <code className="font-semibold">setup-print-agent.bat</code> on this
+            PC, wait for "Done!", then click Recheck above. No admin rights or Python needed.
+          </p>
+        </div>
       )}
 
       {/* Printers */}
