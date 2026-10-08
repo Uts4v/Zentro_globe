@@ -190,6 +190,23 @@ export function djangoHeaders(json = false): HeadersInit {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Drop the POS identity left behind by whichever account was signed in before
+ * this login. The POS store is a module singleton and the staff session names
+ * a staff member of one merchant, so a login that switches accounts must start
+ * the POS empty — otherwise the previous merchant's workers, menu and tables
+ * are shown to the new account, whose PosLayout sees an already-hydrated store
+ * and skips re-bootstrapping it. Called from every sign-in flow, never from
+ * session expiry: a till running on a staff PIN must not be interrupted just
+ * because an old Google session died. The device registration and any unsynced
+ * offline sales are left alone — a login changes who is signed in, not which
+ * till this is or which orders it has taken.
+ */
+function dropPreviousAccountPos(): void {
+  staffSession.set(null);
+  usePosStore.getState().reset();
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [merchantProfile, setMerchantProfile] = useState<MerchantProfile | null>(null);
@@ -352,6 +369,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }),
         });
         tokenStore.set(data.access, data.refresh);
+        dropPreviousAccountPos();
         scheduleRefresh(data.access);
         await fetchMe();
         return { error: null };
@@ -387,6 +405,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }),
         });
         tokenStore.set(data.access, data.refresh);
+        dropPreviousAccountPos();
         scheduleRefresh(data.access);
         await fetchMe();
         return { error: null };
@@ -428,6 +447,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }),
         });
         tokenStore.set(data.access, data.refresh);
+        dropPreviousAccountPos();
         scheduleRefresh(data.access);
         await fetchMe();
         return { error: null };
@@ -501,12 +521,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     tokenStore.clear();
     useStore.getState().resetSession();
-    // The POS store is a module singleton, so switching accounts in the same
-    // browser must not carry the previous merchant's workers, menu or tables
-    // into the next account's POS. The staff session identifies a staff member
-    // of the old business and cannot survive the account switch either.
-    staffSession.set(null);
-    usePosStore.getState().reset();
+    // Switching accounts must not carry the previous merchant's workers,
+    // menu or tables into the next account's POS either.
+    dropPreviousAccountPos();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     setUser(null);
     setMerchantProfile(null);
