@@ -61,7 +61,7 @@ if errorlevel 1 (
 rem --- 2. Auto-start at every login (Startup shortcut, no admin) ---
 echo Installing start-at-login shortcut...
 if not exist "%STARTUP%" mkdir "%STARTUP%"
-powershell -NoProfile -Command "$ws=New-Object -ComObject WScript.Shell;$s=$ws.CreateShortcut('%LNK%');$s.TargetPath='%EXE%';$s.WorkingDirectory='%APP_DATA%';$s.Save()"
+powershell -NoProfile -WindowStyle Hidden -Command "$ws=New-Object -ComObject WScript.Shell;$s=$ws.CreateShortcut('%LNK%');$s.TargetPath='%EXE%';$s.WorkingDirectory='%APP_DATA%';$s.Save()"
 if errorlevel 1 (
     echo [error] Could not create the startup shortcut.
     echo.

@@ -30,6 +30,13 @@ const STATUS_LABELS: Record<string, string> = {
   refunded: "Refunded",
 };
 
+function localDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export default function ZReportScreen() {
   const merchant = usePosStore((s) => s.merchant);
   const activeShift = usePosStore((s) => s.activeShift);
@@ -43,13 +50,11 @@ export default function ZReportScreen() {
   const [data, setData] = useState<PosZReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState<string>(
-    dateParam || new Date().toISOString().split("T")[0],
-  );
+  const [dateFilter, setDateFilter] = useState<string>(dateParam || localDateString(new Date()));
 
   useEffect(() => {
     loadReport();
-  }, [activeShift?.id, shiftIdParam, dateParam]);
+  }, [activeShift?.id, shiftIdParam, dateParam, dateFilter]);
 
   async function loadReport() {
     setLoading(true);

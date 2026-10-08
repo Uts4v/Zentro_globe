@@ -219,11 +219,17 @@ def _windows_raw_print(printer_name, data, timeout_ms=15000):
 def _run_powershell(script):
     """Run a PowerShell snippet and return stdout (UTF-16-safe via EncodedCommand)."""
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    kwargs = {}
+    if os.name == "nt":
+        # The agent runs as a windowless (--noconsole) exe; without this flag
+        # each powershell child opens its own console window on this machine.
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     proc = subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
         capture_output=True,
         timeout=20,
         check=False,
+        **kwargs,
     )
     if proc.returncode != 0:
         stdout = proc.stdout.decode("utf-8", errors="replace")

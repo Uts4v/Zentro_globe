@@ -8,6 +8,7 @@ from django.db.models import Sum, Count, Q, F
 from django.db.models.functions import Coalesce
 from django.db import IntegrityError
 from django.utils import timezone
+from zoneinfo import ZoneInfo
 
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -2082,7 +2083,7 @@ def pos_orders(request):
     if denied:
         return denied
 
-    qs = Order.objects.filter(merchant=merchant)
+    qs = Order.objects.filter(merchant=merchant).order_by("-created_at", "-id")
 
     shift_id = request.query_params.get("shift_id")
     if shift_id:
@@ -2092,6 +2093,59 @@ def pos_orders(request):
     status_filter = request.query_params.get("status")
     if status_filter:
         qs = qs.filter(status=status_filter)
+
+    search = request.query_params.get("q")
+    if search:
+        from django.db.models import CharField
+        from django.db.models.functions import Cast
+        qs = qs.annotate(
+            _id_text=Cast("id", output_field=CharField()),
+            _uuid_text=Cast("uuid", output_field=CharField()),
+            _table_number_text=Cast("table_number_snapshot", output_field=CharField()),
+        ).filter(
+            Q(_id_text__icontains=search)
+            | Q(_uuid_text__icontains=search)
+            | Q(table_name_snapshot__icontains=search)
+            | Q(_table_number_text__icontains=search)
+            | Q(customer__full_name__icontains=search)
+            | Q(customer_name_snapshot__icontains=search)
+        )
+
+    page_param = request.query_params.get("page")
+    if page_param is not None:
+        # Explicit pagination (opt-in): 1-based page numbers with a small
+        # envelope. Consumers that call without page/page_size keep the plain
+        # bare-array response below, so nothing existing breaks.
+        try:
+            page = max(1, int(page_param))
+            page_size = int(request.query_params.get("page_size") or 20)
+        except (TypeError, ValueError):
+            return Response({"error": "Invalid page or page_size."},
+                            status=status.HTTP_400_BAD_REQUEST)
+        page_size = min(max(page_size, 1), 50)
+        count = qs.count()
+        total_pages = (count + page_size - 1) // page_size
+
+        page_qs = qs[(page - 1) * page_size:page * page_size]
+        page_qs = page_qs.select_related(
+            "customer__user",
+            "merchant",
+            "reward_redemption__reward",
+            "punch_card_redemption__punch_card",
+            "table",
+            "processed_by_worker",
+            "pos_device",
+            "cash_shift",
+        ).prefetch_related("items__menu_item", "items__options", "kots")
+
+        from orders.serializers import OrderSerializer
+        return Response({
+            "results": OrderSerializer(page_qs, many=True, context={"request": request}).data,
+            "count": count,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        })
 
     qs = qs.select_related(
         "customer__user",
@@ -3537,8 +3591,8 @@ def z_report(request):
     date_str = request.query_params.get("date")
 
     now = timezone.now()
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    today_end = today_start + timezone.timedelta(days=1)
+    merchant_tz = ZoneInfo(merchant.timezone or "Asia/Kathmandu")
+    now_local = timezone.localtime(now, merchant_tz)
 
     shifts = CashShift.objects.filter(merchant=merchant)
 
@@ -3552,52 +3606,47 @@ def z_report(request):
         shift_end = shift_obj.closed_at or now
         shifts = shifts.filter(id=shift_id)
         report_label = f"Shift {str(shift_id)[:8]}"
-    elif date_str:
-        try:
-            target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            return Response({"error": "Invalid date format. Use YYYY-MM-DD."},
-                            status=status.HTTP_400_BAD_REQUEST)
-        day_start = timezone.make_aware(
-            timezone.datetime.combine(target_date, timezone.datetime.min.time())
+        payments = PosPayment.objects.filter(
+            shift__in=shifts,
+            status=PosPayment.STATUS_COMPLETED,
         )
+    else:
+        # A Z report lists the sales that happened on a business day. Shifts can
+        # stay open for days or weeks, so the day window is applied to when a
+        # payment was recorded (in the merchant's local time), not to when its
+        # shift happened to be opened. Otherwise a day with sales but no freshly
+        # opened shift comes back as all zeros.
+        if date_str:
+            try:
+                target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                return Response({"error": "Invalid date format. Use YYYY-MM-DD."},
+                                status=status.HTTP_400_BAD_REQUEST)
+        else:
+            target_date = now_local.date()
+        day_start = timezone.datetime.combine(
+            target_date, timezone.datetime.min.time()
+        ).replace(tzinfo=merchant_tz)
         day_end = day_start + timezone.timedelta(days=1)
-        shifts = shifts.filter(opened_at__gte=day_start, opened_at__lt=day_end)
         shift_start = day_start
         shift_end = day_end
         report_label = target_date.strftime("%d %b %Y")
-    else:
-        # Today: find the current open shift or last closed shift
-        current_shift = shifts.filter(
-            status=CashShift.STATUS_OPEN
-        ).order_by("-opened_at").first()
-        if current_shift:
-            shifts = shifts.filter(id=current_shift.id)
-            shift_start = current_shift.opened_at
-            shift_end = now
-            report_label = "Today (Open Shift)"
-        else:
-            last_shift = shifts.filter(
-                status=CashShift.STATUS_CLOSED
-            ).order_by("-closed_at").first()
-            if last_shift:
-                shifts = shifts.filter(id=last_shift.id)
-                shift_start = last_shift.opened_at
-                shift_end = last_shift.closed_at or now
-                report_label = last_shift.closed_at.strftime("%d %b %Y") if last_shift.closed_at else "Today"
-            else:
-                shifts = shifts.none()
-                shift_start = today_start
-                shift_end = today_end
-                report_label = "Today"
-
-    # Collect all payments across the shift(s)
-    payments = PosPayment.objects.filter(
-        shift__in=shifts,
-        status=PosPayment.STATUS_COMPLETED,
-    )
+        # Shifts overlapping the day — used only for the Shift Details card,
+        # refunds and cash movements, not for the sales totals themselves.
+        shifts = shifts.filter(
+            opened_at__lt=day_end,
+        ).filter(
+            Q(closed_at__isnull=True) | Q(closed_at__gte=day_start)
+        )
+        payments = PosPayment.objects.filter(
+            merchant=merchant,
+            status=PosPayment.STATUS_COMPLETED,
+            created_at__gte=day_start,
+            created_at__lt=day_end,
+        )
 
     orders = Order.objects.filter(
+        merchant=merchant,
         pos_payments__in=payments,
     ).distinct()
 
@@ -3716,8 +3765,10 @@ def z_report(request):
 
     # ── Refund stats ──
     refund_payments = PosPayment.objects.filter(
-        shift__in=shifts,
+        merchant=merchant,
         status=PosPayment.STATUS_REFUNDED,
+        created_at__gte=shift_start,
+        created_at__lt=shift_end,
     )
     refund_total = refund_payments.aggregate(t=Sum("amount"))["t"] or 0
 
@@ -3766,7 +3817,11 @@ def z_report(request):
         })
 
     # ── Cash movements summary ──
-    cash_movements = PosCashMovement.objects.filter(shift__in=shifts)
+    cash_movements = PosCashMovement.objects.filter(
+        shift__in=shifts,
+        created_at__gte=shift_start,
+        created_at__lt=shift_end,
+    )
     payout_total = cash_movements.filter(
         movement_type=PosCashMovement.TYPE_PAYOUT
     ).aggregate(t=Sum("amount"))["t"] or 0

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePosStore } from "../store";
 import {
-  posListOrders,
+  posListOrdersPaged,
   posReceiptData,
   posUpdateOrderStatus,
   posAddItemsToOrder,
@@ -42,6 +42,8 @@ import {
   PackageMinus,
   WifiOff,
   Utensils,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import CustomerSearchModal from "./CustomerSearchModal";
 import MinusStockModal from "./MinusStockModal";
@@ -72,6 +74,9 @@ const STATUS_COLORS: Record<string, string> = {
 
 const NEEDS_CONNECTION = "Needs a connection — not available offline";
 
+const ORDER_PAGE_SIZE = 20;
+const ORDER_SEARCH_DEBOUNCE_MS = 350;
+
 /**
  * An order that so far exists only on this device. Once it has synced it comes
  * back from the server with a real id (and still `source: "pos_offline"`), and
@@ -79,6 +84,17 @@ const NEEDS_CONNECTION = "Needs a connection — not available offline";
  */
 function isLocalOrder(order: PosOrder) {
   return order.source === "pos_offline" && order.id <= 0;
+}
+
+function pageList(page: number, totalPages: number): Array<number | "…"> {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
+  const out: Array<number | "…"> = [1];
+  const start = Math.max(2, page - 1);
+  const end = Math.min(totalPages - 1, page + 1);
+  if (start > 2) out.push("…");
+  for (let n = start; n <= end; n++) out.push(n);
+  if (end < totalPages - 1) out.push("…");
+  return [...out, totalPages];
 }
 
 // Payment can still be collected unless the order is already settled or void.
@@ -177,6 +193,10 @@ export default function OrderDetailScreen({
   const [loading, setLoading] = useState(true);
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
   const [search, setSearch] = useState("");
+  const [serverSearch, setServerSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
   const [receiptData, setReceiptData] = useState<PosReceiptData | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [showRefund, setShowRefund] = useState(false);
@@ -205,28 +225,55 @@ export default function OrderDetailScreen({
   const canTakePayments = hasStaffPermission("payments.take");
   const canRefund = hasStaffPermission("payments.refund");
 
-  // Reload when the connection changes and whenever a sync pass finishes:
-  // orders taken here turn into server orders at that moment.
+  // Debounce the type-ahead: search is pushed to the server while online, so
+  // the loaded page only changes after a short pause.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setServerSearch(search.trim());
+      setPage(1);
+    }, ORDER_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reload when the connection changes, a sync pass finishes, the page changes
+  // or the (debounced) search phrase changes.
   useEffect(() => {
     loadOrders();
-  }, [isOffline, syncRevision]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOffline, syncRevision, page, serverSearch]);
 
-  async function loadOrders() {
+  async function loadOrders(): Promise<PosOrder[]> {
     setLoading(true);
     let serverList: PosOrder[] = [];
     const online = serverReachable();
 
     if (online) {
       try {
-        serverList = await posListOrders();
-        cachedServerOrders.save(serverList);
+        const res = await posListOrdersPaged(page, ORDER_PAGE_SIZE, serverSearch);
+        serverList = res.results;
+        setTotalPages(Math.max(res.total_pages, 1));
+        setTotalCount(res.count);
+        // Fold each fetched page into the saved copy so a later offline search
+        // still finds everything this till has already browsed.
+        const byUuid = new Map<string, PosOrder>();
+        for (const o of cachedServerOrders.get()) byUuid.set(o.uuid, o);
+        for (const o of serverList) byUuid.set(o.uuid, o);
+        const mergedCache = [...byUuid.values()].sort((a, b) =>
+          (b.created_at ?? "").localeCompare(a.created_at ?? ""),
+        );
+        cachedServerOrders.save(mergedCache);
       } catch {
         serverList = cachedServerOrders.get();
+        setTotalPages(1);
+        setTotalCount(serverList.length);
       }
     } else {
       serverList = cachedServerOrders.get();
+      setTotalPages(1);
+      setTotalCount(serverList.length);
     }
 
+    let merged = serverList;
     try {
       // A synced order is on the server (and in its list) under its own id,
       // so only the ones still waiting are shown from this device.
@@ -241,7 +288,7 @@ export default function OrderDetailScreen({
         ),
       );
 
-      const merged = [...waiting.map(offlineOrderToPosOrder), ...serverList];
+      merged = [...waiting.map(offlineOrderToPosOrder), ...serverList];
       setOrders(merged);
 
       setSelectedOrder((prev) => {
@@ -263,6 +310,7 @@ export default function OrderDetailScreen({
     } finally {
       setLoading(false);
     }
+    return merged;
   }
 
   /**
@@ -580,7 +628,9 @@ export default function OrderDetailScreen({
             )}
             {tableDisplay && (
               <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 p-3">
-                <p className="text-xs uppercase font-bold text-amber-700 dark:text-amber-400">Table</p>
+                <p className="text-xs uppercase font-bold text-amber-700 dark:text-amber-400">
+                  Table
+                </p>
                 <p className="font-bold text-foreground">{tableDisplay}</p>
               </div>
             )}
@@ -840,17 +890,9 @@ export default function OrderDetailScreen({
             order={selectedOrder}
             onAdded={async () => {
               setShowAddItems(false);
-              setLoading(true);
-              try {
-                const fresh = await posListOrders();
-                setOrders(fresh);
-                const updated = fresh.find((o) => o.id === selectedOrder.id);
-                if (updated) setSelectedOrder(updated);
-              } catch {
-                /* ignore */
-              } finally {
-                setLoading(false);
-              }
+              // Reloads the current page; selectedOrder is re-resolved from the
+              // fresh list by loadOrders.
+              await loadOrders();
             }}
             onClose={() => setShowAddItems(false)}
           />
@@ -1016,6 +1058,56 @@ export default function OrderDetailScreen({
                 </button>
               );
             })}
+        </div>
+      )}
+
+      {!isOffline && totalPages > 1 && (
+        <div className="mt-6 flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              aria-label="Previous page"
+              className="flex h-9 items-center gap-1 rounded-xl border border-border px-3 text-sm font-medium text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Prev
+            </button>
+            {pageList(page, totalPages).map((n, i) =>
+              n === "…" ? (
+                <span key={`e${i}`} className="px-1 text-sm text-muted-foreground">
+                  {"\u2026"}
+                </span>
+              ) : (
+                <button
+                  key={n}
+                  onClick={() => setPage(n)}
+                  aria-label={`Go to page ${n}`}
+                  aria-current={n === page ? "page" : undefined}
+                  className={`h-9 min-w-9 rounded-xl px-3 text-sm font-medium ${
+                    n === page
+                      ? "bg-ink text-white"
+                      : "border border-border text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {n}
+                </button>
+              ),
+            )}
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              aria-label="Next page"
+              className="flex h-9 items-center gap-1 rounded-xl border border-border px-3 text-sm font-medium text-muted-foreground hover:bg-muted disabled:pointer-events-none disabled:opacity-40"
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Page {page} of {totalPages} &middot; {totalCount}{" "}
+            {totalCount === 1 ? "order" : "orders"}
+          </p>
         </div>
       )}
     </div>

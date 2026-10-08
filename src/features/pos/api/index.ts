@@ -278,6 +278,25 @@ export const posListOrders = (shiftId?: string) =>
     headers: headers(),
   });
 
+export interface PosOrdersPage {
+  results: PosOrder[];
+  count: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export const posListOrdersPaged = (page: number, pageSize = 20, q?: string) => {
+  const params = new URLSearchParams({
+    page: String(page),
+    page_size: String(pageSize),
+  });
+  if (q?.trim()) params.set("q", q.trim());
+  return djangoFetch<PosOrdersPage>(apiUrl(`/pos/orders/?${params.toString()}`), {
+    headers: headers(),
+  });
+};
+
 export const posUpdateOrderStatus = (
   orderId: string,
   status: string,
