@@ -870,8 +870,18 @@ def create_worker(request):
     except team.TeamError as exc:
         return Response({"error": str(exc)}, status=exc.status)
 
-    worker = ShiftWorker(merchant=merchant, display_name=ser.validated_data["display_name"])
-    worker.set_pin(ser.validated_data["pin"])
+    vd = ser.validated_data
+    worker = ShiftWorker(
+        merchant=merchant,
+        display_name=vd["display_name"],
+        # staff code/phone/email are part of the staff account — dropping them
+        # here meant a code set on the POS screen never saved, so code login
+        # could never find the worker it was created for.
+        staff_code=vd.get("staff_code", ""),
+        phone=vd.get("phone", ""),
+        email=vd.get("email", ""),
+    )
+    worker.set_pin(vd["pin"])
     worker.save()
     team.apply_role_and_areas(request, worker, role, ser.validated_data.get("area_ids"))
 
@@ -911,7 +921,7 @@ def update_worker(request, worker_id):
     except team.TeamError as exc:
         return Response({"error": str(exc)}, status=exc.status)
 
-    for attr in ("display_name", "is_active"):
+    for attr in ("display_name", "is_active", "staff_code", "phone", "email"):
         if attr in data:
             setattr(worker, attr, data[attr])
     worker.save()
@@ -1055,10 +1065,16 @@ def pos_staff_login(request):
     elif staff_code:
         qs = ShiftWorker.objects.select_related("merchant", "staff_role").filter(staff_code__iexact=staff_code, is_deleted=False)
         if merchant:
+            # A known till or store pins the search to that merchant: a staff
+            # code can then never resolve to a worker of any other business.
             qs = qs.filter(merchant=merchant)
         candidates = list(qs)
         if len(candidates) == 1:
             worker = candidates[0]
+            # Only reached without a device or store, i.e. on a fresh phone that
+            # has never spoken to any merchant. The code must be unique across
+            # every merchant, so it names exactly one business — the employee's
+            # own. Any ambiguity demands the store name instead.
             merchant = worker.merchant
         elif len(candidates) > 1:
             return Response(

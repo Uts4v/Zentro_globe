@@ -119,6 +119,7 @@ export const posUpdateWorker = (
     staff_code: string;
     phone: string;
     email: string;
+    pin: string;
     is_active: boolean;
     can_apply_discount: boolean;
     can_process_refund: boolean;

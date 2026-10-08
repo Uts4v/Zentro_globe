@@ -5,10 +5,14 @@
  * manual browser-cache clear can dislodge. Telling a merchant to open dev tools
  * is not support, so the app has to be able to clear its own cache.
  *
- * Two rules make this safe to ship as a one-tap action:
+ * Three rules make this safe to ship as a one-tap action:
  *
- * - The session survives by default. A cache clear that signs a merchant out
- *   is a worse problem than the one it fixed.
+ * - The Google/customer session survives by default (``dja``/``djr``). A cache
+ *   clear that signs a merchant out is a worse problem than the one it fixed.
+ * - The POS staff account and the device registration do NOT survive. A till
+ *   handed between merchants must not keep the previous merchant's staff,
+ *   device or saved copy: clearing cache clears them so the next load starts
+ *   fresh under the merchant actually signed in.
  * - Unsynced offline sales are never touched. Orders and payments this device
  *   has taken but the server has not seen are money, not cache — discarding
  *   them is a separate, explicit choice.
@@ -16,37 +20,26 @@
 
 import { menuCache, offlineSales } from "@/features/pos/offline/db";
 import { clearAllSavedBootstrap } from "@/features/pos/offline/cache";
+import { staffSession } from "./staff-session";
 
 /**
- * Keys that must survive a cache clear: identity, device registration and the
- * POS session. Everything else in localStorage is a cache.
+ * Keys that must survive a cache clear: the logged-in Google/customer session,
+ * plus two device settings that are hardware and taste rather than cached data.
+ * Everything else in localStorage is a cache — and anything that identifies a
+ * POS staff member or a merchant's device is deliberately cleared, so the next
+ * load can never start under the previous merchant.
  */
 const KEEP_KEYS = new Set([
-  // Merchant / customer session
+  // Google / customer session — the only account that survives.
   "dja",
   "djr",
-  "zentro.staff",
   // Theme is a preference, not a cache — clearing it resets the merchant's
   // chosen appearance for no reason.
   "zentro-theme",
-  // POS identity: without these the terminal has to re-register and re-pin.
-  "pos_device_id",
-  "pos_device_token",
-  "pos_worker_id",
-  "pos_worker",
-  "pos_active_shift",
   // Printer setup is terminal hardware configuration, not a cache — clearing
   // it would silently drop every printer back to the browser print dialog.
   "pos_printer_settings",
 ]);
-
-export interface ClearCacheOptions {
-  /**
-   * Also drop the POS device registration, so the terminal re-authorizes and
-   * re-downloads everything from scratch.
-   */
-  signOutPos?: boolean;
-}
 
 export interface ClearCacheResult {
   caches: number;
@@ -110,21 +103,16 @@ export async function countPendingOfflineSales(): Promise<number> {
  * Clear the app's cache: Cache Storage, the service worker, and every
  * localStorage/sessionStorage key that is a cache rather than a session.
  *
- * `signOutPos` additionally drops the POS device registration and the saved
- * offline copy, so the next load rebuilds both from the server. Unsynced orders
- * and payments are kept either way — see `discardPendingOfflineSales`.
+ * The Google/customer session survives, as do the theme and printer setup. The
+ * POS staff session and the device registration do not: a till handed between
+ * merchants must never keep the previous merchant's staff or device, so the
+ * next load re-registers under the merchant actually signed in. Unsynced
+ * offline orders and payments are kept — see `discardPendingOfflineSales`.
  */
-export async function clearAppCache(opts: ClearCacheOptions = {}): Promise<ClearCacheResult> {
-  const keep = new Set(KEEP_KEYS);
-  if (opts.signOutPos) {
-    [
-      "pos_device_id",
-      "pos_device_token",
-      "pos_worker_id",
-      "pos_worker",
-      "pos_active_shift",
-    ].forEach((key) => keep.delete(key));
-  }
+export async function clearAppCache(): Promise<ClearCacheResult> {
+  // Belt and braces for the staff session: the storage sweep below removes its
+  // key too, but this also drops the in-memory copy and notifies subscribers.
+  staffSession.set(null);
 
   const cacheBuckets = await clearCacheStorage();
   const workers = await unregisterServiceWorkers();
@@ -132,7 +120,7 @@ export async function clearAppCache(opts: ClearCacheOptions = {}): Promise<Clear
   // a till handed between merchants can still hold older copies.
   clearAllSavedBootstrap();
   await menuCache.clear().catch(() => {});
-  const storageKeys = clearWebStorage(keep);
+  const storageKeys = clearWebStorage(KEEP_KEYS);
 
   return { caches: cacheBuckets, serviceWorkers: workers, storageKeys };
 }

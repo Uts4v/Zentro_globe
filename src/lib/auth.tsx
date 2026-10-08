@@ -7,7 +7,7 @@
  * 1 day in dev — we refresh when < 2 min remain).
  */
 
-import { staffHeaders } from "@/lib/staff-session";
+import { staffHeaders, staffSession } from "@/lib/staff-session";
 import {
   createContext,
   useContext,
@@ -20,6 +20,7 @@ import {
 import { apiUrl, tokenStore, djangoFetch } from "@/lib/django-api-base";
 import { decodeJwt, refreshAccessToken, secondsUntilExpiry } from "@/lib/auth-tokens";
 import { useStore } from "@/lib/store";
+import { usePosStore } from "@/features/pos/store";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -500,6 +501,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     tokenStore.clear();
     useStore.getState().resetSession();
+    // The POS store is a module singleton, so switching accounts in the same
+    // browser must not carry the previous merchant's workers, menu or tables
+    // into the next account's POS. The staff session identifies a staff member
+    // of the old business and cannot survive the account switch either.
+    staffSession.set(null);
+    usePosStore.getState().reset();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     setUser(null);
     setMerchantProfile(null);

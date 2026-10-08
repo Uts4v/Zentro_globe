@@ -75,6 +75,8 @@ export function ClearCacheDialog({
           <div className="rounded-2xl bg-mist px-4 py-3 text-xs text-muted-foreground">
             <p className="mb-1.5 font-semibold text-foreground">This will:</p>
             <ul className="space-y-1">
+              <li>· Sign out the POS staff account saved on this device</li>
+              <li>· Un-register this device — it rejoins under the merchant you sign into</li>
               <li>· Delete the POS offline menu, tables and staff saved on this device</li>
               <li>· Delete cached files, images and fonts</li>
               <li>· Reinstall the app shell on the next load</li>
@@ -84,7 +86,7 @@ export function ClearCacheDialog({
           <div className="rounded-2xl bg-mist px-4 py-3 text-xs text-muted-foreground">
             <p className="mb-1.5 font-semibold text-foreground">This will not:</p>
             <ul className="space-y-1">
-              <li>· Sign you out</li>
+              <li>· Sign you out of Google or your account</li>
               <li>· Delete anything on the server</li>
               <li>
                 · Delete orders taken offline on this device
