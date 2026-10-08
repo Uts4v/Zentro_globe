@@ -1779,11 +1779,25 @@ def create_pos_order(request):
         order_type = Order.ORDER_TYPE_REGULAR
     is_staff_comp = order_type == Order.ORDER_TYPE_STAFF_COMP
 
+    # Giving anything away free (a whole staff order or single items) needs
+    # the merchant setting on, the employee's permission and the PIN if set.
+    wants_free_items = any(
+        isinstance(row, dict) and row.get("is_free") for row in items_data
+    )
+    if is_staff_comp or wants_free_items:
+        from .order_edit import authorize_free_items
+        refused = authorize_free_items(request, merchant, worker, data.get("free_item_pin"))
+        if refused is not None:
+            return refused
+
     # ── Server-side authoritative pricing (orders.pricing; never trust
     # frontend totals). Staff comp orders are priced at zero. ───────────────
     from orders.pricing import PricingError, price_request_lines
     try:
-        priced = price_request_lines(merchant, items_data, staff_comp=is_staff_comp)
+        priced = price_request_lines(
+            merchant, items_data, staff_comp=is_staff_comp,
+            allow_free=wants_free_items, free_by=worker,
+        )
     except PricingError as exc:
         return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
     # Item points + spend points (LoyaltyRules.points_per_npr) on paid lines.
@@ -1832,6 +1846,9 @@ def create_pos_order(request):
             notes=data.get("notes", ""),
             performed_by=request.user,
         )
+        if is_staff_comp or wants_free_items:
+            from .order_edit import audit_free_items
+            audit_free_items(merchant, bill_order, created_items, worker=worker, user=request.user)
 
         if client_mutation_id:
             ProcessedClientMutation.objects.create(
@@ -1967,6 +1984,12 @@ def create_pos_order(request):
                "total": str(pricing.grand_total),
                "items_count": len(order_items_data),
            })
+    if is_staff_comp or wants_free_items:
+        from .order_edit import audit_free_items
+        audit_free_items(
+            merchant, order, created_items, worker=worker, user=request.user,
+            whole_order=is_staff_comp,
+        )
 
     from orders.serializers import OrderSerializer
     return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
@@ -2700,7 +2723,9 @@ def apply_discount(request):
                "amount": str(adjustment.amount),
            })
 
-    return Response(PosDiscountSerializer(discount).data, status=status.HTTP_201_CREATED)
+    payload = dict(PosDiscountSerializer(discount).data)
+    payload["pricing"] = _pricing.to_dict()
+    return Response(payload, status=status.HTTP_201_CREATED)
 
 
 @api_view(["POST"])
@@ -2739,9 +2764,9 @@ def remove_discount(request):
 
     order.version += 1
     order.save(update_fields=["version", "updated_at"])
-    _audit(merchant, PosAuditLog.ACTION_ORDER_UPDATE,
+    _audit(merchant, PosAuditLog.ACTION_DISCOUNT_REMOVE,
            worker=worker, user=request.user, entity_type="order", entity_id=order.id,
-           metadata={"action": "discount_remove"})
+           metadata={"order_id": str(order.id), "new_total": str(pricing.grand_total)})
 
     return Response({"order_id": str(order.uuid), "pricing": pricing.to_dict()})
 
@@ -3445,6 +3470,8 @@ def receipt_data(request, order_id):
             "tax_amount": str(item.tax_amount),
             "line_total": str(item.total_amount),
             "tax_class": item.tax_class,
+            "is_free": item.is_complimentary,
+            "free_value": str(item.complimentary_value),
             "special_instructions": item.special_instructions or "",
             "options": [
                 {

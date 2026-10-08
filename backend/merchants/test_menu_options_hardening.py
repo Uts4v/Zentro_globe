@@ -271,20 +271,30 @@ class ModifierSelectionTests(OptionGroupTestBase):
             )
         self.assertIn("only one", str(ctx.exception).lower())
 
-    def test_min_select_is_enforced_even_when_group_not_flagged_required(self):
+    def test_addon_group_is_optional_unless_marked_required(self):
         """
-        A group with min_select=1 is mandatory regardless of the `required`
-        flag — the floor is the real rule, `required` is just the UI hint.
+        Add-ons are optional unless the merchant marks the group Required: a
+        minimum left on a non-required add-on group never forces a pick.
         """
         self.toppings.min_select = 2
         self.toppings.required = False
+        self.toppings.save()
+        self.toppings.refresh_from_db()
+        self.assertEqual(self.toppings.min_select, 0)
+        line = validate_and_price_line(self.pizza, 1, [self.pair(self.size, self.small)])
+        self.assertEqual(line.quantity, 1)
+
+    def test_min_select_is_enforced_on_a_required_addon_group(self):
+        """A Required add-on group with a minimum of 2 needs two picks."""
+        self.toppings.min_select = 2
+        self.toppings.required = True
         self.toppings.save()
 
         with self.assertRaises(LineValidationError) as ctx:
             validate_and_price_line(
                 self.pizza, 1, [self.pair(self.size, self.small)]
             )
-        self.assertIn("at least 2", str(ctx.exception))
+        self.assertIn("Extra Toppings", str(ctx.exception))
 
         with self.assertRaises(LineValidationError):
             validate_and_price_line(
@@ -415,10 +425,17 @@ class OptionGroupConstraintTests(OptionGroupTestBase):
     def test_min_select_is_clamped_to_max_select(self):
         group = MenuOptionGroup.objects.create(
             merchant=self.merchant, menu_item=self.burger, name="Clamped",
-            kind="modifier", required=False, min_select=9, max_select=2,
+            kind="modifier", required=True, min_select=9, max_select=2,
         )
         self.assertEqual(group.min_select, 2)
         self.assertEqual(group.max_select, 2)
+
+    def test_optional_addon_group_never_keeps_a_minimum(self):
+        group = MenuOptionGroup.objects.create(
+            merchant=self.merchant, menu_item=self.burger, name="Extras",
+            kind="modifier", required=False, min_select=1, max_select=3,
+        )
+        self.assertEqual(group.min_select, 0)
 
     def test_variant_group_is_forced_to_single_select(self):
         group = MenuOptionGroup.objects.create(

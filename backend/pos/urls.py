@@ -6,6 +6,7 @@ from django.urls import path
 from . import views
 from . import reporting_views
 from . import team
+from . import order_edit
 
 urlpatterns = [
     # Team: staff mode, roles & permissions, employees
@@ -58,6 +59,8 @@ urlpatterns = [
     path("order/create/", views.create_pos_order, name="pos-order-create"),
     path("orders/create/", views.create_pos_order, name="pos-orders-create-alias"),
     path("order/status/", views.update_order_status_uuid, name="pos-order-status"),
+    path("order/item/update/", order_edit.update_order_item, name="pos-order-item-update"),
+    path("free-item/authorize/", order_edit.authorize_free_item, name="pos-free-item-authorize"),
     path("orders/", views.pos_orders, name="pos-orders"),
 
     # Receipts & Bills
@@ -98,6 +101,7 @@ urlpatterns = [
     # POS settings
     path("settings/", views.pos_settings, name="pos-settings"),
     path("settings/update/", views.update_pos_settings, name="pos-settings-update"),
+    path("settings/free-item-pin/", order_edit.set_free_item_pin, name="pos-free-item-pin"),
 
     # Menu snapshot for offline bootstrap
     path("menu/snapshot/", views.menu_snapshot, name="pos-menu-snapshot"),

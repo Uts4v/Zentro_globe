@@ -29,6 +29,9 @@ function CustomerSignup() {
   const { redirect } = useSearch({ from: "/auth/signup" });
 
   const phone = `${dialCode}${localNumber}`;
+  // Optional: only send a number the person actually typed. A bare country
+  // code is not a phone number and used to block the whole sign-up.
+  const typedPhone = localNumber.replace(/\D/g, "").length > 0 ? phone : "";
 
   const handlePhoneChange = (raw: string) => {
     let rest = raw;
@@ -42,7 +45,7 @@ function CustomerSignup() {
     setError(null);
     const { error: err } = await googleAuth(idToken, {
       role: "customer",
-      phone,
+      phone: typedPhone,
     });
     if (err) {
       setError(err);
@@ -66,7 +69,7 @@ function CustomerSignup() {
       const { error: err } = await signUp(email, password, name, {
         role: "customer",
         confirmPassword,
-        phone,
+        phone: typedPhone,
       });
       if (err) {
         setError(err);
@@ -120,7 +123,7 @@ function CustomerSignup() {
         {/* Mobile number (OTP verification arrives in a future update) */}
         <label className="block">
           <span className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
-            Mobile number
+            Mobile number <span className="normal-case tracking-normal">(optional)</span>
           </span>
           <div className="mt-1.5 flex h-14 items-stretch overflow-hidden rounded-2xl bg-mist transition-all focus-within:ring-2 focus-within:ring-ember/40">
             <div className="relative shrink-0">

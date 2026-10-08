@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "ai_core",
     "inventory",
     "offers",
+    "finance",
     "config",
 ]
 

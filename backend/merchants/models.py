@@ -133,6 +133,15 @@ class MerchantProfile(models.Model):
         default=False,
         help_text="Allow applying discounts while offline",
     )
+    # ── Free items given by staff ─────────────────────────────────────────────
+    free_items_enabled = models.BooleanField(
+        default=False,
+        help_text="Allow staff to give free items at the POS",
+    )
+    free_item_pin_hash = models.CharField(
+        max_length=128, blank=True, default="",
+        help_text="Hashed PIN staff must enter to give a free item (empty = no PIN)",
+    )
     offline_credit_allowed = models.BooleanField(
         default=False,
         help_text="Allow credit sales while offline",
@@ -349,6 +358,23 @@ class MerchantProfile(models.Model):
             return custom
         return dict(PosPayment.METHOD_CHOICES).get(method, method)
 
+    # ── Free item PIN ────────────────────────────────────────────────────────
+    @property
+    def free_item_pin_set(self) -> bool:
+        return bool(self.free_item_pin_hash)
+
+    def set_free_item_pin(self, raw_pin: str) -> None:
+        from django.contrib.auth.hashers import make_password
+
+        self.free_item_pin_hash = make_password(raw_pin) if raw_pin else ""
+
+    def check_free_item_pin(self, raw_pin: str) -> bool:
+        from django.contrib.auth.hashers import check_password
+
+        if not self.free_item_pin_hash:
+            return True
+        return bool(raw_pin) and check_password(str(raw_pin), self.free_item_pin_hash)
+
     def can_accept_qr_payment(self):
         """QR is only offered when enabled *and* an actual QR image is set."""
         return bool(self.payment_qr_enabled and self.payment_qr_url)
@@ -464,11 +490,18 @@ class MenuOptionGroup(models.Model):
         just `required=True` and nothing else, so the invariant is enforced here
         rather than pushed onto every call site:
 
+          * add-on (modifier) groups are optional unless marked required.
           * "required" means at least one pick, so min_select floors at 1.
           * min_select can never exceed max_select, or the group could never
             be satisfied and the product would become unorderable.
           * variant groups are single-select by definition.
         """
+        # Add-ons are optional unless the merchant marks the group Required:
+        # a minimum left over on a non-required add-on group must never force
+        # a pick at the till.
+        if self.kind == self.KIND_MODIFIER and not self.required:
+            self.min_select = 0
+
         if self.required and (self.min_select or 0) < 1:
             self.min_select = 1
 

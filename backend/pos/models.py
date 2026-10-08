@@ -480,6 +480,10 @@ class PosAuditLog(models.Model):
     ACTION_STAFF_MODE = "staff_mode"
     ACTION_PUNCH_CARD_REDEEM = "punch_card_redeem"
     ACTION_REWARD_REDEEM = "reward_redeem"
+    ACTION_FREE_ITEM = "free_item"
+    ACTION_ORDER_ITEM_UPDATE = "order_item_update"
+    ACTION_DISCOUNT_REMOVE = "discount_remove"
+    ACTION_SETTINGS_UPDATE = "settings_update"
 
     ACTION_CHOICES = [
         (ACTION_DEVICE_REGISTER, "Device Register"),
@@ -519,6 +523,10 @@ class PosAuditLog(models.Model):
         (ACTION_STAFF_MODE, "Staff Mode"),
         (ACTION_PUNCH_CARD_REDEEM, "Punch Card Redeem"),
         (ACTION_REWARD_REDEEM, "Reward Redeem"),
+        (ACTION_FREE_ITEM, "Free Item"),
+        (ACTION_ORDER_ITEM_UPDATE, "Order Item Update"),
+        (ACTION_DISCOUNT_REMOVE, "Discount Remove"),
+        (ACTION_SETTINGS_UPDATE, "Settings Update"),
     ]
 
     id = models.BigAutoField(primary_key=True)

@@ -353,15 +353,63 @@ export const posCreateSplitPayment = (data: PosSplitPaymentPayload) =>
   });
 
 // ── Discounts ─────────────────────────────────────────────────────────────────
+/** The bill as the server re-priced it after a change (money as strings). */
+export interface PosBillPricing {
+  subtotal: string;
+  discount_total: string;
+  taxable_total: string;
+  tax_total: string;
+  charge_total: string;
+  grand_total: string;
+  prices_include_tax: boolean;
+  taxes?: Array<{ name: string; rate: string; amount: string }>;
+}
+
 export const posApplyDiscount = (data: PosApplyDiscountPayload) =>
-  djangoFetch<PosDiscount>(apiUrl("/pos/discount/apply/"), {
+  djangoFetch<PosDiscount & { pricing: PosBillPricing }>(apiUrl("/pos/discount/apply/"), {
     method: "POST",
     headers: headers(),
     body: JSON.stringify(data),
   });
 
 export const posRemoveDiscount = (data: { order_id: string; worker_id: string }) =>
-  djangoFetch<{ order_id: string; pricing: unknown }>(apiUrl("/pos/discount/remove/"), {
+  djangoFetch<{ order_id: string; pricing: PosBillPricing }>(apiUrl("/pos/discount/remove/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
+
+// ── Changing a sent order ─────────────────────────────────────────────────────
+/** Lower an item's quantity on an open, unpaid order (0 removes the line). */
+export const posUpdateOrderItem = (data: {
+  order_id: string;
+  item_id: number;
+  quantity: number;
+  worker_id?: string;
+  reason?: string;
+}) =>
+  djangoFetch<PosOrder>(apiUrl("/pos/order/item/update/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
+
+// ── Free items ────────────────────────────────────────────────────────────────
+/** Checks the setting, this employee's permission and the PIN before an item is marked free. */
+export const posAuthorizeFreeItem = (data: { worker_id?: string; pin?: string }) =>
+  djangoFetch<{ allowed: boolean; pin_required: boolean }>(apiUrl("/pos/free-item/authorize/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(data),
+  });
+
+/** Set, change or remove (empty pin) the PIN staff enter to give a free item. */
+export const posSetFreeItemPin = (data: {
+  pin: string;
+  current_pin?: string;
+  account_password?: string;
+}) =>
+  djangoFetch<{ free_item_pin_set: boolean }>(apiUrl("/pos/settings/free-item-pin/"), {
     method: "POST",
     headers: headers(),
     body: JSON.stringify(data),
@@ -567,6 +615,11 @@ export interface PosOrder {
     special_instructions?: string;
     /** Variant/modifier picks as snapshotted on the order line. */
     options?: Array<{ group_name: string; option_name: string; kind?: string }>;
+    /** Given free by staff (charged nothing). */
+    is_complimentary?: boolean;
+    complimentary_value?: string;
+    /** Added by an offer; cannot be edited on its own. */
+    is_promotion_reward?: boolean;
   }>;
   cancellation_reason: string;
   cancelled_by: string;
@@ -751,6 +804,10 @@ export interface PosSettings {
   manager_approval_threshold: string;
   offline_discounts_allowed: boolean;
   offline_credit_allowed: boolean;
+  /** Merchant setting: staff may give free items. */
+  free_items_enabled?: boolean;
+  /** True when the merchant set a PIN that must be entered to give a free item. */
+  free_item_pin_set?: boolean;
   /** Merchant's payment QR image for QR payments; "" when not configured. */
   payment_qr_url?: string;
   tax_enabled: boolean;
@@ -831,11 +888,15 @@ export interface PosCreateOrderPayload {
     /** Variant/modifier picks for this line. Required when the item has groups. */
     selections?: MenuSelection[];
     special_instructions?: string;
+    /** Give this line free (needs the merchant setting, permission and PIN). */
+    is_free?: boolean;
   }>;
   notes?: string;
   fulfillment_type?: string;
   table_id?: number | null;
   customer_id?: number | null;
+  /** PIN for free items / a Staff Free order, when the merchant set one. */
+  free_item_pin?: string;
   order_type?: string;
   source?: string;
   shift_id?: string;

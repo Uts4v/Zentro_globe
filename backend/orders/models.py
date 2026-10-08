@@ -648,6 +648,22 @@ class OrderItem(models.Model):
         default=False,
         help_text="Added as an offer's free/reward item (still a real, priced line).",
     )
+    # ── Free item given by staff (merchant setting + permission + PIN) ────────
+    is_complimentary = models.BooleanField(
+        default=False,
+        help_text="Given free by staff: charged 0, earns no loyalty.",
+    )
+    complimentary_value = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0,
+        help_text="What this line would have cost if it had been charged.",
+    )
+    complimentary_by = models.ForeignKey(
+        "pos.ShiftWorker",
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name="complimentary_items",
+        help_text="Employee who gave the item free.",
+    )
 
     class Meta:
         db_table = "order_items"

@@ -124,7 +124,8 @@ export function OptionGroupsEditor({
         name: groupForm.name,
         kind: groupForm.kind,
         required: Boolean(groupForm.required),
-        min_select: Number(groupForm.min_select),
+        min_select:
+          groupForm.kind === "modifier" && !groupForm.required ? 0 : Number(groupForm.min_select),
         max_select: Number(groupForm.max_select),
         is_active: Boolean(groupForm.is_active),
         display_order: Number(groupForm.display_order ?? 0),
@@ -437,10 +438,14 @@ export function OptionGroupsEditor({
                         ...groupForm,
                         kind: k,
                         max_select: k === "variant" ? 1 : groupForm.max_select,
-                        min_select:
-                          k === "variant"
-                            ? Math.min(groupForm.min_select, 1)
-                            : groupForm.min_select,
+                        // Switching the kind resets "required": a variant must
+                        // be chosen, add-ons are optional until the merchant
+                        // turns Required on.
+                        ...(k === groupForm.kind
+                          ? {}
+                          : k === "variant"
+                            ? { required: true, min_select: 1 }
+                            : { required: false, min_select: 0 }),
                       })
                     }
                     className={`flex items-center justify-center gap-1.5 rounded-xl border py-2.5 text-xs font-medium ${groupForm.kind === k ? "border-teal-600 bg-teal-600 text-white" : "border-border bg-white/60 text-muted-foreground"}`}
@@ -494,11 +499,16 @@ export function OptionGroupsEditor({
                   <input
                     type="number"
                     min="0"
-                    value={groupForm.min_select}
+                    value={
+                      groupForm.kind === "modifier" && !groupForm.required
+                        ? 0
+                        : groupForm.min_select
+                    }
                     onChange={(e) =>
                       setGroupForm({ ...groupForm, min_select: Number(e.target.value) })
                     }
-                    className="h-10 w-full rounded-xl border border-border bg-white/60 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                    disabled={groupForm.kind === "modifier" && !groupForm.required}
+                    className="h-10 w-full rounded-xl border border-border bg-white/60 px-3 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30 disabled:opacity-50"
                   />
                 </label>
                 <label className="block">
@@ -538,6 +548,13 @@ export function OptionGroupsEditor({
                   </button>
                 </label>
               </div>
+              {groupForm.kind === "modifier" && (
+                <p className="text-xs text-muted-foreground">
+                  {groupForm.required
+                    ? "Required: an order cannot be placed without choosing from this group."
+                    : "Optional: customers and staff can place the order without choosing any add-on."}
+                </p>
+              )}
               {groupError && <p className="text-xs text-rose-700">{groupError}</p>}
               <button
                 type="button"

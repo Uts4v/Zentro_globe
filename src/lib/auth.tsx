@@ -65,6 +65,10 @@ export type MerchantProfile = {
   credit_accounts_enabled?: boolean;
   debit_accounts_enabled?: boolean;
   discounts_enabled?: boolean;
+  /** Staff may give free items at the POS. */
+  free_items_enabled?: boolean;
+  /** A PIN must be entered to give a free item (the PIN itself is never sent). */
+  free_item_pin_set?: boolean;
   shift_management_enabled?: boolean;
   receipt_printing_enabled?: boolean;
   max_worker_discount_percent?: number;

@@ -20,6 +20,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/auth/ChangePasswordDialog";
+import { FreeItemsSettings } from "../components/FreeItemsSettings";
 import { ClearCacheRow } from "@/components/ClearCacheControl";
 
 const TAX_PRESETS: Record<string, Array<{ name: string; rate: number }>> = {
@@ -523,6 +524,13 @@ export function MerchantSettingsPage() {
           </label>
         </div>
       </section>
+
+      {/* ── Free items ─────────────────────────────────────────────────────── */}
+      <FreeItemsSettings
+        enabled={Boolean(profile.free_items_enabled)}
+        pinSet={Boolean(profile.free_item_pin_set)}
+        onChange={(next) => setProfile((p) => (p ? { ...p, ...next } : p))}
+      />
 
       {/* ── Payment methods ────────────────────────────────────────────────── */}
       <section className="glass-strong rounded-3xl p-6">

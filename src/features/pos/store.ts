@@ -29,6 +29,8 @@ type PosOrderItem = {
   subtotal: number;
   selections: MenuSelection[];
   special_instructions: string;
+  /** Given free by staff: charged nothing, `price` keeps the normal price for display. */
+  is_free?: boolean;
 };
 
 /**
@@ -92,7 +94,16 @@ export function cartToOrderItems(cart: PosOrderItem[]) {
     quantity: item.quantity,
     selections: item.selections,
     special_instructions: item.special_instructions,
+    ...(item.is_free ? { is_free: true } : {}),
   }));
+}
+
+/** Marks a cart line's key as the free copy of that line, so it never merges with a paid one. */
+const FREE_SUFFIX = "#free";
+
+/** True when the cart gives at least one item away free. */
+export function cartHasFreeItems(cart: PosOrderItem[]): boolean {
+  return cart.some((item) => item.is_free);
 }
 
 interface PosState {
@@ -145,6 +156,11 @@ interface PosState {
   updateCartItem: (currentKey: string, item: PosOrderItemInput) => void;
   removeItemFromCart: (idx: number) => void;
   updateCartItemQty: (idx: number, qty: number) => void;
+  /** Give a cart line free, or charge it again. */
+  setCartItemFree: (idx: number, free: boolean) => void;
+  /** PIN entered for free items on this cart (kept in memory only). */
+  freeItemPin: string | null;
+  setFreeItemPin: (pin: string | null) => void;
   clearCart: () => void;
   setCartNotes: (n: string) => void;
   pendingDiscount: PendingDiscount | null;
@@ -174,6 +190,7 @@ const initialState = {
   incomingOrders: [],
   tables: [],
   savedDataFrom: null,
+  freeItemPin: null as string | null,
   offlineCacheUnavailable: false,
   lastSyncedAt: null,
   cart: [],
@@ -302,6 +319,26 @@ export const usePosStore = create<PosState>((set, get) => ({
       return { cart: updated };
     }),
 
+  setCartItemFree: (idx, free) =>
+    set((state) => {
+      const line = state.cart[idx];
+      if (!line || Boolean(line.is_free) === free) return {};
+      const baseKey = line.key.endsWith(FREE_SUFFIX)
+        ? line.key.slice(0, -FREE_SUFFIX.length)
+        : line.key;
+      const key = free ? baseKey + FREE_SUFFIX : baseKey;
+      const updated = state.cart.filter((_, i) => i !== idx);
+      const twin = updated.findIndex((c) => c.key === key);
+      if (twin >= 0) {
+        const quantity = updated[twin].quantity + line.quantity;
+        updated[twin] = { ...updated[twin], quantity, subtotal: quantity * updated[twin].price };
+      } else {
+        updated.splice(idx, 0, { ...line, key, is_free: free });
+      }
+      return { cart: updated, ...(updated.some((c) => c.is_free) ? {} : { freeItemPin: null }) };
+    }),
+  setFreeItemPin: (pin) => set({ freeItemPin: pin }),
+
   clearCart: () =>
     set({
       cart: [],
@@ -310,6 +347,7 @@ export const usePosStore = create<PosState>((set, get) => ({
       selectedCustomerId: null,
       pendingDiscount: null,
       pendingOffer: null,
+      freeItemPin: null,
     }),
   setCartNotes: (n) => set({ cartNotes: n }),
   // One discount/reward per order (V1): choosing one replaces the other.

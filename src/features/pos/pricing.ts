@@ -43,7 +43,7 @@ export function usePosCartPricing(): PosCartPricing {
       lines: cart.map((item) => ({
         key: item.key,
         quantity: item.quantity,
-        unitPrice: item.price,
+        unitPrice: item.is_free ? 0 : item.price,
         taxClass: taxClassById.get(item.menu_item_id) ?? "standard",
       })),
       // An offer's value was computed by the server for this cart; it is

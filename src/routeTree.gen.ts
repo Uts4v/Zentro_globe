@@ -61,6 +61,7 @@ import { Route as MerchantInventoryRouteImport } from './routes/merchant.invento
 import { Route as MerchantCustomersRouteImport } from './routes/merchant.customers'
 import { Route as MerchantAnalyticsRouteImport } from './routes/merchant.analytics'
 import { Route as MerchantAiRouteImport } from './routes/merchant.ai'
+import { Route as MerchantAccountsRouteImport } from './routes/merchant.accounts'
 import { Route as MSlugRouteImport } from './routes/m.$slug'
 import { Route as CustomerOrdersRouteImport } from './routes/customer.orders'
 import { Route as CustomerOrderRouteImport } from './routes/customer.order'
@@ -343,6 +344,11 @@ const MerchantAiRoute = MerchantAiRouteImport.update({
   path: '/ai',
   getParentRoute: () => MerchantRoute,
 } as any)
+const MerchantAccountsRoute = MerchantAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
+  getParentRoute: () => MerchantRoute,
+} as any)
 const MSlugRoute = MSlugRouteImport.update({
   id: '/m/$slug',
   path: '/m/$slug',
@@ -477,6 +483,7 @@ export interface FileRoutesByFullPath {
   '/customer/order': typeof CustomerOrderRoute
   '/customer/orders': typeof CustomerOrdersRoute
   '/m/$slug': typeof MSlugRouteWithChildren
+  '/merchant/accounts': typeof MerchantAccountsRoute
   '/merchant/ai': typeof MerchantAiRoute
   '/merchant/analytics': typeof MerchantAnalyticsRoute
   '/merchant/customers': typeof MerchantCustomersRoute
@@ -550,6 +557,7 @@ export interface FileRoutesByTo {
   '/customer/order': typeof CustomerOrderRoute
   '/customer/orders': typeof CustomerOrdersRoute
   '/m/$slug': typeof MSlugRouteWithChildren
+  '/merchant/accounts': typeof MerchantAccountsRoute
   '/merchant/ai': typeof MerchantAiRoute
   '/merchant/analytics': typeof MerchantAnalyticsRoute
   '/merchant/customers': typeof MerchantCustomersRoute
@@ -626,6 +634,7 @@ export interface FileRoutesById {
   '/customer/order': typeof CustomerOrderRoute
   '/customer/orders': typeof CustomerOrdersRoute
   '/m/$slug': typeof MSlugRouteWithChildren
+  '/merchant/accounts': typeof MerchantAccountsRoute
   '/merchant/ai': typeof MerchantAiRoute
   '/merchant/analytics': typeof MerchantAnalyticsRoute
   '/merchant/customers': typeof MerchantCustomersRoute
@@ -703,6 +712,7 @@ export interface FileRouteTypes {
     | '/customer/order'
     | '/customer/orders'
     | '/m/$slug'
+    | '/merchant/accounts'
     | '/merchant/ai'
     | '/merchant/analytics'
     | '/merchant/customers'
@@ -776,6 +786,7 @@ export interface FileRouteTypes {
     | '/customer/order'
     | '/customer/orders'
     | '/m/$slug'
+    | '/merchant/accounts'
     | '/merchant/ai'
     | '/merchant/analytics'
     | '/merchant/customers'
@@ -851,6 +862,7 @@ export interface FileRouteTypes {
     | '/customer/order'
     | '/customer/orders'
     | '/m/$slug'
+    | '/merchant/accounts'
     | '/merchant/ai'
     | '/merchant/analytics'
     | '/merchant/customers'
@@ -1298,6 +1310,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MerchantAiRouteImport
       parentRoute: typeof MerchantRoute
     }
+    '/merchant/accounts': {
+      id: '/merchant/accounts'
+      path: '/accounts'
+      fullPath: '/merchant/accounts'
+      preLoaderRoute: typeof MerchantAccountsRouteImport
+      parentRoute: typeof MerchantRoute
+    }
     '/m/$slug': {
       id: '/m/$slug'
       path: '/m/$slug'
@@ -1502,6 +1521,7 @@ const LoyaltyRouteWithChildren =
   LoyaltyRoute._addFileChildren(LoyaltyRouteChildren)
 
 interface MerchantRouteChildren {
+  MerchantAccountsRoute: typeof MerchantAccountsRoute
   MerchantAiRoute: typeof MerchantAiRoute
   MerchantAnalyticsRoute: typeof MerchantAnalyticsRoute
   MerchantCustomersRoute: typeof MerchantCustomersRoute
@@ -1524,6 +1544,7 @@ interface MerchantRouteChildren {
 }
 
 const MerchantRouteChildren: MerchantRouteChildren = {
+  MerchantAccountsRoute: MerchantAccountsRoute,
   MerchantAiRoute: MerchantAiRoute,
   MerchantAnalyticsRoute: MerchantAnalyticsRoute,
   MerchantCustomersRoute: MerchantCustomersRoute,

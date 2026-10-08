@@ -33,6 +33,7 @@ import {
   FileType,
   Package,
   UsersRound,
+  Wallet,
 } from "lucide-react";
 import { NoAccess, useAccess, type Perm } from "@/features/team/access";
 import { StaffBanner, StartStaffModeButton } from "@/features/team/StaffMode";
@@ -97,6 +98,13 @@ const navItems: {
     icon: FileText,
     section: "Dashboard",
     perm: "reports.view",
+  },
+  {
+    to: "/merchant/accounts",
+    label: "Accounts",
+    icon: Wallet,
+    section: "Dashboard",
+    perm: "accounts.view",
   },
   {
     to: "/merchant/orders",

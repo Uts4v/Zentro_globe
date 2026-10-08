@@ -1,6 +1,8 @@
 import { usePosStore, cartToOrderItems } from "../store";
 import { useState, useMemo, useEffect } from "react";
-import { PosReceiptData, PosCustomer, posCreateOrder } from "../api";
+import { PosReceiptData, PosCustomer, posAuthorizeFreeItem, posCreateOrder } from "../api";
+import FreeItemPinDialog from "./FreeItemPinDialog";
+import { toast } from "sonner";
 import { safeUuid } from "@/lib/utils";
 import { formatCurrency } from "@/lib/currency";
 import { usePosCartPricing } from "../pricing";
@@ -50,6 +52,15 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
   const canApplyDiscount = hasStaffPermission("discounts.apply");
   const canManageCustomers = hasStaffPermission("customers.manage");
   const canManageRewards = hasStaffPermission("rewards.manage");
+  // Free items: the merchant switches them on, the role must allow them and,
+  // when the merchant set one, the PIN is asked for. The server checks all three.
+  const canGiveFree = Boolean(posSettings?.free_items_enabled) && hasStaffPermission("items.free");
+  const freePinNeeded = Boolean(posSettings?.free_item_pin_set);
+  const setCartItemFree = usePosStore((s) => s.setCartItemFree);
+  const freeItemPin = usePosStore((s) => s.freeItemPin);
+  const setFreeItemPin = usePosStore((s) => s.setFreeItemPin);
+  const [freePinFor, setFreePinFor] = useState<{ idx: number; name: string } | null>(null);
+  const [staffFreePin, setStaffFreePin] = useState("");
   const merchant = usePosStore((s) => s.merchant);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
@@ -297,6 +308,30 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
     setPrintingBill(false);
   }
 
+  /** Give one cart line free (or charge it again). */
+  async function toggleFree(idx: number) {
+    const line = cart[idx];
+    if (!line) return;
+    if (line.is_free) {
+      setCartItemFree(idx, false);
+      return;
+    }
+    if (freePinNeeded && !freeItemPin) {
+      setFreePinFor({ idx, name: line.name });
+      return;
+    }
+    try {
+      await posAuthorizeFreeItem({
+        worker_id: currentWorker?.id,
+        pin: freeItemPin ?? undefined,
+      });
+      setCartItemFree(idx, true);
+    } catch (err: unknown) {
+      setFreeItemPin(null);
+      toast.error(err instanceof Error && err.message ? err.message : "Could not give this free.");
+    }
+  }
+
   async function handleStaffFreeOrder() {
     if (!merchant || !currentWorker || !device || cart.length === 0) return;
     setFreeOrderLoading(true);
@@ -307,6 +342,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
         items: cartToOrderItems(cart),
         notes: `Staff free order — ${cartNotes || "No notes"}`,
         fulfillment_type: fulfillmentType,
+        free_item_pin: staffFreePin || undefined,
         order_type: "staff_comp",
         shift_id: activeShift?.id ?? undefined,
         worker_id: currentWorker.id,
@@ -315,6 +351,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
       });
       clearCart();
       setShowFreeConfirm(false);
+      setStaffFreePin("");
     } catch (err: any) {
       setFreeOrderError(err?.message || "Failed to create free order");
     } finally {
@@ -491,7 +528,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <p className="truncate text-sm font-semibold text-foreground">{item.name}</p>
-                      {item.price === 0 ? (
+                      {item.price === 0 || item.is_free ? (
                         <span className="shrink-0 rounded-full bg-success/10 px-2 py-0.5 text-xs font-bold text-success">
                           FREE
                         </span>
@@ -502,9 +539,11 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                       )}
                     </div>
                     <p className="numeric text-xs text-muted-foreground">
-                      {item.price === 0
-                        ? "No charge"
-                        : `${formatCurrency(item.price, currencySymbol)} each`}
+                      {item.is_free
+                        ? `Free · normally ${formatCurrency(item.subtotal, currencySymbol)}`
+                        : item.price === 0
+                          ? "No charge"
+                          : `${formatCurrency(item.price, currencySymbol)} each`}
                     </p>
                     {optionsText ? (
                       <p className="mt-0.5 truncate text-[11px] text-muted-foreground/90">
@@ -565,6 +604,26 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
+                      {canGiveFree && item.price > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => toggleFree(idx)}
+                          disabled={offline}
+                          aria-pressed={Boolean(item.is_free)}
+                          title={
+                            offlineTitle ??
+                            (item.is_free ? "Charge for this item again" : "Give this item free")
+                          }
+                          className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                            item.is_free
+                              ? "border-success bg-success text-white"
+                              : "border-success/40 bg-success/10 text-success hover:bg-success/20"
+                          }`}
+                        >
+                          <Gift className="h-3.5 w-3.5" />
+                          <span>{item.is_free ? "Free ✓" : "Free"}</span>
+                        </button>
+                      )}
                       {fulfillmentType === "dine-in" && (
                         <button
                           type="button"
@@ -757,7 +816,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               Redeem
             </button>
           )}
-          {!isEmpty && canCreateOrders && (
+          {!isEmpty && canCreateOrders && canGiveFree && (
             <button
               onClick={() => setShowFreeConfirm(true)}
               disabled={offline}
@@ -830,6 +889,22 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               </span>{" "}
               → <span className="font-bold text-success">FREE</span>
             </div>
+            {freePinNeeded && (
+              <label className="mt-3 block">
+                <span className="mb-1 block text-xs font-medium text-muted-foreground">
+                  Free item PIN
+                </span>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={8}
+                  value={staffFreePin}
+                  onChange={(e) => setStaffFreePin(e.target.value.replace(/\D/g, ""))}
+                  className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-center text-lg tracking-[0.4em] focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+                />
+              </label>
+            )}
             {freeOrderError && <p className="mt-2 text-xs text-destructive">{freeOrderError}</p>}
             <div className="mt-5 flex gap-2">
               <button
@@ -844,7 +919,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
               </button>
               <button
                 onClick={handleStaffFreeOrder}
-                disabled={freeOrderLoading}
+                disabled={freeOrderLoading || (freePinNeeded && staffFreePin.length < 4)}
                 className="flex-1 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
               >
                 {freeOrderLoading ? "Creating..." : "Confirm Free"}
@@ -852,6 +927,19 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
             </div>
           </div>
         </div>
+      )}
+
+      {freePinFor && (
+        <FreeItemPinDialog
+          subject={freePinFor.name}
+          onClose={() => setFreePinFor(null)}
+          onSubmit={async (pin) => {
+            await posAuthorizeFreeItem({ worker_id: currentWorker?.id, pin });
+            setFreeItemPin(pin);
+            setCartItemFree(freePinFor.idx, true);
+            setFreePinFor(null);
+          }}
+        />
       )}
 
       {/* ── Minus Stock Modal ── */}

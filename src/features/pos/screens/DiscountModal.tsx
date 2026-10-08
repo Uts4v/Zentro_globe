@@ -1,22 +1,38 @@
 import { useState, useEffect } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
-import { posWorkerLogin, ShiftWorker } from "../api";
+import {
+  posApplyDiscount,
+  posRemoveDiscount,
+  posWorkerLogin,
+  type PosBillPricing,
+  ShiftWorker,
+} from "../api";
 import { usePosCartPricing } from "../pricing";
 import { X, Percent, DollarSign, Lock, AlertTriangle, Check, Loader2 } from "lucide-react";
 
 interface DiscountModalProps {
   open: boolean;
-  onApplied: () => void;
+  /** For an existing order, receives the bill as the server re-priced it. */
+  onApplied: (pricing?: PosBillPricing) => void;
   onClose: () => void;
+  /**
+   * An order that already exists (sent, bill printed, not yet paid). The
+   * discount is applied or removed on the server straight away, which
+   * re-prices the bill. Without it the modal sets the cart's discount.
+   */
+  order?: { uuid: string; subtotal: number; hasDiscount: boolean };
 }
 
 /**
- * Chooses the cart's manual discount. It is stored on the cart and applied by
- * the server right after the order is created, so the discount is always
- * priced by the backend (and re-validated if the order changes).
+ * Chooses a manual discount.
+ *
+ * For the cart it is stored on the cart and applied by the server right after
+ * the order is created. For an existing order it is sent to the server now.
+ * Either way the discount is always priced by the backend (and re-validated
+ * if the order changes).
  */
-export default function DiscountModal({ open, onApplied, onClose }: DiscountModalProps) {
+export default function DiscountModal({ open, onApplied, onClose, order }: DiscountModalProps) {
   const currentWorker = usePosStore((s) => s.currentWorker);
   const setPendingDiscount = usePosStore((s) => s.setPendingDiscount);
   const cartPricing = usePosCartPricing();
@@ -55,7 +71,8 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
       ? numValue > maxDiscount && maxDiscount > 0
       : numValue > approvalThreshold && approvalThreshold > 0;
 
-  const exceedsSubtotal = type === "fixed" && numValue > cartPricing.subtotalValue;
+  const subtotalValue = order ? order.subtotal : cartPricing.subtotalValue;
+  const exceedsSubtotal = type === "fixed" && numValue > subtotalValue;
   const canSubmit =
     numValue > 0 &&
     !submitting &&
@@ -86,9 +103,43 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
     setError(null);
 
     try {
-      setPendingDiscount({ type, value: numValue, reason, authorizedByWorkerId });
-      onApplied();
+      if (order) {
+        const res = await posApplyDiscount({
+          order_id: order.uuid,
+          worker_id: currentWorker.id,
+          discount_type: type,
+          discount_value: numValue,
+          reason,
+          authorized_by_worker_id: authorizedByWorkerId,
+          source: "pos",
+        });
+        onApplied(res.pricing);
+      } else {
+        setPendingDiscount({ type, value: numValue, reason, authorizedByWorkerId });
+        onApplied();
+      }
       onClose();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error && err.message ? err.message : "The discount could not be applied.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleRemove() {
+    if (!order || !currentWorker) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await posRemoveDiscount({ order_id: order.uuid, worker_id: currentWorker.id });
+      onApplied(res.pricing);
+      onClose();
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error && err.message ? err.message : "The discount could not be removed.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -210,7 +261,7 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
         {/* Header */}
         <div className="mb-5 flex items-center justify-between">
           <h3 id="discount-title" className="text-base font-bold text-foreground">
-            Apply Discount
+            {order?.hasDiscount ? "Edit Discount" : "Apply Discount"}
           </h3>
           <button
             aria-label="Close"
@@ -313,10 +364,20 @@ export default function DiscountModal({ open, onApplied, onClose }: DiscountModa
           ) : (
             <>
               <Check className="h-4 w-4" />
-              Apply Discount
+              {order?.hasDiscount ? "Update Discount" : "Apply Discount"}
             </>
           )}
         </button>
+        {order?.hasDiscount && (
+          <button
+            type="button"
+            onClick={handleRemove}
+            disabled={submitting}
+            className="mt-2 min-h-[44px] w-full rounded-xl border border-destructive/30 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-40"
+          >
+            Remove discount
+          </button>
+        )}
       </div>
     </div>
   );

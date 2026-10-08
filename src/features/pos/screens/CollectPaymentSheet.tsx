@@ -11,6 +11,10 @@ import {
   DebitAccount,
 } from "../api";
 import Receipt from "../printing/Receipt";
+import PaymentQrBlock from "./PaymentQrBlock";
+import DiscountModal from "./DiscountModal";
+import { hasStaffPermission } from "@/lib/staff-session";
+import type { PosBillPricing } from "../api";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
 import { isOfflineCapableMethod } from "../offline/tenders";
 import { enqueueMutation } from "../offline/sync";
@@ -33,6 +37,7 @@ import {
   Check,
   Loader2,
   Receipt as ReceiptIcon,
+  Percent,
 } from "lucide-react";
 
 type PaymentMethod = "cash" | "card" | "bank_qr" | "mobile_wallet" | "debit";
@@ -59,9 +64,37 @@ interface CollectPaymentSheetProps {
   onClose: () => void;
   /** Receives the order's payment state as reported by the server, when known. */
   onPaid: (update?: Pick<PosOrder, "payment_status" | "payment_method" | "status">) => void;
+  /** The bill changed here (discount applied, changed or removed). */
+  onBillChanged?: (bill: BillFigures) => void;
 }
 
-export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectPaymentSheetProps) {
+/** The money lines of a bill that change when a discount does. */
+export type BillFigures = Pick<
+  PosOrder,
+  "subtotal" | "discount_amount" | "tax_amount" | "tax_breakdown" | "total_amount"
+>;
+
+/** Bill figures from the server's re-pricing of an order. */
+export function billFromPricing(pricing: PosBillPricing, previous: PosOrder): BillFigures {
+  return {
+    subtotal: pricing.subtotal,
+    discount_amount: pricing.discount_total,
+    tax_amount: pricing.tax_total,
+    tax_breakdown: pricing.taxes ?? previous.tax_breakdown,
+    total_amount: pricing.grand_total,
+  };
+}
+
+export default function CollectPaymentSheet({
+  order: sentOrder,
+  onClose,
+  onPaid,
+  onBillChanged,
+}: CollectPaymentSheetProps) {
+  // The bill can change while this sheet is open (a discount before payment),
+  // so everything below reads the live copy, never the prop.
+  const [order, setOrder] = useState(sentOrder);
+  const [showDiscount, setShowDiscount] = useState(false);
   const merchant = usePosStore((s) => s.merchant);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const device = usePosStore((s) => s.device);
@@ -121,6 +154,12 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
 
   const qr = posSettings?.payment_qr ?? null;
   const activeMethod = availableMethods.find((m) => m.key === method);
+  // A discount can still be given after the order is sent and the bill
+  // printed, right up until the payment is taken.
+  const canDiscount =
+    Boolean(posSettings?.discounts_enabled) &&
+    hasStaffPermission("discounts.apply") &&
+    order.source !== "pos_offline";
 
   useEffect(() => {
     if (availableMethods.length > 0 && !availableMethods.some((m) => m.key === method)) {
@@ -397,7 +436,7 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-lg rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
+      <div className="relative max-h-[94dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h3 id="collect-payment-title" className="text-base font-bold text-foreground">
             Collect Payment — Order {orderNumber(order)}
@@ -411,12 +450,81 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
           </button>
         </div>
 
-        <div className="border-b border-border px-6 py-4 text-center">
-          <p className="text-xs text-muted-foreground">Amount to pay</p>
-          <p className="numeric mt-1 text-3xl font-bold tracking-tight text-ink">
-            {formatCurrency(total, currencySymbol)}
-          </p>
+        <div className="border-b border-border px-6 py-4">
+          <div className="space-y-1 text-sm">
+            <div className="flex justify-between text-muted-foreground">
+              <span>Subtotal</span>
+              <span className="numeric">
+                {formatCurrency(Number(order.subtotal), currencySymbol)}
+              </span>
+            </div>
+            {Number(order.discount_amount) > 0 && (
+              <div className="flex justify-between text-success">
+                <span>Discount</span>
+                <span className="numeric">
+                  -{formatCurrency(Number(order.discount_amount), currencySymbol)}
+                </span>
+              </div>
+            )}
+            {(order.tax_breakdown ?? []).length > 0
+              ? (order.tax_breakdown ?? []).map((tax, i) => (
+                  <div key={i} className="flex justify-between text-muted-foreground">
+                    <span>
+                      {tax.name} ({Number(tax.rate)}%)
+                    </span>
+                    <span className="numeric">
+                      {formatCurrency(Number(tax.amount), currencySymbol)}
+                    </span>
+                  </div>
+                ))
+              : Number(order.tax_amount) > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Tax</span>
+                    <span className="numeric">
+                      {formatCurrency(Number(order.tax_amount), currencySymbol)}
+                    </span>
+                  </div>
+                )}
+          </div>
+          <div className="mt-3 text-center">
+            <p className="text-xs text-muted-foreground">Amount to pay</p>
+            <p className="numeric mt-1 text-3xl font-bold tracking-tight text-ink">
+              {formatCurrency(total, currencySymbol)}
+            </p>
+          </div>
+          {canDiscount && (
+            <button
+              type="button"
+              onClick={() => setShowDiscount(true)}
+              disabled={queued}
+              title={queued ? "Needs a connection — not available offline" : undefined}
+              className="mx-auto mt-3 flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-border px-4 text-sm font-semibold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Percent className="h-4 w-4" aria-hidden="true" />
+              {Number(order.discount_amount) > 0 ? "Edit Discount" : "Apply Discount"}
+            </button>
+          )}
         </div>
+
+        {showDiscount && (
+          <DiscountModal
+            open
+            order={{
+              uuid: order.uuid,
+              subtotal: Number(order.subtotal),
+              hasDiscount: Number(order.discount_amount) > 0,
+            }}
+            onClose={() => setShowDiscount(false)}
+            onApplied={(pricing) => {
+              if (!pricing) return;
+              const bill = billFromPricing(pricing, order);
+              setOrder((prev) => ({ ...prev, ...bill }));
+              // Cash typed for the old total no longer matches the new one.
+              setCashReceived("");
+              onBillChanged?.(bill);
+            }}
+          />
+        )}
 
         <div className="grid grid-cols-3 gap-2 px-6 py-4 sm:grid-cols-5">
           {availableMethods.map((pm) => {
@@ -438,33 +546,13 @@ export default function CollectPaymentSheet({ order, onClose, onPaid }: CollectP
         </div>
 
         {activeMethod?.isQr && qr && (
-          <div className="mx-6 mb-4 rounded-2xl border border-border bg-muted/40 p-4">
-            <div className="flex flex-col items-center gap-3 sm:flex-row">
-              <img
-                src={qr.url}
-                alt={`${qr.name} payment QR`}
-                className="h-32 w-32 shrink-0 rounded-xl bg-white object-contain p-1"
-              />
-              <div className="min-w-0 flex-1 text-center sm:text-left">
-                <p className="text-sm font-semibold text-foreground">{qr.name}</p>
-                {qr.account_name && (
-                  <p className="text-xs text-muted-foreground">{qr.account_name}</p>
-                )}
-                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                  {qr.instructions}
-                </p>
-                <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={qrConfirmed}
-                    onChange={(e) => setQrConfirmed(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-border accent-ink"
-                  />
-                  <span>Customer has scanned and shown me their payment confirmation</span>
-                </label>
-              </div>
-            </div>
-          </div>
+          <PaymentQrBlock
+            qr={qr}
+            amount={total}
+            currencySymbol={currencySymbol}
+            confirmed={qrConfirmed}
+            onConfirmedChange={setQrConfirmed}
+          />
         )}
 
         {activeMethod?.isQr && !qr && (

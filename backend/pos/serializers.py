@@ -470,6 +470,8 @@ class PosSettingsSerializer(serializers.Serializer):
     manager_approval_threshold = serializers.DecimalField(max_digits=10, decimal_places=2)
     offline_discounts_allowed = serializers.BooleanField()
     offline_credit_allowed = serializers.BooleanField()
+    free_items_enabled = serializers.BooleanField(required=False)
+    free_item_pin_set = serializers.BooleanField(read_only=True)
     payment_qr_url = serializers.URLField(required=False, allow_blank=True)
     tax_enabled = serializers.BooleanField(required=False)
     tax_rate_percent = serializers.DecimalField(max_digits=5, decimal_places=2, required=False)

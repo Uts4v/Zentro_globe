@@ -38,12 +38,19 @@ def price_request_lines(
     *,
     loyalty_eligible: bool = True,
     staff_comp: bool = False,
+    allow_free: bool = False,
+    free_by=None,
     key_prefix: str = "new",
 ) -> list[PricedRequestLine]:
     """
     Price client-requested lines for ``merchant``. Only the item ids, selections,
     quantities and instructions are read from the request; every price comes
     from the database. Raises ``PricingError`` for anything the server rejects.
+
+    A row flagged ``is_free`` is charged nothing only when the caller passes
+    ``allow_free`` (after checking the merchant setting, the employee's
+    permission and the PIN); otherwise the flag is ignored and the line is
+    charged normally. ``free_by`` is the employee recorded on the line.
     """
     from merchants.models import MenuItem
 
@@ -65,18 +72,19 @@ def price_request_lines(
             (sel.get("group_id"), sel.get("option_id"))
             for sel in (row.get("selections") or [])
         ]
+        is_free = bool(allow_free and row.get("is_free")) and not staff_comp
         try:
             line = validate_and_price_line(
                 menu_item,
                 row.get("quantity", 1),
                 selections,
                 special_instructions=row.get("special_instructions", ""),
-                loyalty_eligible=loyalty_eligible and not staff_comp,
+                loyalty_eligible=loyalty_eligible and not staff_comp and not is_free,
             )
         except LineValidationError as exc:
             raise PricingError(f"{menu_item.name}: {exc}", code=getattr(exc, "code", None) or "invalid_line")
 
-        if staff_comp:
+        if staff_comp or is_free:
             unit_price = list_unit_price = ZERO
         else:
             unit_price = line.unit_price
@@ -97,7 +105,7 @@ def price_request_lines(
                 menu_item_id=menu_item.id,
                 category_id=getattr(menu_item, "category_ref_id", None),
                 option_ids=frozenset(o.option_id for o in line.options if o.option_id),
-                modifier_unit_total=ZERO if staff_comp else modifier_total,
+                modifier_unit_total=ZERO if (staff_comp or is_free) else modifier_total,
             ),
             item_fields={
                 "menu_item": menu_item,
@@ -108,9 +116,17 @@ def price_request_lines(
                 "subtotal": unit_price * line.quantity,
                 "special_instructions": line.special_instructions,
                 "tax_class": tax_class,
+                **(
+                    {
+                        "is_complimentary": True,
+                        "complimentary_value": to_decimal(line.unit_price) * line.quantity,
+                        "complimentary_by": free_by,
+                    }
+                    if is_free else {}
+                ),
             },
             options=line.options,
-            points=0 if staff_comp else line.points,
+            points=0 if (staff_comp or is_free) else line.points,
         ))
     return priced
 

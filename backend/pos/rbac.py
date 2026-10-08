@@ -42,6 +42,7 @@ PERMISSION_GROUPS = [
         ("payments.take", "Take payments", "Accept cash, card and other payments."),
         ("payments.refund", "Refund", "Give money back to a customer."),
         ("discounts.apply", "Give discounts", "Apply a discount to an order."),
+        ("items.free", "Give free items", "Mark an item as free on an order."),
         ("shifts.close", "Close the cash shift", "Count the drawer and close the shift."),
     ]),
     ("tables", "Tables", [
@@ -70,6 +71,10 @@ PERMISSION_GROUPS = [
     ]),
     ("reports", "Reports", [
         ("reports.view", "See reports", "Sales, analytics and reports."),
+    ]),
+    ("accounts", "Accounts", [
+        ("accounts.view", "See accounts", "Cash, bank, supplier payments, salaries and money reports."),
+        ("accounts.manage", "Manage accounts", "Record expenses, bank transfers, supplier payments and salaries."),
     ]),
     ("employees", "Employees", [
         ("staff.manage", "Manage employees", "Add employees and set their role and areas."),

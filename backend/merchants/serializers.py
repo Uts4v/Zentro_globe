@@ -312,6 +312,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
         queryset=MerchantCategory.objects.filter(is_active=True), required=False, allow_null=True,
     )
     primary_category_detail = serializers.SerializerMethodField()
+    free_item_pin_set = serializers.BooleanField(read_only=True)
 
     def get_primary_category_detail(self, obj):
         c = obj.primary_category
@@ -342,6 +343,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "discounts_enabled", "shift_management_enabled", "receipt_printing_enabled",
             "max_worker_discount_percent", "manager_approval_threshold",
             "offline_discounts_allowed", "offline_credit_allowed", "payment_qr_url",
+            "free_items_enabled", "free_item_pin_set",
             "tax_enabled", "tax_rate_percent", "tax_components",
             "tax_policy", "service_charge_percent", "service_charge_dine_in_only",
             "currency_code", "currency_symbol",

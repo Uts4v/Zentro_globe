@@ -42,8 +42,9 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "total_amount", "tax_class", "refunded_quantity", "refunded_amount",
             "special_instructions", "options",
             "variant_name", "modifier_summary",
+            "is_complimentary", "complimentary_value", "is_promotion_reward",
         ]
-        read_only_fields = ["id"]
+        read_only_fields = ["id", "is_complimentary", "complimentary_value", "is_promotion_reward"]
 
     def _kind(self, opt):
         return getattr(opt, "kind", "modifier")

@@ -5,9 +5,11 @@ import {
   posReceiptData,
   posUpdateOrderStatus,
   posAddItemsToOrder,
+  posUpdateOrderItem,
   PosOrder,
   PosReceiptData,
 } from "../api";
+import DiscountModal from "./DiscountModal";
 import { menuApi, type MenuItem } from "@/lib/api";
 import { formatCurrency } from "@/lib/currency";
 import { cartKey, fromPrice, lineSelectionsText } from "@/lib/menu-utils";
@@ -18,7 +20,7 @@ import ProductDetailSheet, {
 import Receipt from "../printing/Receipt";
 import { printKOT, kotTicketFromReceipt, kotTicketFromKOT } from "../printing/kot-markup";
 import RefundModal from "./RefundModal";
-import CollectPaymentSheet from "./CollectPaymentSheet";
+import CollectPaymentSheet, { billFromPricing, type BillFigures } from "./CollectPaymentSheet";
 import {
   ArrowLeft,
   Clock,
@@ -44,6 +46,8 @@ import {
   Utensils,
   ChevronLeft,
   ChevronRight,
+  Percent,
+  Trash2,
 } from "lucide-react";
 import CustomerSearchModal from "./CustomerSearchModal";
 import MinusStockModal from "./MinusStockModal";
@@ -118,6 +122,14 @@ function canAddItems(order: PosOrder) {
     !["paid", "partially_paid", "refunded"].includes(order.payment_status) &&
     order.status !== "cancelled"
   );
+}
+
+/**
+ * The bill is still open: items can be reduced and a discount given. Both stop
+ * once any money is taken, exactly as the server enforces.
+ */
+function canChangeBill(order: PosOrder) {
+  return canAddItems(order) || (order.status === "ready" && order.payment_status === "unpaid");
 }
 
 function getOrderDetailTableDisplay(order: PosOrder): string | null {
@@ -224,6 +236,47 @@ export default function OrderDetailScreen({
   const canCancelOrders = hasStaffPermission("orders.cancel");
   const canTakePayments = hasStaffPermission("payments.take");
   const canRefund = hasStaffPermission("payments.refund");
+  const canDiscount =
+    Boolean(posSettings?.discounts_enabled) && hasStaffPermission("discounts.apply");
+  const [showDiscount, setShowDiscount] = useState(false);
+  const [changingItemId, setChangingItemId] = useState<number | null>(null);
+
+  /** Put the server's new bill figures on the open order and in the list. */
+  function applyBill(uuid: string, bill: Partial<PosOrder> | BillFigures) {
+    setSelectedOrder((prev) => (prev?.uuid === uuid ? { ...prev, ...bill } : prev));
+    setOrders((prev) => prev.map((o) => (o.uuid === uuid ? { ...o, ...bill } : o)));
+  }
+
+  /** Lower an item's quantity by one on a sent order (the last unit removes the line). */
+  async function reduceItem(order: PosOrder, item: PosOrder["items"][number]) {
+    const next = item.quantity - 1;
+    if (next === 0) {
+      if (order.items.length <= 1) {
+        toast.error("This is the only item. Cancel the order instead.");
+        return;
+      }
+      if (!window.confirm(`Remove ${item.name} from this order?`)) return;
+    }
+    setChangingItemId(item.id);
+    try {
+      const updated = await posUpdateOrderItem({
+        order_id: order.uuid,
+        item_id: item.id,
+        quantity: next,
+        worker_id: currentWorker?.id,
+      });
+      applyBill(order.uuid, updated);
+      toast.success(
+        next === 0 ? `${item.name} removed` : `${item.name} changed to ${next}`,
+      );
+    } catch (err: unknown) {
+      toast.error(
+        err instanceof Error && err.message ? err.message : "The order could not be changed.",
+      );
+    } finally {
+      setChangingItemId(null);
+    }
+  }
 
   // Debounce the type-ahead: search is pushed to the server while online, so
   // the loaded page only changes after a short pause.
@@ -650,15 +703,62 @@ export default function OrderDetailScreen({
             <div className="divide-y divide-border rounded-xl border border-border">
               {order.items.map((item) => (
                 <div key={item.id} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{item.name}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-foreground">
+                      {item.name}
+                      {item.is_complimentary && (
+                        <span className="ml-2 rounded-full bg-success/10 px-2 py-0.5 text-xs font-bold text-success">
+                          FREE
+                        </span>
+                      )}
+                    </p>
                     <p className="text-xs text-muted-foreground">
-                      {item.quantity} x {formatCurrency(Number(item.price), currencySymbol)}
+                      {item.is_complimentary
+                        ? `${item.quantity} x free · normally ${formatCurrency(Number(item.complimentary_value ?? 0), currencySymbol)}`
+                        : `${item.quantity} x ${formatCurrency(Number(item.price), currencySymbol)}`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    {canChangeBill(order) &&
+                      !isLocalOrder(order) &&
+                      !item.is_promotion_reward &&
+                      (item.quantity > 1 ? canEditOrders : canCancelOrders) && (
+                        <div className="flex items-center rounded-xl border border-border bg-card">
+                          <button
+                            type="button"
+                            onClick={() => reduceItem(order, item)}
+                            disabled={isOffline || changingItemId !== null}
+                            title={
+                              isOffline
+                                ? NEEDS_CONNECTION
+                                : item.quantity > 1
+                                  ? "Decrease quantity"
+                                  : "Remove item"
+                            }
+                            aria-label={
+                              item.quantity > 1
+                                ? `Decrease ${item.name} quantity`
+                                : `Remove ${item.name}`
+                            }
+                            className="grid h-10 w-10 place-items-center rounded-l-xl text-muted-foreground transition-colors hover:bg-mist hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {changingItemId === item.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : item.quantity > 1 ? (
+                              <Minus className="h-4 w-4" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                          </button>
+                          <span className="w-9 pr-2 text-center text-sm font-semibold text-foreground">
+                            {item.quantity}
+                          </span>
+                        </div>
+                      )}
                     <p className="text-sm font-bold text-ink">
-                      {formatCurrency(Number(item.subtotal), currencySymbol)}
+                      {item.is_complimentary
+                        ? "Free"
+                        : formatCurrency(Number(item.subtotal), currencySymbol)}
                     </p>
                     {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) &&
                       order.status !== "cancelled" &&
@@ -699,12 +799,21 @@ export default function OrderDetailScreen({
                 <span>-{formatCurrency(Number(order.discount_amount), currencySymbol)}</span>
               </div>
             )}
-            {Number(order.tax_amount) > 0 && (
-              <div className="flex justify-between text-muted-foreground">
-                <span>VAT</span>
-                <span>{formatCurrency(Number(order.tax_amount), currencySymbol)}</span>
-              </div>
-            )}
+            {(order.tax_breakdown ?? []).length > 0
+              ? (order.tax_breakdown ?? []).map((tax, i) => (
+                  <div key={i} className="flex justify-between text-muted-foreground">
+                    <span>
+                      {tax.name} ({Number(tax.rate)}%)
+                    </span>
+                    <span>{formatCurrency(Number(tax.amount), currencySymbol)}</span>
+                  </div>
+                ))
+              : Number(order.tax_amount) > 0 && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Tax</span>
+                    <span>{formatCurrency(Number(order.tax_amount), currencySymbol)}</span>
+                  </div>
+                )}
             <div className="flex justify-between border-t border-border pt-1.5 font-bold text-foreground">
               <span>Total</span>
               <span>{formatCurrency(Number(order.total_amount), currencySymbol)}</span>
@@ -769,6 +878,21 @@ export default function OrderDetailScreen({
                   );
                 })}
               </div>
+            )}
+
+            {/* A discount can still be given after the order is sent and the bill
+                printed, until the payment is taken. */}
+            {canChangeBill(order) && canDiscount && !isLocalOrder(order) && (
+              <button
+                type="button"
+                onClick={() => setShowDiscount(true)}
+                disabled={isOffline}
+                title={isOffline ? NEEDS_CONNECTION : undefined}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-border py-2.5 text-sm font-bold text-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Percent className="h-4 w-4" />
+                {Number(order.discount_amount) > 0 ? "Edit Discount" : "Apply Discount"}
+              </button>
             )}
 
             {/* Pay button for unpaid orders */}
@@ -856,6 +980,7 @@ export default function OrderDetailScreen({
           <CollectPaymentSheet
             order={order}
             onClose={() => setShowCollectPayment(false)}
+            onBillChanged={(bill) => applyBill(order.uuid, bill)}
             onPaid={(update) => {
               setShowCollectPayment(false);
               // Apply the server-reported payment state right away so the
@@ -869,6 +994,23 @@ export default function OrderDetailScreen({
                 );
               }
               loadOrders();
+            }}
+          />
+        )}
+
+        {showDiscount && (
+          <DiscountModal
+            open
+            order={{
+              uuid: order.uuid,
+              subtotal: Number(order.subtotal),
+              hasDiscount: Number(order.discount_amount) > 0,
+            }}
+            onClose={() => setShowDiscount(false)}
+            onApplied={(pricing) => {
+              if (!pricing) return;
+              applyBill(order.uuid, billFromPricing(pricing, order));
+              toast.success("Bill updated");
             }}
           />
         )}

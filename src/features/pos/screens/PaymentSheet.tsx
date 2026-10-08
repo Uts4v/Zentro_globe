@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { safeUuid } from "@/lib/utils";
-import { usePosStore, cartToOrderItems } from "../store";
+import { usePosStore, cartToOrderItems, cartHasFreeItems } from "../store";
+import PaymentQrBlock from "./PaymentQrBlock";
 import { isOnline as serverReachable } from "@/lib/connectivity";
 import {
   posApplyDiscount,
@@ -375,6 +376,9 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         worker_id: currentWorker.id,
         device_id: device.id,
         client_mutation_id: orderMutationId,
+        free_item_pin: cartHasFreeItems(cart)
+          ? (usePosStore.getState().freeItemPin ?? undefined)
+          : undefined,
       });
       uuid = String(orderRes.uuid);
       setCreatedOrderId(uuid);
@@ -446,6 +450,9 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     }
     if (pendingDiscount) {
       return "Discounts need an internet connection. Remove the discount to continue offline.";
+    }
+    if (cartHasFreeItems(cart)) {
+      return "Free items need an internet connection. Charge for them or wait for the connection.";
     }
     return null;
   }
@@ -947,7 +954,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
       >
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-        <div className="relative w-full max-w-lg rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
+        <div className="relative max-h-[94dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
           <div className="flex items-center justify-between border-b border-border px-6 py-4">
             <h3 id="payment-sheet-dinein-title" className="text-base font-bold text-foreground">
               Confirm Dine-In Order
@@ -1015,7 +1022,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     >
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      <div className="relative w-full max-w-lg rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
+      <div className="relative max-h-[94dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-card shadow-2xl sm:rounded-3xl">
         <div className="flex items-center justify-between border-b border-border px-6 py-4">
           <h3 id="payment-sheet-title" className="text-base font-bold text-foreground">
             Payment
@@ -1056,33 +1063,13 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         </div>
 
         {activeMethod?.isQr && qr && (
-          <div className="mx-6 mb-4 rounded-2xl border border-border bg-muted/40 p-4">
-            <div className="flex flex-col items-center gap-3 sm:flex-row">
-              <img
-                src={qr.url}
-                alt={`${qr.name} payment QR`}
-                className="h-32 w-32 shrink-0 rounded-xl bg-white object-contain p-1"
-              />
-              <div className="min-w-0 flex-1 text-center sm:text-left">
-                <p className="text-sm font-semibold text-foreground">{qr.name}</p>
-                {qr.account_name && (
-                  <p className="text-xs text-muted-foreground">{qr.account_name}</p>
-                )}
-                <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-                  {qr.instructions}
-                </p>
-                <label className="mt-3 flex cursor-pointer items-start gap-2 text-[11px] text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={qrConfirmed}
-                    onChange={(e) => setQrConfirmed(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-border accent-ink"
-                  />
-                  <span>Customer has scanned and shown me their payment confirmation</span>
-                </label>
-              </div>
-            </div>
-          </div>
+          <PaymentQrBlock
+            qr={qr}
+            amount={total}
+            currencySymbol={currencySymbol}
+            confirmed={qrConfirmed}
+            onConfirmedChange={setQrConfirmed}
+          />
         )}
 
         {activeMethod?.isQr && !qr && (

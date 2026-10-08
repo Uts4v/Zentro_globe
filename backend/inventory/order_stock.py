@@ -158,6 +158,76 @@ def deduct_stock_for_order(order, lines=None, performed_by=None):
     return created
 
 
+def _reduce_key_prefix(sale_id) -> str:
+    return f"order-stock-reduce:{sale_id}:"
+
+
+def _already_returned(merchant, sale) -> Decimal:
+    """Stock already put back for ``sale`` by earlier quantity reductions."""
+    from django.db.models import Sum
+
+    total = InventoryMovement.objects.filter(
+        merchant=merchant, idempotency_key__startswith=_reduce_key_prefix(sale.id),
+    ).aggregate(total=Sum("quantity_change"))["total"]
+    return total or ZERO
+
+
+def restore_stock_for_reduced_line(order, line, old_quantity, new_quantity, performed_by=None):
+    """Put back the stock for the units removed when a line's quantity drops.
+
+    The line's sale movement stays in place (so the remaining units stay
+    consumed); only the removed share is returned. Safe to call repeatedly for
+    the same change.
+    """
+    if not old_quantity or new_quantity >= old_quantity:
+        return []
+    performed_by = _user_or_none(performed_by)
+    removed_share = Decimal(old_quantity - new_quantity) / Decimal(old_quantity)
+    sales = InventoryMovement.objects.filter(
+        merchant=order.merchant,
+        movement_type=MovementType.SALE,
+        source_type=MovementSource.ORDER,
+        source_id=str(order.id),
+        idempotency_key__startswith=_sale_key(line.id, ""),
+    ).select_related("location", "inventory_item")
+
+    restored = []
+    for sale in sales:
+        if sale.reversals.exists():
+            continue
+        # What is still consumed for this line after earlier reductions.
+        still_consumed = -sale.quantity_change - _already_returned(order.merchant, sale)
+        give_back = (still_consumed * removed_share).quantize(Decimal("0.000001"))
+        if give_back <= 0:
+            continue
+        restored.append(InventoryMovementService.apply_change(
+            merchant=order.merchant,
+            location=sale.location,
+            inventory_item=sale.inventory_item,
+            quantity_change=give_back,
+            movement_type=MovementType.REVERSAL,
+            source_type=MovementSource.ORDER,
+            source_id=order.id,
+            reason=f"Order #{order.id}: {line.name} reduced {old_quantity} to {new_quantity}",
+            note=f"Partly restoring movement #{sale.id}",
+            performed_by=performed_by,
+            idempotency_key=f"{_reduce_key_prefix(sale.id)}{old_quantity}-{new_quantity}:{order.version}",
+        ))
+    return restored
+
+
+def safe_restore_stock_for_reduced_line(order, line, old_quantity, new_quantity, performed_by=None):
+    """restore_stock_for_reduced_line, but a stock failure never blocks the order flow."""
+    try:
+        with transaction.atomic():
+            return restore_stock_for_reduced_line(
+                order, line, old_quantity, new_quantity, performed_by=performed_by,
+            )
+    except Exception:
+        logger.exception("Stock restore failed for order %s line %s", order.pk, getattr(line, "pk", None))
+        return []
+
+
 def restore_stock_for_order(order, lines=None, performed_by=None):
     """Put back what a cancelled order (or its cancelled `lines`) consumed.
 
@@ -185,11 +255,15 @@ def restore_stock_for_order(order, lines=None, performed_by=None):
         # manual reversal in the movement ledger.
         if sale.reversals.exists():
             continue
+        # Units already returned by a quantity reduction are not returned twice.
+        remaining = -sale.quantity_change - _already_returned(order.merchant, sale)
+        if remaining <= 0:
+            continue
         restored.append(InventoryMovementService.apply_change(
             merchant=order.merchant,
             location=sale.location,
             inventory_item=sale.inventory_item,
-            quantity_change=-sale.quantity_change,
+            quantity_change=remaining,
             movement_type=MovementType.REVERSAL,
             source_type=MovementSource.ORDER,
             source_id=order.id,

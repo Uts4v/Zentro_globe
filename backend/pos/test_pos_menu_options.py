@@ -411,6 +411,9 @@ class PosOrderSelectionsTests(TestCase):
 
     def test_staff_free_order_records_the_configuration(self):
         """A comp order is free, but the kitchen still needs to know the size."""
+        # Free orders are a merchant setting (off for new businesses).
+        self.merchant.free_items_enabled = True
+        self.merchant.save(update_fields=["free_items_enabled"])
         response = self._create([{
             "menu_item_id": self.item.id,
             "quantity": 1,
