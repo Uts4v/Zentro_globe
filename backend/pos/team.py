@@ -24,7 +24,7 @@ from rest_framework.response import Response
 
 from . import rbac
 from .models import PosAuditLog, ShiftWorker, StaffAreaAssignment, StaffRole
-from .serializers import CreateWorkerSerializer, ShiftWorkerSerializer, UpdateWorkerSerializer
+from .serializers import CreateWorkerSerializer, TeamShiftWorkerSerializer, UpdateWorkerSerializer
 
 
 class TeamError(ValueError):
@@ -157,7 +157,7 @@ def team_workers(request):
         qs = _workers_qs(merchant)
         if request.query_params.get("active") == "1":
             qs = qs.filter(is_active=True)
-        return Response(ShiftWorkerSerializer(qs, many=True).data)
+        return Response(TeamShiftWorkerSerializer(qs, many=True).data)
 
     ser = CreateWorkerSerializer(data=request.data)
     if not ser.is_valid():
@@ -193,7 +193,7 @@ def team_workers(request):
         apply_role_and_areas(request, worker, role, data.get("area_ids"))
     _audit(request, merchant, PosAuditLog.ACTION_WORKER_CREATE, "shift_worker", worker.id,
            worker=worker, display_name=worker.display_name, role=worker.staff_role.name, staff_code=staff_code)
-    return Response(ShiftWorkerSerializer(_workers_qs(merchant).get(pk=worker.pk)).data, status=201)
+    return Response(TeamShiftWorkerSerializer(_workers_qs(merchant).get(pk=worker.pk)).data, status=201)
 
 
 @api_view(["PATCH", "DELETE"])
@@ -263,10 +263,10 @@ def team_worker_detail(request, worker_id):
             worker.set_pin(data["pin"])
             worker.failed_pin_attempts = 0
             worker.locked_until = None
-            worker.save(update_fields=["pin_hash", "failed_pin_attempts", "locked_until", "updated_at"])
+            worker.save(update_fields=["pin_hash", "pin_plain", "failed_pin_attempts", "locked_until", "updated_at"])
         apply_role_and_areas(request, worker, role, data.get("area_ids"))
     _audit(request, merchant, PosAuditLog.ACTION_WORKER_UPDATE, "shift_worker", worker.id, worker=worker)
-    return Response(ShiftWorkerSerializer(_workers_qs(merchant).get(pk=worker.pk)).data)
+    return Response(TeamShiftWorkerSerializer(_workers_qs(merchant).get(pk=worker.pk)).data)
 
 
 # ── Roles & permissions ───────────────────────────────────────────────────────

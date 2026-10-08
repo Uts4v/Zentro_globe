@@ -110,6 +110,11 @@ class ShiftWorker(models.Model):
         max_length=255,
         help_text="SHA-256 hash of the worker PIN",
     )
+    # The merchant needs to read PINs back off the team page to hand them to
+    # staff, so the plain value is kept next to the hash used for verification.
+    # It is returned only by the merchant team endpoints, never by staff login.
+    # Blank for workers whose PIN predates this column until it is set once.
+    pin_plain = models.CharField(max_length=8, blank=True, default="", help_text="Plain PIN for merchant display")
     # Legacy coarse role, kept in sync from `staff_role` (pos.rbac) for code
     # that still reads it. `staff_role` is the source of truth.
     role = models.CharField(
@@ -183,6 +188,7 @@ class ShiftWorker(models.Model):
 
     def set_pin(self, pin: str):
         self.pin_hash = _hash_token(pin)
+        self.pin_plain = pin
 
     def verify_pin(self, pin: str) -> bool:
         if self.locked_until and self.locked_until > timezone.now():

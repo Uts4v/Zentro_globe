@@ -929,7 +929,7 @@ def update_worker(request, worker_id):
 
     if pin:
         worker.set_pin(pin)
-        worker.save(update_fields=["pin_hash"])
+        worker.save(update_fields=["pin_hash", "pin_plain"])
 
     _audit(merchant, PosAuditLog.ACTION_WORKER_UPDATE,
            user=request.user, worker=worker,

@@ -44,6 +44,8 @@ export interface Employee {
   staff_code?: string;
   phone?: string;
   email?: string;
+  /** Plain PIN, returned by the team endpoints so the merchant page can show it. */
+  pin?: string;
   role: string;
   is_active: boolean;
   is_deleted?: boolean;

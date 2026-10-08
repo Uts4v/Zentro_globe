@@ -67,6 +67,19 @@ class ShiftWorkerSerializer(serializers.ModelSerializer):
         return sorted(a.table_area_id for a in obj.area_assignments.all())
 
 
+class TeamShiftWorkerSerializer(ShiftWorkerSerializer):
+    """The team management view of an employee: everything above plus the
+    plain PIN, so the merchant can read it off the team page and hand it to
+    the staff member. Only the team endpoints use this — staff login and the
+    POS worker lists must never echo a PIN back to a client."""
+
+    pin = serializers.CharField(source="pin_plain", read_only=True)
+
+    class Meta(ShiftWorkerSerializer.Meta):
+        fields = ShiftWorkerSerializer.Meta.fields + ["pin"]
+        read_only_fields = fields
+
+
 class CreateWorkerSerializer(serializers.Serializer):
     display_name = serializers.CharField(max_length=120)
     staff_code = serializers.CharField(max_length=30, required=False, allow_blank=True)
