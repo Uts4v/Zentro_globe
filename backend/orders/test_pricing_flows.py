@@ -140,7 +140,15 @@ class SameBasketParityTests(PricingFlowBase):
 
         self.assert_expected(self.pos_order(), "POS")
 
-        table = APIClient().post(f"/api/pos/table/{self.table.public_token}/order/",
+        # A second table: the guest flow above opened a bill on self.table, and
+        # a second order there now consolidates into it (correct behaviour, but
+        # not what this test measures). Parity is about a fresh basket per flow,
+        # so the POS table-QR flow prices its own order on its own table.
+        second_table = MerchantTable.objects.create(
+            merchant=self.merchant, name="Table 2", table_number=2,
+            public_token="pf-tok-2", is_active=True,
+        )
+        table = APIClient().post(f"/api/pos/table/{second_table.public_token}/order/",
                                  {"items": self.basket()}, format="json")
         self.assertEqual(table.status_code, 201, table.data)
         self.assertEqual(D(table.data["total"]), self.EXPECTED["total_amount"])

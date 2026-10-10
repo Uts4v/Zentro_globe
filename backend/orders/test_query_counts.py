@@ -33,7 +33,9 @@ def _order_qs():
         "processed_by_worker",
         "pos_device",
         "cash_shift",
-    ).prefetch_related("items__menu_item", "items__options")
+        "dining_session",
+        "parent_bill",
+    ).prefetch_related("items__menu_item", "items__options", "kots")
 
 
 class OrderListQueryCountTests(TestCase):
