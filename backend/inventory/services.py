@@ -1112,7 +1112,7 @@ class PurchaseOrderService:
         )
         total = ZERO
         for line in lines:
-            item_id = line.get("item_id")
+            item_id = line.get("item_id") or line.get("inventory_item")
             item = InventoryItem.objects.filter(merchant=merchant, id=item_id).first()
             if not item:
                 raise ValueError(f"Unknown item {item_id}.")

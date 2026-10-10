@@ -242,7 +242,7 @@ export function TopBar({
             <div className="zh-greeting-skeleton" />
           ) : (
             <div className="zh-greeting">
-              <p>{getGreeting()},</p>
+              <p suppressHydrationWarning>{getGreeting()},</p>
               <p>{firstName || "Welcome"}</p>
             </div>
           )}
@@ -290,7 +290,9 @@ export function TopBar({
             <h1 className="mt-2 text-[24px] font-semibold text-foreground">{title}</h1>
           ) : (
             <div className="mt-1">
-              <p className="text-[13px] font-medium text-muted-foreground">{getGreeting()},</p>
+              <p className="text-[13px] font-medium text-muted-foreground" suppressHydrationWarning>
+                {getGreeting()},
+              </p>
               <h1 className="text-[28px] font-extrabold leading-tight tracking-[-0.03em] text-foreground">
                 {firstName || "Welcome"}
               </h1>

@@ -2,6 +2,7 @@
 // "What needs attention?" and "What do you want to do?" — tasks first,
 // no wall of analytics cards.
 import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -37,6 +38,8 @@ const h = copy.home;
 export function HomeScreen() {
   const { can, go, root, sym } = useInventory();
   const { user } = useAuth();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const overview = useQuery({
     queryKey: ["inventory", "overview"],
     queryFn: inventoryApi.overview,
@@ -110,7 +113,7 @@ export function HomeScreen() {
   return (
     <div className="space-y-8">
       <div>
-        <p className="text-lg text-muted-foreground">{h.greeting(firstName)}</p>
+        {mounted && <p className="text-lg text-muted-foreground">{h.greeting(firstName)}</p>}
         <h2 className="mt-1 font-display text-2xl font-semibold text-foreground">{h.question}</h2>
       </div>
 

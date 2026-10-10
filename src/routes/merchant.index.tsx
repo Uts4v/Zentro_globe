@@ -193,7 +193,10 @@ function Overview() {
       <section className="glass-strong rounded-[2rem] p-6 sm:p-8">
         <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground">
+            <p
+              suppressHydrationWarning
+              className="text-[11px] uppercase tracking-[0.22em] text-muted-foreground"
+            >
               {new Date().toLocaleDateString("en-US", {
                 weekday: "long",
                 month: "long",
@@ -201,7 +204,10 @@ function Overview() {
               })}
             </p>
 
-            <h1 className="font-display mt-3 text-4xl leading-tight text-ink sm:text-5xl">
+            <h1
+              suppressHydrationWarning
+              className="font-display mt-3 text-4xl leading-tight text-ink sm:text-5xl"
+            >
               {getGreeting()}, {(merchantProfile.business_name ?? "there").split(" ")[0]}.
             </h1>
 

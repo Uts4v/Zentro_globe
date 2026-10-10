@@ -460,6 +460,20 @@ class PurchaseOrderTests(InventoryTestBase):
             InventoryBalance.objects.filter(inventory_item=self.flour).count(), 0
         )
 
+    def test_create_po_accepts_inventory_item_key(self):
+        po = PurchaseOrderService.create(
+            merchant=self.merchant,
+            supplier=self.supplier,
+            delivery_location=self.kitchen,
+            lines=[{"inventory_item": self.milk.id, "quantity": 3, "unit_cost": 60}],
+            created_by=self.merchant_user,
+        )
+        line = po.lines.get()
+        self.assertEqual(line.inventory_item, self.milk)
+        self.assertEqual(line.quantity, Decimal("3"))
+        self.assertEqual(po.status, OrderStatus.SENT)
+        self.assertEqual(po.total_amount, Decimal("180.00"))
+
     def test_receive_lines_partial_then_complete(self):
         po = PurchaseOrderService.create(
             merchant=self.merchant,
