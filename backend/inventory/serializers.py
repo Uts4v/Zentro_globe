@@ -914,12 +914,38 @@ class SupplierSerializer(serializers.ModelSerializer):
         read_only_fields = ["archived", "created_at", "updated_at"]
 
 
+class POLineSerializer(serializers.Serializer):
+    """One supplier-order line. Accepts the API's `inventory_item` key and the
+    service's historical `item_id` key; validates shape up front so the user
+    gets structured, line-indexed errors instead of a raw service message."""
+
+    inventory_item = serializers.IntegerField(required=False, allow_null=True)
+    item_id = serializers.IntegerField(required=False, allow_null=True)
+    quantity = serializers.DecimalField(max_digits=24, decimal_places=6)
+    unit_cost = serializers.DecimalField(
+        max_digits=24, decimal_places=4, required=False, allow_null=True
+    )
+    purchase_unit_label = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
+    purchase_unit_conversion = serializers.DecimalField(
+        max_digits=24, decimal_places=6, required=False, allow_null=True
+    )
+
+    def validate(self, attrs):
+        if attrs.get("inventory_item") is None and attrs.get("item_id") is None:
+            raise serializers.ValidationError("Each line needs an item (inventory_item).")
+        if (attrs.get("quantity") or 0) <= 0:
+            raise serializers.ValidationError("PO line quantity must be positive.")
+        return attrs
+
+
 class POCreateSerializer(serializers.Serializer):
     supplier = serializers.IntegerField()
     delivery_location = serializers.IntegerField()
     expected_date = serializers.DateField(required=False, allow_null=True)
     notes = serializers.CharField(required=False, allow_blank=True)
-    lines = serializers.ListField()
+    lines = serializers.ListField(child=POLineSerializer(), allow_empty=False)
 
 
 class POReceiveSerializer(serializers.Serializer):

@@ -316,3 +316,61 @@ class SettingsApiTests(InventoryApiTestBase):
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(resp.data["require_count_approval"])
         self.assertFalse(resp.data["prevent_negative_stock"])
+
+
+class PurchaseOrderApiValidationTests(InventoryApiTestBase):
+    def _supplier(self, name="Flour Co"):
+        return Supplier.objects.create(merchant=self.merchant, name=name)
+
+    def test_po_accepts_inventory_item_key(self):
+        supplier = self._supplier()
+        item = self._create_item(name="Flour")
+        resp = self.client.post("/api/inventory/purchase-orders/", {
+            "supplier": supplier.id,
+            "delivery_location": self.kitchen.id,
+            "lines": [{"inventory_item": item["id"], "quantity": 2, "unit_cost": 1500}],
+        }, format="json")
+        self.assertEqual(resp.status_code, 201, resp.data)
+        self.assertTrue(resp.data["po_number"].startswith("PO-"))
+        self.assertEqual(resp.data["total_amount"], "3000.00")
+
+    def test_po_line_without_item_is_structured_error(self):
+        resp = self.client.post("/api/inventory/purchase-orders/", {
+            "supplier": self._supplier().id,
+            "delivery_location": self.kitchen.id,
+            "lines": [{"quantity": 2, "unit_cost": 100}],
+        }, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("lines", resp.data)
+        self.assertEqual(
+            resp.data["lines"][0]["non_field_errors"],
+            ["Each line needs an item (inventory_item)."],
+        )
+
+    def test_po_line_negative_quantity_rejected(self):
+        item = self._create_item(name="Flour")
+        resp = self.client.post("/api/inventory/purchase-orders/", {
+            "supplier": self._supplier().id,
+            "delivery_location": self.kitchen.id,
+            "lines": [{"inventory_item": item["id"], "quantity": -1, "unit_cost": 100}],
+        }, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("lines", resp.data)
+
+    def test_po_empty_lines_rejected(self):
+        resp = self.client.post("/api/inventory/purchase-orders/", {
+            "supplier": self._supplier().id,
+            "delivery_location": self.kitchen.id,
+            "lines": [],
+        }, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("lines", resp.data)
+
+    def test_po_unknown_item_still_plain_message(self):
+        resp = self.client.post("/api/inventory/purchase-orders/", {
+            "supplier": self._supplier().id,
+            "delivery_location": self.kitchen.id,
+            "lines": [{"inventory_item": 999999, "quantity": 1, "unit_cost": 10}],
+        }, format="json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(resp.data.get("detail"), "Unknown item 999999.")

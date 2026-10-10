@@ -126,7 +126,7 @@ function toLocalDateStr(d: Date): string {
 }
 
 function formatNPR(value: number | string | null | undefined, sym = "Rs") {
-  return `${sym} ${Number(value ?? 0).toLocaleString(undefined, {
+  return `${sym} ${Number(value ?? 0).toLocaleString("en-US", {
     maximumFractionDigits: 0,
   })}`;
 }

@@ -3622,6 +3622,10 @@ def z_report(request):
     ?shift_id=<uuid> — report for a specific shift
     ?date=YYYY-MM-DD  — report for a specific date (all shifts that day)
     No params — today's Z-report (all shifts today, current or last closed)
+
+    Known limitation: cash *expenses* recorded in Accounts (finance app) are not
+    deducted from ``expected_cash`` here, which only reconciles POS cash orders and
+    cash movements against the drawer. Reconcile large cash payouts in Accounts.
     """
     merchant = _get_merchant(request)
     if not _require_pos(merchant):
@@ -5170,6 +5174,7 @@ def staff_daily_report(request):
     worker_id = request.query_params.get("worker_id")
 
     now = timezone.now()
+    merchant_tz = ZoneInfo(merchant.timezone or "Asia/Kathmandu")
     if date_str:
         try:
             target_date = timezone.datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -5177,10 +5182,11 @@ def staff_daily_report(request):
             return Response({"error": "Invalid date format. Use YYYY-MM-DD."},
                             status=status.HTTP_400_BAD_REQUEST)
     else:
-        target_date = now.date()
+        target_date = timezone.localtime(now, merchant_tz).date()
 
     day_start = timezone.make_aware(
-        timezone.datetime.combine(target_date, timezone.datetime.min.time())
+        timezone.datetime.combine(target_date, timezone.datetime.min.time()),
+        merchant_tz,
     )
     day_end = day_start + timezone.timedelta(days=1)
 
@@ -5280,13 +5286,13 @@ def staff_daily_report(request):
         "staff": staff_data,
         "totals": {
             "total_revenue": str(
-                sum(float(s["total_revenue"]) for s in staff_data)
+                sum((Decimal(s["total_revenue"]) for s in staff_data), Decimal("0"))
             ),
             "total_orders": sum(s["order_count"] for s in staff_data),
             "total_payments": sum(s["payment_count"] for s in staff_data),
             "total_items_sold": sum(s["items_sold"] for s in staff_data),
             "total_discount": str(
-                sum(float(s["total_discount"]) for s in staff_data)
+                sum((Decimal(s["total_discount"]) for s in staff_data), Decimal("0"))
             ),
         },
     })

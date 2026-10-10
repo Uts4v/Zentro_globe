@@ -65,11 +65,11 @@ export function CustomChartTooltip({
 
           let displayVal = String(item.value ?? 0);
           if (isRevenue) {
-            displayVal = `${currencySymbol} ${Number(item.value ?? 0).toLocaleString(undefined, {
+            displayVal = `${currencySymbol} ${Number(item.value ?? 0).toLocaleString("en-US", {
               maximumFractionDigits: 2,
             })}`;
           } else if (isOrders) {
-            displayVal = `${Number(item.value ?? 0).toLocaleString()} ${
+            displayVal = `${Number(item.value ?? 0).toLocaleString("en-US")} ${
               Number(item.value) === 1 ? "order" : "orders"
             }`;
           }
@@ -94,7 +94,7 @@ export function CustomChartTooltip({
             <span>Avg / Order</span>
             <span className="font-medium text-foreground">
               {currencySymbol}{" "}
-              {(Number(rawData.revenue) / Number(rawData.orders)).toLocaleString(undefined, {
+              {(Number(rawData.revenue) / Number(rawData.orders)).toLocaleString("en-US", {
                 maximumFractionDigits: 0,
               })}
             </span>

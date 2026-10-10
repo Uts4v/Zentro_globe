@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation
 
 from django.db import IntegrityError, transaction
 from django.db.models import Q, Sum
+from django.db.models.functions import Coalesce
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -384,15 +385,19 @@ def salaries(request):
         month = _month(request.query_params.get("month")) if request.query_params.get("month") else None
         if month:
             qs = qs.filter(period=month)
+        total_amount = qs.aggregate(v=Coalesce(Sum("amount"), ZERO))["v"]
+        total_paid = qs.aggregate(
+            v=Coalesce(Sum("payments__amount", filter=Q(payments__is_void=False)), ZERO)
+        )["v"]
         rows = []
         for salary in qs.prefetch_related("payments")[: services.ROW_LIMIT]:
             payments = sorted(salary.payments.all(), key=lambda p: (p.date, p.id), reverse=True)
             rows.append(services.salary_dict(salary, payments))
         return Response({
             "rows": rows,
-            "amount": services.money(sum((Decimal(r["amount"]) for r in rows), ZERO)),
-            "paid": services.money(sum((Decimal(r["paid"]) for r in rows), ZERO)),
-            "outstanding": services.money(sum((Decimal(r["outstanding"]) for r in rows), ZERO)),
+            "amount": services.money(total_amount),
+            "paid": services.money(total_paid),
+            "outstanding": services.money(total_amount - total_paid),
         })
 
     data = request.data

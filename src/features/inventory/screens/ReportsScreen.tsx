@@ -46,9 +46,15 @@ const CATEGORY = new Set([
   "waste",
 ]);
 
+function localDateStr(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 function monthStart() {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return localDateStr(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 
 export function useDownload() {
@@ -79,7 +85,7 @@ export function ReportsScreen() {
     params.report && REPORTS.includes(params.report) ? params.report : "current-stock",
   );
   const [from, setFrom] = useState(monthStart());
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [to, setTo] = useState(localDateStr(new Date()));
   const [location, setLocation] = useState("");
   const [category, setCategory] = useState("");
   const [page, setPage] = useState(1);

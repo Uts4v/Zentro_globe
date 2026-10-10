@@ -8,7 +8,9 @@ These verify the per-staff daily report aggregation (rewritten from a per-worker
 """
 
 import uuid
+from datetime import datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from django.test import TestCase
 from django.contrib.auth import get_user_model
@@ -107,7 +109,6 @@ class StaffDailyReportTests(TestCase):
         self.assertEqual(bob["order_count"], 2)
         self.assertEqual(Decimal(bob["total_discount"]), Decimal("5"))
         self.assertEqual(bob["items_sold"], 4)
-
     def test_worker_with_no_activity_yields_zeroes(self):
         # Only Bob has activity; Alice must still appear with zeroed values.
         b1 = self._order(self.worker_b, 50)
@@ -122,6 +123,34 @@ class StaffDailyReportTests(TestCase):
         self.assertEqual(alice["payment_count"], 0)
         self.assertEqual(alice["order_count"], 0)
         self.assertEqual(alice["items_sold"], 0)
+
+    def test_day_boundary_uses_merchant_timezone(self):
+        # 2026-03-10 19:00 UTC == 2026-03-11 00:45 Asia/Kathmandu (+05:45).
+        ts = datetime(2026, 3, 10, 19, 0, tzinfo=ZoneInfo("UTC"))
+        order = self._order(self.worker_a, 100)
+        self._payment(self.worker_a, order, PosPayment.METHOD_CASH, 100)
+        Order.objects.filter(pk=order.pk).update(created_at=ts)
+        PosPayment.objects.filter(order=order).update(created_at=ts)
+
+        def alice_on(day):
+            resp = self.client.get("/api/pos/staff-report/", {"date": day})
+            self.assertEqual(resp.status_code, 200, resp.data)
+            return {s["worker_name"]: s for s in resp.data["staff"]}["Alice"]
+
+        # The order belongs to the 11th in the merchant's timezone, not the 10th.
+        self.assertEqual(Decimal(alice_on("2026-03-11")["total_revenue"]), Decimal("100"))
+        self.assertEqual(Decimal(alice_on("2026-03-10")["total_revenue"]), Decimal("0"))
+
+    def test_totals_are_exact_decimals(self):
+        a1 = self._order(self.worker_a, Decimal("100.10"))
+        self._payment(self.worker_a, a1, PosPayment.METHOD_CASH, Decimal("100.10"))
+        b1 = self._order(self.worker_b, Decimal("100.20"))
+        self._payment(self.worker_b, b1, PosPayment.METHOD_CASH, Decimal("100.20"))
+
+        resp = self.client.get("/api/pos/staff-report/")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        # Float summation would drift to 200.29999...; Decimal keeps it exact.
+        self.assertEqual(Decimal(resp.data["totals"]["total_revenue"]), Decimal("200.30"))
 
 
 class StaffDailyReportAuthTests(TestCase):

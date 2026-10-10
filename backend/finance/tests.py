@@ -6,6 +6,7 @@ Run with: python manage.py test finance
 
 import uuid
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -240,6 +241,23 @@ class SalaryTests(Base):
 
         staff = self.client.get("/api/finance/salaries/staff/").data
         self.assertEqual(staff[0]["last_salary"], "20000.00")
+
+    def test_totals_cover_all_salaries_not_just_the_listed_page(self):
+        ram = self.worker("Ram", "cashier")
+        sita = self.worker("Sita", "cashier")
+        self.assertEqual(self.client.post("/api/finance/salaries/", {
+            "worker_id": str(ram.id), "period": "2026-09", "amount": "20000",
+        }, format="json").status_code, 201)
+        self.assertEqual(self.client.post("/api/finance/salaries/", {
+            "worker_id": str(sita.id), "period": "2026-08", "amount": "5000",
+        }, format="json").status_code, 201)
+
+        # With the page limit at 1, totals must still reflect both salaries.
+        with mock.patch.object(services, "ROW_LIMIT", 1):
+            data = self.client.get("/api/finance/salaries/").data
+        self.assertEqual(len(data["rows"]), 1)
+        self.assertEqual(data["amount"], "25000.00")
+        self.assertEqual(data["outstanding"], "25000.00")
 
 
 class AccessTests(Base):

@@ -6,12 +6,13 @@ Mounted at /api/pos/reports/...
 
 import io
 import csv
+from collections import defaultdict
 from datetime import datetime, date, timedelta, time as dt_time
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from django.db.models import Sum, Count, Q, Avg, F, DecimalField
-from django.db.models.functions import TruncDate
+from django.db.models import Sum, Count, Q, Avg, F, DecimalField, Max, Value
+from django.db.models.functions import TruncDate, Coalesce
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
 from django.utils.html import escape
@@ -323,18 +324,14 @@ def sales_report(request):
         .annotate(
             quantity_sold=Sum("quantity"),
             revenue=Sum("subtotal"),
+            category=Coalesce(Max("menu_item__category"), Value("")),
         )
         .order_by("-revenue")
     )
 
-    # Group by menu item category if available
-    menu_categories = {}
-    for item in MenuItem.objects.filter(merchant=merchant).values("name", "category"):
-        menu_categories[item["name"]] = item["category"]
-
     category_map = {}
     for row in category_rows:
-        cat = menu_categories.get(row["name"], "Uncategorized")
+        cat = row["category"] or "Uncategorized"
         if cat not in category_map:
             category_map[cat] = {"name": cat, "quantity_sold": 0, "revenue": 0}
         category_map[cat]["quantity_sold"] += int(row["quantity_sold"] or 0)
@@ -673,16 +670,12 @@ def item_analytics(request):
         if payment_filter == "cash":
             active_qs = active_qs.filter(payment_method="cash")
         elif payment_filter == "online":
-            active_qs = active_qs.filter(payment_method__in=["card", "bank_qr", "mobile_wallet"])
+            active_qs = active_qs.exclude(payment_method__in=["cash", ""])
         elif payment_filter in ("card", "bank_qr", "mobile_wallet", "credit", "debit"):
             active_qs = active_qs.filter(payment_method=payment_filter)
 
-    # Get menu item categories
-    menu_categories = {}
-    for item in MenuItem.objects.filter(merchant=merchant).values("name", "category"):
-        menu_categories[item["name"]] = item["category"]
-
-    # Item-level analytics
+    # Menu item categories come from the menu_item FK (not matched by name),
+    # so renamed menu items keep their category attribution.
     items = (
         OrderItem.objects
         .filter(order__in=active_qs)
@@ -691,6 +684,7 @@ def item_analytics(request):
             quantity_sold=Sum("quantity"),
             revenue=Sum("subtotal"),
             order_count=Count("order", distinct=True),
+            category=Coalesce(Max("menu_item__category"), Value("")),
         )
         .order_by("-revenue")
     )
@@ -699,36 +693,51 @@ def item_analytics(request):
     if category_filter:
         items = [
             i for i in items
-            if menu_categories.get(i["name"], "Uncategorized") == category_filter
+            if (i["category"] or "Uncategorized") == category_filter
         ]
 
-    # Payment method breakdown per item
+    # Payment method breakdown per item — single grouped pass, no per-item queries.
+    order_info = {
+        o["id"]: o
+        for o in active_qs.values("id", "payment_method", "total_amount")
+    }
+    buckets = defaultdict(
+        lambda: defaultdict(lambda: {"count": 0, "total": 0, "seen": set()})
+    )
+    for name, order_id in (
+        OrderItem.objects.filter(order__in=active_qs)
+        .values_list("name", "order_id")
+        .iterator()
+    ):
+        info = order_info.get(order_id)
+        if info is None or not info["payment_method"]:
+            continue
+        bucket = buckets[name][info["payment_method"]]
+        if order_id in bucket["seen"]:
+            continue
+        bucket["seen"].add(order_id)
+        bucket["count"] += 1
+        bucket["total"] += float(info["total_amount"] or 0)
+
     result_items = []
     for item in items:
         item_name = item["name"]
-        # Get payment breakdown for this specific item
-        item_orders = active_qs.filter(items__name=item_name)
-        pm_rows = (
-            item_orders
-            .exclude(payment_method="")
-            .values("payment_method")
-            .annotate(count=Count("id"), total=Sum("total_amount"))
-            .order_by("-total")
-        )
-
+        breakdown = buckets.get(item_name, {})
         payment_breakdown = [
             {
-                "method": pm["payment_method"],
-                "label": merchant.payment_method_label(pm["payment_method"]),
-                "count": int(pm["count"]),
-                "amount": float(pm["total"] or 0),
+                "method": method,
+                "label": merchant.payment_method_label(method),
+                "count": row["count"],
+                "amount": row["total"],
             }
-            for pm in pm_rows
+            for method, row in sorted(
+                breakdown.items(), key=lambda kv: kv[1]["total"], reverse=True
+            )
         ]
 
         result_items.append({
             "name": item_name,
-            "category": menu_categories.get(item_name, "Uncategorized"),
+            "category": item["category"] or "Uncategorized",
             "quantity_sold": int(item["quantity_sold"] or 0),
             "revenue": float(item["revenue"] or 0),
             "order_count": int(item["order_count"] or 0),
@@ -751,7 +760,14 @@ def item_analytics(request):
     total_revenue = sum(ri["revenue"] for ri in result_items)
 
     # Get available categories for filter
-    available_categories = sorted(set(menu_categories.values()) | {"Uncategorized"})
+    available_categories = sorted(
+        set(
+            MenuItem.objects.filter(merchant=merchant)
+            .exclude(category="")
+            .values_list("category", flat=True)
+        )
+        | {"Uncategorized"}
+    )
 
     return Response({
         "date_from": str(date_from),
@@ -951,7 +967,7 @@ def enhanced_analytics(request):
         "tax_rate": _get_total_tax_rate(merchant),
         "overview": {
             "total_sales": total_sales,
-            "net_sales": total_sales - float(agg["total_discount"] or 0),
+            "net_sales": total_sales - float(agg["total_discount"] or 0) - refund_amount,
             "total_orders": total_orders,
             "total_customers": active_qs.exclude(customer=None).values("customer").distinct().count(),
             "avg_order_value": round(float(agg["avg_order"] or 0), 2),

@@ -534,10 +534,20 @@ function headers(json = false): Record<string, string> {
 function flattenErrors(data: Record<string, unknown>): string {
   const direct = data.detail ?? data.error;
   if (typeof direct === "string") return direct;
-  const parts = Object.entries(data)
-    .filter(([k]) => !["code", "duplicate_of", "previous_import", "quantity", "unit"].includes(k))
-    .map(([, v]) => (Array.isArray(v) ? v.join(" ") : typeof v === "string" ? v : ""))
-    .filter(Boolean);
+  const skip = new Set(["code", "duplicate_of", "previous_import", "quantity", "unit"]);
+  const parts: string[] = [];
+  const collect = (v: unknown): void => {
+    if (typeof v === "string") {
+      parts.push(v);
+    } else if (Array.isArray(v)) {
+      v.forEach(collect);
+    } else if (v && typeof v === "object") {
+      Object.values(v as Record<string, unknown>).forEach(collect);
+    }
+  };
+  Object.entries(data)
+    .filter(([k]) => !skip.has(k))
+    .forEach(([, v]) => collect(v));
   return parts.join(" ") || "Something went wrong. Please try again.";
 }
 

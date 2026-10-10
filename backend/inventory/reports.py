@@ -12,11 +12,13 @@ viewer may not see costs, so an export can never become a cost leak.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Callable, Iterable, Iterator
+from zoneinfo import ZoneInfo
 
 from django.db.models import Count, Prefetch, Q
+from django.utils import timezone
 
 from .models import (
     CountStatus,
@@ -190,12 +192,28 @@ def _date_param(params, key):
         return None
 
 
-def _date_range(qs, params, field_name="created_at"):
+def _date_range(qs, params, merchant=None, field_name="created_at"):
+    """Filter a queryset to whole local days in the merchant's own timezone.
+
+    `from_date`/`to_date` are calendar days in the merchant's local day (e.g.
+    a Kathmandu merchant's Friday runs 23:45–21:59 UTC). This matches how the
+    POS reports and merchant analytics bucket days, so a report never mixes
+    rows across the UTC calendar boundary.
+    """
     start, end = _date_param(params, "from_date"), _date_param(params, "to_date")
+    if not (start or end):
+        return qs
+    tz_name = (merchant.timezone or "Asia/Kathmandu") if merchant else None
+    tz = ZoneInfo(tz_name) if tz_name else timezone.get_current_timezone()
     if start:
-        qs = qs.filter(**{f"{field_name}__date__gte": start})
+        qs = qs.filter(**{
+            f"{field_name}__gte": timezone.make_aware(datetime.combine(start, datetime.min.time()), tz),
+        })
     if end:
-        qs = qs.filter(**{f"{field_name}__date__lte": end})
+        end = end + timedelta(days=1)
+        qs = qs.filter(**{
+            f"{field_name}__lt": timezone.make_aware(datetime.combine(end, datetime.min.time()), tz),
+        })
     return qs
 
 
@@ -387,7 +405,7 @@ def movements_queryset(merchant, params):
     qs = InventoryMovement.objects.filter(merchant=merchant).select_related(
         "inventory_item__base_unit", "location", "performed_by", "approved_by"
     )
-    qs = _date_range(qs, params)
+    qs = _date_range(qs, params, merchant=merchant)
     group = params.get("group")
     if group in MOVEMENT_GROUPS:
         qs = qs.filter(movement_type__in=MOVEMENT_GROUPS[group])
@@ -452,7 +470,7 @@ def waste_queryset(merchant, params):
     qs = InventoryWasteRecord.objects.filter(merchant=merchant).select_related(
         "inventory_item__base_unit", "location", "performed_by"
     )
-    qs = _date_range(qs, params)
+    qs = _date_range(qs, params, merchant=merchant)
     for key, lookup in (("item", "inventory_item_id"), ("location", "location_id"),
                         ("category", "inventory_item__category_id")):
         value = _int_param(params, key)
@@ -523,7 +541,7 @@ def _counts_report(merchant, params, include_cost):
             distinct=True,
         ),
     )
-    qs = _date_range(qs, params)
+    qs = _date_range(qs, params, merchant=merchant)
     location = _int_param(params, "location")
     if location:
         qs = qs.filter(location_id=location)
@@ -665,7 +683,7 @@ def _purchasing_report(merchant, params, include_cost):
     qs = PurchaseOrder.objects.filter(merchant=merchant).select_related(
         "supplier", "delivery_location"
     ).annotate(n_lines=Count("lines"))
-    qs = _date_range(qs, params)
+    qs = _date_range(qs, params, merchant=merchant)
     location = _int_param(params, "location")
     if location:
         qs = qs.filter(delivery_location_id=location)
@@ -707,7 +725,7 @@ def _deliveries_report(merchant, params, include_cost):
     qs = InventoryReceiving.objects.filter(merchant=merchant).select_related(
         "supplier", "location", "received_by"
     ).annotate(n_lines=Count("lines"))
-    qs = _date_range(qs, params, "received_at")
+    qs = _date_range(qs, params, merchant=merchant, field_name="received_at")
     location = _int_param(params, "location")
     if location:
         qs = qs.filter(location_id=location)

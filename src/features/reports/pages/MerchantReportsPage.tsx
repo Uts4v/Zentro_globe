@@ -35,7 +35,7 @@ import { paymentMethodLabel } from "@/lib/payment-methods";
 
 function fmt(value: number | string | null | undefined, symbol = "Rs", decimals = 0): string {
   const num = Number(value ?? 0);
-  return `${symbol} ${num.toLocaleString(undefined, {
+  return `${symbol} ${num.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })}`;

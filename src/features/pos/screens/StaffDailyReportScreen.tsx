@@ -14,6 +14,12 @@ import {
   ArrowDown,
 } from "lucide-react";
 
+function localDateStr(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 export default function StaffDailyReportScreen() {
   const merchant = usePosStore((s) => s.merchant);
   const posSettings = usePosStore((s) => s.posSettings);
@@ -27,7 +33,7 @@ export default function StaffDailyReportScreen() {
   const [workers, setWorkers] = useState<ShiftWorker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState(dateParam || new Date().toISOString().split("T")[0]);
+  const [dateFilter, setDateFilter] = useState(dateParam || localDateStr(new Date()));
   const [workerFilter, setWorkerFilter] = useState<string>(workerIdParam || "");
 
   useEffect(() => {
