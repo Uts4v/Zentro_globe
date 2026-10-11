@@ -72,7 +72,7 @@ export function presetPeriod(key: Exclude<PresetKey, "custom">): Period {
 
 export function money(value: string | number | null | undefined, symbol: string): string {
   const n = Number(value ?? 0);
-  const abs = Math.abs(Number.isFinite(n) ? n : 0).toLocaleString(undefined, {
+  const abs = Math.abs(Number.isFinite(n) ? n : 0).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });

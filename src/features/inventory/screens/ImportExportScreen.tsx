@@ -18,10 +18,16 @@ import { P, useInventory } from "@/features/inventory/context";
 
 const x = copy.importExport;
 
+function localDateStr(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 function monthAgo() {
   const d = new Date();
   d.setDate(d.getDate() - 30);
-  return d.toISOString().slice(0, 10);
+  return localDateStr(d);
 }
 
 export function ImportExportScreen() {

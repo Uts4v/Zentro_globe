@@ -38,7 +38,7 @@ export type CurrencyCode = (typeof CURRENCIES)[number]["code"];
 export function formatCurrency(amount: number | string, symbol = "Rs", decimals = 2): string {
   const num = typeof amount === "string" ? Number.parseFloat(amount) : amount;
   if (!Number.isFinite(num)) return `${symbol} 0.00`;
-  return `${symbol} ${num.toLocaleString(undefined, {
+  return `${symbol} ${num.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })}`;

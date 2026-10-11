@@ -52,7 +52,7 @@ export function formatMoney(v: string | number | null | undefined, sym = "Rs"): 
   if (v === null || v === undefined || v === "") return "—";
   const n = Number(v);
   if (Number.isNaN(n)) return `${sym} 0`;
-  return `${sym} ${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  return `${sym} ${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
 export function formatDate(iso: string | null | undefined): string {

@@ -10,6 +10,7 @@ Covers:
 - item analytics payment breakdown uses a constant number of queries
 """
 
+from datetime import timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -140,3 +141,33 @@ class ReportingFixesTests(TestCase):
             self.client.get("/api/pos/reports/items/", self._params())
 
         self.assertEqual(len(second), queries_for_three)
+
+    def test_empty_range_returns_zeroed_metrics(self):
+        past_from = (self.today - timedelta(days=90)).isoformat()
+        past_to = (self.today - timedelta(days=80)).isoformat()
+
+        analytics = self.client.get("/api/pos/reports/analytics/", {
+            "date_from": past_from, "date_to": past_to,
+        })
+        self.assertEqual(analytics.status_code, 200, analytics.data)
+        ov = analytics.data["overview"]
+        self.assertEqual(Decimal(str(ov["total_sales"])), Decimal("0"))
+        self.assertEqual(Decimal(str(ov["net_sales"])), Decimal("0"))
+        self.assertEqual(ov["total_orders"], 0)
+
+        items = self.client.get("/api/pos/reports/items/", {
+            "date_from": past_from, "date_to": past_to,
+        })
+        self.assertEqual(items.status_code, 200, items.data)
+        self.assertEqual(items.data["items"], [])
+        self.assertEqual(Decimal(str(items.data["total_revenue"])), Decimal("0"))
+
+    def test_sales_report_refunded_only_returns_zero_net(self):
+        self._order(50, payment_status="refunded", method="card")
+
+        resp = self.client.get("/api/pos/reports/sales/", self._params())
+        self.assertEqual(resp.status_code, 200, resp.data)
+        ov = resp.data["overview"]
+        self.assertEqual(Decimal(str(ov["total_sales"])), Decimal("50"))
+        self.assertEqual(Decimal(str(ov["net_sales"])), Decimal("0"))
+        self.assertEqual(Decimal(str(resp.data["refunds"]["amount"])), Decimal("50"))

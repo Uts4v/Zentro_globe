@@ -20,6 +20,12 @@ import {
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
+function localDateStr(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 export default function StaffScheduleScreen() {
   const workers = usePosStore((s) => s.workers);
   const [schedules, setSchedules] = useState<PosStaffSchedule[]>([]);
@@ -42,7 +48,7 @@ export default function StaffScheduleScreen() {
     d.setDate(monday.getDate() + i);
     return d;
   });
-  const weekStr = weekDates[0].toISOString().split("T")[0];
+  const weekStr = localDateStr(weekDates[0]);
 
   useEffect(() => {
     loadSchedules();
@@ -94,7 +100,7 @@ export default function StaffScheduleScreen() {
   }
 
   function getSchedulesForDate(date: Date) {
-    const dateStr = date.toISOString().split("T")[0];
+    const dateStr = localDateStr(date);
     return schedules.filter((s) => s.shift_date === dateStr);
   }
 
@@ -141,7 +147,7 @@ export default function StaffScheduleScreen() {
         <div className="grid grid-cols-7 gap-2">
           {weekDates.map((date, i) => {
             const daySchedules = getSchedulesForDate(date);
-            const isToday = date.toISOString().split("T")[0] === today.toISOString().split("T")[0];
+            const isToday = localDateStr(date) === localDateStr(today);
             return (
               <div
                 key={i}

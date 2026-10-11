@@ -5,6 +5,7 @@ Run with: python manage.py test finance
 """
 
 import uuid
+from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -258,6 +259,86 @@ class SalaryTests(Base):
         self.assertEqual(len(data["rows"]), 1)
         self.assertEqual(data["amount"], "25000.00")
         self.assertEqual(data["outstanding"], "25000.00")
+
+
+class ReportEdgeTests(Base):
+    def test_ledger_lists_newest_first(self):
+        self.assertEqual(self.entry(
+            kind="expense", amount="10", payment_method="cash", date="2026-01-10"
+        ).status_code, 201)
+        self.assertEqual(self.entry(
+            kind="expense", amount="20", payment_method="cash", date="2026-01-05"
+        ).status_code, 201)
+
+        resp = self.client.get("/api/finance/entries/", {"from": "2026-01-01", "to": "2026-12-31"})
+        self.assertEqual(resp.status_code, 200, resp.data)
+        dates = [r["date"] for r in resp.data["rows"]]
+        self.assertEqual(dates, sorted(dates, reverse=True))
+        self.assertEqual(resp.data["total"], "30.00")
+
+    def test_salary_month_filter_filters_period(self):
+        ram = self.worker("Ram", "cashier")
+        sita = self.worker("Sita", "cashier")
+        self.assertEqual(self.client.post("/api/finance/salaries/", {
+            "worker_id": str(ram.id), "period": "2026-09", "amount": "20000",
+        }, format="json").status_code, 201)
+        self.assertEqual(self.client.post("/api/finance/salaries/", {
+            "worker_id": str(sita.id), "period": "2026-08", "amount": "5000",
+        }, format="json").status_code, 201)
+
+        resp = self.client.get("/api/finance/salaries/", {"month": "2026-08"})
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual([r["worker_name"] for r in resp.data["rows"]], ["Sita"])
+        self.assertEqual(resp.data["amount"], "5000.00")
+        self.assertEqual(resp.data["outstanding"], "5000.00")
+
+    def test_transfers_are_forced_cash_and_land_on_the_bank_book(self):
+        resp = self.entry(
+            kind="bank_deposit", amount="200", date="2026-01-10", payment_method="bank_transfer",
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        # The client method is ignored: transfers always move cash to the bank.
+        self.assertEqual(resp.data["payment_method"], "cash")
+
+        params = {"from": "2026-01-01", "to": "2026-12-31"}
+        cash = self.client.get("/api/finance/cash/", params).data
+        bank = self.client.get("/api/finance/bank/", params).data
+        self.assertEqual(cash["money_out"], "200.00")
+        self.assertEqual(bank["money_in"], "200.00")
+
+    def test_daily_series_is_capped_at_92_days(self):
+        today = services.today(self.merchant)
+        past = today - timedelta(days=100)
+
+        resp = self.client.get("/api/finance/summary/", {
+            "from": past.isoformat(), "to": today.isoformat(),
+        })
+        self.assertEqual(resp.status_code, 200, resp.data)
+        daily = resp.data["daily"]
+        self.assertEqual(len(daily), 93)
+        self.assertEqual(daily[0]["date"], (today - timedelta(days=92)).isoformat())
+
+    def test_opening_date_anchors_the_ledger(self):
+        today = services.today(self.merchant)
+        resp = self.client.put("/api/finance/settings/", {
+            "opening_cash": "1000", "opening_bank": "0", "opening_date": today.isoformat(),
+        }, format="json")
+        self.assertEqual(resp.status_code, 200, resp.data)
+
+        # One completed sale today...
+        self.pay("cash", "200", change="100")
+        # ...and one the previous day (before the opening date).
+        old = self.pay("cash", "500")
+        PosPayment.objects.filter(pk=old.pk).update(
+            created_at=timezone.make_aware(
+                datetime.combine(today - timedelta(days=1), datetime.min.time()),
+                services.merchant_tz(self.merchant),
+            )
+        )
+
+        summary = self.client.get("/api/finance/summary/").data
+        # Only today's sale counts: opening 1000 + (200 - 100).
+        self.assertEqual(summary["balances"]["cash"], "1100.00")
 
 
 class AccessTests(Base):
