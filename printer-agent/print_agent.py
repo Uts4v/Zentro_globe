@@ -25,6 +25,7 @@ import argparse
 import base64
 import ipaddress
 import json
+import os
 import platform
 import re
 import socket
@@ -37,6 +38,44 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 MAX_JOB_BYTES = 8 * 1024 * 1024  # refuse jobs larger than 8 MB
 DEFAULT_NETWORK_PORT = 9100
 DEFAULT_TIMEOUT = 15.0
+
+_log_path = None
+
+
+def _log_file():
+    """Agent log under %LOCALAPPDATA%\\ZentroPrintAgent\\. Safe when the agent
+    runs as a window-less (--noconsole) executable with no stdout/stderr."""
+    global _log_path
+    if _log_path is None:
+        try:
+            base = os.environ.get(
+                "LOCALAPPDATA", os.path.expanduser("~")
+            )
+            log_dir = os.path.join(base, "ZentroPrintAgent")
+            os.makedirs(log_dir, exist_ok=True)
+            _log_path = os.path.join(log_dir, "agent.log")
+        except Exception:
+            _log_path = ""
+    return _log_path
+
+
+def log(msg):
+    """Write a line to the agent log, and to stdout when one is available."""
+    stamp = time.strftime("%H:%M:%S")
+    try:
+        if sys.stdout is not None:
+            sys.stdout.write("[print-agent] %s\n" % msg)
+            sys.stdout.flush()
+    except Exception:
+        pass
+    path = _log_file()
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write("%s %s\n" % (stamp, msg))
+    except Exception:
+        pass
 
 
 def list_os_printers():
@@ -55,6 +94,7 @@ def list_os_printers():
         return names
     except Exception:
         return []
+
 
 def _windows_list_printers():
     import ctypes
@@ -179,11 +219,17 @@ def _windows_raw_print(printer_name, data, timeout_ms=15000):
 def _run_powershell(script):
     """Run a PowerShell snippet and return stdout (UTF-16-safe via EncodedCommand)."""
     encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    kwargs = {}
+    if os.name == "nt":
+        # The agent runs as a windowless (--noconsole) exe; without this flag
+        # each powershell child opens its own console window on this machine.
+        kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     proc = subprocess.run(
         ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
         capture_output=True,
         timeout=20,
         check=False,
+        **kwargs,
     )
     if proc.returncode != 0:
         stdout = proc.stdout.decode("utf-8", errors="replace")
@@ -541,8 +587,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(500, {"ok": False, "error": str(exc)})
 
     def log_message(self, fmt, *args):
-        # One quiet line per request — enough to debug, not a per-print flood.
-        sys.stdout.write("[print-agent] %s - %s\n" % (self.address_string(), fmt % args))
+        # One line per request — enough to debug, not a per-print flood.
+        log("%s - %s" % (self.address_string(), fmt % args))
 
 
 def main():
@@ -552,15 +598,12 @@ def main():
     args = parser.parse_args()
 
     server = ThreadingHTTPServer((args.host, args.port), Handler)
-    print(f"[print-agent] Zentro Print Bridge listening on http://{args.host}:{args.port}")
-    print(
-        "[print-agent] Endpoints: GET /health, GET /printers, GET /devices, "
-        "GET /scan-network, POST /print, POST /install-printer"
-    )
+    log(f"Zentro Print Bridge listening on http://{args.host}:{args.port}")
+    log("Endpoints: GET /health, GET /printers, GET /devices, GET /scan-network, POST /print, POST /install-printer")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        print("\n[print-agent] stopped")
+        log("stopped")
 
 
 if __name__ == "__main__":
