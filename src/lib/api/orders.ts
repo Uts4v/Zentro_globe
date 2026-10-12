@@ -1,4 +1,4 @@
-﻿import { apiUrl, djangoFetch } from "@/lib/django-api-base";
+import { apiUrl, djangoFetch } from "@/lib/django-api-base";
 import { djangoHeaders as authHeaders } from "@/lib/auth";
 import type {
   Order,
@@ -128,6 +128,33 @@ export const orderApi = {
       body: JSON.stringify(body),
     });
     return normaliseOrder(data);
+  },
+
+  /** Track order status for unauthenticated guests using table token or guest session */
+  trackGuest: async (params: {
+    order_id?: number | string;
+    table_token?: string;
+    guest_session_id?: string;
+  }): Promise<any> => {
+    const q = new URLSearchParams();
+    if (params.order_id) q.set("order_id", String(params.order_id));
+    if (params.table_token) q.set("table_token", params.table_token);
+    if (params.guest_session_id) q.set("guest_session_id", params.guest_session_id);
+
+    const path = params.order_id
+      ? `/orders/${params.order_id}/guest-status/?${q.toString()}`
+      : `/orders/guest-track/?${q.toString()}`;
+
+    const data = await djangoFetch<any>(apiUrl(path), {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (params.order_id) {
+      return normaliseOrder(data);
+    }
+    return {
+      results: (data.results || []).map(normaliseOrder),
+      count: data.count || 0,
+    };
   },
 
   /** Server-authoritative order preview (customer cart review / price guard). */

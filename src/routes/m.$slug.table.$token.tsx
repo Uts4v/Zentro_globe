@@ -25,8 +25,14 @@ import {
   Moon,
   BellRing,
   Check,
+  Clock,
+  Timer,
+  ChefHat,
+  CheckCircle2,
+  RefreshCw,
 } from "lucide-react";
 import { tableApi, menuApi, orderApi, type TableResolution } from "@/lib/api";
+import { offersApi, type PublicOffer } from "@/lib/api/offers";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { useStore, cartTotals, type CartItem } from "@/lib/store";
@@ -166,7 +172,55 @@ function TableQRScanPage() {
   const [waiterStatus, setWaiterStatus] = useState<"idle" | "sending" | "sent">("idle");
   const [waiterCooldown, setWaiterCooldown] = useState(0);
 
+  // Offers and live guest tracking state
+  const [offers, setOffers] = useState<PublicOffer[]>([]);
+  const [trackedOrder, setTrackedOrder] = useState<any | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+
   const currencySymbol = catalog?.merchant?.currency_symbol || "Rs";
+
+  // Fetch available offers for guest discovery
+  useEffect(() => {
+    offersApi
+      .list({ limit: 4 })
+      .then((res) => {
+        setOffers(res.results || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Poll live guest order tracking when orderSuccess is active
+  useEffect(() => {
+    if (!orderSuccess?.orderId) {
+      setTrackedOrder(null);
+      return;
+    }
+    let cancelled = false;
+    setTrackingLoading(true);
+
+    const pollStatus = async () => {
+      try {
+        const order = await orderApi.trackGuest({
+          order_id: orderSuccess.orderId,
+          table_token: token,
+          guest_session_id: guestSession?.guestId,
+        });
+        if (!cancelled) {
+          setTrackedOrder(order);
+          setTrackingLoading(false);
+        }
+      } catch {
+        if (!cancelled) setTrackingLoading(false);
+      }
+    };
+
+    pollStatus();
+    const interval = setInterval(pollStatus, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [orderSuccess?.orderId, token, guestSession?.guestId]);
 
   // Resolve table token
   useEffect(() => {
@@ -425,53 +479,133 @@ function TableQRScanPage() {
   const merchant = resolution.merchant;
   const table = resolution.table;
 
-  // Order success screen
+  // Order success screen with live guest tracking & offers
   if (orderSuccess) {
+    const statusText = trackedOrder?.status || "pending";
+    const statusMap: Record<string, { label: string; bg: string; text: string; icon: any }> = {
+      pending: { label: "Order Received · Dispatching", bg: "bg-amber-500/10 border-amber-500/20", text: "text-amber-600", icon: Clock },
+      confirmed: { label: "Confirmed by Staff", bg: "bg-blue-500/10 border-blue-500/20", text: "text-blue-600", icon: CheckCircle2 },
+      preparing: { label: "Cooking in Kitchen", bg: "bg-purple-500/10 border-purple-500/20", text: "text-purple-600", icon: ChefHat },
+      ready: { label: "Ready to Serve ✨", bg: "bg-emerald-500/10 border-emerald-500/20", text: "text-emerald-600", icon: Sparkles },
+      completed: { label: "Served & Completed", bg: "bg-emerald-500/10 border-emerald-500/20", text: "text-emerald-600", icon: Check },
+      cancelled: { label: "Cancelled", bg: "bg-rose-500/10 border-rose-500/20", text: "text-rose-600", icon: Check },
+    };
+    const currentStatus = statusMap[statusText] || statusMap.pending;
+    const StatusIcon = currentStatus.icon;
+
     return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-background px-5 text-center">
-        <div className="text-6xl mb-4">🎉</div>
+      <div className="mx-auto flex min-h-dvh max-w-[480px] flex-col items-center bg-background px-5 py-10 text-center">
+        <div className="text-5xl mb-3">🎉</div>
         <h1 className="font-display text-3xl text-foreground">Order Placed!</h1>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           Your order has been sent to the kitchen.
         </p>
+
         {activeTable && (
-          <div className="mt-4 inline-flex items-center gap-2 rounded-full bg-muted/60 px-4 py-2">
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-muted/60 px-4 py-1.5">
             <Utensils className="h-4 w-4 text-ember" />
             <span className="text-sm font-medium">
               {merchant.name} · Table {activeTable.tableName}
             </span>
           </div>
         )}
-        <p className="mt-2 text-xs text-muted-foreground">
-          {resolution?.active_session
-            ? `Added to Open Bill #${orderSuccess.orderId}`
-            : `Bill #${orderSuccess.orderId}`}
-        </p>
-        <button
-          onClick={() => {
-            setOrderSuccess(null);
-            tableApi.resolve(slug, token).then((r) => setResolution(r)).catch(() => {});
-          }}
-          className="mt-8 flex h-12 items-center gap-2 rounded-2xl bg-foreground px-8 text-sm font-medium text-background active:scale-[0.98]"
-        >
-          Order More <ArrowRight className="h-4 w-4" />
-        </button>
-        <button
-          onClick={handleCallWaiter}
-          disabled={waiterStatus === "sending" || waiterCooldown > 0}
-          className="mt-3 flex h-12 items-center gap-2 rounded-2xl border border-border bg-background px-8 text-sm font-medium text-foreground active:scale-[0.98] disabled:opacity-60"
-        >
-          {waiterStatus === "sending" ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : waiterStatus === "sent" && waiterCooldown > 0 ? (
-            <Check className="h-4 w-4 text-green-600" />
-          ) : (
-            <BellRing className="h-4 w-4" />
+
+        {/* Live Guest Order Tracking Card */}
+        <div className="mt-5 w-full rounded-3xl border border-border bg-card p-5 text-left shadow-soft">
+          <div className="flex items-center justify-between border-b border-border/50 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Order Status</span>
+              {trackingLoading && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+            </div>
+            <span className="text-xs font-mono text-muted-foreground">
+              Bill #{orderSuccess.orderId}
+            </span>
+          </div>
+
+          <div className={`mt-3.5 flex items-center gap-2.5 rounded-2xl border px-3.5 py-2.5 ${currentStatus.bg}`}>
+            <StatusIcon className={`h-4 w-4 shrink-0 ${currentStatus.text}`} />
+            <span className={`text-xs font-bold ${currentStatus.text}`}>
+              {currentStatus.label}
+            </span>
+          </div>
+
+          {trackedOrder?.items && trackedOrder.items.length > 0 && (
+            <div className="mt-4 space-y-2 border-t border-border/40 pt-3">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase">Items in this order</p>
+              {trackedOrder.items.map((item: any, idx: number) => (
+                <div key={idx} className="flex justify-between text-xs text-foreground">
+                  <span>{item.quantity}× {item.name || item.menu_item?.name}</span>
+                  <span className="font-medium">{currencySymbol} {Number(item.subtotal || item.price * item.quantity).toFixed(2)}</span>
+                </div>
+              ))}
+              <div className="mt-2 flex justify-between border-t border-border/40 pt-2 text-sm font-bold text-foreground">
+                <span>Total</span>
+                <span>{currencySymbol} {Number(trackedOrder.total_amount).toFixed(2)}</span>
+              </div>
+            </div>
           )}
-          {waiterStatus === "sent" && waiterCooldown > 0
-            ? `Waiter notified (${waiterCooldown}s)`
-            : "Call Waiter"}
-        </button>
+        </div>
+
+        {/* Exclusive Offers Section for Guests */}
+        {offers.length > 0 && (
+          <div className="mt-6 w-full rounded-3xl border border-ember/20 bg-gradient-to-b from-ember/5 to-transparent p-5 text-left">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Gift className="h-4 w-4 text-ember" />
+                <h3 className="font-semibold text-sm text-foreground">Member Deals & Offers</h3>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-ember">Sign up to claim</span>
+            </div>
+            <p className="text-xs text-muted-foreground mb-3">
+              Unlock exclusive discounts, free items, and reward stamps on future visits.
+            </p>
+            <div className="space-y-2.5">
+              {offers.slice(0, 2).map((offer) => (
+                <div key={offer.id} className="glass rounded-2xl p-3 border border-border/40 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-xs text-foreground truncate">{offer.title}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">{offer.description}</p>
+                  </div>
+                  <Link
+                    to="/auth/signup"
+                    search={{ redirect: "/offers" }}
+                    className="shrink-0 rounded-xl bg-ink px-3 py-1.5 text-xs font-semibold text-primary-foreground active:scale-95 transition-transform"
+                  >
+                    Claim Offer
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex w-full flex-col gap-2.5">
+          <button
+            onClick={() => {
+              setOrderSuccess(null);
+              tableApi.resolve(slug, token).then((r) => setResolution(r)).catch(() => {});
+            }}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-foreground text-sm font-medium text-background active:scale-[0.98]"
+          >
+            Order More Items <ArrowRight className="h-4 w-4" />
+          </button>
+          <button
+            onClick={handleCallWaiter}
+            disabled={waiterStatus === "sending" || waiterCooldown > 0}
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background text-sm font-medium text-foreground active:scale-[0.98] disabled:opacity-60"
+          >
+            {waiterStatus === "sending" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : waiterStatus === "sent" && waiterCooldown > 0 ? (
+              <Check className="h-4 w-4 text-green-600" />
+            ) : (
+              <BellRing className="h-4 w-4" />
+            )}
+            {waiterStatus === "sent" && waiterCooldown > 0
+              ? `Waiter notified (${waiterCooldown}s)`
+              : "Call Waiter"}
+          </button>
+        </div>
       </div>
     );
   }
@@ -833,6 +967,53 @@ function TableQRScanPage() {
             >
               Join Free
             </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Special Offers Section */}
+      {offers.length > 0 && (
+        <div className="mx-5 mt-4">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-1.5">
+              <Gift className="h-4 w-4 text-ember" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                Exclusive Deals & Offers
+              </h2>
+            </div>
+            <Link
+              to="/offers"
+              className="text-[11px] font-semibold text-ember hover:underline"
+            >
+              See all
+            </Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+            {offers.map((offer) => (
+              <div
+                key={offer.id}
+                className="min-w-[220px] max-w-[240px] shrink-0 rounded-2xl border border-border/70 bg-card/70 p-3 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="inline-flex items-center gap-1 rounded-full bg-ember/10 px-2 py-0.5 text-[10px] font-bold text-ember">
+                    <Sparkles className="h-3 w-3" />
+                    {offer.badge || "MEMBER DEAL"}
+                  </div>
+                  <h3 className="font-semibold text-xs text-foreground mt-2 line-clamp-1">{offer.title}</h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{offer.description}</p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">Sign up to claim</span>
+                  <Link
+                    to="/auth/signup"
+                    search={{ redirect: "/offers" }}
+                    className="inline-flex items-center rounded-xl bg-ink px-2.5 py-1 text-[11px] font-medium text-primary-foreground transition-transform active:scale-95"
+                  >
+                    Claim
+                  </Link>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

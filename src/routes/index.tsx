@@ -50,6 +50,8 @@ import { toast } from "sonner";
 // Home components
 import { MainPageLoyaltyCard, MainPageLoyaltyCardSkeleton } from "@/components/MainPageLoyaltyCard";
 import { QuickActions } from "@/components/home/QuickActions";
+import { PublicLandingScreen } from "@/components/home/PublicLandingScreen";
+import { useAuth } from "@/lib/auth";
 
 const PersonalQR = lazy(() =>
   import("@/features/transfers/components/PersonalQR").then((m) => ({ default: m.PersonalQR })),
@@ -59,17 +61,38 @@ const TableQRScanner = lazy(() =>
 );
 
 export const Route = createFileRoute("/")({
-  beforeLoad: requireAuth,
   head: () => ({
     meta: [
-      { title: "Zentro — Home" },
-      { name: "description", content: "Your loyalty dashboard. Earn, redeem, and discover." },
+      { title: "Zentro — Smart Dining, Loyalty Rewards & POS" },
+      {
+        name: "description",
+        content:
+          "Scan table QR codes to order with zero app download, collect loyalty stamps, and unlock exclusive rewards at your favorite cafés.",
+      },
     ],
   }),
   component: Index,
 });
 
 function Index() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <PublicLandingScreen />;
+  }
+
+  return <CustomerDashboard />;
+}
+
+function CustomerDashboard() {
   const { add, selectedMerchantId, setSelectedMerchant, activeTable, clearTable } = useStore();
   const navigate = useNavigate();
 
