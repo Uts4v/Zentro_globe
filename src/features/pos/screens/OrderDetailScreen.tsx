@@ -49,6 +49,7 @@ import {
   Percent,
   Trash2,
 } from "lucide-react";
+import { markLocalBatch } from "../voice/coordinator";
 import CustomerSearchModal from "./CustomerSearchModal";
 import MinusStockModal from "./MinusStockModal";
 import { paymentMethodLabel } from "@/lib/payment-methods";
@@ -1371,7 +1372,7 @@ function AddItemsModal({
     setSubmitting(true);
     setError("");
     try {
-      await posAddItemsToOrder(
+      const updated = await posAddItemsToOrder(
         order.id,
         // Selections and instructions must ride along: the server prices from
         // them, so omitting them either 400s or bills the base configuration.
@@ -1382,6 +1383,8 @@ function AddItemsModal({
           special_instructions: c.special_instructions,
         })),
       );
+      // Staff entered this add-on here; make sure this terminal never reads it back.
+      markLocalBatch(updated);
       onAdded();
     } catch (e: any) {
       setError(e.message || "Failed to add items");

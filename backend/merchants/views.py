@@ -225,6 +225,16 @@ def merchant_by_slug(request, slug):
     try:
         merchant = MerchantProfile.objects.get(slug=slug, is_approved=True)
     except MerchantProfile.DoesNotExist:
+        pending = MerchantProfile.objects.filter(slug=slug, is_approved=False).first()
+        if pending:
+            return Response(
+                {
+                    "error": "This store is pending admin approval.",
+                    "code": "pending_approval",
+                    "business_name": pending.business_name,
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response({"error": "Merchant not found."}, status=status.HTTP_404_NOT_FOUND)
     return Response(
         cache.get_or_set(

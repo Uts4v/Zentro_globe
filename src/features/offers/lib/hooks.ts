@@ -43,7 +43,8 @@ export function useClaimOffer(returnTo: string) {
     linkToken?: string,
   ): Promise<{ claim: OfferClaim; created: boolean } | null> {
     if (!user) {
-      navigate({ to: "/auth/login", search: { redirect: returnTo } });
+      toast.info("Create a free account to claim and save this offer!");
+      navigate({ to: "/auth/signup" as any, search: { redirect: returnTo || "/offers" } as any });
       return null;
     }
     if (user.role !== "customer") {

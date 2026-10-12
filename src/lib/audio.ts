@@ -24,18 +24,19 @@ if (typeof window !== "undefined") {
   );
 }
 
-export function playOrderChime() {
+export function playOrderChime(volume = 0.3) {
   try {
     const ctx = getContext();
     if (!ctx) return;
     if (ctx.state === "suspended") void ctx.resume();
+    const level = Math.min(1, Math.max(0, volume));
     const oscillator = ctx.createOscillator();
     const gain = ctx.createGain();
     oscillator.connect(gain);
     gain.connect(ctx.destination);
     oscillator.frequency.setValueAtTime(880, ctx.currentTime);
     oscillator.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.setValueAtTime(level, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
     oscillator.start(ctx.currentTime);
     oscillator.stop(ctx.currentTime + 0.4);

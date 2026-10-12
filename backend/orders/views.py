@@ -1118,6 +1118,85 @@ def order_detail(request, pk):
 
 
 @api_view(["GET"])
+@permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
+def guest_order_status(request, pk=None):
+    """
+    GET /api/orders/<pk>/guest-status/?table_token=...&guest_session_id=...
+    or
+    GET /api/orders/guest-track/?table_token=...&guest_session_id=...&order_id=...
+
+    Allows unauthenticated guests who placed a table-QR or guest order to track
+    their order's lifecycle, preparation progress, and items.
+    Requires table token or guest session token to verify ownership.
+    """
+    order_id = pk or request.query_params.get("order_id")
+    table_token = (request.query_params.get("table_token") or "").strip()
+    guest_session_id = (
+        request.query_params.get("guest_session_id")
+        or request.query_params.get("session_token")
+        or ""
+    ).strip()
+
+    if not order_id and not table_token and not guest_session_id:
+        return Response(
+            {"error": "Please provide an order_id, table_token, or guest_session_id to track orders."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    if order_id:
+        try:
+            order = (
+                Order.objects
+                .prefetch_related("items__menu_item", "items__options")
+                .select_related("customer__user", "merchant", "table", "dining_session")
+                .get(pk=order_id)
+            )
+        except (Order.DoesNotExist, ValueError):
+            return Response({"error": "Order not found."}, status=status.HTTP_404_NOT_FOUND)
+
+        table_match = bool(table_token and order.table and order.table.public_token == table_token)
+        session_match = bool(
+            guest_session_id and (
+                order.guest_session_id == guest_session_id
+                or (order.dining_session and order.dining_session.guest_session_id == guest_session_id)
+            )
+        )
+        user = getattr(request, "user", None)
+        user_match = bool(
+            user and user.is_authenticated and (
+                (hasattr(user, "customer_profile") and order.customer == user.customer_profile)
+                or (hasattr(user, "merchant_profile") and order.merchant == user.merchant_profile)
+                or user.is_staff
+            )
+        )
+
+        if not (table_match or session_match or user_match):
+            return Response(
+                {"error": "Not authorised. Valid table token or guest session token required."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        return Response(OrderSerializer(order, context={"request": request}).data)
+
+    qs = Order.objects.prefetch_related("items__menu_item", "items__options").select_related("merchant", "table", "dining_session")
+    if table_token:
+        qs = qs.filter(table__public_token=table_token)
+    if guest_session_id:
+        qs = qs.filter(
+            Q(guest_session_id=guest_session_id) | Q(dining_session__guest_session_id=guest_session_id)
+        )
+
+    orders = qs.order_by("-created_at")[:10]
+    serializer = OrderSerializer(orders, many=True, context={"request": request})
+    return Response({"results": serializer.data, "count": len(orders)})
+
+
+guest_order_status.throttle_scope = "guest"
+
+
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def order_pricing(request, pk):
     """

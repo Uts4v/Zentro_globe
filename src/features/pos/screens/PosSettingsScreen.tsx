@@ -6,6 +6,7 @@ import { Info, Settings, Save, Loader2, Trash2, Wifi, WifiOff } from "lucide-rea
 import { ClearCacheDialog } from "@/components/ClearCacheControl";
 import { useOnlineStatus } from "../offline/hooks";
 import { PrinterSettingsSection } from "../printing/PrinterSettingsSection";
+import { VoiceAnnouncementSettings } from "../voice/VoiceAnnouncementSettings";
 
 export default function PosSettingsScreen() {
   const posSettings = usePosStore((s) => s.posSettings);
@@ -116,6 +117,9 @@ export default function PosSettingsScreen() {
 
         {/* Printers — stored per terminal, saved immediately (not via Save Settings). */}
         <PrinterSettingsSection />
+
+        {/* Voice announcements — also stored per terminal, saved immediately. */}
+        <VoiceAnnouncementSettings />
 
         {/* Discount Limits */}
         <section className="rounded-2xl border border-border bg-card p-5">

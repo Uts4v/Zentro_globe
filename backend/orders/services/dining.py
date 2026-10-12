@@ -50,6 +50,7 @@ def serialize_kot_items_data(priced_lines=None, order_items=None) -> list:
                 options.append({
                     "group_name": getattr(opt, "group_name", ""),
                     "option_name": getattr(opt, "option_name", ""),
+                    "kind": getattr(opt, "kind", "modifier"),
                 })
             item_fields = getattr(p, "item_fields", {})
             name = (
@@ -76,7 +77,7 @@ def serialize_kot_items_data(priced_lines=None, order_items=None) -> list:
     elif order_items:
         for item in order_items:
             options = [
-                {"group_name": opt.group_name, "option_name": opt.option_name}
+                {"group_name": opt.group_name, "option_name": opt.option_name, "kind": opt.kind}
                 for opt in item.options.all()
             ] if hasattr(item, "options") else []
             items.append({

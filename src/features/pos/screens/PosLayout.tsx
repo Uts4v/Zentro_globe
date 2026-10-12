@@ -13,6 +13,7 @@ import ShiftCloseScreen from "./ShiftCloseScreen";
 import SyncStatusBar from "./SyncStatusBar";
 import PendingOfflineKOTs from "./PendingOfflineKOTs";
 import NotificationBell from "./NotificationBell";
+import PosVoiceAnnouncer from "./PosVoiceAnnouncer";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { useBackgroundSync, useOnlineStatus } from "../offline/hooks";
 import { isPosPathOfflineSafe, POS_NAV_SECTIONS } from "../offline/permissions";
@@ -467,6 +468,8 @@ export default function PosLayout() {
 
   return (
     <div className="flex h-dvh overflow-hidden bg-background">
+      {/* One coordinator per terminal: owns the shared order feed and speech. */}
+      <PosVoiceAnnouncer />
       {/* ── Sidebar ── */}
       <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-background lg:flex">
         {/* Logo + notification */}

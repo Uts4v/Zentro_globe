@@ -1,4 +1,4 @@
-﻿"""
+"""
 Regression guards for table-QR / guest ordering with variants and modifiers.
 
 This is the customer path a guest takes after scanning a table code. It is
@@ -288,6 +288,50 @@ class TableQROrderingTests(TestCase):
 
         chosen = {o["option_name"] for o in line["options"]}
         self.assertEqual(chosen, {"Large", "Oat milk"})
+
+    def test_guest_order_tracking_with_table_token_and_session(self):
+        # Place a guest order without any customer login
+        res = self._guest_order([{
+            "menu_item_id": self.item.id, "quantity": 1, "name": "",
+            "price": "0", "points_per_item": 0,
+            "selections": self._selections((self.size, self.small)),
+        }])
+        self.assertEqual(res.status_code, 201, res.data)
+        order_id = res.data["id"]
+
+        # 1. Unauthenticated guest querying with table_token succeeds
+        self.client.logout()
+        res_table = self.client.get(
+            f"/api/orders/{order_id}/guest-status/",
+            {"table_token": self.table.public_token},
+        )
+        self.assertEqual(res_table.status_code, 200, res_table.data)
+        self.assertEqual(res_table.data["id"], order_id)
+        self.assertEqual(res_table.data["status"], Order.STATUS_PENDING)
+
+        # 2. Querying with guest_session_id succeeds
+        res_sess = self.client.get(
+            "/api/orders/guest-track/",
+            {"order_id": order_id, "guest_session_id": "sess-1"},
+        )
+        self.assertEqual(res_sess.status_code, 200, res_sess.data)
+        self.assertEqual(res_sess.data["id"], order_id)
+
+        # 3. Invalid table token is rejected with 403 Forbidden
+        res_bad = self.client.get(
+            f"/api/orders/{order_id}/guest-status/",
+            {"table_token": "wrong-token"},
+        )
+        self.assertEqual(res_bad.status_code, 403)
+
+        # 4. Listing active orders by table token succeeds
+        res_list = self.client.get(
+            "/api/orders/guest-track/",
+            {"table_token": self.table.public_token},
+        )
+        self.assertEqual(res_list.status_code, 200)
+        self.assertGreaterEqual(res_list.data["count"], 1)
+
 
     def test_tax_stacks_on_top_of_variant_pricing(self):
         self.merchant.tax_rate_percent = 10

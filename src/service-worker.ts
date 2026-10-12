@@ -48,7 +48,7 @@ registerRoute(
   }),
 );
 
-// ── Cache-first: Google Fonts ─────────────────────────────────────────────────
+// ── Cache-first: Google Fonts ───────────────────────────  ──────────────────────
 registerRoute(
   ({ url }) =>
     url.origin === "https://fonts.googleapis.com" || url.origin === "https://fonts.gstatic.com",

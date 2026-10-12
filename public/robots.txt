@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /m/
+Allow: /stores
+Allow: /offers
+
+Disallow: /merchant/
+Disallow: /pos/
+Disallow: /api/
+
+Sitemap: https://zentro.com/sitemap.xml

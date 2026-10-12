@@ -12,8 +12,11 @@ import {
   Utensils,
   ArrowRight,
   SendHorizontal,
+  Gift,
+  Sparkles,
 } from "lucide-react";
 import { menuApi, merchantApi, type MerchantProfile } from "@/lib/api";
+import { offersApi, type PublicOffer } from "@/lib/api/offers";
 import { useStore, cartTotal, type MenuItem } from "@/lib/store";
 
 export const Route = createFileRoute("/guest/merchant/$slug")({
@@ -107,6 +110,16 @@ function GuestMerchantMenu() {
   const [orderSuccess, setOrderSuccess] = useState<{ orderId: string; tableNum: number } | null>(
     null,
   );
+  const [offers, setOffers] = useState<PublicOffer[]>([]);
+
+  useEffect(() => {
+    offersApi
+      .list({ limit: 4 })
+      .then((res) => {
+        setOffers(res.results || []);
+      })
+      .catch(() => {});
+  }, []);
 
   // Load merchant + menu
   useEffect(() => {
@@ -385,6 +398,53 @@ function GuestMerchantMenu() {
           </Link>
         </p>
       </div>
+
+      {/* Special Offers Section */}
+      {offers.length > 0 && (
+        <div className="mx-5 mt-3">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-1.5">
+              <Gift className="h-4 w-4 text-ember" />
+              <h2 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                Exclusive Deals & Offers
+              </h2>
+            </div>
+            <Link
+              to="/offers"
+              className="text-[11px] font-semibold text-ember hover:underline"
+            >
+              See all
+            </Link>
+          </div>
+          <div className="flex gap-3 overflow-x-auto pb-2 no-scrollbar">
+            {offers.map((offer) => (
+              <div
+                key={offer.id}
+                className="min-w-[220px] max-w-[240px] shrink-0 rounded-2xl border border-border/70 bg-card/70 p-3 flex flex-col justify-between"
+              >
+                <div>
+                  <div className="inline-flex items-center gap-1 rounded-full bg-ember/10 px-2 py-0.5 text-[10px] font-bold text-ember">
+                    <Sparkles className="h-3 w-3" />
+                    {offer.badge || "MEMBER DEAL"}
+                  </div>
+                  <h3 className="font-semibold text-xs text-foreground mt-2 line-clamp-1">{offer.title}</h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">{offer.description}</p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-border/40 flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">Sign up to claim</span>
+                  <Link
+                    to="/auth/signup"
+                    search={{ redirect: "/offers" }}
+                    className="inline-flex items-center rounded-xl bg-ink px-2.5 py-1 text-[11px] font-medium text-primary-foreground transition-transform active:scale-95"
+                  >
+                    Claim
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Menu grid */}
       <div className="px-5 mt-4 pb-32">

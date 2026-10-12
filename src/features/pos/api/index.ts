@@ -623,6 +623,8 @@ export interface PosOrder {
   }>;
   cancellation_reason: string;
   cancelled_by: string;
+  /** Order-creation/add-on events captured as kitchen tickets; newest last. */
+  kots?: KitchenOrderTicketSnapshot[];
   kot_number: number | null;
   table_id: number | null;
   table_name_snapshot: string;
@@ -680,7 +682,7 @@ export interface KitchenOrderTicketSnapshot {
     name: string;
     quantity: number;
     special_instructions?: string;
-    options?: Array<{ group_name: string; option_name: string }>;
+    options?: Array<{ group_name: string; option_name: string; kind?: string }>;
   }>;
   created_at: string;
 }

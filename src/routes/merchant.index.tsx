@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { TrendingUp, Users, Coffee, Loader2, Activity, ShoppingBag, RefreshCw } from "lucide-react";
+import { TrendingUp, Users, Coffee, Loader2, Activity, ShoppingBag, RefreshCw, Clock, AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { analyticsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -190,6 +190,36 @@ function Overview() {
 
   return (
     <div className="space-y-6">
+      {/* Onboarding Pending Admin Approval Banner */}
+      {merchantProfile && !merchantProfile.is_approved && (
+        <div className="rounded-3xl border border-amber-300/80 bg-gradient-to-r from-amber-50 to-orange-50/60 p-5 sm:p-6 shadow-sm">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex items-start gap-3.5">
+              <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-amber-500/20 text-amber-700">
+                <Clock className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-bold text-amber-900">
+                    Store Under Review — Admin Approval Pending
+                  </h2>
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-200/80 px-2.5 py-0.5 text-[10px] font-bold text-amber-800">
+                    <span className="h-1.5 w-1.5 rounded-full bg-amber-600 animate-pulse" />
+                    Pending Approval
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-relaxed text-amber-800/90 max-w-2xl">
+                  Your store profile has been created and is currently awaiting administrator review. During this review period, public customer URLs (<code className="rounded bg-amber-200/50 px-1 py-0.5 font-mono text-[11px]">/m/{merchantProfile.slug}</code>) remain private.
+                </p>
+                <p className="mt-1.5 text-[11px] text-amber-700">
+                  ✅ <strong>What you can do right now:</strong> Configure your menu catalog, set up tables and QR codes, test the POS register, and train staff. Everything will immediately go live once approved!
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section className="glass-strong rounded-[2rem] p-6 sm:p-8">
         <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
           <div>

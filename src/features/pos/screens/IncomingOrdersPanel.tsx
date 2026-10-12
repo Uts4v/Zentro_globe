@@ -1,19 +1,19 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useRef } from "react";
 import { usePosStore, isConnectionError } from "../store";
 import { enqueueMutation } from "../offline/sync";
-import { cachedServerOrders } from "../offline/db";
 import { useOnlineStatus } from "../offline/hooks";
 import { isOnline as serverReachable } from "@/lib/connectivity";
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/currency";
 import {
-  posListOrders,
   posUpdateOrderStatus,
   posAssignCustomerToOrder,
   posSearchCustomers,
   PosOrder,
   PosCustomer,
 } from "../api";
+import { refreshPosOrderFeed } from "../orders/feed";
+import { cachedServerOrders } from "../offline/db";
 import {
   Bell,
   Check,
@@ -27,7 +27,6 @@ import {
   Search,
   Utensils,
 } from "lucide-react";
-import { playOrderChime } from "@/lib/audio";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700 border-amber-200",
@@ -56,7 +55,6 @@ export default function IncomingOrdersPanel() {
   const [loading, setLoading] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [collapsed, setCollapsed] = useState(false);
-  const knownOrderIds = useRef<Set<number>>(new Set());
 
   // Customer linking state
   const [linkingOrderId, setLinkingOrderId] = useState<number | null>(null);
@@ -66,43 +64,18 @@ export default function IncomingOrdersPanel() {
   const [linking, setLinking] = useState(false);
   const searchRequest = useRef<AbortController | null>(null);
 
-  const fetchOrders = useCallback(async () => {
+  /**
+   * Pull fresh orders on demand. The shared order feed also polls every few
+   * seconds; this is just the manual "Refresh" action.
+   */
+  async function refreshOrders() {
     setLoading(true);
     try {
-      const data = await posListOrders();
-      // Keep the saved copy current, so the Orders screen has today's orders
-      // to show if the connection drops before anyone opens it.
-      cachedServerOrders.save(data);
-      const incoming = data.filter(
-        (o) =>
-          ["customer_app", "table_qr"].includes(o.source) &&
-          ["pending", "confirmed"].includes(o.status),
-      );
-
-      // Play chime for new incoming orders
-      if (knownOrderIds.current.size > 0) {
-        const newOrders = incoming.filter((o) => !knownOrderIds.current.has(o.id));
-        if (newOrders.length > 0) {
-          playOrderChime();
-        }
-      }
-
-      // Update known IDs
-      incoming.forEach((o) => knownOrderIds.current.add(o.id));
-
-      setIncomingOrders(incoming);
-    } catch {
-      // silent
+      await refreshPosOrderFeed();
     } finally {
       setLoading(false);
     }
-  }, [setIncomingOrders]);
-
-  useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(interval);
-  }, [fetchOrders]);
+  }
 
   /**
    * Change an incoming order's status. With no connection the change is saved
@@ -152,7 +125,7 @@ export default function IncomingOrdersPanel() {
       toast.error(
         err instanceof Error && err.message ? err.message : "Could not update the order.",
       );
-      fetchOrders();
+      void refreshPosOrderFeed();
       return null;
     }
   }
@@ -201,7 +174,7 @@ export default function IncomingOrdersPanel() {
       setLinkingOrderId(null);
       setCustSearch("");
       setCustResults([]);
-      fetchOrders();
+      void refreshPosOrderFeed();
     } catch {
       // silent
     } finally {
@@ -232,7 +205,7 @@ export default function IncomingOrdersPanel() {
           />
         </button>
         <button
-          onClick={fetchOrders}
+          onClick={() => void refreshOrders()}
           disabled={loading}
           aria-label="Refresh incoming orders"
           className="grid h-10 w-10 place-items-center rounded-lg text-muted-foreground hover:bg-amber-100"

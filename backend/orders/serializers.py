@@ -119,7 +119,7 @@ class KitchenOrderTicketSerializer(serializers.ModelSerializer):
                 "quantity": item.quantity,
                 "special_instructions": item.special_instructions or "",
                 "options": [
-                    {"group_name": o.group_name, "option_name": o.option_name}
+                    {"group_name": o.group_name, "option_name": o.option_name, "kind": o.kind}
                     for o in item.options.all()
                 ],
             }
@@ -190,7 +190,7 @@ class OrderSerializer(serializers.ModelSerializer):
                         "quantity": i.quantity,
                         "special_instructions": i.special_instructions or "",
                         "options": [
-                            {"group_name": o.group_name, "option_name": o.option_name}
+                            {"group_name": o.group_name, "option_name": o.option_name, "kind": o.kind}
                             for o in i.options.all()
                         ],
                     }
@@ -328,7 +328,7 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
                         "quantity": i.quantity,
                         "special_instructions": i.special_instructions or "",
                         "options": [
-                            {"group_name": o.group_name, "option_name": o.option_name}
+                            {"group_name": o.group_name, "option_name": o.option_name, "kind": o.kind}
                             for o in i.options.all()
                         ],
                     }
