@@ -32,6 +32,7 @@ export function CartPage() {
     setQty,
     replaceLine,
     removeLine,
+    pruneCart,
     placeOrder,
     selectedMerchantId,
     activeTable,
@@ -86,6 +87,9 @@ export function CartPage() {
     try {
       const data = await menuApi.catalog(selectedMerchantId);
       setCatalog(data);
+      // Drop persisted cart lines not on this merchant's menu so a stale cart
+      // can't show as a phantom item/total in the cart.
+      pruneCart(new Set((data.items ?? []).map((i) => String(i.id))));
       if (data.merchant.currency_symbol) setSym(data.merchant.currency_symbol);
     } catch {
       setCatalog(null);

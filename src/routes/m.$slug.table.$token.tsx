@@ -143,6 +143,7 @@ function TableQRScanPage() {
     replaceLine,
     setQty,
     removeLine,
+    pruneCart,
     setActiveTable,
     setSelectedMerchant,
     setGuestSession,
@@ -300,6 +301,9 @@ function TableQRScanPage() {
         setCatalog(c);
         setMenuItems(c.items ?? []);
         setMenuError(null);
+        // Drop persisted cart lines that aren't on this merchant's menu so a
+        // stale cart can't show a phantom count/total after scanning a table.
+        pruneCart(new Set((c.items ?? []).map((i) => String(i.id))));
       })
       .catch(() => {
         if (!cancelled) setMenuError("Couldn't load this menu. Please try again.");
@@ -311,7 +315,7 @@ function TableQRScanPage() {
     return () => {
       cancelled = true;
     };
-  }, [resolution]);
+  }, [resolution, pruneCart]);
 
   const cats = useMemo(
     () => ["All", ...Array.from(new Set(menuItems.map((m) => m.category).filter(Boolean)))],

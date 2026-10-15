@@ -93,6 +93,7 @@ type State = {
   setQty: (key: string, qty: number) => void;
   removeLine: (key: string) => void;
   replaceLine: (oldKey: string, line: CartLineInput) => void;
+  pruneCart: (validItemIds: Set<string>) => void;
   clearCart: () => void;
   clearTable: () => void;
   placeOrder: (
@@ -134,7 +135,14 @@ export const useStore = create<State>()(
       fulfillmentType: "pickup" as FulfillmentType,
       guestSession: null,
 
-      setSelectedMerchant: (id) => set({ selectedMerchantId: id }),
+      // A cart belongs to a single merchant. Switching merchants drops the
+      // previous merchant's lines so stale items can't linger as a phantom
+      // badge/total (or be submitted to the wrong merchant).
+      setSelectedMerchant: (id) =>
+        set((s) => ({
+          selectedMerchantId: id,
+          cart: s.selectedMerchantId && id && s.selectedMerchantId !== id ? [] : s.cart,
+        })),
 
       setActiveTable: (ctx) =>
         set({
@@ -193,6 +201,14 @@ export const useStore = create<State>()(
         }),
 
       removeLine: (key) => set((s) => ({ cart: s.cart.filter((c) => c.key !== key) })),
+
+      // Drop any cart lines whose menu item no longer exists in the current
+      // merchant's menu (e.g. a persisted cart from a different/outdated menu).
+      pruneCart: (validItemIds) =>
+        set((s) => {
+          const next = s.cart.filter((c) => validItemIds.has(String(c.itemId)));
+          return next.length === s.cart.length ? s : { cart: next };
+        }),
 
       replaceLine: (oldKey, line) =>
         set((s) => {

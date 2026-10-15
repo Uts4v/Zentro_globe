@@ -95,8 +95,17 @@ function GuestMenuItemCard({
 function GuestMerchantMenu() {
   const { slug } = Route.useParams();
   const navigate = useNavigate();
-  const { cart, add, remove, activeTable, guestSession, setGuestName, placeGuestOrder } =
-    useStore();
+  const {
+    cart,
+    add,
+    remove,
+    activeTable,
+    guestSession,
+    setGuestName,
+    placeGuestOrder,
+    setSelectedMerchant,
+    pruneCart,
+  } = useStore();
 
   const [merchant, setMerchant] = useState<MerchantProfile | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -127,24 +136,32 @@ function GuestMerchantMenu() {
     setLoading(true);
     Promise.all([
       merchantApi.bySlug(slug).then((m) => {
-        if (!cancelled) setMerchant(m);
+        if (!cancelled) {
+          setMerchant(m);
+          // Bind the cart to this merchant so a cart from another store is
+          // discarded (and guest orders go to the right merchant).
+          setSelectedMerchant(String(m.id));
+        }
       }),
       merchantApi.bySlug(slug).then((m) =>
         menuApi.forMerchant(String(m.id)).then((items) => {
-          if (!cancelled)
-            setMenuItems(
-              items.map((i) => ({
-                id: String(i.id),
-                name: i.name,
-                description: i.description ?? "",
-                price: Number(i.price),
-                category: i.category ?? "",
-                emoji: i.emoji ?? "☕",
-                points_per_item: i.points_per_item ?? 0,
-                is_available: i.is_available,
-                image_url: i.image_url,
-              })),
-            );
+          if (!cancelled) {
+            const mapped = items.map((i) => ({
+              id: String(i.id),
+              name: i.name,
+              description: i.description ?? "",
+              price: Number(i.price),
+              category: i.category ?? "",
+              emoji: i.emoji ?? "☕",
+              points_per_item: i.points_per_item ?? 0,
+              is_available: i.is_available,
+              image_url: i.image_url,
+            }));
+            setMenuItems(mapped);
+            // Drop any persisted cart lines not on this menu so the badge and
+            // the checkout list always agree.
+            pruneCart(new Set(mapped.map((i) => String(i.id))));
+          }
         }),
       ),
     ]).finally(() => {
@@ -153,7 +170,7 @@ function GuestMerchantMenu() {
     return () => {
       cancelled = true;
     };
-  }, [slug]);
+  }, [slug, setSelectedMerchant, pruneCart]);
 
   const cats = useMemo(
     () => ["All", ...Array.from(new Set(menuItems.map((m) => m.category).filter(Boolean)))],

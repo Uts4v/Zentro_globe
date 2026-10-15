@@ -21,6 +21,7 @@
     "test:offline-cache": "node --test src/features/pos/offline/cache.test.ts",
     "test:staff-only-sync": "node --test src/features/pos/offline/sync.test.ts",
     "test:pos-manifest": "node --test src/features/pwa/pos-manifest.test.ts",
+    "test:cart-sync": "bun test src/lib/store.cart-sync.test.ts",
     "format": "prettier --write ."
   },
   "dependencies": {

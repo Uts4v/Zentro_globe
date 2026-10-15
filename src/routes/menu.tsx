@@ -171,7 +171,7 @@ function SpecialBanner({
 }
 
 function MenuPage() {
-  const { cart, addLine } = useStore();
+  const { cart, addLine, pruneCart } = useStore();
   const [catalog, setCatalog] = useState<MenuCatalog | null>(null);
   const [selectedMerchantId, setSelectedMerchantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -213,7 +213,12 @@ function MenuPage() {
     Promise.all([
       menuApi
         .catalog(selectedMerchantId)
-        .then(setCatalog)
+        .then((c) => {
+          setCatalog(c);
+          // Drop persisted cart lines not on this merchant's menu so a stale
+          // cart can't produce a phantom badge/total.
+          pruneCart(new Set((c.items ?? []).map((i) => String(i.id))));
+        })
         .catch(() => setCatalog(null)),
       merchantApi
         .get(selectedMerchantId)
@@ -226,7 +231,7 @@ function MenuPage() {
         })
         .catch(() => {}),
     ]).finally(() => setLoading(false));
-  }, [selectedMerchantId]);
+  }, [selectedMerchantId, pruneCart]);
 
   const merchant = catalog?.merchant;
   const items = useMemo(() => catalog?.items ?? [], [catalog]);
