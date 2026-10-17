@@ -23,7 +23,7 @@ import {
   UserPlus,
   Sun,
   Moon,
-  BellRing,
+  ConciergeBell,
   Check,
   Clock,
   Timer,
@@ -596,18 +596,20 @@ function TableQRScanPage() {
           <button
             onClick={handleCallWaiter}
             disabled={waiterStatus === "sending" || waiterCooldown > 0}
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-border bg-background text-sm font-medium text-foreground active:scale-[0.98] disabled:opacity-60"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-ember/40 bg-ember/10 text-sm font-semibold text-ember active:scale-[0.98] disabled:opacity-60"
           >
             {waiterStatus === "sending" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : waiterStatus === "sent" && waiterCooldown > 0 ? (
               <Check className="h-4 w-4 text-green-600" />
             ) : (
-              <BellRing className="h-4 w-4" />
+              <ConciergeBell className="h-4 w-4" />
             )}
             {waiterStatus === "sent" && waiterCooldown > 0
-              ? `Waiter notified (${waiterCooldown}s)`
-              : "Call Waiter"}
+              ? `Waiter on the way (${waiterCooldown}s)`
+              : waiterStatus === "sending"
+                ? "Calling waiter..."
+                : "Call Waiter"}
           </button>
         </div>
       </div>
@@ -814,25 +816,25 @@ function TableQRScanPage() {
             <button
               onClick={handleCallWaiter}
               disabled={waiterStatus === "sending" || waiterCooldown > 0}
-              className="flex h-10 items-center gap-1.5 rounded-full bg-muted/50 px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+              className="flex h-10 items-center gap-1.5 rounded-full bg-ember px-3.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-ember/90 active:scale-[0.97] disabled:opacity-60"
               title={
                 waiterStatus === "sent" && waiterCooldown > 0
-                  ? `Waiter notified — re-enables in ${waiterCooldown}s`
+                  ? `Waiter on the way - re-enables in ${waiterCooldown}s`
                   : "Call a waiter to your table"
               }
             >
               {waiterStatus === "sending" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : waiterStatus === "sent" && waiterCooldown > 0 ? (
-                <Check className="h-4 w-4 text-green-600" />
+                <Check className="h-4 w-4" />
               ) : (
-                <BellRing className="h-4 w-4" />
+                <ConciergeBell className="h-4 w-4" />
               )}
               {waiterStatus === "sent" && waiterCooldown > 0
-                ? `Called (${waiterCooldown}s)`
+                ? `Waiter coming (${waiterCooldown}s)`
                 : waiterStatus === "sending"
                   ? "Calling..."
-                  : "Waiter"}
+                  : "Call Waiter"}
             </button>
             <button
               onClick={() => setTheme(themeResolved === "dark" ? "light" : "dark")}

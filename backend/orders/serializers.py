@@ -142,6 +142,7 @@ class OrderSerializer(serializers.ModelSerializer):
     items         = OrderItemSerializer(many=True, read_only=True)
     merchant_name = serializers.CharField(source="merchant.business_name", read_only=True)
     customer_name = serializers.SerializerMethodField()
+    customer_phone = serializers.SerializerMethodField()
     merchant_id   = serializers.IntegerField(source="merchant.id",         read_only=True)
     kots          = serializers.SerializerMethodField()
     dining_session_id = serializers.SerializerMethodField()
@@ -207,6 +208,11 @@ class OrderSerializer(serializers.ModelSerializer):
             return obj.guest_name_snapshot
         return None
 
+    def get_customer_phone(self, obj):
+        if obj.customer and obj.customer.user:
+            return obj.customer.user.phone or None
+        return None
+
     # Display helpers for redemption orders — null for regular orders
     reward_name = serializers.CharField(
         source="reward_redemption.reward.name", read_only=True, default=None
@@ -256,7 +262,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "cancellation_reason", "cancelled_by",
             "reward_name", "punch_card_name",
             "table_id", "table_name_snapshot", "table_number_snapshot",
-            "processed_by_worker", "worker_name",
+            "processed_by_worker", "worker_name", "customer_phone",
             "pos_device", "cash_shift",
             "guest_session_id", "guest_name_snapshot",
             "kot_number", "kots", "dining_session_id", "parent_bill_id", "is_bill",

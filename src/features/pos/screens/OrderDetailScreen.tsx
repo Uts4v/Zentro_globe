@@ -46,6 +46,7 @@ import {
   Utensils,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Percent,
   Trash2,
 } from "lucide-react";
@@ -81,6 +82,44 @@ const NEEDS_CONNECTION = "Needs a connection — not available offline";
 
 const ORDER_PAGE_SIZE = 20;
 const ORDER_SEARCH_DEBOUNCE_MS = 350;
+
+/**
+ * Billing-oriented quick filters. Each maps to the server's `status` /
+ * `payment_status` list params (comma-separated, matches `__in`), and is also
+ * applied client-side so orders still waiting on this device filter the same
+ * way while offline.
+ */
+type OrderFilter = "all" | "unpaid" | "paid" | "active" | "cancelled";
+
+const ORDER_FILTERS: Array<{
+  key: OrderFilter;
+  label: string;
+  status?: string;
+  paymentStatus?: string;
+}> = [
+  { key: "all", label: "All" },
+  { key: "unpaid", label: "Unpaid", paymentStatus: "unpaid,partially_paid" },
+  { key: "paid", label: "Paid", paymentStatus: "paid" },
+  { key: "active", label: "Active", status: "pending,confirmed,preparing,ready" },
+  { key: "cancelled", label: "Cancelled", status: "cancelled" },
+];
+
+const ACTIVE_STATUSES = ["pending", "confirmed", "preparing", "ready"];
+
+function matchesOrderFilter(order: PosOrder, filter: OrderFilter): boolean {
+  switch (filter) {
+    case "unpaid":
+      return ["unpaid", "partially_paid"].includes(order.payment_status);
+    case "paid":
+      return order.payment_status === "paid";
+    case "active":
+      return ACTIVE_STATUSES.includes(order.status);
+    case "cancelled":
+      return order.status === "cancelled";
+    default:
+      return true;
+  }
+}
 
 /**
  * An order that so far exists only on this device. Once it has synced it comes
@@ -207,6 +246,10 @@ export default function OrderDetailScreen({
   const [selectedOrder, setSelectedOrder] = useState<PosOrder | null>(null);
   const [search, setSearch] = useState("");
   const [serverSearch, setServerSearch] = useState("");
+  const [filter, setFilter] = useState<OrderFilter>("all");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Collect Payment opened straight from a collapsed row in the list.
+  const [listCollectOrder, setListCollectOrder] = useState<PosOrder | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -290,11 +333,11 @@ export default function OrderDetailScreen({
   }, [search]);
 
   // Reload when the connection changes, a sync pass finishes, the page changes
-  // or the (debounced) search phrase changes.
+  // or the (debounced) search phrase / quick filter changes.
   useEffect(() => {
     loadOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOffline, syncRevision, page, serverSearch]);
+  }, [isOffline, syncRevision, page, serverSearch, filter]);
 
   async function loadOrders(): Promise<PosOrder[]> {
     setLoading(true);
@@ -303,7 +346,14 @@ export default function OrderDetailScreen({
 
     if (online) {
       try {
-        const res = await posListOrdersPaged(page, ORDER_PAGE_SIZE, serverSearch);
+        const activeFilter = ORDER_FILTERS.find((f) => f.key === filter);
+        const res = await posListOrdersPaged(
+          page,
+          ORDER_PAGE_SIZE,
+          serverSearch,
+          activeFilter?.status,
+          activeFilter?.paymentStatus,
+        );
         serverList = res.results;
         setTotalPages(Math.max(res.total_pages, 1));
         setTotalCount(res.count);
@@ -342,7 +392,12 @@ export default function OrderDetailScreen({
         ),
       );
 
-      merged = [...waiting.map(offlineOrderToPosOrder), ...serverList];
+      merged = [
+        ...waiting
+          .map(offlineOrderToPosOrder)
+          .filter((o) => matchesOrderFilter(o, filter)),
+        ...serverList,
+      ];
       setOrders(merged);
 
       setSelectedOrder((prev) => {
@@ -1098,16 +1153,41 @@ export default function OrderDetailScreen({
         </div>
       )}
 
-      <div className="relative mb-4">
+      <div className="relative mb-3">
         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           type="text"
-          placeholder="Search by order #, customer..."
+          placeholder="Search by order #, customer, phone or table..."
           aria-label="Search orders"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-xl border border-border bg-muted/50 py-2.5 pl-10 pr-4 text-sm placeholder:text-muted-foreground focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
         />
+      </div>
+
+      {/* Quick filters — finding the bill to settle in a long list. */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {ORDER_FILTERS.map((f) => {
+          const active = filter === f.key;
+          return (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() => {
+                setFilter(f.key);
+                setPage(1);
+              }}
+              aria-pressed={active}
+              className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-colors ${
+                active
+                  ? "border-ink bg-ink text-white"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted"
+              }`}
+            >
+              {f.label}
+            </button>
+          );
+        })}
       </div>
 
       {orders.length === 0 ? (
@@ -1119,12 +1199,14 @@ export default function OrderDetailScreen({
         <div className="space-y-3">
           {orders
             .filter((o) => {
+              if (!matchesOrderFilter(o, filter)) return false;
               if (!search) return true;
               const q = search.toLowerCase();
               return (
                 String(o.id).includes(q) ||
                 (o.uuid ?? "").toLowerCase().includes(q) ||
                 (o.customer_name ?? "").toLowerCase().includes(q) ||
+                (o.customer_phone ?? "").toLowerCase().includes(q) ||
                 (o.table_name_snapshot ?? "").toLowerCase().includes(q) ||
                 String(o.table_number_snapshot ?? "").includes(q)
               );
@@ -1133,75 +1215,241 @@ export default function OrderDetailScreen({
               const isOfflineOrder = isLocalOrder(order);
               const syncFailed = isOfflineOrder && order.uuid in syncErrors;
               const tableDisplay = getOrderDetailTableDisplay(order);
+              const rowKey = order.uuid || String(order.id);
+              const isExpanded = expandedId === rowKey;
               return (
-                <button
-                  key={order.uuid || order.id}
-                  onClick={() => setSelectedOrder(order)}
-                  className="w-full rounded-2xl border border-border bg-card p-4 text-left transition-shadow hover:shadow-sm"
+                <div
+                  key={rowKey}
+                  className="overflow-hidden rounded-2xl border border-border bg-card transition-shadow hover:shadow-sm"
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-bold text-foreground">
-                          {orderNumber(order)}
-                        </span>
-                        {tableDisplay && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
-                            <Utensils className="h-3.5 w-3.5" />
-                            {tableDisplay}
+                  <button
+                    type="button"
+                    onClick={() => setExpandedId(isExpanded ? null : rowKey)}
+                    aria-expanded={isExpanded}
+                    className="w-full p-4 text-left"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-foreground">
+                            {orderNumber(order)}
                           </span>
-                        )}
-                        {isOfflineOrder &&
-                          (syncFailed ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-bold text-destructive">
-                              Sync failed
+                          {tableDisplay && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                              <Utensils className="h-3.5 w-3.5" />
+                              {tableDisplay}
                             </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
-                              ⚡ Pending Sync
+                          )}
+                          {isOfflineOrder &&
+                            (syncFailed ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-bold text-destructive">
+                                Sync failed
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-bold text-amber-600 dark:text-amber-400">
+                                ⚡ Pending Sync
+                              </span>
+                            ))}
+                          {order.kot_number && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
+                              <Ticket className="h-2.5 w-2.5" />
+                              KOT {String(order.kot_number).padStart(3, "0")}
                             </span>
-                          ))}
-                        {order.kot_number && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-ember-soft px-2 py-0.5 text-xs font-bold text-ember">
-                            <Ticket className="h-2.5 w-2.5" />
-                            KOT {String(order.kot_number).padStart(3, "0")}
+                          )}
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                              STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {order.status.toUpperCase()}
                           </span>
-                        )}
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                            STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {order.status.toUpperCase()}
-                        </span>
-                        {canCollectPayment(order) && (
-                          <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-bold text-warning">
-                            {order.payment_status === "partially_paid" ? "PART PAID" : "UNPAID"}
-                          </span>
-                        )}
-                      </div>
-                      {tableDisplay && (
-                        <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-lg border border-amber-500/25 bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-foreground">
-                          <Utensils className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                          <span>{tableDisplay}</span>
+                          {canCollectPayment(order) && (
+                            <span className="rounded-full bg-warning/10 px-2 py-0.5 text-xs font-bold text-warning">
+                              {order.payment_status === "partially_paid" ? "PART PAID" : "UNPAID"}
+                            </span>
+                          )}
                         </div>
-                      )}
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {order.customer_name || "Walk-in"} · {order.items.length} item(s) —{" "}
-                        {formatCurrency(Number(order.total_amount), currencySymbol)}
-                      </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {order.customer_name || "Walk-in"}
+                          {order.customer_phone ? ` · ${order.customer_phone}` : ""} ·{" "}
+                          {order.items.length} item(s) —{" "}
+                          {formatCurrency(Number(order.total_amount), currencySymbol)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(order.created_at).toLocaleTimeString("en-MY", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                        <ChevronDown
+                          className={`h-4 w-4 text-muted-foreground transition-transform ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        />
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(order.created_at).toLocaleTimeString("en-MY", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                  </div>
-                </button>
+                  </button>
+
+                  {isExpanded && (
+                    <div className="border-t border-border px-4 pb-4 pt-3">
+                      {/* Info grid */}
+                      <div className="mb-3 grid grid-cols-2 gap-2 text-sm">
+                        <div className="rounded-xl bg-muted/50 p-2.5">
+                          <p className="text-xs uppercase text-muted-foreground">Type</p>
+                          <p className="font-medium capitalize">
+                            {order.fulfillment_type.replace(/_/g, " ")}
+                          </p>
+                        </div>
+                        <div className="rounded-xl bg-muted/50 p-2.5">
+                          <p className="text-xs uppercase text-muted-foreground">Payment</p>
+                          <p className="font-medium capitalize">{order.payment_status}</p>
+                        </div>
+                        <div className="rounded-xl bg-muted/50 p-2.5">
+                          <p className="text-xs uppercase text-muted-foreground">Customer</p>
+                          <p className="font-medium truncate">
+                            {order.customer_name || "Walk-in"}
+                          </p>
+                          {order.customer_phone && (
+                            <p className="text-xs text-muted-foreground">{order.customer_phone}</p>
+                          )}
+                        </div>
+                        <div className="rounded-xl bg-muted/50 p-2.5">
+                          <p className="text-xs uppercase text-muted-foreground">Method</p>
+                          <p className="font-medium">{paymentMethodLabel(order.payment_method)}</p>
+                        </div>
+                      </div>
+
+                      {/* Items */}
+                      <div className="mb-3 divide-y divide-border rounded-xl border border-border">
+                        {order.items.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-foreground">
+                                {item.name}
+                                {item.is_complimentary && (
+                                  <span className="ml-2 rounded-full bg-success/10 px-2 py-0.5 text-xs font-bold text-success">
+                                    FREE
+                                  </span>
+                                )}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {item.quantity} x{" "}
+                                {formatCurrency(Number(item.price), currencySymbol)}
+                              </p>
+                            </div>
+                            <p className="text-sm font-bold text-ink">
+                              {item.is_complimentary
+                                ? "Free"
+                                : formatCurrency(Number(item.subtotal), currencySymbol)}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Totals */}
+                      <div className="mb-3 space-y-1 border-t border-border pt-3 text-sm">
+                        <div className="flex justify-between text-muted-foreground">
+                          <span>Subtotal</span>
+                          <span>{formatCurrency(Number(order.subtotal), currencySymbol)}</span>
+                        </div>
+                        {Number(order.discount_amount) > 0 && (
+                          <div className="flex justify-between text-success">
+                            <span>Discount</span>
+                            <span>
+                              -{formatCurrency(Number(order.discount_amount), currencySymbol)}
+                            </span>
+                          </div>
+                        )}
+                        {Number(order.tax_amount) > 0 && (
+                          <div className="flex justify-between text-muted-foreground">
+                            <span>Tax</span>
+                            <span>{formatCurrency(Number(order.tax_amount), currencySymbol)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between font-bold text-foreground">
+                          <span>Total</span>
+                          <span>{formatCurrency(Number(order.total_amount), currencySymbol)}</span>
+                        </div>
+                      </div>
+
+                      {/* Quick actions — the common billing path without leaving the list. */}
+                      <div className="flex flex-wrap gap-2">
+                        {canCollectPayment(order) && canTakePayments && (
+                          <button
+                            type="button"
+                            onClick={() => setListCollectOrder(order)}
+                            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary-hover"
+                          >
+                            <CreditCard className="h-4 w-4" />
+                            Collect Payment
+                          </button>
+                        )}
+                        {Boolean(
+                          order.kot_number || isOfflineOrder || order.kots?.length,
+                        ) && (
+                          <button
+                            type="button"
+                            onClick={() => handlePrintKOT(order)}
+                            disabled={loadingReceipt}
+                            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-ink/20 px-3 py-2.5 text-sm font-medium text-ink hover:bg-ink/5 disabled:opacity-50"
+                          >
+                            {loadingReceipt ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Ticket className="h-4 w-4" />
+                            )}
+                            Print KOT
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleViewReceipt(order)}
+                          disabled={loadingReceipt}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-border px-3 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted disabled:opacity-50"
+                        >
+                          {loadingReceipt ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ReceiptIcon className="h-4 w-4" />
+                          )}
+                          {order.payment_status === "paid" ? "View Receipt" : "View Bill"}
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOrder(order)}
+                        className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-ink/30 py-2.5 text-sm font-bold text-ink hover:bg-ink/5"
+                      >
+                        Open full details
+                      </button>
+                    </div>
+                  )}
+                </div>
               );
             })}
         </div>
+      )}
+
+      {listCollectOrder && (
+        <CollectPaymentSheet
+          order={listCollectOrder}
+          onClose={() => setListCollectOrder(null)}
+          onBillChanged={(bill) => applyBill(listCollectOrder.uuid, bill)}
+          onPaid={(update) => {
+            const uuid = listCollectOrder.uuid;
+            setListCollectOrder(null);
+            if (update) {
+              setOrders((prev) => prev.map((o) => (o.uuid === uuid ? { ...o, ...update } : o)));
+            }
+            loadOrders();
+          }}
+        />
       )}
 
       {!isOffline && totalPages > 1 && (

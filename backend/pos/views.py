@@ -1991,6 +1991,21 @@ def create_pos_order(request):
             whole_order=is_staff_comp,
         )
 
+    # Notify merchant/reception when a new POS order is created (walk-in/till order)
+    try:
+        _notify_safe(
+            user=merchant.user,
+            title="New order placed",
+            message=f"Order #{order.id} received ({pricing.grand_total} {merchant.currency_symbol})",
+            notification_type="pos_new_order",
+            merchant_name=merchant.business_name,
+            order_id=order.id,
+            merchant_id=merchant.id,
+            context_url=f"/pos/orders/{order.id}",
+        )
+    except Exception:
+        logger.exception("Failed to send POS order notification")
+
     from orders.serializers import OrderSerializer
     return Response(OrderSerializer(order, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
@@ -2129,9 +2144,21 @@ def pos_orders(request):
         # Filter orders by shift — we'll need a shift FK on Order in later phases
         pass
 
+    # Filter chips ("Unpaid", "Active", …) send comma-separated values; a plain
+    # single value still works, so existing callers are unaffected.
     status_filter = request.query_params.get("status")
     if status_filter:
-        qs = qs.filter(status=status_filter)
+        statuses = [s for s in (v.strip() for v in status_filter.split(",")) if s]
+        if statuses:
+            qs = qs.filter(status__in=statuses)
+
+    payment_status_filter = request.query_params.get("payment_status")
+    if payment_status_filter:
+        payment_statuses = [
+            s for s in (v.strip() for v in payment_status_filter.split(",")) if s
+        ]
+        if payment_statuses:
+            qs = qs.filter(payment_status__in=payment_statuses)
 
     search = request.query_params.get("q")
     if search:
@@ -2148,6 +2175,7 @@ def pos_orders(request):
             | Q(_table_number_text__icontains=search)
             | Q(customer__full_name__icontains=search)
             | Q(customer_name_snapshot__icontains=search)
+            | Q(customer__user__phone__icontains=search)
         )
 
     page_param = request.query_params.get("page")

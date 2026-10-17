@@ -25,6 +25,7 @@ import { enqueueMutation } from "../offline/sync";
 import { useOnlineStatus } from "../offline/hooks";
 import { offlineOrders, offlinePayments } from "../offline/db";
 import type { MenuOptionGroup, MenuSelection } from "@/lib/api/types";
+import { playOrderNotificationSound } from "@/lib/audio";
 import {
   X,
   Banknote,
@@ -597,6 +598,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         setPlacedKot(kot);
         setPlacedOffline(true);
         setOrderPlaced(true);
+        try { playOrderNotificationSound(0.7); } catch {}
       } catch (err: any) {
         setError(err?.message || "Failed to store offline order.");
       }
@@ -616,6 +618,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         setDiscountAppliedTo(null);
         setPlacedOffline(false);
         setOrderPlaced(true);
+        try { playOrderNotificationSound(0.7); } catch {}
         try {
           const r = await posReceiptData(placedUuid);
           setPlacedKot(kotTicketFromReceipt(r));
@@ -668,6 +671,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         setReceiptData(bill);
         setPlacedKot(kot);
         clearCart();
+        try { playOrderNotificationSound(0.7); } catch {}
       } catch (err: any) {
         setError(err?.message || "Failed to process offline checkout.");
       }
@@ -710,6 +714,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         setDiscountAppliedTo(null);
         setOrderMutationId(safeUuid());
         setPaymentMutationId(safeUuid());
+        try { playOrderNotificationSound(0.7); } catch {}
         setLoadingReceipt(true);
         try {
           const receipt = await posReceiptData(targetOrderUuid);

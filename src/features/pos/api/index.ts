@@ -287,12 +287,20 @@ export interface PosOrdersPage {
   total_pages: number;
 }
 
-export const posListOrdersPaged = (page: number, pageSize = 20, q?: string) => {
+export const posListOrdersPaged = (
+  page: number,
+  pageSize = 20,
+  q?: string,
+  status?: string,
+  paymentStatus?: string,
+) => {
   const params = new URLSearchParams({
     page: String(page),
     page_size: String(pageSize),
   });
   if (q?.trim()) params.set("q", q.trim());
+  if (status?.trim()) params.set("status", status.trim());
+  if (paymentStatus?.trim()) params.set("payment_status", paymentStatus.trim());
   return djangoFetch<PosOrdersPage>(apiUrl(`/pos/orders/?${params.toString()}`), {
     headers: headers(),
   });
@@ -586,6 +594,8 @@ export interface PosOrder {
   uuid: string;
   customer: number | null;
   customer_name: string | null;
+  /** Phone on the linked customer account (null for walk-in / offline). */
+  customer_phone?: string | null;
   merchant: number;
   merchant_id: number;
   merchant_name: string;

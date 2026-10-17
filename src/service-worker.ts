@@ -48,6 +48,17 @@ registerRoute(
   }),
 );
 
+// ── Cache-first: notification sounds ──────────────────────────────────────────
+// POS alerts must fire instantly (and keep working offline), so the mp3s are
+// cached on first load instead of being bundled into the precache manifest.
+registerRoute(
+  ({ request, url }) => request.destination === "audio" || url.pathname.startsWith("/sounds/"),
+  new CacheFirst({
+    cacheName: "zentro-audio-v1",
+    plugins: [new ExpirationPlugin({ maxEntries: 8, maxAgeSeconds: 60 * 60 * 24 * 365 })],
+  }),
+);
+
 // ── Cache-first: Google Fonts ───────────────────────────  ──────────────────────
 registerRoute(
   ({ url }) =>

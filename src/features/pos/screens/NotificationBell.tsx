@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { posNotifications, posMarkNotificationRead, PosNotification } from "../api";
 import { Bell, X, Check } from "lucide-react";
-import { playWaiterCallChime } from "@/lib/audio";
+import { playOrderNotificationSound, playWaiterCallSound } from "@/lib/audio";
 import { useAnchoredPopover } from "@/lib/use-anchored-popover";
 
 const PANEL_WIDTH = 320; // w-80
@@ -51,14 +51,13 @@ export default function NotificationBell() {
       );
       const knownIds = knownNotificationIds.current;
       if (knownIds) {
-        const waiterCall = data.find(
-          (notification) =>
-            notification.notification_type === "waiter_call" &&
-            !notification.is_read &&
-            !knownIds.has(notification.id),
+        const fresh = data.filter(
+          (notification) => !notification.is_read && !knownIds.has(notification.id),
         );
-        if (waiterCall) {
-          playWaiterCallChime();
+        if (fresh.some((notification) => notification.notification_type === "waiter_call")) {
+          playWaiterCallSound();
+        } else if (fresh.length > 0) {
+          playOrderNotificationSound();
         }
       }
       knownNotificationIds.current = new Set(data.map((notification) => notification.id));
