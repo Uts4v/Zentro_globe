@@ -33,8 +33,10 @@ import {
   UserCheck,
   AlertTriangle,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ThemeCycleButton } from "@/components/ThemeCycleButton";
 
@@ -115,7 +117,7 @@ function NavItem({
 function NavSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="px-4 pb-1 pt-4 text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground/70">
+      <p className="px-4 pb-1 pt-2.5 first:pt-1 text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground/70">
         {title}
       </p>
       {children}
@@ -231,6 +233,86 @@ export default function PosLayout() {
   const workers = usePosStore((s) => s.workers);
   const bootstrap = usePosStore((s) => s.bootstrap);
   const isOnline = useOnlineStatus();
+
+  // Draggable sidebar footer state (desktop)
+  const [footerCollapsed, setFooterCollapsed] = useState(false);
+  const [footerDragY, setFooterDragY] = useState(0);
+  const [footerDragging, setFooterDragging] = useState(false);
+  const footerDragStartRef = useRef<number | null>(null);
+
+  const handleFooterPointerDown = (e: React.PointerEvent) => {
+    footerDragStartRef.current = e.clientY;
+    setFooterDragging(true);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handleFooterPointerMove = (e: React.PointerEvent) => {
+    if (!footerDragging || footerDragStartRef.current === null) return;
+    const delta = e.clientY - footerDragStartRef.current;
+    if (footerCollapsed) {
+      setFooterDragY(Math.min(0, Math.max(-80, delta)));
+    } else {
+      setFooterDragY(Math.max(0, Math.min(100, delta)));
+    }
+  };
+
+  const handleFooterPointerUp = (e: React.PointerEvent) => {
+    if (footerDragStartRef.current !== null) {
+      const delta = e.clientY - footerDragStartRef.current;
+      if (Math.abs(delta) < 6) {
+        setFooterCollapsed((prev) => !prev);
+      } else if (delta > 25) {
+        setFooterCollapsed(true);
+      } else if (delta < -25) {
+        setFooterCollapsed(false);
+      }
+    }
+    setFooterDragging(false);
+    setFooterDragY(0);
+    footerDragStartRef.current = null;
+  };
+
+  // Draggable sidebar footer state (mobile)
+  const [mobileFooterCollapsed, setMobileFooterCollapsed] = useState(false);
+  const [mobileFooterDragY, setMobileFooterDragY] = useState(0);
+  const [mobileFooterDragging, setMobileFooterDragging] = useState(false);
+  const mobileFooterDragStartRef = useRef<number | null>(null);
+
+  const handleMobileFooterPointerDown = (e: React.PointerEvent) => {
+    mobileFooterDragStartRef.current = e.clientY;
+    setMobileFooterDragging(true);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handleMobileFooterPointerMove = (e: React.PointerEvent) => {
+    if (!mobileFooterDragging || mobileFooterDragStartRef.current === null) return;
+    const delta = e.clientY - mobileFooterDragStartRef.current;
+    if (mobileFooterCollapsed) {
+      setMobileFooterDragY(Math.min(0, Math.max(-80, delta)));
+    } else {
+      setMobileFooterDragY(Math.max(0, Math.min(100, delta)));
+    }
+  };
+
+  const handleMobileFooterPointerUp = (e: React.PointerEvent) => {
+    if (mobileFooterDragStartRef.current !== null) {
+      const delta = e.clientY - mobileFooterDragStartRef.current;
+      if (Math.abs(delta) < 6) {
+        setMobileFooterCollapsed((prev) => !prev);
+      } else if (delta > 25) {
+        setMobileFooterCollapsed(true);
+      } else if (delta < -25) {
+        setMobileFooterCollapsed(false);
+      }
+    }
+    setMobileFooterDragging(false);
+    setMobileFooterDragY(0);
+    mobileFooterDragStartRef.current = null;
+  };
 
   // Initialize POS, then keep it current. A terminal left open all day must
   // show a dish added in the merchant dashboard an hour ago, not the menu as it
@@ -471,9 +553,9 @@ export default function PosLayout() {
       {/* One coordinator per terminal: owns the shared order feed and speech. */}
       <PosVoiceAnnouncer />
       {/* ── Sidebar ── */}
-      <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-background lg:flex">
+      <aside className="hidden w-64 shrink-0 flex-col h-screen border-r border-border bg-background lg:flex overflow-hidden">
         {/* Logo + notification */}
-        <div className="flex items-center justify-between px-5 py-5">
+        <div className="flex shrink-0 items-center justify-between px-5 py-4">
           <div className="flex items-center gap-2">
             <Link
               to="/"
@@ -490,7 +572,7 @@ export default function PosLayout() {
         </div>
 
         {/* User / staff info */}
-        <div className="border-y border-border px-5 py-4">
+        <div className="shrink-0 border-y border-border px-5 py-3.5">
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-ink text-sm font-semibold text-white">
               {(currentWorker?.display_name ?? "?").charAt(0).toUpperCase()}
@@ -512,7 +594,7 @@ export default function PosLayout() {
           <button
             type="button"
             onClick={handleSwitchStaff}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-1.5 text-xs font-semibold text-foreground transition hover:bg-muted active:scale-[0.98]"
+            className="mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-card py-1.5 text-xs font-semibold text-foreground transition hover:bg-muted active:scale-[0.98]"
             title="Switch Staff / Lock Terminal"
           >
             <UserCheck className="h-3.5 w-3.5 text-primary" />
@@ -520,7 +602,7 @@ export default function PosLayout() {
           </button>
           {/* Shift status */}
           {activeShift ? (
-            <div className="mt-3 flex items-center gap-2 rounded-xl bg-green-50 px-3 py-2 text-xs font-medium text-green-700">
+            <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-green-50 px-3 py-1.5 text-xs font-medium text-green-700">
               <span className="relative flex h-2 w-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-green-500" />
@@ -528,7 +610,7 @@ export default function PosLayout() {
               Shift active — {activeShift.total_orders} orders
             </div>
           ) : (
-            <div className="mt-3 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-700">
+            <div className="mt-2.5 flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700">
               <span className="h-2 w-2 rounded-full bg-amber-500" />
               No active shift
             </div>
@@ -536,99 +618,162 @@ export default function PosLayout() {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-2 pb-4">
+        <nav className="flex-1 min-h-[160px] space-y-1 overflow-y-auto px-3 py-2 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60">
           <PosNav isOnline={isOnline} cartCount={cartCount} activePath={pathname} />
         </nav>
 
-        {/* Footer */}
-        <div className="space-y-2 border-t border-border px-3 py-4">
-          <div className="px-1">
-            <p className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Theme
-            </p>
-            <ThemeToggle />
-          </div>
-          <div className="px-1">
-            <SyncStatusBar />
-          </div>
-          <div className="px-1">
-            <PendingOfflineKOTs />
-          </div>
-          {/* Close / Open shift */}
-          {activeShift ? (
-            <button
-              onClick={() => setShowShiftClose(true)}
-              disabled={!isOnline}
-              title={
-                isOnline
-                  ? undefined
-                  : "Closing a shift needs an internet connection. Close it once you are back online."
+        {/* Footer (Draggable / Collapsible) */}
+        <div
+          className="shrink-0 mt-auto flex flex-col border-t border-border bg-card/30 transition-transform duration-150 ease-out"
+          style={footerDragging && footerDragY !== 0 ? { transform: `translateY(${footerDragY}px)` } : undefined}
+        >
+          {/* Drag Handle Bar (Drag down to collapse, drag up or tap to expand) */}
+          <div
+            role="button"
+            tabIndex={0}
+            onPointerDown={handleFooterPointerDown}
+            onPointerMove={handleFooterPointerMove}
+            onPointerUp={handleFooterPointerUp}
+            onPointerCancel={() => {
+              setFooterDragging(false);
+              setFooterDragY(0);
+              footerDragStartRef.current = null;
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setFooterCollapsed((prev) => !prev);
               }
-              className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
-            >
-              <Wallet className="h-4 w-4" />
-              <span>Close Shift</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => navigate({ to: "/pos" })}
-              disabled={!isOnline}
-              title={isOnline ? undefined : "Opening a shift needs an internet connection."}
-              className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
-            >
-              <Wallet className="h-4 w-4" />
-              <span>Open Shift</span>
-            </button>
-          )}
-          {/* Connection state */}
-          <div className="space-y-1 px-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-2">
-              {isOnline ? (
-                <>
-                  <Wifi className="h-3.5 w-3.5 text-green-500" />
-                  <span>Online</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="h-3.5 w-3.5 text-amber-500" />
-                  <span className="text-amber-600">Offline</span>
-                </>
-              )}
+            }}
+            title={footerCollapsed ? "Drag up or tap to expand footer" : "Drag down or tap to collapse footer"}
+            aria-expanded={!footerCollapsed}
+            aria-label="Toggle terminal status and footer panel"
+            className="group flex cursor-grab active:cursor-grabbing select-none flex-col items-center justify-center px-4 py-2 hover:bg-muted/50 transition-colors touch-none"
+          >
+            {/* Grab pill */}
+            <div className="h-1.5 w-10 rounded-full bg-border group-hover:bg-muted-foreground/40 transition-colors" />
+
+            <div className="mt-1 flex w-full items-center justify-between text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5 font-medium">
+                {!isOnline ? (
+                  <>
+                    <WifiOff className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <span className="text-amber-600 font-semibold truncate">Offline Status</span>
+                  </>
+                ) : (
+                  <>
+                    <Wifi className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                    <span className="truncate">System & Sync</span>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-1 text-[11px] text-muted-foreground/70 font-normal">
+                <span>{footerCollapsed ? "Expand" : "Drag down"}</span>
+                {footerCollapsed ? (
+                  <ChevronUp className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5 transition-transform group-hover:translate-y-0.5" />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Collapsible Content */}
+          <div
+            className={`transition-[max-height,opacity] duration-200 ease-in-out ${
+              footerCollapsed
+                ? "max-h-0 opacity-0 overflow-hidden"
+                : "max-h-[46vh] opacity-100 overflow-y-auto space-y-2 border-t border-border/50 px-3 py-3 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60"
+            }`}
+          >
+            <div className="px-1">
+              <p className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Theme
+              </p>
+              <ThemeToggle />
+            </div>
+            <div className="px-1">
+              <SyncStatusBar />
+            </div>
+            <div className="px-1">
+              <PendingOfflineKOTs />
+            </div>
+            {/* Close / Open shift */}
+            {activeShift ? (
               <button
-                type="button"
-                onClick={() => refreshFromServer()}
-                disabled={!isOnline || refreshing}
+                onClick={() => setShowShiftClose(true)}
+                disabled={!isOnline}
                 title={
                   isOnline
-                    ? "Fetch the latest menu, tables and staff from the server"
-                    : "Needs an internet connection"
+                    ? undefined
+                    : "Closing a shift needs an internet connection. Close it once you are back online."
                 }
-                className="ml-auto inline-flex min-h-[32px] items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-amber-600 hover:bg-amber-50 disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
               >
-                <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
-                Refresh
+                <Wallet className="h-4 w-4" />
+                <span>Close Shift</span>
               </button>
-            </div>
-            {savedDataFrom ? (
-              <p className="text-amber-700">Menu saved {savedLabel(savedDataFrom)}</p>
-            ) : lastSyncedAt ? (
-              <p>Menu updated {savedLabel(lastSyncedAt)}</p>
-            ) : null}
-            {offlineCacheUnavailable && (
-              <p className="text-rose-600">
-                No offline copy saved — no menu if the connection drops.
-              </p>
+            ) : (
+              <button
+                onClick={() => navigate({ to: "/pos" })}
+                disabled={!isOnline}
+                title={isOnline ? undefined : "Opening a shift needs an internet connection."}
+                className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-green-600 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-muted-foreground/40 disabled:hover:bg-transparent"
+              >
+                <Wallet className="h-4 w-4" />
+                <span>Open Shift</span>
+              </button>
             )}
+            {/* Connection state */}
+            <div className="space-y-1 px-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                {isOnline ? (
+                  <>
+                    <Wifi className="h-3.5 w-3.5 text-green-500" />
+                    <span>Online</span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="text-amber-600">Offline</span>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={() => refreshFromServer()}
+                  disabled={!isOnline || refreshing}
+                  title={
+                    isOnline
+                      ? "Fetch the latest menu, tables and staff from the server"
+                      : "Needs an internet connection"
+                  }
+                  className="ml-auto inline-flex min-h-[32px] items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-muted-foreground hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <RefreshCw className={`h-3 w-3 ${refreshing ? "animate-spin" : ""}`} />
+                  Refresh
+                </button>
+              </div>
+              {savedDataFrom ? (
+                <p className="text-amber-700">Menu saved {savedLabel(savedDataFrom)}</p>
+              ) : lastSyncedAt ? (
+                <p>Menu updated {savedLabel(lastSyncedAt)}</p>
+              ) : null}
+              {offlineCacheUnavailable && (
+                <p className="text-rose-600">
+                  No offline copy saved — no menu if the connection drops.
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleSignOut}
+              disabled={offline}
+              title={offline ? NEEDS_CONNECTION : undefined}
+              className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sign out</span>
+            </button>
           </div>
-          <button
-            onClick={handleSignOut}
-            disabled={offline}
-            title={offline ? NEEDS_CONNECTION : undefined}
-            className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Sign out</span>
-          </button>
         </div>
       </aside>
 
@@ -705,8 +850,8 @@ export default function PosLayout() {
               className="absolute inset-0 bg-black/40"
               aria-label="Close POS navigation"
             />
-            <aside className="relative flex h-full w-[min(20rem,85vw)] flex-col bg-background shadow-2xl">
-              <div className="flex items-center justify-between border-b border-border px-4 py-4">
+            <aside className="relative flex h-full w-[min(20rem,85vw)] flex-col bg-background shadow-2xl overflow-hidden">
+              <div className="flex shrink-0 items-center justify-between border-b border-border px-4 py-4">
                 <div className="flex items-center gap-2">
                   <ZentroLogo className="h-6 w-auto" title="" />
                   <span className="rounded-md bg-ember-soft px-1.5 py-0.5 text-xs font-bold uppercase text-ember">
@@ -715,7 +860,7 @@ export default function PosLayout() {
                 </div>
                 <PosNotifications offline={offline} />
               </div>
-              <nav className="flex-1 space-y-1 overflow-y-auto px-3 pt-2 pb-4">
+              <nav className="flex-1 min-h-[160px] space-y-1 overflow-y-auto px-3 pt-2 pb-4 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60">
                 <PosNav
                   isOnline={isOnline}
                   cartCount={cartCount}
@@ -723,23 +868,70 @@ export default function PosLayout() {
                   onNavigate={() => setMobileNavOpen(false)}
                 />
               </nav>
-              <div className="space-y-2 border-t border-border p-3">
-                <SyncStatusBar />
-                <PendingOfflineKOTs />
-                <button
-                  onClick={handleSignOut}
-                  disabled={offline}
-                  title={offline ? NEEDS_CONNECTION : undefined}
-                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+
+              {/* Mobile Footer (Draggable / Collapsible) */}
+              <div
+                className="shrink-0 mt-auto flex flex-col border-t border-border bg-card/30 transition-transform duration-150 ease-out"
+                style={mobileFooterDragging && mobileFooterDragY !== 0 ? { transform: `translateY(${mobileFooterDragY}px)` } : undefined}
+              >
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onPointerDown={handleMobileFooterPointerDown}
+                  onPointerMove={handleMobileFooterPointerMove}
+                  onPointerUp={handleMobileFooterPointerUp}
+                  onPointerCancel={() => {
+                    setMobileFooterDragging(false);
+                    setMobileFooterDragY(0);
+                    mobileFooterDragStartRef.current = null;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setMobileFooterCollapsed((prev) => !prev);
+                    }
+                  }}
+                  title={mobileFooterCollapsed ? "Drag up or tap to expand status" : "Drag down or tap to collapse status"}
+                  aria-expanded={!mobileFooterCollapsed}
+                  aria-label="Toggle mobile footer status"
+                  className="group flex cursor-grab active:cursor-grabbing select-none flex-col items-center justify-center px-4 py-2 hover:bg-muted/50 transition-colors touch-none"
                 >
-                  <LogOut className="h-4 w-4" />
-                  <span>Sign out</span>
-                </button>
-                <ClearCacheNavButton
-                  disabled={!isOnline}
-                  disabledReason="Needs an internet connection to clear cache safely"
-                  className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
-                />
+                  <div className="h-1.5 w-10 rounded-full bg-border group-hover:bg-muted-foreground/40 transition-colors" />
+                  <div className="mt-1 flex w-full items-center justify-between text-xs text-muted-foreground">
+                    <span className="font-medium">
+                      {!isOnline ? <span className="text-amber-600 font-semibold">Offline Status</span> : "System & Sync"}
+                    </span>
+                    <span className="flex items-center gap-1 text-[11px] text-muted-foreground/70">
+                      <span>{mobileFooterCollapsed ? "Expand" : "Drag down"}</span>
+                      {mobileFooterCollapsed ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  className={`transition-[max-height,opacity] duration-200 ease-in-out ${
+                    mobileFooterCollapsed
+                      ? "max-h-0 opacity-0 overflow-hidden"
+                      : "max-h-[45vh] opacity-100 overflow-y-auto space-y-2 border-t border-border/50 p-3 [scrollbar-width:thin] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-border/60"
+                  }`}
+                >
+                  <SyncStatusBar />
+                  <PendingOfflineKOTs />
+                  <button
+                    onClick={handleSignOut}
+                    disabled={offline}
+                    title={offline ? NEEDS_CONNECTION : undefined}
+                    className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    <span>Sign out</span>
+                  </button>
+                  <ClearCacheNavButton
+                    disabled={!isOnline}
+                    disabledReason="Needs an internet connection to clear cache safely"
+                    className="flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                  />
+                </div>
               </div>
             </aside>
           </div>
