@@ -282,6 +282,7 @@ export function MerchantSettingsPage() {
         currency_code: profile.currency_code,
         currency_symbol: profile.currency_symbol,
         gst_number: profile.gst_number?.trim() ?? "",
+        receipt_footer_text: profile.receipt_footer_text?.trim() ?? "",
         accepted_payment_methods: profile.accepted_payment_methods,
         payment_method_labels: profile.payment_method_labels,
         payment_qr_url: profile.payment_qr_url ?? "",
@@ -514,6 +515,39 @@ export function MerchantSettingsPage() {
           />
           <p className="mt-1.5 text-[11px] text-muted-foreground">
             Leave blank if you do not have a GST number. When empty, the GST line will be hidden on all bills and receipts.
+          </p>
+        </div>
+      </section>
+
+      {/* ── Bill / Receipt ──────────────────────────────────────────────────── */}
+      <section className="glass-strong rounded-3xl p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
+            Bill / Receipt
+          </h2>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Control what customers see on printed and on-screen bills. Your store tagline (from Store
+          details) is printed directly under your store name on every bill.
+        </p>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            Custom message on bill
+          </label>
+          <textarea
+            rows={3}
+            placeholder="e.g. Thank you for dining with us! No refunds on prepared food."
+            value={profile.receipt_footer_text ?? ""}
+            onChange={(e) =>
+              setProfile((p) => (p ? { ...p, receipt_footer_text: e.target.value } : p))
+            }
+            maxLength={255}
+            className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink resize-y"
+          />
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Printed at the bottom center of every bill and receipt. Leave blank to hide it — no
+            empty section is shown.
           </p>
         </div>
       </section>

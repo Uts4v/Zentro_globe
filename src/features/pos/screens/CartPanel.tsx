@@ -184,6 +184,8 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
         phone: merchant?.phone ?? "",
         logo_url: merchant?.logo_url ?? "",
         gst_number: merchant?.gst_number ?? posSettings?.gst_number ?? "",
+        tagline: merchant?.tagline ?? "",
+        footer_text: merchant?.receipt_footer_text ?? "",
       },
       table: selectedTable
         ? { name: selectedTable.name, number: selectedTable.table_number }
@@ -247,9 +249,10 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
         <div style="text-align: center; margin-bottom: 8px; width: 100%;">
           ${billData.merchant.logo_url ? `<img src="${billData.merchant.logo_url}" alt="" style="height: 48px; width: 48px; object-fit: contain; display: block; margin: 0 auto 4px auto;" />` : ""}
           <p style="font-size: 16px; font-weight: bold; margin: 0 0 2px 0; text-align: center;">${billData.merchant.name}</p>
+          ${billData.merchant.tagline ? `<p style="font-size: 11px; font-style: italic; color: #333; margin: 1px 0 2px 0; text-align: center;">${billData.merchant.tagline}</p>` : ""}
           ${billData.merchant.gst_number ? `<p style="font-size: 11px; font-weight: bold; margin: 2px 0; text-align: center;">GST: ${billData.merchant.gst_number}</p>` : ""}
           ${billData.merchant.address ? `<p style="font-size: 11px; color: #444; margin: 2px 0; text-align: center;">${billData.merchant.address}</p>` : ""}
-          ${billData.merchant.phone ? `<p style="font-size: 11px; color: #444; margin: 2px 0; text-align: center;">${billData.merchant.phone}</p>` : ""}
+          ${billData.merchant.phone ? `<p style="font-size: 11px; color: #444; margin: 2px 0; text-align: center;">Phone: ${billData.merchant.phone}</p>` : ""}
           <p style="font-size: 10px; color: #666; margin: 3px 0 0 0; text-align: center;">** DRAFT BILL **</p>
         </div>
         <hr style="border: none; border-top: 1px dashed #000; margin: 6px 0;">
@@ -287,6 +290,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
         </div>
         <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;">
         <div style="text-align: center; font-size: 11px; font-weight: bold;">** AWAITING PAYMENT **</div>
+        ${billData.merchant.footer_text ? `<p style="font-size: 11px; margin: 6px 0 0 0; text-align: center; white-space: pre-wrap;">${billData.merchant.footer_text}</p>` : ""}
       </div>
     `;
 

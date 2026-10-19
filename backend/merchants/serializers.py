@@ -341,6 +341,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "pos_enabled", "offline_pos_enabled",
             "credit_accounts_enabled", "debit_accounts_enabled",
             "discounts_enabled", "shift_management_enabled", "receipt_printing_enabled",
+            "receipt_footer_text",
             "max_worker_discount_percent", "manager_approval_threshold",
             "offline_discounts_allowed", "offline_credit_allowed", "payment_qr_url",
             "free_items_enabled", "free_item_pin_set",

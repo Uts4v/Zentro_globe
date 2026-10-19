@@ -119,6 +119,10 @@ class MerchantProfile(models.Model):
         default=False,
         help_text="Enable receipt printing from POS",
     )
+    receipt_footer_text = models.TextField(
+        blank=True, default="",
+        help_text="Custom message printed at the bottom center of bills and receipts (empty = hidden)",
+    )
 
     # POS settings
     max_worker_discount_percent = models.DecimalField(

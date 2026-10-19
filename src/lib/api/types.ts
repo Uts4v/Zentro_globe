@@ -409,6 +409,8 @@ export interface MerchantProfile {
   discounts_enabled?: boolean;
   shift_management_enabled?: boolean;
   receipt_printing_enabled?: boolean;
+  /** Custom message printed at the bottom center of bills and receipts. */
+  receipt_footer_text?: string | null;
   max_worker_discount_percent?: number;
   manager_approval_threshold?: number;
   offline_discounts_allowed?: boolean;

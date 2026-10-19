@@ -1378,6 +1378,7 @@ function StoreConfig() {
             label="Tagline / Description"
             value={form.description}
             onChange={(v) => updateField("description", v)}
+            hint="Shown directly under your store name on printed bills and receipts when set."
             multiline
           />
           <Field
@@ -1533,12 +1534,14 @@ function StoreConfig() {
 // ── Field component ───────────────────────────────────────────────────────────
 function Field({
   label,
+  hint,
   value,
   onChange,
   placeholder,
   multiline = false,
 }: {
   label: string;
+  hint?: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
@@ -1563,6 +1566,7 @@ function Field({
           className="mt-1.5 h-12 w-full rounded-2xl bg-mist px-4 text-sm text-ink outline-none transition-all focus:ring-2 focus:ring-ember/40"
         />
       )}
+      {hint ? <span className="mt-1 block text-[11px] text-muted-foreground">{hint}</span> : null}
     </label>
   );
 }

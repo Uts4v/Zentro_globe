@@ -451,6 +451,10 @@ def pos_login(request):
             "receipt_printing_enabled": merchant.receipt_printing_enabled,
             "currency_code": merchant.currency_code,
             "currency_symbol": merchant.currency_symbol,
+            "address": merchant.address or "",
+            "phone": merchant.phone or "",
+            "tagline": merchant.description or "",
+            "receipt_footer_text": merchant.receipt_footer_text or "",
         },
     })
 
@@ -619,6 +623,10 @@ def pos_bootstrap(request):
             "slug": merchant.slug,
             "logo_url": merchant.logo_url,
             "gst_number": getattr(merchant, "gst_number", "") or "",
+            "address": merchant.address or "",
+            "phone": merchant.phone or "",
+            "tagline": merchant.description or "",
+            "receipt_footer_text": merchant.receipt_footer_text or "",
         },
         "device": PosDeviceSerializer(device).data,
         "workers": workers_data,
@@ -708,6 +716,10 @@ def pos_bootstrap_device(request):
             "slug": merchant.slug,
             "logo_url": merchant.logo_url,
             "gst_number": getattr(merchant, "gst_number", "") or "",
+            "address": merchant.address or "",
+            "phone": merchant.phone or "",
+            "tagline": merchant.description or "",
+            "receipt_footer_text": merchant.receipt_footer_text or "",
         },
         "device": PosDeviceSerializer(device).data,
         "workers": workers_data,
@@ -3602,6 +3614,8 @@ def receipt_data(request, order_id):
             "phone": merchant.phone,
             "logo_url": merchant.logo_url,
             "gst_number": getattr(merchant, "gst_number", "") or "",
+            "tagline": merchant.description or "",
+            "footer_text": merchant.receipt_footer_text or "",
         },
 
         "table": {
@@ -3915,6 +3929,8 @@ def z_report(request):
             "address": merchant.address,
             "phone": merchant.phone,
             "logo_url": merchant.logo_url,
+            "tagline": merchant.description or "",
+            "footer_text": merchant.receipt_footer_text or "",
         },
 
         # Shift(s) summary

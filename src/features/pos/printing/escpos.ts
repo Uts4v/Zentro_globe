@@ -336,9 +336,10 @@ export function receiptToEscPos(data: PosReceiptData, paper: TicketPaper): Uint8
   t.bold();
   t.center(data.merchant?.name || "ZENTRO");
   t.bold(false);
+  if (data.merchant?.tagline?.trim()) t.center(data.merchant.tagline.trim());
   if (data.merchant?.gst_number) t.center(`GST: ${data.merchant.gst_number}`);
   if (data.merchant?.address) t.center(data.merchant.address);
-  if (data.merchant?.phone) t.center(data.merchant.phone);
+  if (data.merchant?.phone) t.center(`Phone: ${data.merchant.phone}`);
 
   t.align("left");
   t.rule("-");
@@ -415,6 +416,10 @@ export function receiptToEscPos(data: PosReceiptData, paper: TicketPaper): Uint8
   }
   if (data.is_offline_receipt && data.sync_status !== "synced") {
     t.center("OFFLINE - Pending Sync");
+  }
+  if (data.merchant?.footer_text?.trim()) {
+    t.nl();
+    t.center(data.merchant.footer_text.trim());
   }
   t.align("left");
   return t.cut().bytes();

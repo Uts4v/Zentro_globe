@@ -30,6 +30,10 @@ export const posLogin = (email: string, password: string) =>
       business_name: string;
       slug: string;
       logo_url: string;
+      address?: string;
+      phone?: string;
+      tagline?: string;
+      receipt_footer_text?: string;
       pos_enabled: boolean;
       offline_pos_enabled: boolean;
       shift_management_enabled: boolean;
@@ -716,6 +720,10 @@ export interface PosReceiptData {
     phone: string;
     logo_url: string;
     gst_number?: string;
+    /** Store tagline (MerchantProfile.description), shown under the store name. */
+    tagline?: string;
+    /** Merchant-configured custom message, printed at the bottom center. */
+    footer_text?: string;
   };
   table: { name: string; number: number } | null;
   fulfillment_type: string;
@@ -884,6 +892,10 @@ export interface PosBootstrapResponse {
     slug: string;
     logo_url: string;
     gst_number?: string;
+    address?: string;
+    phone?: string;
+    tagline?: string;
+    receipt_footer_text?: string;
   };
   device: PosDevice;
   workers: ShiftWorker[];
@@ -1105,6 +1117,8 @@ export interface PosZReportData {
     address: string;
     phone: string;
     logo_url: string;
+    tagline?: string;
+    footer_text?: string;
   };
   shifts: Array<{
     id: string;

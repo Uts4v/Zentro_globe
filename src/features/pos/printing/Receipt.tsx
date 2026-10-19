@@ -95,6 +95,19 @@ export default function Receipt({
         margin: 0 0 2px 0 !important;
         text-align: center !important;
       }
+      .receipt-tagline {
+        font-size: 0.92em !important;
+        font-style: italic !important;
+        color: #333 !important;
+        margin: 1px 0 2px 0 !important;
+        text-align: center !important;
+      }
+      .receipt-custom-text {
+        font-size: 0.95em !important;
+        margin: 4px 0 0 0 !important;
+        text-align: center !important;
+        white-space: pre-wrap !important;
+      }
       .receipt-gst {
         font-size: 0.92em !important;
         font-weight: bold !important;
@@ -143,6 +156,8 @@ export default function Receipt({
   };
 
   const merchantName = data.merchant?.name || "ZENTRO";
+  const merchantTagline = data.merchant?.tagline?.trim();
+  const customFooterText = data.merchant?.footer_text?.trim();
   const receiptTable = tableLabel(data.table?.name, data.table?.number);
 
   return (
@@ -194,6 +209,21 @@ export default function Receipt({
           >
             {merchantName}
           </p>
+          {merchantTagline ? (
+            <p
+              className="receipt-tagline text-[13px] italic text-muted-foreground"
+              style={{
+                textAlign: "center",
+                fontSize: "12px",
+                fontStyle: "italic",
+                color: "#333",
+                margin: "1px 0 2px 0",
+                lineHeight: 1.25,
+              }}
+            >
+              {merchantTagline}
+            </p>
+          ) : null}
           {data.merchant?.gst_number ? (
             <p
               className="receipt-gst text-[13px] font-semibold text-ink"
@@ -233,7 +263,7 @@ export default function Receipt({
                 lineHeight: 1.25,
               }}
             >
-              {data.merchant.phone}
+              Phone: {data.merchant.phone}
             </p>
           )}
         </div>
@@ -407,6 +437,11 @@ export default function Receipt({
           {data.is_offline_receipt && data.sync_status !== "synced" && (
             <span className="receipt-offline-badge">OFFLINE - Pending Sync</span>
           )}
+          {customFooterText ? (
+            <p className="receipt-custom-text mt-1 whitespace-pre-wrap text-center">
+              {customFooterText}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>
