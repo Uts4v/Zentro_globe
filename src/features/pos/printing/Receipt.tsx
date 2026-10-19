@@ -432,7 +432,7 @@ export default function Receipt({
           {data.payment_status !== "paid" && data.payment_status !== "fulfilled" ? (
             <p className="receipt-bold">** AWAITING PAYMENT **</p>
           ) : (
-            <p className="receipt-bold">Thank you!</p>
+            <p className="receipt-bold">.</p>
           )}
           {data.is_offline_receipt && data.sync_status !== "synced" && (
             <span className="receipt-offline-badge">OFFLINE - Pending Sync</span>

@@ -411,7 +411,7 @@ export function receiptToEscPos(data: PosReceiptData, paper: TicketPaper): Uint8
     t.bold(false);
   } else {
     t.bold();
-    t.center("Thank you!");
+    t.center(".");
     t.bold(false);
   }
   if (data.is_offline_receipt && data.sync_status !== "synced") {
