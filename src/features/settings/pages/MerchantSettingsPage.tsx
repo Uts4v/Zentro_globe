@@ -18,6 +18,7 @@ import {
   QrCode,
   Upload,
   KeyRound,
+  FileText,
 } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/auth/ChangePasswordDialog";
 import { FreeItemsSettings } from "../components/FreeItemsSettings";
@@ -280,6 +281,7 @@ export function MerchantSettingsPage() {
         service_charge_dine_in_only: profile.service_charge_dine_in_only ?? true,
         currency_code: profile.currency_code,
         currency_symbol: profile.currency_symbol,
+        gst_number: profile.gst_number?.trim() ?? "",
         accepted_payment_methods: profile.accepted_payment_methods,
         payment_method_labels: profile.payment_method_labels,
         payment_qr_url: profile.payment_qr_url ?? "",
@@ -484,6 +486,38 @@ export function MerchantSettingsPage() {
           </span>
           . This depends on your country's tax rules and is set by Zentro support.
         </p>
+      </section>
+
+      {/* ── GST / Tax Identification ────────────────────────────────────────── */}
+      <section className="glass-strong rounded-3xl p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <FileText className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
+            GST / Tax Identification
+          </h2>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Enter your Goods and Services Tax (GST) or Tax Identification Number. It will automatically
+          be displayed directly below your company name on every printed or downloaded bill, receipt, and invoice.
+        </p>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            GST Number
+          </label>
+          <input
+            type="text"
+            placeholder="e.g. 27ABCDE1234F1Z5"
+            value={profile.gst_number ?? ""}
+            onChange={(e) =>
+              setProfile((p) => (p ? { ...p, gst_number: e.target.value } : p))
+            }
+            maxLength={50}
+            className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
+          />
+          <p className="mt-1.5 text-[11px] text-muted-foreground">
+            Leave blank if you do not have a GST number. When empty, the GST line will be hidden on all bills and receipts.
+          </p>
+        </div>
       </section>
 
       {/* ── Service charge ─────────────────────────────────────────────────── */}
@@ -758,6 +792,14 @@ export function MerchantSettingsPage() {
               {profile.currency_symbol} {profile.currency_code}
             </span>
           </div>
+          {profile.gst_number ? (
+            <div className="flex items-center justify-between rounded-2xl bg-mist px-4 py-3">
+              <span className="text-sm text-foreground">GST Number</span>
+              <span className="font-medium text-sm text-foreground">
+                {profile.gst_number}
+              </span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between rounded-2xl bg-mist px-4 py-3">
             <span className="text-sm text-foreground">Tax Status</span>
             <span

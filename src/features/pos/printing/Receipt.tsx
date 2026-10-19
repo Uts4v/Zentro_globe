@@ -135,6 +135,11 @@ export default function Receipt({
             />
           )}
           <p className="text-lg font-bold tracking-wide">{merchantName}</p>
+          {data.merchant?.gst_number ? (
+            <p className="text-[13px] font-semibold text-ink">
+              GST: {data.merchant.gst_number}
+            </p>
+          ) : null}
           {data.merchant?.address && (
             <p className="text-[13px] text-muted-foreground">{data.merchant.address}</p>
           )}

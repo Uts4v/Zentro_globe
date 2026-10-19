@@ -346,7 +346,7 @@ class MerchantProfileSerializer(serializers.ModelSerializer):
             "free_items_enabled", "free_item_pin_set",
             "tax_enabled", "tax_rate_percent", "tax_components",
             "tax_policy", "service_charge_percent", "service_charge_dine_in_only",
-            "currency_code", "currency_symbol",
+            "gst_number", "currency_code", "currency_symbol",
             "ai_enabled", "ai_insights_enabled", "ai_insights_time", "timezone",
             "pdf_menu_url", "pdf_menu_token",
             # Payment recording config (merchant-scoped, owner-only reads)
@@ -486,7 +486,7 @@ class MerchantPublicSerializer(serializers.ModelSerializer):
     class Meta:
         model = MerchantProfile
         fields = [
-            "id", "business_name", "slug", "business_type",
+            "id", "business_name", "slug", "business_type", "gst_number",
             "address", "phone", "logo_url", "banner_url",
             "description", "is_open",
             "latitude", "longitude",

@@ -618,6 +618,7 @@ def pos_bootstrap(request):
             "business_name": merchant.business_name,
             "slug": merchant.slug,
             "logo_url": merchant.logo_url,
+            "gst_number": getattr(merchant, "gst_number", "") or "",
         },
         "device": PosDeviceSerializer(device).data,
         "workers": workers_data,
@@ -706,6 +707,7 @@ def pos_bootstrap_device(request):
             "business_name": merchant.business_name,
             "slug": merchant.slug,
             "logo_url": merchant.logo_url,
+            "gst_number": getattr(merchant, "gst_number", "") or "",
         },
         "device": PosDeviceSerializer(device).data,
         "workers": workers_data,
@@ -3599,6 +3601,7 @@ def receipt_data(request, order_id):
             "address": merchant.address,
             "phone": merchant.phone,
             "logo_url": merchant.logo_url,
+            "gst_number": getattr(merchant, "gst_number", "") or "",
         },
 
         "table": {

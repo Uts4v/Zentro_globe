@@ -715,6 +715,7 @@ export interface PosReceiptData {
     address: string;
     phone: string;
     logo_url: string;
+    gst_number?: string;
   };
   table: { name: string; number: number } | null;
   fulfillment_type: string;
@@ -830,6 +831,7 @@ export interface PosSettings {
   service_charge_dine_in_only?: boolean;
   currency_code: string;
   currency_symbol: string;
+  gst_number?: string;
   tax_components: TaxComponent[];
   accepted_payment_methods: string[];
   /** Only the tenders this merchant actually offers, already QR-filtered. */
@@ -881,6 +883,7 @@ export interface PosBootstrapResponse {
     business_name: string;
     slug: string;
     logo_url: string;
+    gst_number?: string;
   };
   device: PosDevice;
   workers: ShiftWorker[];

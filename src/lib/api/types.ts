@@ -392,6 +392,7 @@ export interface MerchantProfile {
   allow_delivery?: boolean;
   allow_dine_in?: boolean;
   preparation_routing_enabled?: boolean;
+  gst_number?: string | null;
   currency_code?: string;
   currency_symbol?: string;
   tax_enabled?: boolean;

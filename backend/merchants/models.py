@@ -164,6 +164,10 @@ class MerchantProfile(models.Model):
     )
 
     # ── Currency & multi-tax ──────────────────────────────────────────────────
+    gst_number = models.CharField(
+        max_length=50, blank=True, default="",
+        help_text="GST / Tax Identification Number",
+    )
     currency_code = models.CharField(
         max_length=3, default="NPR",
         help_text="ISO 4217 currency code (e.g. NPR, INR, USD, THB)",

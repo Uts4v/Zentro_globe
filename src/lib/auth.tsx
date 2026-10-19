@@ -52,6 +52,7 @@ export type MerchantProfile = {
   latitude?: string | null;
   longitude?: string | null;
   ai_enabled: boolean;
+  gst_number?: string | null;
   currency_code?: string;
   currency_symbol?: string;
   tax_enabled?: boolean;

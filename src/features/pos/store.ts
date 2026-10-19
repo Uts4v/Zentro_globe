@@ -107,7 +107,7 @@ export function cartHasFreeItems(cart: PosOrderItem[]): boolean {
 }
 
 interface PosState {
-  merchant: { id: number; business_name: string; slug: string; logo_url: string } | null;
+  merchant: { id: number; business_name: string; slug: string; logo_url: string; gst_number?: string } | null;
   device: PosDevice | null;
   deviceToken: string | null;
   workers: ShiftWorker[];
@@ -143,7 +143,7 @@ interface PosState {
 
   recentOrders: PosOrder[];
 
-  setMerchant: (m: { id: number; business_name: string; slug: string; logo_url: string }) => void;
+  setMerchant: (m: { id: number; business_name: string; slug: string; logo_url: string; gst_number?: string }) => void;
   setDevice: (d: PosDevice, token: string) => void;
   setWorkers: (w: ShiftWorker[]) => void;
   setMenu: (m: PosMenuSnapshot) => void;

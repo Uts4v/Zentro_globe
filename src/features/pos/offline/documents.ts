@@ -10,7 +10,7 @@ import type { PosOrder, PosReceiptData } from "../api";
 import type { KOTTicketData } from "../printing/KOTTicket";
 import type { OfflineOrder } from "./db";
 
-type MerchantInfo = { id: number; business_name: string; logo_url: string } | null;
+type MerchantInfo = { id: number; business_name: string; logo_url: string; gst_number?: string } | null;
 
 /** The reference an order goes by until the server gives it a number. */
 export function offlineOrderNumber(id: string): string {
@@ -58,6 +58,7 @@ export function receiptFromOrder(order: PosOrder, merchant: MerchantInfo): PosRe
       address: "",
       phone: "",
       logo_url: merchant?.logo_url ?? "",
+      gst_number: merchant?.gst_number || "",
     },
     table:
       order.table_name_snapshot || order.table_number_snapshot != null
@@ -146,6 +147,7 @@ export function billFromOfflineOrder(order: OfflineOrder, merchant: MerchantInfo
       address: "",
       phone: "",
       logo_url: merchant?.logo_url ?? "",
+      gst_number: merchant?.gst_number || "",
     },
     table:
       order.kot?.tableName || order.kot?.tableNumber != null

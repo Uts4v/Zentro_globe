@@ -481,6 +481,7 @@ class PosSettingsSerializer(serializers.Serializer):
         max_digits=5, decimal_places=2, min_value=0, max_value=100, required=False,
     )
     service_charge_dine_in_only = serializers.BooleanField(required=False)
+    gst_number = serializers.CharField(max_length=50, required=False, allow_blank=True)
     currency_code = serializers.CharField(max_length=3, required=False)
     currency_symbol = serializers.CharField(max_length=5, required=False)
     tax_components = serializers.ListField(

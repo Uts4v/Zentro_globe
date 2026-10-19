@@ -183,6 +183,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
         address: "",
         phone: "",
         logo_url: merchant?.logo_url ?? "",
+        gst_number: merchant?.gst_number ?? posSettings?.gst_number ?? "",
       },
       table: selectedTable
         ? { name: selectedTable.name, number: selectedTable.table_number }
@@ -245,6 +246,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
       <div style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.35; width: 72mm; padding: 4mm; color: #000; background: #fff;">
         <div style="text-align: center; margin-bottom: 8px;">
           <p style="font-size: 16px; font-weight: bold; margin: 0;">${billData.merchant.name}</p>
+          ${billData.merchant.gst_number ? `<p style="font-size: 11px; font-weight: bold; margin: 2px 0;">GST: ${billData.merchant.gst_number}</p>` : ""}
           <p style="font-size: 10px; color: #666; margin: 2px 0;">** DRAFT BILL **</p>
         </div>
         <hr style="border: none; border-top: 1px dashed #000; margin: 6px 0;">

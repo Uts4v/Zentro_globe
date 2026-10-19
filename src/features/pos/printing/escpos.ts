@@ -325,6 +325,7 @@ export function receiptToEscPos(data: PosReceiptData, paper: TicketPaper): Uint8
   t.bold();
   t.center(data.merchant?.name || "ZENTRO");
   t.bold(false);
+  if (data.merchant?.gst_number) t.center(`GST: ${data.merchant.gst_number}`);
   if (data.merchant?.address) t.center(data.merchant.address);
   if (data.merchant?.phone) t.center(data.merchant.phone);
 
