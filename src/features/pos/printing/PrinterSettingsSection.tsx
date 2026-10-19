@@ -65,7 +65,7 @@ const EMPTY_FORM: FormState = {
   name: "",
   connection: "network",
   address: "",
-  paper: "58mm",
+  paper: "80mm",
 };
 
 const FIELD =

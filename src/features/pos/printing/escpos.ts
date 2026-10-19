@@ -162,9 +162,13 @@ class Ticket {
     return this;
   }
 
-  align(a: Align): this {
-    this.currentAlign = a;
-    return this.raw([ESC, 0x61, a === "left" ? 0 : a === "center" ? 1 : 2]);
+  align(_a: Align): this {
+    // Keep printer in left alignment (ESC a 0).
+    // ESC a 1 (hardware center) centers across the printer mechanism's physical width
+    // (e.g. 80mm / 48 columns) rather than the ticket layout width (e.g. 58mm / 32 columns),
+    // which pushes centered text to the right of the bill.
+    // Software column padding in center() ensures exact centering across this.cols.
+    return this.raw([ESC, 0x61, 0]);
   }
 
   bold(on = true): this {
@@ -181,15 +185,16 @@ class Ticket {
     return this;
   }
 
-  /** Wrapped lines, centered. */
+  /** Wrapped lines, centered across this.cols width. */
   center(text: string): this {
     for (const line of wrapText(text, this.cols)) {
-      if (this.currentAlign === "center") {
-        this.text(line.trim()).nl();
-      } else {
-        const pad = Math.max(0, Math.floor((this.cols - line.length) / 2));
-        this.text(" ".repeat(pad) + line).nl();
+      const trimmed = line.trim();
+      if (!trimmed) {
+        this.nl();
+        continue;
       }
+      const pad = Math.max(0, Math.floor((this.cols - trimmed.length) / 2));
+      this.text(" ".repeat(pad) + trimmed).nl();
     }
     return this;
   }
