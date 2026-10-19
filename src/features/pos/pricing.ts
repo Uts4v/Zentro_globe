@@ -44,7 +44,9 @@ export function usePosCartPricing(): PosCartPricing {
         key: item.key,
         quantity: item.quantity,
         unitPrice: item.is_free ? 0 : item.price,
-        taxClass: taxClassById.get(item.menu_item_id) ?? "standard",
+        taxClass:
+          (item.menu_item_id != null ? taxClassById.get(item.menu_item_id) : undefined) ??
+          "standard",
       })),
       // An offer's value was computed by the server for this cart; it is
       // re-checked whenever the cart changes (see usePendingOfferRefresh).

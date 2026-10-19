@@ -327,9 +327,30 @@ export const posUpdateOrderStatus = (
     }),
   });
 
+/**
+ * One line sent to the order endpoints. A normal line names a menu item; an
+ * ad-hoc "custom" line (`is_custom`) carries its own name and manual price and
+ * is only accepted from staff.
+ */
+export interface PosOrderItemPayload {
+  menu_item_id?: number | null;
+  quantity: number;
+  /** Variant/modifier picks for this line. Required when the item has groups. */
+  selections?: MenuSelection[];
+  special_instructions?: string;
+  /** Give this line free (needs the merchant setting, permission and PIN). */
+  is_free?: boolean;
+  /** Ad-hoc line with a manual price and no menu item (staff only). */
+  is_custom?: boolean;
+  /** The line's name; required when `is_custom`. */
+  name?: string;
+  /** The manual unit price; required when `is_custom`. */
+  price?: number;
+}
+
 export const posAddItemsToOrder = (
   orderId: number,
-  items: { menu_item_id: number; quantity: number }[],
+  items: PosOrderItemPayload[],
 ) =>
   djangoFetch<PosOrder>(apiUrl(`/orders/${orderId}/add-items/`), {
     method: "POST",
@@ -634,6 +655,8 @@ export interface PosOrder {
     complimentary_value?: string;
     /** Added by an offer; cannot be edited on its own. */
     is_promotion_reward?: boolean;
+    /** Ad-hoc staff line with a manual price; not linked to the menu catalog. */
+    is_custom?: boolean;
   }>;
   cancellation_reason: string;
   cancelled_by: string;
@@ -740,6 +763,8 @@ export interface PosReceiptData {
     line_total?: string;
     tax_class?: string;
     special_instructions?: string;
+    /** Ad-hoc staff line with a manual price; not linked to the menu catalog. */
+    is_custom?: boolean;
     options?: Array<{ group_name: string; option_name: string; kind: string }>;
   }>;
   subtotal: string;
@@ -909,15 +934,7 @@ export interface PosBootstrapResponse {
 
 export interface PosCreateOrderPayload {
   merchant_id: number;
-  items: Array<{
-    menu_item_id: number;
-    quantity: number;
-    /** Variant/modifier picks for this line. Required when the item has groups. */
-    selections?: MenuSelection[];
-    special_instructions?: string;
-    /** Give this line free (needs the merchant setting, permission and PIN). */
-    is_free?: boolean;
-  }>;
+  items: PosOrderItemPayload[];
   notes?: string;
   fulfillment_type?: string;
   table_id?: number | null;

@@ -12,11 +12,19 @@ never from today's menu, so a menu edit cannot change an open bill.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal, InvalidOperation
 
 from config.menu_pricing import LineValidationError, PricedOption, validate_and_price_line
+from config.order_utils import QuantityValidationError, parse_quantity
 
 from .money import ZERO, to_decimal
 from .types import TAX_CLASS_STANDARD, TAX_CLASSES, LineInput, PricingError
+
+# Ad-hoc POS lines take their price from the request, so it is bounded here the
+# same way OrderItem.price is (max_digits=10, decimal_places=2).
+MAX_CUSTOM_NAME_LENGTH = 255
+MAX_CUSTOM_PRICE = Decimal("99999999.99")
+MAX_CUSTOM_INSTRUCTIONS = 500
 
 
 @dataclass
@@ -32,6 +40,98 @@ def _tax_class(menu_item) -> str:
     return value if value in TAX_CLASSES else TAX_CLASS_STANDARD
 
 
+def price_custom_line(
+    row,
+    *,
+    staff_comp: bool = False,
+    allow_free: bool = False,
+    free_by=None,
+    key_prefix: str = "new",
+    index: int = 0,
+) -> PricedRequestLine:
+    """
+    Price an ad-hoc POS line that has no menu item behind it.
+
+    The name and price come from the request (there is no catalog row to read
+    them from), so both are strictly validated; callers must only reach here for
+    an authorised employee. Otherwise the line is an ordinary priced order line:
+    ``standard`` tax class, eligible for order-level discounts, no loyalty
+    points, and never persisted to the menu catalog.
+    """
+    name = str(row.get("name") or "").strip()
+    if not name:
+        raise PricingError("A custom item needs a name.", code="invalid_custom_item")
+    name = name[:MAX_CUSTOM_NAME_LENGTH]
+
+    raw_price = row.get("price")
+    if raw_price is None or raw_price == "":
+        raise PricingError("A custom item needs a price.", code="invalid_custom_item")
+    try:
+        unit_price = to_decimal(raw_price)
+    except (InvalidOperation, TypeError, ValueError):
+        raise PricingError("A custom item needs a valid price.", code="invalid_custom_item")
+    if unit_price < ZERO:
+        raise PricingError(
+            "A custom item price cannot be negative.", code="invalid_custom_item",
+        )
+    if unit_price > MAX_CUSTOM_PRICE:
+        raise PricingError("That custom item price is too large.", code="invalid_custom_item")
+
+    try:
+        quantity = parse_quantity(row.get("quantity"), default=1)
+    except QuantityValidationError as exc:
+        raise PricingError(f"{name}: {exc}", code="invalid_custom_item")
+
+    if row.get("selections"):
+        raise PricingError(
+            "A custom item cannot carry menu options.", code="invalid_custom_item",
+        )
+
+    special_instructions = str(row.get("special_instructions") or "")[:MAX_CUSTOM_INSTRUCTIONS]
+    tax_class = row.get("tax_class")
+    if tax_class not in TAX_CLASSES:
+        tax_class = TAX_CLASS_STANDARD
+
+    is_free = bool(allow_free and row.get("is_free")) and not staff_comp
+    charged_price = ZERO if (staff_comp or is_free) else unit_price
+
+    item_fields = {
+        "menu_item": None,
+        "name": name,
+        "price": charged_price,
+        "list_unit_price": unit_price,
+        "quantity": quantity,
+        "subtotal": charged_price * quantity,
+        "special_instructions": special_instructions,
+        "tax_class": tax_class,
+        "is_custom": True,
+    }
+    if is_free:
+        item_fields.update({
+            "is_complimentary": True,
+            "complimentary_value": unit_price * quantity,
+            "complimentary_by": free_by,
+        })
+
+    return PricedRequestLine(
+        line=LineInput(
+            key=f"{key_prefix}:{index}",
+            name=name,
+            quantity=quantity,
+            unit_price=charged_price,
+            list_unit_price=unit_price,
+            tax_class=tax_class,
+            menu_item_id=None,
+            category_id=None,
+            option_ids=frozenset(),
+            modifier_unit_total=ZERO,
+        ),
+        item_fields=item_fields,
+        options=[],
+        points=0,
+    )
+
+
 def price_request_lines(
     merchant,
     request_items,
@@ -45,7 +145,10 @@ def price_request_lines(
     """
     Price client-requested lines for ``merchant``. Only the item ids, selections,
     quantities and instructions are read from the request; every price comes
-    from the database. Raises ``PricingError`` for anything the server rejects.
+    from the database. A row flagged ``is_custom`` is an authorised ad-hoc POS
+    line whose name and price come from the request instead (see
+    ``price_custom_line``). Raises ``PricingError`` for anything the server
+    rejects.
 
     A row flagged ``is_free`` is charged nothing only when the caller passes
     ``allow_free`` (after checking the merchant setting, the employee's
@@ -54,7 +157,11 @@ def price_request_lines(
     """
     from merchants.models import MenuItem
 
-    ids = [row.get("menu_item_id") for row in request_items]
+    ids = [
+        row.get("menu_item_id")
+        for row in request_items
+        if not row.get("is_custom") and row.get("menu_item_id") is not None
+    ]
     menu_items = {
         mi.id: mi
         for mi in MenuItem.objects.filter(id__in=ids, merchant=merchant, is_available=True)
@@ -62,6 +169,17 @@ def price_request_lines(
 
     priced = []
     for index, row in enumerate(request_items):
+        if row.get("is_custom"):
+            priced.append(price_custom_line(
+                row,
+                staff_comp=staff_comp,
+                allow_free=allow_free,
+                free_by=free_by,
+                key_prefix=key_prefix,
+                index=index,
+            ))
+            continue
+
         menu_item = menu_items.get(row.get("menu_item_id"))
         if menu_item is None:
             raise PricingError(

@@ -85,6 +85,7 @@ export function receiptFromOrder(order: PosOrder, merchant: MerchantInfo): PosRe
       quantity: item.quantity,
       subtotal: item.subtotal,
       special_instructions: item.special_instructions || "",
+      is_custom: item.is_custom,
       options: (item.options ?? []).map((o) => ({
         group_name: o.group_name,
         option_name: o.option_name,
@@ -175,6 +176,7 @@ export function billFromOfflineOrder(order: OfflineOrder, merchant: MerchantInfo
       price: String(item.price),
       quantity: item.quantity,
       subtotal: String(item.subtotal),
+      is_custom: item.is_custom,
     })),
     subtotal: String(order.cart_snapshot.reduce((sum, item) => sum + item.subtotal, 0)),
     discounts: [],

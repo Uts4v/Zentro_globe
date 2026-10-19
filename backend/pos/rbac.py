@@ -43,6 +43,7 @@ PERMISSION_GROUPS = [
         ("payments.refund", "Refund", "Give money back to a customer."),
         ("discounts.apply", "Give discounts", "Apply a discount to an order."),
         ("items.free", "Give free items", "Mark an item as free on an order."),
+        ("items.custom", "Add custom items", "Add a one-off item with a manual price to an order."),
         ("shifts.close", "Close the cash shift", "Count the drawer and close the shift."),
     ]),
     ("tables", "Tables", [

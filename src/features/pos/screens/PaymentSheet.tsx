@@ -91,7 +91,7 @@ type TicketWorker = { display_name?: string; name?: string } | null;
 type TicketLine = {
   name: string;
   quantity: number;
-  menu_item_id: number;
+  menu_item_id: number | null;
   special_instructions?: string;
   selections?: MenuSelection[];
 };
@@ -130,7 +130,10 @@ function makeOfflineKOT(
       name: item.name,
       quantity: item.quantity,
       special_instructions: item.special_instructions || "",
-      options: resolveOptionLabels(groupsByItemId.get(item.menu_item_id), item.selections),
+      options: resolveOptionLabels(
+        item.menu_item_id != null ? groupsByItemId.get(item.menu_item_id) : undefined,
+        item.selections,
+      ),
     })),
   };
 }
@@ -202,7 +205,10 @@ function makeOfflineReceiptData(input: {
       quantity: item.quantity,
       subtotal: String(item.subtotal),
       special_instructions: item.special_instructions || "",
-      options: resolveOptionLabels(input.groupsByItemId.get(item.menu_item_id), item.selections),
+      options: resolveOptionLabels(
+        item.menu_item_id != null ? input.groupsByItemId.get(item.menu_item_id) : undefined,
+        item.selections,
+      ),
     })),
     subtotal: pricing.subtotal,
     notes: input.cartNotes,
@@ -505,10 +511,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     await offlineOrders.save({
       id: offlineOrderId,
       merchant_id: merchant.id,
-      items: cart.map((item) => ({
-        menu_item_id: item.menu_item_id,
-        quantity: item.quantity,
-      })),
+      items: cartToOrderItems(cart),
       notes: cartNotes,
       fulfillment_type: fulfillmentType,
       table_id: selectedTableId ?? null,
@@ -521,6 +524,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         price: item.price,
         quantity: item.quantity,
         subtotal: item.subtotal,
+        is_custom: item.is_custom,
       })),
       total: roundMoney(total),
       status: "pending_sync",

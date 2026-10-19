@@ -319,6 +319,7 @@ export default function Receipt({
               <div className="receipt-item-row text-[15px]">
                 <span className="receipt-bold">
                   {item.quantity}x {item.name}
+                  {item.is_custom ? <span className="text-[11px] opacity-70"> (custom)</span> : null}
                 </span>
                 <span>
                   {Number(item.price) === 0

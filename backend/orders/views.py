@@ -1509,7 +1509,11 @@ def add_items_to_order(request, pk):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    serializer = AddItemsToOrderSerializer(data=request.data)
+    # The merchant owner (POS/reception) may append ad-hoc custom lines; a
+    # customer adding to their own order may not set their own prices.
+    serializer = AddItemsToOrderSerializer(
+        data=request.data, context={"allow_custom": is_merchant_owner},
+    )
     if not serializer.is_valid():
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 

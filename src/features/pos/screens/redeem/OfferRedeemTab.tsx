@@ -10,7 +10,7 @@ import {
   type RewardOption,
 } from "@/lib/api/offers";
 import { QrCameraScanner } from "@/features/offers/components/QrCameraScanner";
-import { cartToOrderItems, usePosStore } from "../../store";
+import { cartToOfferLines, usePosStore } from "../../store";
 import { pendingOfferFrom } from "../../offers";
 
 /**
@@ -53,7 +53,7 @@ export default function OfferRedeemTab({ onDone }: { onDone: () => void }) {
         value,
         cart.length
           ? {
-              items: cartToOrderItems(usePosStore.getState().cart),
+              items: cartToOfferLines(usePosStore.getState().cart),
               fulfillment_type: fulfillmentType,
             }
           : {},

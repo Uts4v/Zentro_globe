@@ -43,8 +43,12 @@ class OrderItemSerializer(serializers.ModelSerializer):
             "special_instructions", "options",
             "variant_name", "modifier_summary",
             "is_complimentary", "complimentary_value", "is_promotion_reward",
+            "is_custom",
         ]
-        read_only_fields = ["id", "is_complimentary", "complimentary_value", "is_promotion_reward"]
+        read_only_fields = [
+            "id", "is_complimentary", "complimentary_value",
+            "is_promotion_reward", "is_custom",
+        ]
 
     def _kind(self, opt):
         return getattr(opt, "kind", "modifier")
@@ -388,7 +392,7 @@ class CustomerOrderSerializer(serializers.ModelSerializer):
 
 
 class CreateOrderItemSerializer(serializers.Serializer):
-    menu_item_id = serializers.IntegerField()
+    menu_item_id = serializers.IntegerField(required=False, allow_null=True)
     quantity     = serializers.IntegerField(min_value=1)
     selections = serializers.ListField(
         child=serializers.DictField(),
@@ -403,6 +407,47 @@ class CreateOrderItemSerializer(serializers.Serializer):
         max_length=500,
         help_text="Per-line special requests (stored as an immutable snapshot).",
     )
+    # ── Ad-hoc "custom" line (staff only): a manual price, no menu item ───────
+    is_custom = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="An ad-hoc line with a manual price and no menu item. Staff only.",
+    )
+    name = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+        help_text="The ad-hoc line's name (required when is_custom).",
+    )
+    price = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+        min_value=0,
+        help_text="The manually entered unit price (required when is_custom).",
+    )
+
+    def validate(self, attrs):
+        # Whether a caller may post an ad-hoc line is decided by the endpoint
+        # (POS/merchant yes, customer-facing no) and signalled through context.
+        if attrs.get("is_custom"):
+            if not self.context.get("allow_custom"):
+                raise serializers.ValidationError(
+                    {"is_custom": "Custom items are not allowed here."}
+                )
+            if not (attrs.get("name") or "").strip():
+                raise serializers.ValidationError({"name": "A custom item needs a name."})
+            if attrs.get("price") is None:
+                raise serializers.ValidationError({"price": "A custom item needs a price."})
+            if attrs.get("selections"):
+                raise serializers.ValidationError(
+                    {"selections": "A custom item cannot carry menu options."}
+                )
+            attrs["name"] = attrs["name"].strip()
+        elif attrs.get("menu_item_id") is None:
+            raise serializers.ValidationError({"menu_item_id": "This field is required."})
+        return attrs
 
 
 class CreateOrderSerializer(serializers.Serializer):

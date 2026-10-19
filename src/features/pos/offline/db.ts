@@ -3,7 +3,7 @@
  * Stores orders, payments, and sync queue items.
  */
 
-import type { PosReceiptData, PosOrder } from "../api";
+import type { PosOrderItemPayload, PosReceiptData, PosOrder } from "../api";
 
 const DB_NAME = "zentro-pos";
 const DB_VERSION = 1;
@@ -36,7 +36,7 @@ export interface OfflineKOT {
 export interface OfflineOrder {
   id: string; // client-generated UUID
   merchant_id: number;
-  items: Array<{ menu_item_id: number; quantity: number }>;
+  items: PosOrderItemPayload[];
   notes: string;
   fulfillment_type: string;
   table_id?: number | null;
@@ -50,6 +50,8 @@ export interface OfflineOrder {
     price: number;
     quantity: number;
     subtotal: number;
+    /** Ad-hoc staff line with a manual price; not linked to the menu catalog. */
+    is_custom?: boolean;
   }>;
   total: number;
   status: "pending_sync" | "syncing" | "synced" | "failed";

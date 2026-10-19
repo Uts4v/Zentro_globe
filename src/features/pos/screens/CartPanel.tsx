@@ -26,10 +26,12 @@ import {
   Star,
   Pencil,
   PackageMinus,
+  Sparkles,
 } from "lucide-react";
 import ProductDetailSheet, {
   type ProductDraft,
 } from "@/features/catalog/components/ProductDetailSheet";
+import CustomItemSheet, { type CustomItemDraft } from "./CustomItemSheet";
 import type { MenuItemSelectable } from "@/lib/api/types";
 import MinusStockModal from "./MinusStockModal";
 import { useOnlineStatus } from "../offline/hooks";
@@ -49,6 +51,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
   const fulfillmentType = usePosStore((s) => s.fulfillmentType);
   const posSettings = usePosStore((s) => s.posSettings);
   const canCreateOrders = hasStaffPermission("orders.create");
+  const canAddCustom = hasStaffPermission("items.custom");
   const canApplyDiscount = hasStaffPermission("discounts.apply");
   const canManageCustomers = hasStaffPermission("customers.manage");
   const canManageRewards = hasStaffPermission("rewards.manage");
@@ -67,6 +70,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
   const menu = usePosStore((s) => s.menu);
   const tables = usePosStore((s) => s.tables);
   const selectedTableId = usePosStore((s) => s.selectedTableId);
+  const addItemToCart = usePosStore((s) => s.addItemToCart);
   const updateCartItemQty = usePosStore((s) => s.updateCartItemQty);
   const updateCartItem = usePosStore((s) => s.updateCartItem);
   const removeItemFromCart = usePosStore((s) => s.removeItemFromCart);
@@ -101,6 +105,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
   const [freeOrderLoading, setFreeOrderLoading] = useState(false);
   const [freeOrderError, setFreeOrderError] = useState<string | null>(null);
   const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [showCustomSheet, setShowCustomSheet] = useState(false);
   const [showMinusStock, setShowMinusStock] = useState(false);
   const [selectedMinusStockItem, setSelectedMinusStockItem] = useState<{
     name: string;
@@ -146,7 +151,11 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
 
   const isEmpty = cart.length === 0;
   const editingLine = cart.find((item) => item.key === editingKey) ?? null;
-  const editingMenuItem = editingLine ? (menuItemById.get(editingLine.menu_item_id) ?? null) : null;
+  const editingMenuItem = editingLine
+    ? editingLine.menu_item_id != null
+      ? (menuItemById.get(editingLine.menu_item_id) ?? null)
+      : null
+    : null;
 
   function handleEditLine(draft: ProductDraft) {
     if (!editingLine) return;
@@ -158,6 +167,39 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
       subtotal: draft.unitPrice * draft.qty,
       selections: draft.selections,
       special_instructions: draft.specialInstructions,
+    });
+    setEditingKey(null);
+  }
+
+  /** Add a one-off custom line the cashier priced by hand. */
+  function handleAddCustom(draft: CustomItemDraft) {
+    addItemToCart({
+      key: `custom:${safeUuid()}`,
+      menu_item_id: null,
+      name: draft.name,
+      price: draft.price,
+      quantity: draft.quantity,
+      subtotal: draft.price * draft.quantity,
+      selections: [],
+      special_instructions: draft.special_instructions,
+      is_custom: true,
+    });
+  }
+
+  /** Update a custom line, keeping its key so it stays a distinct line. */
+  function handleEditCustom(draft: CustomItemDraft) {
+    if (!editingLine) return;
+    updateCartItem(editingLine.key, {
+      key: editingLine.key,
+      menu_item_id: null,
+      name: draft.name,
+      price: draft.price,
+      quantity: draft.quantity,
+      subtotal: draft.price * draft.quantity,
+      selections: [],
+      special_instructions: draft.special_instructions,
+      is_custom: true,
+      is_free: editingLine.is_free,
     });
     setEditingKey(null);
   }
@@ -512,7 +554,8 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
         ) : (
           <div className="divide-y divide-border">
             {cart.map((item, idx) => {
-              const meta = menuItemById.get(item.menu_item_id);
+              const meta =
+                item.menu_item_id != null ? menuItemById.get(item.menu_item_id) : undefined;
               const optionsText = meta ? lineSelectionsText(meta, item.selections ?? []) : "";
               return (
                 <div
@@ -528,6 +571,8 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                         className="h-full w-full object-cover"
                         crossOrigin="anonymous"
                       />
+                    ) : item.is_custom ? (
+                      <Sparkles className="h-5 w-5 text-muted-foreground" />
                     ) : (
                       meta?.emoji || "🍽️"
                     )}
@@ -559,6 +604,11 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                         {optionsText}
                       </p>
                     ) : null}
+                    {item.is_custom ? (
+                      <span className="mt-0.5 inline-block rounded-full bg-mist px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+                        Custom
+                      </span>
+                    ) : null}
                     {item.special_instructions ? (
                       <p className="mt-0.5 truncate text-[11px] italic text-muted-foreground/90">
                         &ldquo;{item.special_instructions}&rdquo;
@@ -569,8 +619,12 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                     <div className="mt-2 flex items-center gap-2">
                       <button
                         onClick={() => setEditingKey(item.key)}
-                        disabled={!meta}
-                        title="Edit item options and instructions"
+                        disabled={!meta && !item.is_custom}
+                        title={
+                          item.is_custom
+                            ? "Edit this custom item"
+                            : "Edit item options and instructions"
+                        }
                         aria-label={`Edit ${item.name}`}
                         className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-mist disabled:opacity-40"
                       >
@@ -633,7 +687,7 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
                           <span>{item.is_free ? "Free ✓" : "Free"}</span>
                         </button>
                       )}
-                      {fulfillmentType === "dine-in" && (
+                      {fulfillmentType === "dine-in" && !item.is_custom && (
                         <button
                           type="button"
                           onClick={() => {
@@ -673,6 +727,32 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
           submitLabel="Update item"
           onClose={() => setEditingKey(null)}
           onAdd={handleEditLine}
+        />
+      )}
+
+      {editingLine?.is_custom && (
+        <CustomItemSheet
+          key={editingLine.key}
+          open
+          currencySymbol={currencySymbol}
+          submitLabel="Update item"
+          initial={{
+            name: editingLine.name,
+            price: editingLine.price,
+            quantity: editingLine.quantity,
+            special_instructions: editingLine.special_instructions,
+          }}
+          onClose={() => setEditingKey(null)}
+          onSubmit={handleEditCustom}
+        />
+      )}
+
+      {showCustomSheet && (
+        <CustomItemSheet
+          open
+          currencySymbol={currencySymbol}
+          onClose={() => setShowCustomSheet(false)}
+          onSubmit={handleAddCustom}
         />
       )}
 
@@ -793,6 +873,16 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
       {/* ── Checkout actions ── */}
       <div className="sticky bottom-0 shrink-0 space-y-2 border-t border-border bg-background/95 backdrop-blur px-5 py-3">
         <div className="grid grid-cols-2 gap-2">
+          {canAddCustom && (
+            <button
+              onClick={() => setShowCustomSheet(true)}
+              title="Add a one-off item with your own price"
+              className="flex h-10 items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-card px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-mist hover:text-foreground"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Add Custom Item
+            </button>
+          )}
           {!isEmpty && posSettings?.receipt_printing_enabled && (
             <button
               onClick={handlePrintBill}

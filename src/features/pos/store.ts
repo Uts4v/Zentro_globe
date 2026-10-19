@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { cartKey } from "@/lib/menu-utils";
 import { isGatewayError } from "@/lib/connectivity";
-import type { MenuSelection } from "@/lib/api/types";
 import {
   PosBootstrapResponse,
   PosDevice,
@@ -14,24 +13,10 @@ import {
   PosMenuSnapshot,
 } from "./api";
 import { clearAllSavedBootstrap, saveSavedBootstrap } from "./offline/cache";
+import type { PosOrderItem } from "./cart-payload";
 
-/**
- * One POS cart line. `key` identifies menu item + selections + instructions so
- * that "Small Latte" and "Large Latte" stay two lines instead of collapsing
- * into one when the cashier taps the same product twice.
- */
-type PosOrderItem = {
-  key: string;
-  menu_item_id: number;
-  name: string;
-  price: number;
-  quantity: number;
-  subtotal: number;
-  selections: MenuSelection[];
-  special_instructions: string;
-  /** Given free by staff: charged nothing, `price` keeps the normal price for display. */
-  is_free?: boolean;
-};
+export { cartToOfferLines, cartToOrderItems } from "./cart-payload";
+export type { PosOrderItem } from "./cart-payload";
 
 /**
  * A manual discount chosen for the cart before the order exists. The server
@@ -80,23 +65,6 @@ export function cartFingerprint(cart: PosOrderItem[], fulfillmentType: string): 
 
 /** What callers hand to `addItemToCart`; `key` is derived when omitted. */
 export type PosOrderItemInput = Omit<PosOrderItem, "key"> & { key?: string };
-
-/**
- * Build the order payload items for a POS cart.
- *
- * Selections and instructions must travel with every line: the server prices
- * from the submitted selections, so a line sent without them would either be
- * rejected (required group) or priced as the unconfigured base variant.
- */
-export function cartToOrderItems(cart: PosOrderItem[]) {
-  return cart.map((item) => ({
-    menu_item_id: item.menu_item_id,
-    quantity: item.quantity,
-    selections: item.selections,
-    special_instructions: item.special_instructions,
-    ...(item.is_free ? { is_free: true } : {}),
-  }));
-}
 
 /** Marks a cart line's key as the free copy of that line, so it never merges with a paid one. */
 const FREE_SUFFIX = "#free";

@@ -354,7 +354,7 @@ export function receiptToEscPos(data: PosReceiptData, paper: TicketPaper): Uint8
 
   data.items.forEach((item) => {
     const amount = Number(item.price) === 0 ? "FREE" : cur(item.subtotal);
-    t.item(item.quantity, item.name, amount);
+    t.item(item.quantity, item.is_custom ? `${item.name} (custom)` : item.name, amount);
     if (item.quantity > 1 && Number(item.price) > 0) {
       const line = `@ ${cur(item.price)} each`;
       t.text(" ".repeat(Math.max(0, t.cols - line.length)) + line).nl();

@@ -648,6 +648,10 @@ class OrderItem(models.Model):
         default=False,
         help_text="Added as an offer's free/reward item (still a real, priced line).",
     )
+    is_custom = models.BooleanField(
+        default=False,
+        help_text="One-off POS line with a manual price; not linked to the menu catalog.",
+    )
     # ── Free item given by staff (merchant setting + permission + PIN) ────────
     is_complimentary = models.BooleanField(
         default=False,

@@ -1804,6 +1804,13 @@ def create_pos_order(request):
         if refused is not None:
             return refused
 
+    # Custom (ad-hoc) lines carry a manual price, so they need the dedicated
+    # permission — the same kind of gate as free items and discounts.
+    if any(isinstance(row, dict) and row.get("is_custom") for row in items_data):
+        denied = _perm_denied(worker, "items.custom", request)
+        if denied:
+            return denied
+
     # ── Server-side authoritative pricing (orders.pricing; never trust
     # frontend totals). Staff comp orders are priced at zero. ───────────────
     from orders.pricing import PricingError, price_request_lines
@@ -3513,6 +3520,7 @@ def receipt_data(request, order_id):
             "line_total": str(item.total_amount),
             "tax_class": item.tax_class,
             "is_free": item.is_complimentary,
+            "is_custom": item.is_custom,
             "free_value": str(item.complimentary_value),
             "special_instructions": item.special_instructions or "",
             "options": [
@@ -4780,6 +4788,12 @@ def table_order(request, token):
 
     if not items_data:
         return Response({"error": "At least one item is required."},
+                        status=status.HTTP_400_BAD_REQUEST)
+
+    # Custom (manual-price) items are a staff-only capability; a customer can
+    # never name their own price from the QR menu.
+    if any(isinstance(row, dict) and row.get("is_custom") for row in items_data):
+        return Response({"error": "Custom items can only be added by staff."},
                         status=status.HTTP_400_BAD_REQUEST)
 
     # Optionally link a customer if provided

@@ -8,7 +8,7 @@ import {
 } from "@/lib/api/offers";
 import {
   cartFingerprint,
-  cartToOrderItems,
+  cartToOfferLines,
   usePosStore,
   type PendingOffer,
   type ServerCartPricing,
@@ -68,7 +68,7 @@ export function usePendingOfferRefresh() {
     const timer = setTimeout(async () => {
       try {
         const lookup = await posOffersApi.lookup(pendingOffer.code, {
-          items: cartToOrderItems(cart),
+          items: cartToOfferLines(cart),
           fulfillment_type: fulfillmentType,
         });
         if (ticket !== inFlight.current) return;

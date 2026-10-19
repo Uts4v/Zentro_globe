@@ -49,7 +49,10 @@ import {
   ChevronDown,
   Percent,
   Trash2,
+  Sparkles,
 } from "lucide-react";
+import { safeUuid } from "@/lib/utils";
+import CustomItemSheet, { type CustomItemDraft } from "./CustomItemSheet";
 import { markLocalBatch } from "../voice/coordinator";
 import CustomerSearchModal from "./CustomerSearchModal";
 import MinusStockModal from "./MinusStockModal";
@@ -1508,7 +1511,11 @@ export default function OrderDetailScreen({
 // ── Add Items Modal ─────────────────────────────────────────────────────────
 type AddToOrderLine = {
   key: string;
-  item: MenuItem;
+  /** Null for a custom (ad-hoc) line, which has a manual name and price. */
+  item: MenuItem | null;
+  /** Name for a custom line (there is no menu item to read it from). */
+  name?: string;
+  is_custom?: boolean;
   qty: number;
   unitPrice: number;
   selections: MenuSelection[];
@@ -1540,7 +1547,9 @@ function AddItemsModal({
   const [cart, setCart] = useState<AddToOrderLine[]>([]);
   const [detailItem, setDetailItem] = useState<MenuItem | null>(null);
   const [search, setSearch] = useState("");
+  const [showCustomSheet, setShowCustomSheet] = useState(false);
   const posSettings = usePosStore((s) => s.posSettings);
+  const canAddCustom = hasStaffPermission("items.custom");
   const currencySymbol = posSettings?.currency_symbol || "Rs";
 
   useEffect(() => {
@@ -1603,6 +1612,20 @@ function AddItemsModal({
     setDetailItem(null);
   }
 
+  /** Append a one-off custom line, priced by hand. */
+  function handleAddCustom(draft: CustomItemDraft) {
+    pushLine({
+      key: `custom:${safeUuid()}`,
+      item: null,
+      name: draft.name,
+      is_custom: true,
+      qty: draft.quantity,
+      unitPrice: draft.price,
+      selections: [],
+      special_instructions: draft.special_instructions,
+    });
+  }
+
   function changeQty(key: string, delta: number) {
     setCart((prev) =>
       prev.flatMap((c) => {
@@ -1624,12 +1647,22 @@ function AddItemsModal({
         order.id,
         // Selections and instructions must ride along: the server prices from
         // them, so omitting them either 400s or bills the base configuration.
-        cart.map((c) => ({
-          menu_item_id: Number(c.item.id),
-          quantity: c.qty,
-          selections: c.selections,
-          special_instructions: c.special_instructions,
-        })),
+        cart.map((c) =>
+          c.is_custom
+            ? {
+                is_custom: true,
+                name: c.name,
+                price: c.unitPrice,
+                quantity: c.qty,
+                special_instructions: c.special_instructions,
+              }
+            : {
+                menu_item_id: Number(c.item?.id),
+                quantity: c.qty,
+                selections: c.selections,
+                special_instructions: c.special_instructions,
+              },
+        ),
       );
       // Staff entered this add-on here; make sure this terminal never reads it back.
       markLocalBatch(updated);
@@ -1687,6 +1720,15 @@ function AddItemsModal({
               className="w-full rounded-lg border border-border bg-muted/50 py-2 pl-8 pr-3 text-xs placeholder:text-muted-foreground focus:border-ink focus:outline-none"
             />
           </div>
+          {canAddCustom && (
+            <button
+              onClick={() => setShowCustomSheet(true)}
+              className="mt-2 flex h-9 w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-border text-xs font-medium text-muted-foreground hover:bg-muted"
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              Add Custom Item
+            </button>
+          )}
         </div>
 
         {/* Menu items */}
@@ -1756,8 +1798,13 @@ function AddItemsModal({
               {cart.map((c) => (
                 <div key={c.key} className="flex justify-between gap-2">
                   <span className="min-w-0 text-muted-foreground">
-                    {c.qty}× {c.item.name}
-                    {c.selections.length > 0 && (
+                    {c.qty}× {c.item?.name ?? c.name}
+                    {c.is_custom ? (
+                      <span className="ml-1 rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide">
+                        Custom
+                      </span>
+                    ) : null}
+                    {c.item && c.selections.length > 0 && (
                       <span className="block text-[10px] text-muted-foreground/80">
                         {lineSelectionsText(c.item, c.selections)}
                       </span>
@@ -1806,6 +1853,16 @@ function AddItemsModal({
         onAdd={handleSheetAdd}
         submitLabel="Add to order"
       />
+
+      {showCustomSheet && (
+        <CustomItemSheet
+          open
+          currencySymbol={currencySymbol}
+          submitLabel="Add to order"
+          onClose={() => setShowCustomSheet(false)}
+          onSubmit={handleAddCustom}
+        />
+      )}
     </div>
   );
 }
