@@ -512,6 +512,10 @@ def run_job(payload):
     if len(data) > MAX_JOB_BYTES:
         raise ValueError("print job too large")
 
+    # Sanitize UTF-8 Rupee symbol sequence (0xE2 0x82 0xB9) which renders as
+    # 'Γé╣' on ESC/POS thermal printers defaulting to Code Page 437.
+    data = data.replace(b"\xe2\x82\xb9", b"Rs.")
+
     results = []
     for _ in range(copies):
         if connection == "network":

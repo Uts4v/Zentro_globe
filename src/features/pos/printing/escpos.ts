@@ -25,6 +25,57 @@ const encoder = new TextEncoder();
 const ESC = 0x1b;
 const GS = 0x1d;
 
+/**
+ * ESC/POS thermal printers typically operate on Code Page 437 (PC437).
+ * In UTF-8, the Indian Rupee symbol '₹' (\u20B9) is encoded as 3 bytes: 0xE2 0x82 0xB9.
+ * When decoded by a CP437 thermal printer:
+ *   - 0xE2 -> 'Γ'
+ *   - 0x82 -> 'é'
+ *   - 0xB9 -> '╣'
+ * which renders as the mojibake 'Γé╣' (or 'â‚¹' in Latin-1 / Win-1252).
+ *
+ * This function sanitizes all receipt strings by replacing '₹', literal UTF-8 byte
+ * sequences (\xE2\x82\xB9), and known mojibake artifacts ('Γé╣' / 'â‚¹') with 'Rs.'.
+ */
+export function sanitizeEscPosText(text: string): string {
+  if (!text) return "";
+  return String(text)
+    // Indian Rupee Unicode (₹ / \u20B9)
+    .replace(/\u20B9|₹/g, "Rs.")
+    // CP437 Mojibake (Γé╣)
+    .replace(/Γé╣/g, "Rs.")
+    // Windows-1252 / ISO-8859-1 Mojibake (â‚¹)
+    .replace(/â‚¹/g, "Rs.")
+    // Raw escaped byte literals if strings contain escaped representations
+    .replace(/(?:\\x?E2\\x?82\\x?B9|\xE2\x82\xB9)/gi, "Rs.");
+}
+
+/**
+ * Byte-level safety net for the raw ESC/POS stream.
+ * Replaces any remaining raw UTF-8 sequence [0xE2, 0x82, 0xB9] with ASCII 'Rs.' [0x52, 0x73, 0x2E].
+ */
+export function sanitizeEscPosBytes(bytes: Uint8Array): Uint8Array {
+  let hasRupee = false;
+  for (let i = 0; i < bytes.length - 2; i++) {
+    if (bytes[i] === 0xe2 && bytes[i + 1] === 0x82 && bytes[i + 2] === 0xb9) {
+      hasRupee = true;
+      break;
+    }
+  }
+  if (!hasRupee) return bytes;
+
+  const result: number[] = [];
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] === 0xe2 && bytes[i + 1] === 0x82 && bytes[i + 2] === 0xb9) {
+      result.push(0x52, 0x73, 0x2e); // 'R', 's', '.'
+      i += 2;
+    } else {
+      result.push(bytes[i]);
+    }
+  }
+  return Uint8Array.from(result);
+}
+
 export function charsPerLine(paper: TicketPaper): number {
   if (paper === "58mm") return 32;
   return 48;
@@ -32,8 +83,9 @@ export function charsPerLine(paper: TicketPaper): number {
 
 /** Greedy word wrap; words longer than the line are hard-broken. */
 export function wrapText(text: string, width: number): string[] {
+  const sanitized = sanitizeEscPosText(text);
   const out: string[] = [];
-  for (const paragraph of String(text ?? "").split("\n")) {
+  for (const paragraph of sanitized.split("\n")) {
     if (paragraph === "") {
       out.push("");
       continue;
@@ -100,7 +152,7 @@ class Ticket {
   }
 
   text(s: string): this {
-    this.chunks.push(...encoder.encode(s));
+    this.chunks.push(...encoder.encode(sanitizeEscPosText(s)));
     return this;
   }
 
@@ -138,16 +190,17 @@ class Ticket {
 
   /** Label on the left, value on the right (value bold); wraps when tight. */
   meta(label: string, value: string): this {
-    const v = String(value ?? "");
-    if (label.length + v.length + 1 <= this.cols) {
-      const gap = Math.max(1, this.cols - label.length - v.length);
-      this.text(label + " ".repeat(gap));
+    const l = sanitizeEscPosText(label);
+    const v = sanitizeEscPosText(String(value ?? ""));
+    if (l.length + v.length + 1 <= this.cols) {
+      const gap = Math.max(1, this.cols - l.length - v.length);
+      this.text(l + " ".repeat(gap));
       this.bold();
       this.text(v);
       this.bold(false);
       this.nl();
     } else {
-      this.text(label).nl();
+      this.text(l).nl();
       for (const line of wrapText(v, this.cols)) {
         this.text(" ".repeat(Math.max(0, this.cols - line.length)) + line).nl();
       }
@@ -158,11 +211,12 @@ class Ticket {
   /** Bold double-size key-value line (the TOTAL). */
   bigMeta(label: string, value: string): this {
     const cols = Math.floor(this.cols / 2);
-    const v = String(value ?? "");
-    const gap = Math.max(1, cols - label.length - v.length);
+    const l = sanitizeEscPosText(label);
+    const v = sanitizeEscPosText(String(value ?? ""));
+    const gap = Math.max(1, cols - l.length - v.length);
     this.bold();
     this.double();
-    this.text(label + " ".repeat(gap) + v);
+    this.text(l + " ".repeat(gap) + v);
     this.double(false);
     this.bold(false);
     this.nl();
@@ -171,18 +225,20 @@ class Ticket {
 
   /** `2 x Chicken Tikka` with an optional right-aligned amount. */
   item(qty: number, name: string, amount?: string): this {
-    const label = `${qty} x ${name}`;
+    const cleanName = sanitizeEscPosText(name);
+    const label = `${qty} x ${cleanName}`;
     if (amount === undefined) {
       this.bold();
       for (const line of wrapText(label, this.cols)) this.text(line).nl();
       this.bold(false);
       return this;
     }
-    const inner = Math.max(10, this.cols - amount.length - 1);
+    const cleanAmount = sanitizeEscPosText(amount);
+    const inner = Math.max(10, this.cols - cleanAmount.length - 1);
     const wrapped = wrapText(label, inner);
-    const gap = Math.max(1, this.cols - wrapped[0].length - amount.length);
+    const gap = Math.max(1, this.cols - wrapped[0].length - cleanAmount.length);
     this.bold();
-    this.text(wrapped[0] + " ".repeat(gap) + amount);
+    this.text(wrapped[0] + " ".repeat(gap) + cleanAmount);
     this.bold(false);
     this.nl();
     for (const line of wrapped.slice(1)) this.text(line).nl();
@@ -200,7 +256,7 @@ class Ticket {
   }
 
   bytes(): Uint8Array {
-    return Uint8Array.from(this.chunks);
+    return sanitizeEscPosBytes(Uint8Array.from(this.chunks));
   }
 }
 
@@ -261,7 +317,7 @@ export function kotToEscPos(ticket: KOTTicketData, paper: TicketPaper): Uint8Arr
 
 export function receiptToEscPos(data: PosReceiptData, paper: TicketPaper): Uint8Array {
   const t = new Ticket(paper);
-  const symbol = data.currency_symbol || "Rs";
+  const symbol = sanitizeEscPosText(data.currency_symbol || "Rs");
   const table = tableLabel(data.table?.name, data.table?.number);
   const cur = (v: string | number) => formatCurrency(v, symbol);
 
@@ -358,7 +414,8 @@ export function zReportToEscPos(
   currencySymbol = "Rs",
 ): Uint8Array {
   const t = new Ticket(paper);
-  const cur = (v: string | number) => formatCurrency(v, currencySymbol);
+  const symbol = sanitizeEscPosText(currencySymbol);
+  const cur = (v: string | number) => formatCurrency(v, symbol);
   const revenue = Number(data.total_revenue);
   const avgOrder = data.total_orders > 0 ? revenue / data.total_orders : 0;
 
