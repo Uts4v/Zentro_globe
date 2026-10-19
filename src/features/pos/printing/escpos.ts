@@ -140,6 +140,7 @@ type Align = "left" | "center" | "right";
 class Ticket {
   private chunks: number[] = [];
   readonly cols: number;
+  private currentAlign: Align = "left";
 
   constructor(paper: TicketPaper) {
     this.cols = charsPerLine(paper);
@@ -162,6 +163,7 @@ class Ticket {
   }
 
   align(a: Align): this {
+    this.currentAlign = a;
     return this.raw([ESC, 0x61, a === "left" ? 0 : a === "center" ? 1 : 2]);
   }
 
@@ -182,8 +184,12 @@ class Ticket {
   /** Wrapped lines, centered. */
   center(text: string): this {
     for (const line of wrapText(text, this.cols)) {
-      const pad = Math.max(0, Math.floor((this.cols - line.length) / 2));
-      this.text(" ".repeat(pad) + line).nl();
+      if (this.currentAlign === "center") {
+        this.text(line.trim()).nl();
+      } else {
+        const pad = Math.max(0, Math.floor((this.cols - line.length) / 2));
+        this.text(" ".repeat(pad) + line).nl();
+      }
     }
     return this;
   }

@@ -701,6 +701,17 @@
     background: #fff !important;
   }
 
+  .receipt-header,
+  .receipt-header * {
+    text-align: center !important;
+  }
+
+  .receipt-header .receipt-logo {
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
   .no-print {
     display: none !important;
   }

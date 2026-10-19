@@ -144,8 +144,8 @@ export function billFromOfflineOrder(order: OfflineOrder, merchant: MerchantInfo
     merchant: {
       id: merchant?.id ?? order.merchant_id,
       name: merchant?.business_name || order.kot?.merchantName || "",
-      address: "",
-      phone: "",
+      address: merchant?.address ?? "",
+      phone: merchant?.phone ?? "",
       logo_url: merchant?.logo_url ?? "",
       gst_number: merchant?.gst_number || "",
     },

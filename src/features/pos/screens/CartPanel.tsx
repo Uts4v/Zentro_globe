@@ -180,8 +180,8 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
       merchant: {
         id: 0,
         name: merchant?.business_name ?? "ZENTRO",
-        address: "",
-        phone: "",
+        address: merchant?.address ?? "",
+        phone: merchant?.phone ?? "",
         logo_url: merchant?.logo_url ?? "",
         gst_number: merchant?.gst_number ?? posSettings?.gst_number ?? "",
       },
@@ -244,10 +244,13 @@ export default function CartPanel({ onCheckout, onDiscount, onRedeemOffer }: Car
     }
     const receiptHtml = `
       <div style="font-family: 'Courier New', monospace; font-size: 12px; line-height: 1.35; width: 72mm; padding: 4mm; color: #000; background: #fff;">
-        <div style="text-align: center; margin-bottom: 8px;">
-          <p style="font-size: 16px; font-weight: bold; margin: 0;">${billData.merchant.name}</p>
-          ${billData.merchant.gst_number ? `<p style="font-size: 11px; font-weight: bold; margin: 2px 0;">GST: ${billData.merchant.gst_number}</p>` : ""}
-          <p style="font-size: 10px; color: #666; margin: 2px 0;">** DRAFT BILL **</p>
+        <div style="text-align: center; margin-bottom: 8px; width: 100%;">
+          ${billData.merchant.logo_url ? `<img src="${billData.merchant.logo_url}" alt="" style="height: 48px; width: 48px; object-fit: contain; display: block; margin: 0 auto 4px auto;" />` : ""}
+          <p style="font-size: 16px; font-weight: bold; margin: 0 0 2px 0; text-align: center;">${billData.merchant.name}</p>
+          ${billData.merchant.gst_number ? `<p style="font-size: 11px; font-weight: bold; margin: 2px 0; text-align: center;">GST: ${billData.merchant.gst_number}</p>` : ""}
+          ${billData.merchant.address ? `<p style="font-size: 11px; color: #444; margin: 2px 0; text-align: center;">${billData.merchant.address}</p>` : ""}
+          ${billData.merchant.phone ? `<p style="font-size: 11px; color: #444; margin: 2px 0; text-align: center;">${billData.merchant.phone}</p>` : ""}
+          <p style="font-size: 10px; color: #666; margin: 3px 0 0 0; text-align: center;">** DRAFT BILL **</p>
         </div>
         <hr style="border: none; border-top: 1px dashed #000; margin: 6px 0;">
         <div style="font-size: 11px;">

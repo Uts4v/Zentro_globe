@@ -69,7 +69,44 @@ export default function Receipt({
         width: ${width};
       }
       .receipt-wrap { width: 100%; }
-      .receipt-center { text-align: center; }
+      .receipt-center, .text-center { text-align: center !important; }
+      .receipt-header {
+        width: 100% !important;
+        margin: 0 auto 6px auto !important;
+        text-align: center !important;
+      }
+      .receipt-header * {
+        text-align: center !important;
+      }
+      .receipt-header p {
+        margin: 2px 0 !important;
+        text-align: center !important;
+        width: 100% !important;
+      }
+      .receipt-logo {
+        display: block !important;
+        margin: 0 auto 4px auto !important;
+        object-fit: contain;
+      }
+      .receipt-merchant-name {
+        font-size: 1.2em !important;
+        font-weight: bold !important;
+        letter-spacing: 0.04em !important;
+        margin: 0 0 2px 0 !important;
+        text-align: center !important;
+      }
+      .receipt-gst {
+        font-size: 0.92em !important;
+        font-weight: bold !important;
+        margin: 2px 0 !important;
+        text-align: center !important;
+      }
+      .receipt-address, .receipt-phone {
+        font-size: 0.88em !important;
+        color: #333 !important;
+        margin: 2px 0 !important;
+        text-align: center !important;
+      }
       .receipt-bold { font-weight: bold; }
       .receipt-line { display: flex; justify-content: space-between; gap: 8px; width: 100%; }
       .receipt-line > span:last-child { text-align: right; }
@@ -124,27 +161,80 @@ export default function Receipt({
         className={`receipt-print receipt-${printSize} rounded border border-border bg-white p-4 font-mono text-sm`}
       >
         {/* ── Header ── */}
-        <div className="text-center">
+        <div
+          className="receipt-header receipt-center text-center space-y-0.5"
+          style={{ textAlign: "center", width: "100%", margin: "0 auto 6px auto" }}
+        >
           {data.merchant?.logo_url && (
             <img
               src={data.merchant.logo_url}
               alt=""
-              className="mx-auto mb-1 object-contain"
-              style={{ height: LOGO_PX, width: LOGO_PX }}
+              className="receipt-logo mx-auto mb-1 object-contain"
+              style={{
+                height: LOGO_PX,
+                width: LOGO_PX,
+                display: "block",
+                marginLeft: "auto",
+                marginRight: "auto",
+                marginBottom: "4px",
+              }}
               crossOrigin="anonymous"
             />
           )}
-          <p className="text-lg font-bold tracking-wide">{merchantName}</p>
+          <p
+            className="receipt-merchant-name text-lg font-bold tracking-wide"
+            style={{
+              textAlign: "center",
+              fontWeight: "bold",
+              fontSize: "16px",
+              letterSpacing: "0.025em",
+              margin: "0 0 2px 0",
+              lineHeight: 1.25,
+            }}
+          >
+            {merchantName}
+          </p>
           {data.merchant?.gst_number ? (
-            <p className="text-[13px] font-semibold text-ink">
+            <p
+              className="receipt-gst text-[13px] font-semibold text-ink"
+              style={{
+                textAlign: "center",
+                fontWeight: "600",
+                fontSize: "12px",
+                margin: "2px 0",
+                lineHeight: 1.25,
+              }}
+            >
               GST: {data.merchant.gst_number}
             </p>
           ) : null}
           {data.merchant?.address && (
-            <p className="text-[13px] text-muted-foreground">{data.merchant.address}</p>
+            <p
+              className="receipt-address text-[13px] text-muted-foreground"
+              style={{
+                textAlign: "center",
+                fontSize: "12px",
+                color: "#444",
+                margin: "2px 0",
+                lineHeight: 1.25,
+              }}
+            >
+              {data.merchant.address}
+            </p>
           )}
           {data.merchant?.phone && (
-            <p className="text-[13px] text-muted-foreground">{data.merchant.phone}</p>
+            <p
+              className="receipt-phone text-[13px] text-muted-foreground"
+              style={{
+                textAlign: "center",
+                fontSize: "12px",
+                color: "#444",
+                margin: "2px 0",
+                lineHeight: 1.25,
+              }}
+            >
+              {data.merchant.phone}
+            </p>
           )}
         </div>
 

@@ -152,7 +152,14 @@ type OfflineTender = {
  */
 function makeOfflineReceiptData(input: {
   orderId: string;
-  merchant: { id: number; business_name: string; logo_url: string; gst_number?: string };
+  merchant: {
+    id: number;
+    business_name: string;
+    logo_url: string;
+    address?: string | null;
+    phone?: string | null;
+    gst_number?: string;
+  };
   worker: TicketWorker;
   cart: Array<TicketLine & { price: number; subtotal: number }>;
   pricing: PosCartPricing;
@@ -180,8 +187,8 @@ function makeOfflineReceiptData(input: {
     merchant: {
       id: merchant.id,
       name: merchant.business_name,
-      address: "",
-      phone: "",
+      address: merchant.address ?? "",
+      phone: merchant.phone ?? "",
       logo_url: merchant.logo_url || "",
       gst_number: merchant.gst_number || "",
     },
