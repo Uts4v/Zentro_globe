@@ -514,7 +514,7 @@ def run_job(payload):
 
     # Sanitize UTF-8 Rupee symbol sequence (0xE2 0x82 0xB9) which renders as
     # 'Γé╣' on ESC/POS thermal printers defaulting to Code Page 437.
-    data = data.replace(b"\xe2\x82\xb9", b"Rs.")
+    data = data.replace(b"\xe2\x82\xb9", b"INR")
 
     results = []
     for _ in range(copies):

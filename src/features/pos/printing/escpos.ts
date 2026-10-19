@@ -35,24 +35,24 @@ const GS = 0x1d;
  * which renders as the mojibake 'Γé╣' (or 'â‚¹' in Latin-1 / Win-1252).
  *
  * This function sanitizes all receipt strings by replacing '₹', literal UTF-8 byte
- * sequences (\xE2\x82\xB9), and known mojibake artifacts ('Γé╣' / 'â‚¹') with 'Rs.'.
+ * sequences (\xE2\x82\xB9), and known mojibake artifacts ('Γé╣' / 'â‚¹') with 'INR'.
  */
 export function sanitizeEscPosText(text: string): string {
   if (!text) return "";
   return String(text)
     // Indian Rupee Unicode (₹ / \u20B9)
-    .replace(/\u20B9|₹/g, "Rs.")
+    .replace(/\u20B9|₹/g, "INR")
     // CP437 Mojibake (Γé╣)
-    .replace(/Γé╣/g, "Rs.")
+    .replace(/Γé╣/g, "INR")
     // Windows-1252 / ISO-8859-1 Mojibake (â‚¹)
-    .replace(/â‚¹/g, "Rs.")
+    .replace(/â‚¹/g, "INR")
     // Raw escaped byte literals if strings contain escaped representations
-    .replace(/(?:\\x?E2\\x?82\\x?B9|\xE2\x82\xB9)/gi, "Rs.");
+    .replace(/(?:\\x?E2\\x?82\\x?B9|\xE2\x82\xB9)/gi, "INR");
 }
 
 /**
  * Byte-level safety net for the raw ESC/POS stream.
- * Replaces any remaining raw UTF-8 sequence [0xE2, 0x82, 0xB9] with ASCII 'Rs.' [0x52, 0x73, 0x2E].
+ * Replaces any remaining raw UTF-8 sequence [0xE2, 0x82, 0xB9] with ASCII 'INR' [0x49, 0x4E, 0x52].
  */
 export function sanitizeEscPosBytes(bytes: Uint8Array): Uint8Array {
   let hasRupee = false;
@@ -67,7 +67,7 @@ export function sanitizeEscPosBytes(bytes: Uint8Array): Uint8Array {
   const result: number[] = [];
   for (let i = 0; i < bytes.length; i++) {
     if (bytes[i] === 0xe2 && bytes[i + 1] === 0x82 && bytes[i + 2] === 0xb9) {
-      result.push(0x52, 0x73, 0x2e); // 'R', 's', '.'
+      result.push(0x49, 0x4e, 0x52); // 'I', 'N', 'R'
       i += 2;
     } else {
       result.push(bytes[i]);
