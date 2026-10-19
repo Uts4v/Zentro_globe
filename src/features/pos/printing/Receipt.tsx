@@ -242,17 +242,17 @@ export default function Receipt({
           )}
           {data.charges && data.charges.length > 0
             ? data.charges.map((c, i) => (
-                <div key={i} className="receipt-line">
-                  <span>{c.label}</span>
-                  <span>{formatCurrency(c.amount, currencySymbol)}</span>
-                </div>
-              ))
+              <div key={i} className="receipt-line">
+                <span>{c.label}</span>
+                <span>{formatCurrency(c.amount, currencySymbol)}</span>
+              </div>
+            ))
             : Number(data.service_charge) > 0 && (
-                <div className="receipt-line">
-                  <span>Service Charge</span>
-                  <span>{formatCurrency(data.service_charge, currencySymbol)}</span>
-                </div>
-              )}
+              <div className="receipt-line">
+                <span>Service Charge</span>
+                <span>{formatCurrency(data.service_charge, currencySymbol)}</span>
+              </div>
+            )}
           {Number(data.taxable_amount ?? 0) > 0 &&
             (Number(data.discount_amount) > 0 || Number(data.service_charge) > 0) && (
               <div className="receipt-line">

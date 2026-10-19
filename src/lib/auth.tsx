@@ -522,7 +522,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${access}` },
         body: JSON.stringify({ refresh }),
-      }).catch(() => {});
+      }).catch(() => { });
     }
     tokenStore.clear();
     useStore.getState().resetSession();

@@ -117,9 +117,9 @@ export function MerchantSettingsPage() {
     setProfile((p) =>
       p
         ? {
-            ...p,
-            tax_components: [...(p.tax_components || []), { name: "", rate: 0 }],
-          }
+          ...p,
+          tax_components: [...(p.tax_components || []), { name: "", rate: 0 }],
+        }
         : p,
     );
   }
@@ -128,9 +128,9 @@ export function MerchantSettingsPage() {
     setProfile((p) =>
       p
         ? {
-            ...p,
-            tax_components: (p.tax_components || []).filter((_, i) => i !== index),
-          }
+          ...p,
+          tax_components: (p.tax_components || []).filter((_, i) => i !== index),
+        }
         : p,
     );
   }
@@ -139,16 +139,16 @@ export function MerchantSettingsPage() {
     setProfile((p) =>
       p
         ? {
-            ...p,
-            tax_components: (p.tax_components || []).map((c, i) =>
-              i === index
-                ? {
-                    ...c,
-                    [field]: field === "rate" ? Number.parseFloat(value) || 0 : value,
-                  }
-                : c,
-            ),
-          }
+          ...p,
+          tax_components: (p.tax_components || []).map((c, i) =>
+            i === index
+              ? {
+                ...c,
+                [field]: field === "rate" ? Number.parseFloat(value) || 0 : value,
+              }
+              : c,
+          ),
+        }
         : p,
     );
   }
@@ -163,10 +163,10 @@ export function MerchantSettingsPage() {
     setProfile((p) =>
       p
         ? {
-            ...p,
-            currency_code: currency.code,
-            currency_symbol: currency.symbol,
-          }
+          ...p,
+          currency_code: currency.code,
+          currency_symbol: currency.symbol,
+        }
         : p,
     );
   }
@@ -217,10 +217,10 @@ export function MerchantSettingsPage() {
       setProfile((p) =>
         p
           ? {
-              ...p,
-              payment_qr_url: absoluteMediaUrl(url),
-              payment_qr_name: p.payment_qr_name || "Bank QR",
-            }
+            ...p,
+            payment_qr_url: absoluteMediaUrl(url),
+            payment_qr_name: p.payment_qr_name || "Bank QR",
+          }
           : p,
       );
       toast.success("Payment QR uploaded. Remember to press Save to publish it.");
@@ -389,14 +389,12 @@ export function MerchantSettingsPage() {
             role="switch"
             aria-checked={profile.tax_enabled}
             aria-label="Enable tax"
-            className={`relative h-6 w-11 rounded-full transition-colors ${
-              profile.tax_enabled ? "bg-ink" : "bg-border"
-            }`}
+            className={`relative h-6 w-11 rounded-full transition-colors ${profile.tax_enabled ? "bg-ink" : "bg-border"
+              }`}
           >
             <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
-                profile.tax_enabled ? "left-[22px]" : "left-0.5"
-              }`}
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${profile.tax_enabled ? "left-[22px]" : "left-0.5"
+                }`}
             />
           </button>
         </div>
@@ -586,9 +584,8 @@ export function MerchantSettingsPage() {
             return (
               <div
                 key={option.key}
-                className={`rounded-2xl border px-4 py-3 transition-colors ${
-                  on ? "border-ink bg-ink/[0.03]" : "border-border"
-                }`}
+                className={`rounded-2xl border px-4 py-3 transition-colors ${on ? "border-ink bg-ink/[0.03]" : "border-border"
+                  }`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <label className="flex flex-1 cursor-pointer items-center gap-3">
@@ -718,9 +715,8 @@ export function MerchantSettingsPage() {
             onDragLeave={() => setQrDragOver(false)}
             onDrop={handleQrDrop}
             disabled={qrUploading}
-            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium text-foreground transition-colors disabled:opacity-50 ${
-              qrDragOver ? "border-ember bg-ember/10" : "border-border hover:bg-mist"
-            }`}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium text-foreground transition-colors disabled:opacity-50 ${qrDragOver ? "border-ember bg-ember/10" : "border-border hover:bg-mist"
+              }`}
           >
             {qrUploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -803,11 +799,10 @@ export function MerchantSettingsPage() {
           <div className="flex items-center justify-between rounded-2xl bg-mist px-4 py-3">
             <span className="text-sm text-foreground">Tax Status</span>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                profile.tax_enabled
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${profile.tax_enabled
                   ? "bg-emerald-100 text-emerald-700"
                   : "bg-muted text-muted-foreground"
-              }`}
+                }`}
             >
               {profile.tax_enabled ? "Enabled" : "Disabled"}
             </span>
