@@ -80,7 +80,7 @@ export function orderEventFromOrder(order: PosOrder): OrderEvent {
 }
 
 export function orderEventFromKot(order: PosOrder, kot: KitchenOrderTicketSnapshot): OrderEvent {
-  const lines: NormalizedLine[] = (kot.items_data ?? []).map((item) => {
+  const lines: NormalizedLine[] = (kot.items ?? kot.items_data ?? []).map((item) => {
     const { variant, addOns } = splitOptions(item.options);
     return {
       name: (item.name ?? "").trim(),

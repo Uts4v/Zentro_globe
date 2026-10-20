@@ -672,7 +672,7 @@ function OrderCard({
                     >
                       <span>KOT #{String(k.kot_number).padStart(3, "0")}</span>
                       <span className="text-[11px] text-muted-foreground">
-                        {k.items_data?.length || 0} item(s)
+                        {(k.items ?? k.items_data)?.length || 0} item(s)
                       </span>
                     </button>
                   ))}

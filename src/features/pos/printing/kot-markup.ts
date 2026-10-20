@@ -136,7 +136,14 @@ export function kotTicketFromKOT(
     table_number_snapshot?: number | null;
     customer_name_snapshot?: string;
     fulfillment_type_snapshot?: string;
-    items_data: Array<{
+    /** Serialized by the API under `items`; older/offline snapshots use `items_data`. */
+    items?: Array<{
+      name: string;
+      quantity: number;
+      special_instructions?: string;
+      options?: Array<{ group_name: string; option_name: string }>;
+    }>;
+    items_data?: Array<{
       name: string;
       quantity: number;
       special_instructions?: string;
@@ -163,7 +170,7 @@ export function kotTicketFromKOT(
     customerName: kot.customer_name_snapshot,
     workerName: orderContext?.worker_name,
     notes: kot.notes ?? "",
-    items: (kot.items_data ?? []).map((i) => ({
+    items: (kot.items ?? kot.items_data ?? []).map((i) => ({
       name: i.name,
       quantity: i.quantity,
       special_instructions: i.special_instructions ?? "",

@@ -715,7 +715,15 @@ export interface KitchenOrderTicketSnapshot {
   table_number_snapshot?: number | null;
   customer_name_snapshot?: string;
   fulfillment_type_snapshot?: string;
-  items_data: Array<{
+  /** Serialized by the Django `KitchenOrderTicketSerializer` under `items`. */
+  items?: Array<{
+    name: string;
+    quantity: number;
+    special_instructions?: string;
+    options?: Array<{ group_name: string; option_name: string; kind?: string }>;
+  }>;
+  /** Older/offline snapshots stored the same lines under `items_data`. */
+  items_data?: Array<{
     name: string;
     quantity: number;
     special_instructions?: string;
