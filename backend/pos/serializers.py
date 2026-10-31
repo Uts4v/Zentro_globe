@@ -263,6 +263,7 @@ class SplitPaymentItemSerializer(serializers.Serializer):
     external_reference = serializers.CharField(
         max_length=255, required=False, allow_blank=True, default=""
     )
+    client_mutation_id = serializers.UUIDField(required=False)
 
 
 class CreateSplitPaymentSerializer(serializers.Serializer):
@@ -274,6 +275,7 @@ class CreateSplitPaymentSerializer(serializers.Serializer):
     change_amount = serializers.DecimalField(
         max_digits=12, decimal_places=2, min_value=0, required=False, default=0
     )
+    client_mutation_id = serializers.UUIDField(required=False)
     client_created_at = serializers.DateTimeField(required=False)
 
 

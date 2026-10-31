@@ -24,7 +24,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from merchants.models import MerchantProfile
-from orders.models import Order
+from orders.models import DiningSession, Order
 from pos.models import (
     CashShift, PosDevice, PosPayment, ShiftWorker,
 )
@@ -103,18 +103,20 @@ class PaymentTestBase(TestCase):
             format="json",
         )
 
-    def _post_split(self, order, legs):
+    def _post_split(self, order, legs, **overrides):
         shift = self._open_shift()
+        payload = {
+            "order_id": str(order.uuid),
+            "shift_id": str(shift.id),
+            "worker_id": str(self.worker.id),
+            "device_id": str(self.device.id),
+            "client_mutation_id": str(uuid.uuid4()),
+            "payments": legs,
+        }
+        payload.update(overrides)
         return self.client.post(
             "/api/pos/payment/split/",
-            {
-                "order_id": str(order.uuid),
-                "shift_id": str(shift.id),
-                "worker_id": str(self.worker.id),
-                "device_id": str(self.device.id),
-                "client_mutation_id": str(uuid.uuid4()),
-                "payments": legs,
-            },
+            payload,
             format="json",
         )
 
@@ -273,6 +275,107 @@ class ManualPaymentRecordingTests(PaymentTestBase):
             ).count(),
             1,
         )
+
+    def test_split_change_is_stored_on_cash_leg(self):
+        self._enable_qr()
+        order = self._order(1500)
+        res = self._post_split(order, [
+            {"payment_method": PosPayment.METHOD_CASH, "amount": "600.00"},
+            {"payment_method": PosPayment.METHOD_BANK_QR, "amount": "900.00"},
+        ], change_amount="100.00")
+        self.assertEqual(res.status_code, 201, res.data)
+
+        cash = PosPayment.objects.get(
+            order=order, payment_method=PosPayment.METHOD_CASH
+        )
+        qr = PosPayment.objects.get(
+            order=order, payment_method=PosPayment.METHOD_BANK_QR
+        )
+        self.assertEqual(cash.amount, Decimal("600.00"))
+        self.assertEqual(cash.change_amount, Decimal("100.00"))
+        self.assertEqual(qr.amount, Decimal("900.00"))
+        self.assertEqual(qr.change_amount, Decimal("0.00"))
+        self.assertEqual(res.data["total_paid"], "1500.00")
+
+    def test_split_total_must_match_payable(self):
+        order = self._order(1500)
+        res = self._post_split(order, [
+            {"payment_method": PosPayment.METHOD_CASH, "amount": "500.00"},
+            {"payment_method": PosPayment.METHOD_BANK_QR, "amount": "900.00"},
+        ])
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertEqual(PosPayment.objects.filter(order=order).count(), 0)
+
+    def test_split_change_requires_cash_leg(self):
+        order = self._order(1500)
+        res = self._post_split(order, [
+            {"payment_method": PosPayment.METHOD_BANK_QR, "amount": "700.00"},
+            {"payment_method": PosPayment.METHOD_MOBILE_WALLET, "amount": "800.00"},
+        ], change_amount="100.00")
+        self.assertEqual(res.status_code, 400, res.data)
+        self.assertEqual(PosPayment.objects.filter(order=order).count(), 0)
+
+    def test_split_rejects_duplicate_methods(self):
+        order = self._order(1500)
+        res = self._post_split(order, [
+            {"payment_method": PosPayment.METHOD_CASH, "amount": "700.00"},
+            {"payment_method": PosPayment.METHOD_CASH, "amount": "800.00"},
+        ])
+        self.assertEqual(res.status_code, 400, res.data)
+
+    def test_split_rejects_debit_credit_and_split_legs(self):
+        for method in (
+            PosPayment.METHOD_DEBIT,
+            PosPayment.METHOD_CREDIT,
+            PosPayment.METHOD_SPLIT,
+        ):
+            order = self._order(1500)
+            with self.subTest(method=method):
+                res = self._post_split(order, [
+                    {"payment_method": PosPayment.METHOD_CASH, "amount": "500.00"},
+                    {"payment_method": method, "amount": "1000.00"},
+                ])
+                self.assertEqual(res.status_code, 400, res.data)
+
+    def test_split_request_is_idempotent(self):
+        self._enable_qr()
+        order = self._order(1500)
+        mutation_id = str(uuid.uuid4())
+        legs = [
+            {"payment_method": PosPayment.METHOD_CASH, "amount": "500.00"},
+            {"payment_method": PosPayment.METHOD_BANK_QR, "amount": "1000.00"},
+        ]
+        first = self._post_split(
+            order, legs, client_mutation_id=mutation_id
+        )
+        self.assertEqual(first.status_code, 201, first.data)
+
+        replay = self._post_split(
+            order, legs, client_mutation_id=mutation_id
+        )
+        self.assertEqual(replay.status_code, 200, replay.data)
+        self.assertEqual(replay.data["payments"], first.data["payments"])
+        self.assertEqual(PosPayment.objects.filter(order=order).count(), 2)
+
+    def test_split_closes_active_dining_session(self):
+        self._enable_qr()
+        order = self._order(1500, status=Order.STATUS_COMPLETED)
+        session = DiningSession.objects.create(
+            merchant=self.merchant, bill_order=order,
+            status=DiningSession.STATUS_ACTIVE,
+        )
+        order.dining_session = session
+        order.save(update_fields=["dining_session"])
+
+        res = self._post_split(order, [
+            {"payment_method": PosPayment.METHOD_CASH, "amount": "500.00"},
+            {"payment_method": PosPayment.METHOD_BANK_QR, "amount": "1000.00"},
+        ])
+        self.assertEqual(res.status_code, 201, res.data)
+
+        session.refresh_from_db()
+        self.assertEqual(session.status, DiningSession.STATUS_COMPLETED)
+        self.assertIsNotNone(session.closed_at)
 
 
 class MerchantPaymentSettingsTests(PaymentTestBase):

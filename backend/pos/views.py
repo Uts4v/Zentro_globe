@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 from decimal import Decimal
@@ -2507,13 +2508,6 @@ def create_split_payment(request):
         return Response({"error": "Order not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    if order.payment_status in ("paid", "refunded"):
-        return Response(
-            {"error": f"This order is already {order.payment_status}.",
-             "payment_status": order.payment_status},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-
     try:
         shift = CashShift.objects.get(
             id=ser.validated_data["shift_id"], merchant=merchant,
@@ -2541,8 +2535,60 @@ def create_split_payment(request):
         return Response({"error": "Device not found."},
                         status=status.HTTP_404_NOT_FOUND)
 
-    # Validate total payments match order total
+    # A split retried after the connection dropped must not charge twice.
+    # The request-level id is recorded with the response so a replay returns
+    # the payments the first attempt created.
+    client_mutation_id = ser.validated_data.get("client_mutation_id")
+    mutation = None
+    if client_mutation_id:
+        mutation, created = ProcessedClientMutation.objects.get_or_create(
+            merchant=merchant,
+            device=device,
+            client_mutation_id=client_mutation_id,
+            defaults={"entity_type": "payment_split", "operation": "create"},
+        )
+        if not created:
+            if mutation.response_data:
+                return Response(mutation.response_data, status=status.HTTP_200_OK)
+            return Response(
+                {"error": "This split payment is already being processed."},
+                status=status.HTTP_409_CONFLICT,
+            )
+
+    if order.payment_status in ("paid", "refunded"):
+        return Response(
+            {"error": f"This order is already {order.payment_status}.",
+             "payment_status": order.payment_status},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     payments_data = ser.validated_data["payments"]
+    methods = [p["payment_method"] for p in payments_data]
+
+    if len(set(methods)) != len(methods):
+        return Response(
+            {"error": "Each split leg must use a different payment method."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Debit and credit need wallet / credit-account side effects that a split
+    # leg does not perform, so they cannot be recorded safely here. Split is a
+    # marker on the order, never a leg of its own.
+    unsupported = [
+        m
+        for m in methods
+        if m in (
+            PosPayment.METHOD_DEBIT,
+            PosPayment.METHOD_CREDIT,
+            PosPayment.METHOD_SPLIT,
+        )
+    ]
+    if unsupported:
+        return Response(
+            {"error": "Debit, credit and split cannot be used as split legs."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
     total_payments = sum(p["amount"] for p in payments_data)
 
     # Get total already paid for this order
@@ -2552,17 +2598,25 @@ def create_split_payment(request):
 
     order_payable = order.total_amount - already_paid
     change = ser.validated_data.get("change_amount", 0)
-    net_payment = total_payments - change
 
-    if net_payment != order_payable:
+    # Each leg is the net amount kept by the merchant; change is recorded
+    # separately on the cash leg, exactly like a single cash payment.
+    if total_payments != order_payable:
         return Response(
             {
-                "error": f"Split total ({total_payments}) minus change ({change}) = {net_payment}, "
-                         f"but order payable is {order_payable}.",
+                "error": f"Split total {total_payments} does not match the order payable "
+                         f"{order_payable}.",
                 "order_payable": str(order_payable),
                 "already_paid": str(already_paid),
                 "total_payments": str(total_payments),
             },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    has_cash_leg = PosPayment.METHOD_CASH in methods
+    if change > 0 and not has_cash_leg:
+        return Response(
+            {"error": "Change can only be recorded when a cash leg is part of the split."},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
@@ -2579,6 +2633,7 @@ def create_split_payment(request):
 
     created_payments = []
     for p in payments_data:
+        is_cash = p["payment_method"] == PosPayment.METHOD_CASH
         payment = PosPayment.objects.create(
             merchant=merchant,
             order=order,
@@ -2589,8 +2644,8 @@ def create_split_payment(request):
             amount=p["amount"],
             status=PosPayment.STATUS_COMPLETED,
             external_reference=p.get("external_reference", ""),
-            change_amount=0,
-            client_mutation_id=uuid.uuid4(),
+            change_amount=change if is_cash else 0,
+            client_mutation_id=p.get("client_mutation_id") or uuid.uuid4(),
             client_created_at=ser.validated_data.get("client_created_at", timezone.now()),
         )
         created_payments.append(payment)
@@ -2613,13 +2668,25 @@ def create_split_payment(request):
                 order.loyalty_awarded = True
         order.version += 1
         order.save(update_fields=["payment_status", "payment_method", "status", "loyalty_awarded", "version", "updated_at"])
+        close_dining_session_for_order(order, DiningSession.STATUS_COMPLETED)
 
-    return Response({
+    response_data = json.loads(json.dumps({
         "payments": PosPaymentSerializer(created_payments, many=True).data,
         "total_paid": str(total_all_paid),
         "remaining": str(max(0, order.total_amount - total_all_paid)),
         "order_payment_status": order.payment_status,
-    }, status=status.HTTP_201_CREATED)
+    }, default=str))
+
+    if mutation is not None:
+        mutation.entity_type = "payment_split"
+        mutation.operation = "create"
+        mutation.server_object_id = order.uuid
+        mutation.response_data = response_data
+        mutation.save(
+            update_fields=["entity_type", "operation", "server_object_id", "response_data"]
+        )
+
+    return Response(response_data, status=status.HTTP_201_CREATED)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
