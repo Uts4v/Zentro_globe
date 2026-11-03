@@ -7,6 +7,7 @@ from . import views
 from . import reporting_views
 from . import team
 from . import order_edit
+from . import table_views
 
 urlpatterns = [
     # Team: staff mode, roles & permissions, employees
@@ -20,6 +21,7 @@ urlpatterns = [
     path("workers/team/<uuid:worker_id>/", team.team_worker_detail, name="pos-team-worker-detail"),
     # Health
     path("health/", views.health_check, name="pos-health"),
+    path("ws-token/", views.pos_ws_token, name="pos-ws-token"),
 
     # POS Login & Bootstrap (Phase 4)
     path("auth/login/", views.pos_login, name="pos-login"),
@@ -60,6 +62,8 @@ urlpatterns = [
     path("orders/create/", views.create_pos_order, name="pos-orders-create-alias"),
     path("order/status/", views.update_order_status_uuid, name="pos-order-status"),
     path("order/item/update/", order_edit.update_order_item, name="pos-order-item-update"),
+    path("order/table/move/", table_views.move_order_table, name="pos-order-table-move"),
+    path("tables/status/", table_views.table_statuses, name="pos-table-statuses"),
     path("free-item/authorize/", order_edit.authorize_free_item, name="pos-free-item-authorize"),
     path("orders/", views.pos_orders, name="pos-orders"),
 

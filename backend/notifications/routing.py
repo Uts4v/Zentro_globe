@@ -8,4 +8,8 @@ websocket_urlpatterns = [
         r"^ws/preparation/(?P<merchant_id>\d+)/(?P<area_id>\d+|all)/$",
         consumers.PreparationConsumer.as_asgi(),
     ),
+    re_path(
+        r"^ws/pos/(?P<merchant_id>\d+)/$",
+        consumers.PosConsumer.as_asgi(),
+    ),
 ]

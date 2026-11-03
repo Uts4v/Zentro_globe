@@ -4,6 +4,7 @@ import { formatCurrency, roundMoney } from "@/lib/currency";
 import { usePosStore } from "../store";
 import {
   posCreatePayment,
+  posCreateSplitPayment,
   posReceiptData,
   PosOrder,
   PosReceiptData,
@@ -12,6 +13,13 @@ import {
 } from "../api";
 import Receipt from "../printing/Receipt";
 import PaymentQrBlock from "./PaymentQrBlock";
+import SplitPaymentEditor from "./SplitPaymentEditor";
+import {
+  buildSplitPaymentLegs,
+  emptySplitPaymentState,
+  evaluateSplitPayment,
+  type SplitPaymentState,
+} from "../split-payment";
 import DiscountModal from "./DiscountModal";
 import { hasStaffPermission } from "@/lib/staff-session";
 import type { PosBillPricing } from "../api";
@@ -38,9 +46,10 @@ import {
   Loader2,
   Receipt as ReceiptIcon,
   Percent,
+  Split as SplitIcon,
 } from "lucide-react";
 
-type PaymentMethod = "cash" | "card" | "bank_qr" | "mobile_wallet" | "debit";
+type PaymentMethod = "cash" | "card" | "bank_qr" | "mobile_wallet" | "debit" | "split";
 
 const PAYMENT_METHODS: Array<{
   key: PaymentMethod;
@@ -53,6 +62,15 @@ const PAYMENT_METHODS: Array<{
   { key: "mobile_wallet", label: PAYMENT_METHOD_LABELS.mobile_wallet, icon: Smartphone },
   { key: "debit", label: PAYMENT_METHOD_LABELS.debit, icon: Wallet },
 ];
+
+/** Cash + QR is the only split this POS records, so it is not a server method. */
+const SPLIT_METHOD = {
+  key: "split" as const,
+  label: PAYMENT_METHOD_LABELS.split,
+  requiresReference: false,
+  isQr: false,
+  icon: SplitIcon,
+};
 
 const METHOD_ICONS: Record<
   string,
@@ -114,6 +132,13 @@ export default function CollectPaymentSheet({
   // the server just before the connection dropped is not recorded twice
   // when it is queued and sent again.
   const [paymentMutationId] = useState<string>(() => safeUuid());
+  const [splitState, setSplitState] = useState<SplitPaymentState>(() =>
+    emptySplitPaymentState(),
+  );
+  const [splitLegIds] = useState(() => ({
+    qrMutationId: safeUuid(),
+    cashMutationId: safeUuid(),
+  }));
   const isOnline = useOnlineStatus();
   // An order still waiting to sync has no server record to pay against, so
   // its payment is queued behind it even when the connection is up.
@@ -153,7 +178,16 @@ export default function CollectPaymentSheet({
   }, [posSettings?.payment_methods, queued]);
 
   const qr = posSettings?.payment_qr ?? null;
-  const activeMethod = availableMethods.find((m) => m.key === method);
+  const qrMethod = availableMethods.find((m) => m.isQr);
+  const hasCashMethod = availableMethods.some((m) => m.key === "cash");
+  const methodOptions = useMemo(
+    () =>
+      qr && qrMethod && hasCashMethod
+        ? [...availableMethods, SPLIT_METHOD]
+        : availableMethods,
+    [availableMethods, qr, qrMethod, hasCashMethod],
+  );
+  const activeMethod = methodOptions.find((m) => m.key === method);
   // A discount can still be given after the order is sent and the bill
   // printed, right up until the payment is taken.
   const canDiscount =
@@ -162,14 +196,15 @@ export default function CollectPaymentSheet({
     order.source !== "pos_offline";
 
   useEffect(() => {
-    if (availableMethods.length > 0 && !availableMethods.some((m) => m.key === method)) {
-      setMethod(availableMethods[0].key as PaymentMethod);
+    if (methodOptions.length > 0 && !methodOptions.some((m) => m.key === method)) {
+      setMethod(methodOptions[0].key as PaymentMethod);
     }
-  }, [availableMethods, method]);
+  }, [methodOptions, method]);
 
   useEffect(() => {
     setQrConfirmed(false);
     setReference("");
+    setSplitState(emptySplitPaymentState());
   }, [method]);
 
   const [receiptData, setReceiptData] = useState<PosReceiptData | null>(null);
@@ -192,8 +227,15 @@ export default function CollectPaymentSheet({
     (selectedDebitAccount &&
       debitAccounts.find((a) => a.id === selectedDebitAccount && Number(a.balance) >= total));
   const isQrValid = !(activeMethod?.isQr && qr) || qrConfirmed;
+  const splitBreakdown = evaluateSplitPayment(total, splitState);
+  const isSplitValid = method !== "split" || splitBreakdown.error === null;
   const canSubmit =
-    !submitting && isCashValid && isDebitValid && isQrValid && availableMethods.length > 0;
+    !submitting &&
+    isCashValid &&
+    isDebitValid &&
+    isQrValid &&
+    isSplitValid &&
+    methodOptions.length > 0;
 
   function paidUpdate() {
     return receiptData
@@ -211,7 +253,13 @@ export default function CollectPaymentSheet({
    */
   async function payOffline(shiftId: string) {
     if (!merchant || !currentWorker || !device) return;
-    if (!isOfflineCapableMethod(method)) {
+    const isSplit = method === "split";
+    if (isSplit) {
+      if (!qr || !qrMethod || !isOfflineCapableMethod(qrMethod.key)) {
+        setError("Split payment needs a QR method that works offline.");
+        return;
+      }
+    } else if (!isOfflineCapableMethod(method)) {
       setError(
         `${PAYMENT_METHOD_LABELS[method] || method} cannot be recorded without a connection. Please use Cash, bank QR or mobile wallet.`,
       );
@@ -223,45 +271,110 @@ export default function CollectPaymentSheet({
       const amount = roundMoney(total);
       const changeAmount = method === "cash" ? roundMoney(change) : 0;
       const externalReference = reference.trim();
+      const split = isSplit
+        ? buildSplitPaymentLegs(total, splitState, qrMethod!.key, splitLegIds)
+        : null;
+      const legs = split
+        ? [
+            {
+              id: splitLegIds.qrMutationId,
+              method: qrMethod!.key,
+              amount: split.payments[0].amount,
+              change: 0,
+              reference: splitState.reference.trim(),
+            },
+            {
+              id: splitLegIds.cashMutationId,
+              method: "cash",
+              amount: split.payments[1].amount,
+              change: splitBreakdown.change,
+              reference: "",
+            },
+          ]
+        : [
+            {
+              id: paymentMutationId,
+              method,
+              amount,
+              change: changeAmount,
+              reference: externalReference,
+            },
+          ];
 
-      await offlinePayments.save({
-        id: paymentMutationId,
-        order_id: orderRef,
-        payment_method: method,
-        amount,
-        change_amount: changeAmount,
-        external_reference: externalReference || undefined,
-        shift_id: shiftId,
-        worker_id: currentWorker.id,
-        device_id: device.id,
-        status: "pending_sync",
-        created_at: createdAt,
-      });
-      await enqueueMutation(
-        "payment",
-        "/pos/payment/create/",
-        "POST",
-        {
+      for (const leg of legs) {
+        await offlinePayments.save({
+          id: leg.id,
           order_id: orderRef,
+          payment_method: leg.method,
+          amount: roundMoney(leg.amount),
+          change_amount: roundMoney(leg.change),
+          external_reference: leg.reference || undefined,
           shift_id: shiftId,
           worker_id: currentWorker.id,
           device_id: device.id,
-          payment_method: method,
-          amount,
-          change_amount: changeAmount,
-          external_reference: externalReference || undefined,
-          client_mutation_id: paymentMutationId,
-          client_created_at: createdAt,
-        },
-        paymentMutationId,
-      );
+          status: "pending_sync",
+          created_at: createdAt,
+        });
+      }
+
+      if (split) {
+        await enqueueMutation(
+          "payment",
+          "/pos/payment/split/",
+          "POST",
+          {
+            order_id: orderRef,
+            shift_id: shiftId,
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            payments: legs.map((leg) => ({
+              payment_method: leg.method,
+              amount: roundMoney(leg.amount),
+              external_reference: leg.reference || undefined,
+              client_mutation_id: leg.id,
+            })),
+            change_amount: roundMoney(splitBreakdown.change),
+            client_mutation_id: paymentMutationId,
+            client_created_at: createdAt,
+          },
+          paymentMutationId,
+        );
+      } else {
+        await enqueueMutation(
+          "payment",
+          "/pos/payment/create/",
+          "POST",
+          {
+            order_id: orderRef,
+            shift_id: shiftId,
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            payment_method: method,
+            amount,
+            change_amount: changeAmount,
+            external_reference: externalReference || undefined,
+            client_mutation_id: paymentMutationId,
+            client_created_at: createdAt,
+          },
+          paymentMutationId,
+        );
+      }
 
       const paid = {
-        payments: [receiptPayment(method, String(amount), String(changeAmount), externalReference)],
-        total_paid: String(method === "cash" ? roundMoney(cashAmount) : amount),
-        change: String(changeAmount),
+        payments: legs.map((leg) =>
+          receiptPayment(
+            leg.method,
+            String(roundMoney(leg.amount)),
+            String(roundMoney(leg.change)),
+            leg.reference,
+          ),
+        ),
+        total_paid: split
+          ? String(roundMoney(legs.reduce((sum, leg) => sum + leg.amount, 0)))
+          : String(method === "cash" ? roundMoney(cashAmount) : amount),
+        change: split ? String(roundMoney(splitBreakdown.change)) : String(changeAmount),
         payment_status: "paid",
-        payment_method: method,
+        payment_method: split ? "split" : method,
         // The server completes an order when it is paid in full.
         status: order.status === "cancelled" ? order.status : "completed",
         is_offline_receipt: true,
@@ -304,19 +417,38 @@ export default function CollectPaymentSheet({
       }
 
       try {
-        await posCreatePayment({
-          order_id: String(order.uuid),
-          shift_id: activeShift.id,
-          worker_id: currentWorker.id,
-          device_id: device.id,
-          payment_method: method,
-          amount: roundMoney(total),
-          change_amount: method === "cash" ? roundMoney(change) : 0,
-          debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
-          // Recorded for the merchant's own reconciliation; never required.
-          external_reference: reference.trim() || undefined,
-          client_mutation_id: paymentMutationId,
-        });
+        if (method === "split") {
+          if (!qrMethod) throw new Error("No QR payment method is configured.");
+          const split = buildSplitPaymentLegs(
+            total,
+            splitState,
+            qrMethod.key,
+            splitLegIds,
+          );
+          await posCreateSplitPayment({
+            order_id: String(order.uuid),
+            shift_id: activeShift.id,
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            ...split,
+            client_mutation_id: paymentMutationId,
+            client_created_at: new Date().toISOString(),
+          });
+        } else {
+          await posCreatePayment({
+            order_id: String(order.uuid),
+            shift_id: activeShift.id,
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            payment_method: method,
+            amount: roundMoney(total),
+            change_amount: method === "cash" ? roundMoney(change) : 0,
+            debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
+            // Recorded for the merchant's own reconciliation; never required.
+            external_reference: reference.trim() || undefined,
+            client_mutation_id: paymentMutationId,
+          });
+        }
       } catch (err: any) {
         // The server never answered: keep the payment here rather than lose it.
         if (!serverReachable()) await payOffline(activeShift.id);
@@ -378,9 +510,9 @@ export default function CollectPaymentSheet({
             </div>
             <div>
               <p className="text-sm font-bold text-green-800">Payment successful</p>
-              {method === "cash" && change > 0 && (
+              {Number(receiptData?.change) > 0 && (
                 <p className="text-xs text-green-600">
-                  Change to give: {formatCurrency(change, currencySymbol)}
+                  Change to give: {formatCurrency(Number(receiptData?.change), currencySymbol)}
                 </p>
               )}
               {receiptData?.is_offline_receipt && receiptData.sync_status !== "synced" && (
@@ -514,6 +646,13 @@ export default function CollectPaymentSheet({
               subtotal: Number(order.subtotal),
               hasDiscount: Number(order.discount_amount) > 0,
             }}
+            items={order.items.map((item) => ({
+              key: String(item.id),
+              name: item.name,
+              quantity: item.quantity,
+              amount: Number(item.subtotal),
+              excluded: item.is_complimentary,
+            }))}
             onClose={() => setShowDiscount(false)}
             onApplied={(pricing) => {
               if (!pricing) return;
@@ -527,7 +666,7 @@ export default function CollectPaymentSheet({
         )}
 
         <div className="grid grid-cols-3 gap-2 px-6 py-4 sm:grid-cols-5">
-          {availableMethods.map((pm) => {
+          {methodOptions.map((pm) => {
             const Icon = pm.icon;
             const active = method === pm.key;
             return (
@@ -544,6 +683,16 @@ export default function CollectPaymentSheet({
             );
           })}
         </div>
+
+        {method === "split" && qr && (
+          <SplitPaymentEditor
+            total={total}
+            currencySymbol={currencySymbol}
+            qr={qr}
+            state={splitState}
+            onChange={setSplitState}
+          />
+        )}
 
         {activeMethod?.isQr && qr && (
           <PaymentQrBlock

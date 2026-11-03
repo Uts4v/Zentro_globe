@@ -2,7 +2,7 @@ import { usePosStore } from "../store";
 import { requestPosRefresh } from "../offline/loader";
 import { useState, useEffect, useRef } from "react";
 import { formatCurrency } from "@/lib/currency";
-import { fromPrice } from "@/lib/menu-utils";
+import { baseDiscount, fromPrice } from "@/lib/menu-utils";
 import type { MenuItemSelectable } from "@/lib/api/types";
 import ProductDetailSheet, {
   type ProductDraft,
@@ -321,6 +321,7 @@ function ProductGrid({
       {items.map((item) => {
         const justAdded = lastAddedId === item.id;
         const customizable = (item.groups ?? []).some((g) => g.is_active !== false);
+        const discount = baseDiscount(item);
         return (
           <button
             key={item.id}
@@ -366,6 +367,11 @@ function ProductGrid({
                     Loyalty
                   </span>
                 )}
+                {discount?.percentLabel && (
+                  <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white">
+                    {discount.percentLabel}
+                  </span>
+                )}
               </div>
 
               {/* Unavailable overlay */}
@@ -404,14 +410,24 @@ function ProductGrid({
               <div className="mt-auto flex items-center justify-between pt-1">
                 {Number(item.price) === 0 && !customizable ? (
                   <span className="text-sm font-bold text-success">FREE</span>
-                ) : customizable ? (
-                  <p className="text-sm font-bold text-foreground">
-                    <span className="mr-1 text-[10px] font-medium text-muted-foreground">from</span>
-                    {formatCurrency(fromPrice(item), currencySymbol)}
-                  </p>
                 ) : (
-                  <p className="numeric text-sm font-bold text-foreground">
-                    {formatCurrency(Number(item.price), currencySymbol)}
+                  <p className="numeric flex items-baseline gap-1.5 text-sm font-bold text-foreground">
+                    {customizable && (
+                      <span className="text-[10px] font-medium text-muted-foreground">from</span>
+                    )}
+                    {discount && (
+                      <span className="text-xs font-medium text-muted-foreground line-through">
+                        {formatCurrency(discount.original, currencySymbol)}
+                      </span>
+                    )}
+                    <span className={discount ? "text-rose-600" : undefined}>
+                      {formatCurrency(
+                        customizable
+                          ? fromPrice(item)
+                          : (discount?.discounted ?? Number(item.price)),
+                        currencySymbol,
+                      )}
+                    </span>
                   </p>
                 )}
                 {item.points_per_item > 0 && (

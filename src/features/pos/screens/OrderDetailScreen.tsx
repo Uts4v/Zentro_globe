@@ -50,12 +50,14 @@ import {
   Percent,
   Trash2,
   Sparkles,
+  Armchair,
 } from "lucide-react";
 import { safeUuid } from "@/lib/utils";
 import CustomItemSheet, { type CustomItemDraft } from "./CustomItemSheet";
 import { markLocalBatch } from "../voice/coordinator";
 import CustomerSearchModal from "./CustomerSearchModal";
 import MinusStockModal from "./MinusStockModal";
+import ChangeTableDialog from "./ChangeTableDialog";
 import { paymentMethodLabel } from "@/lib/payment-methods";
 import { toast } from "sonner";
 import { offlineOrders, cachedServerOrders, type OfflineOrder } from "../offline/db";
@@ -70,6 +72,7 @@ import {
 } from "../offline/documents";
 import { isOnline as serverReachable } from "@/lib/connectivity";
 import { hasStaffPermission } from "@/lib/staff-session";
+import { subscribePosRealtime } from "../realtime";
 
 const STATUS_COLORS: Record<string, string> = {
   pending: "bg-warning/10 text-warning",
@@ -175,6 +178,16 @@ function canChangeBill(order: PosOrder) {
   return canAddItems(order) || (order.status === "ready" && order.payment_status === "unpaid");
 }
 
+/** An open dine-in bill can be moved; a settled or closed one is fixed. */
+function canMoveTable(order: PosOrder) {
+  return (
+    Boolean(order.table_id) &&
+    ["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) &&
+    ["pending", "confirmed", "preparing", "ready"].includes(order.status) &&
+    !["paid", "refunded"].includes(order.payment_status)
+  );
+}
+
 function getOrderDetailTableDisplay(order: PosOrder): string | null {
   const name = order.table_name_snapshot?.trim();
   const num = order.table_number_snapshot;
@@ -262,6 +275,7 @@ export default function OrderDetailScreen({
   const [showCollectPayment, setShowCollectPayment] = useState(false);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
   const [showAddItems, setShowAddItems] = useState(false);
+  const [showChangeTable, setShowChangeTable] = useState(false);
   const [showMinusStock, setShowMinusStock] = useState(false);
   const [selectedMinusItem, setSelectedMinusItem] = useState<{
     name: string;
@@ -342,8 +356,33 @@ export default function OrderDetailScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOffline, syncRevision, page, serverSearch, filter]);
 
-  async function loadOrders(): Promise<PosOrder[]> {
-    setLoading(true);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribePosRealtime((event) => {
+      if (event.event !== "order.changed") return;
+      if (
+        event.data.merchant_id != null &&
+        merchant?.id != null &&
+        event.data.merchant_id !== merchant.id
+      ) {
+        return;
+      }
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void loadOrders(true);
+      }, 250);
+    });
+
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOffline, syncRevision, page, serverSearch, filter, merchant?.id]);
+
+  async function loadOrders(silent = false): Promise<PosOrder[]> {
+    if (!silent) setLoading(true);
     let serverList: PosOrder[] = [];
     const online = serverReachable();
 
@@ -420,7 +459,7 @@ export default function OrderDetailScreen({
         setSelectedOrder(serverList.find((o) => o.id === orderId) || null);
       }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
     return merged;
   }
@@ -896,6 +935,19 @@ export default function OrderDetailScreen({
               </button>
             )}
 
+            {canMoveTable(order) && canEditOrders && !isLocalOrder(order) && (
+              <button
+                type="button"
+                onClick={() => setShowChangeTable(true)}
+                disabled={isOffline}
+                title={isOffline ? NEEDS_CONNECTION : "Move this bill to a free table"}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 py-2.5 text-sm font-bold text-amber-700 transition-colors hover:bg-amber-500/15 disabled:cursor-not-allowed disabled:opacity-40 dark:text-amber-400"
+              >
+                <Armchair className="h-4 w-4" />
+                Change Table
+              </button>
+            )}
+
             {/* Minus Stock button for Dine-In orders */}
             {["dine_in", "dine-in"].includes(order.fulfillment_type?.toLowerCase()) &&
               order.status !== "cancelled" &&
@@ -1065,6 +1117,13 @@ export default function OrderDetailScreen({
               subtotal: Number(order.subtotal),
               hasDiscount: Number(order.discount_amount) > 0,
             }}
+            items={order.items.map((item) => ({
+              key: String(item.id),
+              name: item.name,
+              quantity: item.quantity,
+              amount: Number(item.subtotal),
+              excluded: item.is_complimentary,
+            }))}
             onClose={() => setShowDiscount(false)}
             onApplied={(pricing) => {
               if (!pricing) return;
@@ -1120,6 +1179,18 @@ export default function OrderDetailScreen({
             }}
           />
         )}
+
+        {showChangeTable && (
+          <ChangeTableDialog
+            open={showChangeTable}
+            order={order}
+            onClose={() => setShowChangeTable(false)}
+            onMoved={(updated) => {
+              applyBill(order.uuid, updated);
+              void loadOrders();
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -1138,7 +1209,7 @@ export default function OrderDetailScreen({
           )}
         </div>
         <button
-          onClick={loadOrders}
+          onClick={() => void loadOrders()}
           className="flex items-center gap-2 rounded-xl border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />

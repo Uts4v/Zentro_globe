@@ -26,6 +26,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { getWsToken } from "@/lib/ws";
 import { registerPushSubscription } from "@/lib/push";
 import { DJANGO_BASE } from "@/lib/django-api-base";
+import { playMaximize008Sound } from "@/lib/audio";
 
 // Routes that never require auth
 const PUBLIC_ROUTES = [
@@ -263,6 +264,9 @@ function GlobalNotificationToasts() {
       ws.onmessage = (event) => {
         try {
           const notif = JSON.parse(event.data);
+          try {
+            playMaximize008Sound(0.7);
+          } catch {}
           toast.success(notif.title, {
             description: notif.message,
             duration: 6000,

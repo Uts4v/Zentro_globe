@@ -362,7 +362,14 @@ export function receiptToEscPos(data: PosReceiptData, paper: TicketPaper): Uint8
   });
 
   t.rule("-");
-  t.meta("Subtotal", cur(data.subtotal));
+  const hasItemDiscounts = Number(data.item_discount_total) > 0;
+  t.meta(
+    "Subtotal",
+    cur(hasItemDiscounts ? data.list_subtotal ?? data.subtotal : data.subtotal),
+  );
+  if (hasItemDiscounts) {
+    t.meta("Item discounts", `-${cur(data.item_discount_total ?? 0)}`);
+  }
   for (const d of data.discounts.filter((d) => Number(d.amount) > 0)) {
     const label =
       (d.label && d.label !== "Discount" ? d.label : "Discount") +

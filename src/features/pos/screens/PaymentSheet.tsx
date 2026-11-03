@@ -1,14 +1,18 @@
 import { useState, useEffect, useMemo } from "react";
 import { safeUuid } from "@/lib/utils";
 import { usePosStore, cartToOrderItems, cartHasFreeItems } from "../store";
+import { mapCartLineKeysToOrderItemIds } from "../discount-targets";
 import PaymentQrBlock from "./PaymentQrBlock";
 import { isOnline as serverReachable } from "@/lib/connectivity";
 import {
   posApplyDiscount,
   posCreateOrder,
   posCreatePayment,
+  posCreateSplitPayment,
   posReceiptData,
   PosReceiptData,
+  PosOrder,
+  posListOrders,
   posListDebitAccounts,
   DebitAccount,
 } from "../api";
@@ -19,6 +23,13 @@ import { isOfflineCapableMethod } from "../offline/tenders";
 import { posOffersApi } from "@/lib/api/offers";
 import Receipt from "../printing/Receipt";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
+import SplitPaymentEditor from "./SplitPaymentEditor";
+import {
+  buildSplitPaymentLegs,
+  emptySplitPaymentState,
+  evaluateSplitPayment,
+  type SplitPaymentState,
+} from "../split-payment";
 import KOTTicket from "../printing/KOTTicket";
 import { kotTicketFromReceipt, printKOT, type KOTTicketData } from "../printing/kot-markup";
 import { enqueueMutation } from "../offline/sync";
@@ -37,6 +48,7 @@ import {
   Loader2,
   Receipt as ReceiptIcon,
   ShoppingBag,
+  Split as SplitIcon,
   Ticket,
 } from "lucide-react";
 
@@ -46,7 +58,7 @@ interface PaymentSheetProps {
   onPaid: () => void;
 }
 
-type PaymentMethod = "cash" | "card" | "bank_qr" | "mobile_wallet" | "debit";
+type PaymentMethod = "cash" | "card" | "bank_qr" | "mobile_wallet" | "debit" | "split";
 
 /**
  * Fallback list for merchants who have never configured payment methods.
@@ -63,6 +75,15 @@ const PAYMENT_METHODS: Array<{
   { key: "mobile_wallet", label: PAYMENT_METHOD_LABELS.mobile_wallet, icon: Smartphone },
   { key: "debit", label: PAYMENT_METHOD_LABELS.debit, icon: Wallet },
 ];
+
+/** Cash + QR is the only split this POS records, so it is not a server method. */
+const SPLIT_METHOD = {
+  key: "split" as const,
+  label: PAYMENT_METHOD_LABELS.split,
+  requiresReference: false,
+  isQr: false,
+  icon: SplitIcon,
+};
 
 /**
  * Resolve a cart line's `selections` (ids only) into printable modifier names
@@ -138,6 +159,14 @@ function makeOfflineKOT(
   };
 }
 
+type OfflineTenderPayment = {
+  method: string;
+  amount: number;
+  change: number;
+  reference: string;
+  mutationId: string;
+};
+
 /** How an offline sale was paid; absent for an order placed without payment. */
 type OfflineTender = {
   method: string;
@@ -145,6 +174,8 @@ type OfflineTender = {
   change: number;
   reference: string;
   shiftId: string;
+  /** Present for a split; each leg is saved and synced on its own id. */
+  payments?: OfflineTenderPayment[];
 };
 
 /**
@@ -175,6 +206,24 @@ function makeOfflineReceiptData(input: {
   const { orderId, merchant, worker, cart, pricing, table, tender } = input;
   const total = pricing.totalValue;
   const change = String(roundMoney(tender?.change ?? 0));
+  const tenderPayments = tender?.payments;
+  const payments = tenderPayments
+    ? tenderPayments.map((leg) =>
+        receiptPayment(
+          leg.method,
+          String(roundMoney(leg.amount)),
+          String(roundMoney(leg.change)),
+          leg.reference,
+        ),
+      )
+    : tender
+      ? [receiptPayment(tender.method, pricing.grandTotal, change, tender.reference)]
+      : [];
+  const totalPaid = tenderPayments
+    ? String(roundMoney(tenderPayments.reduce((sum, leg) => sum + leg.amount, 0)))
+    : tender
+      ? String(roundMoney(tender.method === "cash" ? tender.cashAmount : total))
+      : "0.00";
   return {
     // A bill, not a receipt: this is the paper copy handed to the customer
     // while the order has no server record to reprint from.
@@ -227,15 +276,11 @@ function makeOfflineReceiptData(input: {
       tax_amount: charge.tax,
     })),
     total_amount: pricing.grandTotal,
-    payments: tender
-      ? [receiptPayment(tender.method, pricing.grandTotal, change, tender.reference)]
-      : [],
-    total_paid: tender
-      ? String(roundMoney(tender.method === "cash" ? tender.cashAmount : total))
-      : "0.00",
+    payments,
+    total_paid: totalPaid,
     change,
     payment_status: tender ? "paid" : "unpaid",
-    payment_method: tender?.method ?? "",
+    payment_method: tenderPayments ? "split" : (tender?.method ?? ""),
     is_offline_receipt: true,
     sync_status: "pending",
   };
@@ -273,12 +318,20 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   const [selectedDebitAccount, setSelectedDebitAccount] = useState<string>("");
   const [reference, setReference] = useState("");
   const [qrConfirmed, setQrConfirmed] = useState(false);
+  const [splitState, setSplitState] = useState<SplitPaymentState>(() =>
+    emptySplitPaymentState(),
+  );
+  const [splitLegIds, setSplitLegIds] = useState(() => ({
+    qrMutationId: safeUuid(),
+    cashMutationId: safeUuid(),
+  }));
 
   const [receiptData, setReceiptData] = useState<PosReceiptData | null>(null);
   const [loadingReceipt, setLoadingReceipt] = useState(false);
   const [orderPlaced, setOrderPlaced] = useState(false);
   const [placedKot, setPlacedKot] = useState<KOTTicketData | null>(null);
   const [createdOrderId, setCreatedOrderId] = useState<string | null>(null);
+  const [createdOrderItems, setCreatedOrderItems] = useState<PosOrder["items"] | null>(null);
   const [discountAppliedTo, setDiscountAppliedTo] = useState<string | null>(null);
   const [orderMutationId, setOrderMutationId] = useState<string>(() => safeUuid());
   const [paymentMutationId, setPaymentMutationId] = useState<string>(() => safeUuid());
@@ -334,27 +387,40 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   }, [posSettings?.payment_methods, isOnline]);
 
   const qr = posSettings?.payment_qr ?? null;
-  const activeMethod = availableMethods.find((m) => m.key === method);
+  const qrMethod = availableMethods.find((m) => m.isQr);
+  const hasCashMethod = availableMethods.some((m) => m.key === "cash");
+  const methodOptions = useMemo(
+    () =>
+      qr && qrMethod && hasCashMethod
+        ? [...availableMethods, SPLIT_METHOD]
+        : availableMethods,
+    [availableMethods, qr, qrMethod, hasCashMethod],
+  );
+  const activeMethod = methodOptions.find((m) => m.key === method);
 
   // Keep the selected tender valid when the merchant's list differs.
   useEffect(() => {
-    if (availableMethods.length > 0 && !availableMethods.some((m) => m.key === method)) {
-      setMethod(availableMethods[0].key as PaymentMethod);
+    if (methodOptions.length > 0 && !methodOptions.some((m) => m.key === method)) {
+      setMethod(methodOptions[0].key as PaymentMethod);
     }
-  }, [availableMethods, method]);
+  }, [methodOptions, method]);
 
   // A QR handover has to be acknowledged before the sale is recorded, otherwise
   // there is no evidence the customer ever saw the code.
   useEffect(() => {
     setQrConfirmed(false);
     setReference("");
+    setSplitState(emptySplitPaymentState());
   }, [method]);
   useEffect(() => {
     if (!open) {
       setCreatedOrderId(null);
+      setCreatedOrderItems(null);
       setDiscountAppliedTo(null);
       setOrderMutationId(safeUuid());
       setPaymentMutationId(safeUuid());
+      setSplitState(emptySplitPaymentState());
+      setSplitLegIds({ qrMutationId: safeUuid(), cashMutationId: safeUuid() });
       setError(null);
       setOrderPlaced(false);
       setReceiptData(null);
@@ -378,6 +444,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
   async function ensureServerOrder(): Promise<{ uuid: string; total: number }> {
     if (!merchant || !currentWorker || !device) throw new Error("POS is not ready.");
     let uuid = createdOrderId;
+    let orderItems: PosOrder["items"] | null = createdOrderItems;
     let serverTotal: number | null = null;
     if (!uuid) {
       const orderRes = await posCreateOrder({
@@ -396,11 +463,37 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           : undefined,
       });
       uuid = String(orderRes.uuid);
+      orderItems = orderRes.items;
       setCreatedOrderId(uuid);
+      setCreatedOrderItems(orderRes.items);
       serverTotal = Number(orderRes.total_amount);
     }
     if (pendingDiscount && discountAppliedTo !== uuid) {
       try {
+        if (pendingDiscount.lineKeys?.length && !orderItems) {
+          const orders = await posListOrders(activeShift?.id);
+          orderItems = orders.find((item) => item.uuid === uuid)?.items ?? null;
+          if (orderItems) setCreatedOrderItems(orderItems);
+        }
+        let orderItemIds: number[] | undefined;
+        if (pendingDiscount.lineKeys?.length) {
+          if (!orderItems) {
+            throw new Error(
+              "The selected items could not be found on the saved order. Reapply the discount.",
+            );
+          }
+          const mapped = mapCartLineKeysToOrderItemIds(
+            orderItems,
+            cart,
+            pendingDiscount.lineKeys,
+          );
+          if (mapped.missing.length > 0) {
+            throw new Error(
+              "The selected items are no longer in the cart. Reapply the discount.",
+            );
+          }
+          orderItemIds = mapped.ids;
+        }
         await posApplyDiscount({
           order_id: uuid,
           worker_id: currentWorker.id,
@@ -409,6 +502,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
           reason: pendingDiscount.reason,
           authorized_by_worker_id: pendingDiscount.authorizedByWorkerId,
           source: "pos",
+          ...(orderItemIds?.length ? { order_item_ids: orderItemIds } : {}),
         });
         setDiscountAppliedTo(uuid);
         serverTotal = null;
@@ -450,13 +544,16 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     (selectedDebitAccount &&
       debitAccounts.find((a) => a.id === selectedDebitAccount && Number(a.balance) >= total));
   const isQrValid = !(activeMethod?.isQr && qr) || qrConfirmed;
+  const splitBreakdown = evaluateSplitPayment(total, splitState);
+  const isSplitValid = method !== "split" || splitBreakdown.error === null;
   const canSubmit =
     !submitting &&
     cart.length > 0 &&
-    availableMethods.length > 0 &&
+    methodOptions.length > 0 &&
     isCashValid &&
     isDebitValid &&
-    isQrValid;
+    isQrValid &&
+    isSplitValid;
 
   /** Why this cart cannot be saved offline, or null when it can. */
   function offlineBlocker(): string | null {
@@ -555,38 +652,74 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
     );
 
     if (tender) {
-      await offlinePayments.save({
-        id: paymentMutationId,
-        order_id: offlineOrderId,
-        payment_method: tender.method,
-        amount: roundMoney(total),
-        change_amount: roundMoney(tender.change),
-        external_reference: tender.reference || undefined,
-        shift_id: tender.shiftId,
-        worker_id: currentWorker.id,
-        device_id: device.id,
-        status: "pending_sync",
-        created_at: createdAt,
-      });
-
-      await enqueueMutation(
-        "payment",
-        "/pos/payment/create/",
-        "POST",
+      const legs: OfflineTenderPayment[] = tender.payments ?? [
         {
+          method: tender.method,
+          amount: roundMoney(total),
+          change: roundMoney(tender.change),
+          reference: tender.reference,
+          mutationId: paymentMutationId,
+        },
+      ];
+
+      for (const leg of legs) {
+        await offlinePayments.save({
+          id: leg.mutationId,
           order_id: offlineOrderId,
+          payment_method: leg.method,
+          amount: roundMoney(leg.amount),
+          change_amount: roundMoney(leg.change),
+          external_reference: leg.reference || undefined,
           shift_id: tender.shiftId,
           worker_id: currentWorker.id,
           device_id: device.id,
-          payment_method: tender.method,
-          amount: roundMoney(total),
-          change_amount: roundMoney(tender.change),
-          external_reference: tender.reference || undefined,
-          client_mutation_id: paymentMutationId,
-          client_created_at: createdAt,
-        },
-        paymentMutationId,
-      );
+          status: "pending_sync",
+          created_at: createdAt,
+        });
+      }
+
+      if (tender.payments) {
+        await enqueueMutation(
+          "payment",
+          "/pos/payment/split/",
+          "POST",
+          {
+            order_id: offlineOrderId,
+            shift_id: tender.shiftId,
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            payments: legs.map((leg) => ({
+              payment_method: leg.method,
+              amount: roundMoney(leg.amount),
+              external_reference: leg.reference || undefined,
+              client_mutation_id: leg.mutationId,
+            })),
+            change_amount: roundMoney(tender.change),
+            client_mutation_id: paymentMutationId,
+            client_created_at: createdAt,
+          },
+          paymentMutationId,
+        );
+      } else {
+        await enqueueMutation(
+          "payment",
+          "/pos/payment/create/",
+          "POST",
+          {
+            order_id: offlineOrderId,
+            shift_id: tender.shiftId,
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            payment_method: tender.method,
+            amount: roundMoney(total),
+            change_amount: roundMoney(tender.change),
+            external_reference: tender.reference || undefined,
+            client_mutation_id: paymentMutationId,
+            client_created_at: createdAt,
+          },
+          paymentMutationId,
+        );
+      }
     }
 
     return { kot, bill };
@@ -659,7 +792,13 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         setError(blocker);
         return;
       }
-      if (!isOfflineCapableMethod(method)) {
+      const isSplit = method === "split";
+      if (isSplit) {
+        if (!qr || !qrMethod || !isOfflineCapableMethod(qrMethod.key)) {
+          setError("Split payment needs a QR method that works offline.");
+          return;
+        }
+      } else if (!isOfflineCapableMethod(method)) {
         setError(
           `${PAYMENT_METHOD_LABELS[method] || method} cannot be recorded without a connection. Please use Cash, bank QR or mobile wallet.`,
         );
@@ -673,13 +812,42 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         return;
       }
       try {
-        const { kot, bill } = await captureOffline({
-          method,
-          cashAmount,
-          change: method === "cash" ? change : 0,
-          reference: reference.trim(),
-          shiftId: offlineShiftId,
-        });
+        const split = isSplit
+          ? buildSplitPaymentLegs(total, splitState, qrMethod!.key, splitLegIds)
+          : null;
+        const { kot, bill } = await captureOffline(
+          split
+            ? {
+                method: "split",
+                cashAmount: splitBreakdown.cashReceived,
+                change: splitBreakdown.change,
+                reference: "",
+                shiftId: offlineShiftId,
+                payments: [
+                  {
+                    method: qrMethod!.key,
+                    amount: split.payments[0].amount,
+                    change: 0,
+                    reference: splitState.reference.trim(),
+                    mutationId: splitLegIds.qrMutationId,
+                  },
+                  {
+                    method: "cash",
+                    amount: split.payments[1].amount,
+                    change: splitBreakdown.change,
+                    reference: "",
+                    mutationId: splitLegIds.cashMutationId,
+                  },
+                ],
+              }
+            : {
+                method,
+                cashAmount,
+                change: method === "cash" ? change : 0,
+                reference: reference.trim(),
+                shiftId: offlineShiftId,
+              },
+        );
         setReceiptData(bill);
         setPlacedKot(kot);
         clearCart();
@@ -697,35 +865,59 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
 
       try {
         const { uuid: targetOrderUuid, total: serverTotal } = await ensureServerOrder();
-        if (method === "cash" && cashAmount < serverTotal) {
-          throw new Error(
-            `The order total is ${formatCurrency(serverTotal, currencySymbol)}; cash received is not enough.`,
+        if (method === "split") {
+          if (!qrMethod) throw new Error("No QR payment method is configured.");
+          const split = buildSplitPaymentLegs(
+            serverTotal,
+            splitState,
+            qrMethod.key,
+            splitLegIds,
           );
-        }
+          await posCreateSplitPayment({
+            order_id: targetOrderUuid,
+            shift_id: activeShift?.id ?? "",
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            ...split,
+            // One request id for the pair; each leg also carries its own id so
+            // a queued offline split can be reconciled leg by leg.
+            client_mutation_id: paymentMutationId,
+            client_created_at: new Date().toISOString(),
+          });
+        } else {
+          if (method === "cash" && cashAmount < serverTotal) {
+            throw new Error(
+              `The order total is ${formatCurrency(serverTotal, currencySymbol)}; cash received is not enough.`,
+            );
+          }
 
-        await posCreatePayment({
-          order_id: targetOrderUuid,
-          shift_id: activeShift?.id ?? "",
-          worker_id: currentWorker.id,
-          device_id: device.id,
-          payment_method: method,
-          amount: roundMoney(serverTotal),
-          change_amount: method === "cash" ? roundMoney(Math.max(0, cashAmount - serverTotal)) : 0,
-          debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
-          // Optional by design: Zentro records the payment, it does not
-          // process it, so there is nothing to look up against a provider.
-          external_reference: reference.trim() || undefined,
-          // One id per sale, shared with the offline path, so a payment that
-          // reached the server just before the connection dropped is not
-          // recorded a second time when it is queued and sent again.
-          client_mutation_id: paymentMutationId,
-        });
+          await posCreatePayment({
+            order_id: targetOrderUuid,
+            shift_id: activeShift?.id ?? "",
+            worker_id: currentWorker.id,
+            device_id: device.id,
+            payment_method: method,
+            amount: roundMoney(serverTotal),
+            change_amount:
+              method === "cash" ? roundMoney(Math.max(0, cashAmount - serverTotal)) : 0,
+            debit_account_id: method === "debit" ? selectedDebitAccount : undefined,
+            // Optional by design: Zentro records the payment, it does not
+            // process it, so there is nothing to look up against a provider.
+            external_reference: reference.trim() || undefined,
+            // One id per sale, shared with the offline path, so a payment that
+            // reached the server just before the connection dropped is not
+            // recorded a second time when it is queued and sent again.
+            client_mutation_id: paymentMutationId,
+          });
+        }
 
         clearCart();
         setCreatedOrderId(null);
         setDiscountAppliedTo(null);
         setOrderMutationId(safeUuid());
         setPaymentMutationId(safeUuid());
+        setSplitState(emptySplitPaymentState());
+        setSplitLegIds({ qrMutationId: safeUuid(), cashMutationId: safeUuid() });
         try { playOrderNotificationSound(0.7); } catch {}
         setLoadingReceipt(true);
         try {
@@ -1061,7 +1253,7 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
         </div>
 
         <div className="grid grid-cols-3 gap-2 px-6 py-4 sm:grid-cols-5">
-          {availableMethods.map((pm) => {
+          {methodOptions.map((pm) => {
             const Icon = pm.icon;
             const active = method === pm.key;
             return (
@@ -1078,6 +1270,16 @@ export default function PaymentSheet({ open, onClose, onPaid }: PaymentSheetProp
             );
           })}
         </div>
+
+        {method === "split" && qr && (
+          <SplitPaymentEditor
+            total={total}
+            currencySymbol={currencySymbol}
+            qr={qr}
+            state={splitState}
+            onChange={setSplitState}
+          />
+        )}
 
         {activeMethod?.isQr && qr && (
           <PaymentQrBlock

@@ -19,6 +19,7 @@
 
 import {
   AlertTriangle,
+  Armchair,
   BarChart3,
   Calendar,
   Clock,
@@ -79,6 +80,7 @@ export const POS_NAV_SECTIONS: PosNavSection[] = [
     items: [
       { to: "/pos", label: "Order", icon: ShoppingCart },
       { to: "/pos/orders", label: "Orders", icon: Clock },
+      { to: "/pos/tables", label: "Tables", icon: Armchair },
       { to: "/pos/preparation", label: "Preparation", icon: AlertTriangle },
       { to: "/pos/conflicts", label: "Conflicts", icon: AlertTriangle },
     ],

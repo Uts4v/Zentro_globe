@@ -28,6 +28,8 @@ export type PendingDiscount = {
   value: number;
   reason: string;
   authorizedByWorkerId?: string;
+  /** Cart line keys the discount is restricted to; empty/absent = whole cart. */
+  lineKeys?: string[];
 };
 
 /**

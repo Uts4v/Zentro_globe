@@ -49,6 +49,7 @@ RULES = [
     ("/api/pos/audit/", "reports.view", "reports.view"),
     ("/api/pos/settings/update/", "settings.manage", "settings.manage"),
     ("/api/pos/settings/free-item-pin/", "settings.manage", "settings.manage"),
+    ("/api/pos/order/table/move/", "pos.access", "orders.edit"),
     ("/api/pos/order/item/", "pos.access", ("orders.edit", "orders.cancel")),
     ("/api/finance/", "accounts.view", "accounts.manage"),
     ("/api/pos/device", "pos.access", "settings.manage"),

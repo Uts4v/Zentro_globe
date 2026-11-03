@@ -51,7 +51,11 @@ export function usePosCartPricing(): PosCartPricing {
       // An offer's value was computed by the server for this cart; it is
       // re-checked whenever the cart changes (see usePendingOfferRefresh).
       adjustment: pendingDiscount
-        ? { calcType: pendingDiscount.type, value: pendingDiscount.value }
+        ? {
+            calcType: pendingDiscount.type,
+            value: pendingDiscount.value,
+            eligibleLineKeys: pendingDiscount.lineKeys,
+          }
         : pendingOffer
           ? { calcType: "fixed", value: pendingOffer.discount }
           : null,

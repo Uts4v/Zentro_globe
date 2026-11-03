@@ -342,8 +342,21 @@ export default function Receipt({
         <div className="space-y-0.5 text-[13px]">
           <div className="receipt-line">
             <span>Subtotal</span>
-            <span>{formatCurrency(data.subtotal, currencySymbol)}</span>
+            <span>
+              {formatCurrency(
+                Number(data.item_discount_total) > 0
+                  ? data.list_subtotal ?? data.subtotal
+                  : data.subtotal,
+                currencySymbol,
+              )}
+            </span>
           </div>
+          {Number(data.item_discount_total) > 0 && (
+            <div className="receipt-line text-green-700">
+              <span>Item discounts</span>
+              <span>-{formatCurrency(data.item_discount_total ?? 0, currencySymbol)}</span>
+            </div>
+          )}
           {data.discounts
             .filter((d) => Number(d.amount) > 0)
             .map((d, i) => (

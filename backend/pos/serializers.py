@@ -307,6 +307,10 @@ class ApplyDiscountSerializer(serializers.Serializer):
     discount_value = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=0)
     reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
     authorized_by_worker_id = serializers.UUIDField(required=False, allow_null=True)
+    # Empty/absent = the whole order; otherwise only these order lines.
+    order_item_ids = serializers.ListField(
+        child=serializers.IntegerField(), required=False, allow_empty=True,
+    )
 
 
 # ── Audit Log ──────────────────────────────────────────────────────────────────

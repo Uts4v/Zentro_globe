@@ -15,6 +15,11 @@ const headers = () => {
 };
 
 // ── Health ────────────────────────────────────────────────────────────────────
+export const posWsToken = () =>
+  djangoFetch<{ token: string; expires_in: number }>(apiUrl("/pos/ws-token/"), {
+    headers: headers(),
+  });
+
 export const posHealth = () =>
   djangoFetch<{ status: string; server_time: string }>(apiUrl("/pos/health/"), {
     headers: headers(),
@@ -322,6 +327,55 @@ export const posUpdateOrderStatus = (
     body: JSON.stringify({
       order_id: orderId,
       status,
+      worker_id: workerId,
+      device_id: deviceId,
+    }),
+  });
+
+export interface PosTableStatusBill {
+  id: number;
+  uuid: string;
+  order_number: string;
+  status: string;
+  payment_status: string;
+  total_amount: string;
+  item_count: number;
+  opened_at: string;
+}
+
+export interface PosTableStatus {
+  id: number;
+  name: string;
+  table_number: number;
+  area_id: number | null;
+  area_name: string;
+  seats?: number;
+  is_occupied: boolean;
+  open_bill_count: number;
+  bill: PosTableStatusBill | null;
+}
+
+export interface PosTableStatusesResponse {
+  tables: PosTableStatus[];
+}
+
+export const posListTableStatuses = () =>
+  djangoFetch<PosTableStatusesResponse>(apiUrl("/pos/tables/status/"), {
+    headers: headers(),
+  });
+
+export const posMoveOrderTable = (
+  orderId: string | number,
+  tableId: number,
+  workerId?: string,
+  deviceId?: string,
+) =>
+  djangoFetch<PosOrder>(apiUrl("/pos/order/table/move/"), {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify({
+      order_id: String(orderId),
+      table_id: tableId,
       worker_id: workerId,
       device_id: deviceId,
     }),
@@ -776,6 +830,10 @@ export interface PosReceiptData {
     options?: Array<{ group_name: string; option_name: string; kind: string }>;
   }>;
   subtotal: string;
+  /** Subtotal before menu-item (catalog) discounts; equals `subtotal` when none. */
+  list_subtotal?: string;
+  /** Saving from menu-item discounts, shown as its own bill line. */
+  item_discount_total?: string;
   notes?: string;
   discounts: Array<{
     kind?: string;
@@ -892,6 +950,11 @@ export interface PosMenuSnapshot {
       name: string;
       description: string;
       price: string;
+      discount_type?: "none" | "percentage" | "fixed";
+      discount_value?: string | null;
+      discount_source?: "manual" | "special";
+      discount_price?: string | null;
+      discount_amount?: string | null;
       tax_class?: string;
       image_url: string;
       category: string;
@@ -979,8 +1042,11 @@ export interface PosSplitPaymentPayload {
     payment_method: string;
     amount: number;
     external_reference?: string;
+    client_mutation_id?: string;
   }>;
   change_amount?: number;
+  client_mutation_id?: string;
+  client_created_at?: string;
 }
 
 export interface PosApplyDiscountPayload {
@@ -991,6 +1057,8 @@ export interface PosApplyDiscountPayload {
   reason?: string;
   authorized_by_worker_id?: string;
   source?: string;
+  /** Restrict the discount to these order lines; omit for the whole order. */
+  order_item_ids?: number[];
 }
 
 // ── Debit (Prepaid / Wallet) ─────────────────────────────────────────────────

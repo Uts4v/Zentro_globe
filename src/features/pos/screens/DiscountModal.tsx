@@ -11,6 +11,16 @@ import {
 import { usePosCartPricing } from "../pricing";
 import { X, Percent, DollarSign, Lock, AlertTriangle, Check, Loader2 } from "lucide-react";
 
+/** One line the cashier can restrict a discount to. */
+export type DiscountTarget = {
+  key: string;
+  name: string;
+  quantity: number;
+  amount: number;
+  /** Free/complimentary lines are not discountable. */
+  excluded?: boolean;
+};
+
 interface DiscountModalProps {
   open: boolean;
   /** For an existing order, receives the bill as the server re-priced it. */
@@ -22,6 +32,8 @@ interface DiscountModalProps {
    * re-prices the bill. Without it the modal sets the cart's discount.
    */
   order?: { uuid: string; subtotal: number; hasDiscount: boolean };
+  /** Order lines that can be selected; omitted when line targeting is unavailable. */
+  items?: DiscountTarget[];
 }
 
 /**
@@ -32,8 +44,15 @@ interface DiscountModalProps {
  * Either way the discount is always priced by the backend (and re-validated
  * if the order changes).
  */
-export default function DiscountModal({ open, onApplied, onClose, order }: DiscountModalProps) {
+export default function DiscountModal({
+  open,
+  onApplied,
+  onClose,
+  order,
+  items,
+}: DiscountModalProps) {
   const currentWorker = usePosStore((s) => s.currentWorker);
+  const cart = usePosStore((s) => s.cart);
   const setPendingDiscount = usePosStore((s) => s.setPendingDiscount);
   const cartPricing = usePosCartPricing();
   const posSettings = usePosStore((s) => s.posSettings);
@@ -41,6 +60,8 @@ export default function DiscountModal({ open, onApplied, onClose, order }: Disco
   const [type, setType] = useState<"percentage" | "fixed">("percentage");
   const [value, setValue] = useState("");
   const [reason, setReason] = useState("");
+  const [targetMode, setTargetMode] = useState<"order" | "items">("order");
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +71,12 @@ export default function DiscountModal({ open, onApplied, onClose, order }: Disco
   const [managerPin, setManagerPin] = useState("");
   const [managerError, setManagerError] = useState<string | null>(null);
   const [verifyingManager, setVerifyingManager] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setTargetMode("order");
+    setSelectedKeys([]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -71,13 +98,44 @@ export default function DiscountModal({ open, onApplied, onClose, order }: Disco
       ? numValue > maxDiscount && maxDiscount > 0
       : numValue > approvalThreshold && approvalThreshold > 0;
 
-  const subtotalValue = order ? order.subtotal : cartPricing.subtotalValue;
+  const targets =
+    items ??
+    (order
+      ? []
+      : cart.map((line) => ({
+          key: line.key,
+          name: line.name,
+          quantity: line.quantity,
+          amount: line.subtotal,
+          excluded: line.is_free,
+        })));
+  const selectableTargets = targets.filter((target) => !target.excluded);
+  const selectedKeysValid = selectedKeys.filter((key) =>
+    selectableTargets.some((target) => target.key === key),
+  );
+  const selectedSubtotal = selectableTargets
+    .filter((target) => selectedKeysValid.includes(target.key))
+    .reduce((sum, target) => sum + target.amount, 0);
+
+  const restrictToItems = targetMode === "items" && selectableTargets.length > 0;
+  const subtotalValue = restrictToItems
+    ? selectedSubtotal
+    : order
+      ? order.subtotal
+      : cartPricing.subtotalValue;
   const exceedsSubtotal = type === "fixed" && numValue > subtotalValue;
   const canSubmit =
     numValue > 0 &&
     !submitting &&
     !exceedsSubtotal &&
+    (!restrictToItems || selectedKeysValid.length > 0) &&
     (type === "fixed" || (numValue > 0 && numValue <= 100));
+
+  function toggleTarget(key: string) {
+    setSelectedKeys((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key],
+    );
+  }
 
   async function handleManagerVerify() {
     if (!managerWorker || managerPin.length < 4) return;
@@ -103,6 +161,9 @@ export default function DiscountModal({ open, onApplied, onClose, order }: Disco
     setError(null);
 
     try {
+      const orderItemIds = restrictToItems
+        ? selectedKeysValid.map((key) => Number(key)).filter((id) => Number.isFinite(id))
+        : undefined;
       if (order) {
         const res = await posApplyDiscount({
           order_id: order.uuid,
@@ -112,10 +173,19 @@ export default function DiscountModal({ open, onApplied, onClose, order }: Disco
           reason,
           authorized_by_worker_id: authorizedByWorkerId,
           source: "pos",
+          ...(orderItemIds?.length ? { order_item_ids: orderItemIds } : {}),
         });
         onApplied(res.pricing);
       } else {
-        setPendingDiscount({ type, value: numValue, reason, authorizedByWorkerId });
+        setPendingDiscount({
+          type,
+          value: numValue,
+          reason,
+          authorizedByWorkerId,
+          ...(restrictToItems && selectedKeysValid.length
+            ? { lineKeys: selectedKeysValid }
+            : {}),
+        });
         onApplied();
       }
       onClose();
@@ -336,6 +406,65 @@ export default function DiscountModal({ open, onApplied, onClose, order }: Disco
             className="w-full rounded-xl border border-border bg-muted/50 px-4 py-2.5 text-sm focus:border-ink focus:outline-none focus:ring-1 focus:ring-ink"
           />
         </div>
+
+        {/* Item targeting */}
+        {selectableTargets.length > 0 && (
+          <div className="mb-4">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Apply to
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTargetMode("order")}
+                className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
+                  targetMode === "order"
+                    ? "bg-ink text-white"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                Whole order
+              </button>
+              <button
+                type="button"
+                onClick={() => setTargetMode("items")}
+                className={`flex-1 rounded-xl py-2 text-xs font-semibold transition-colors ${
+                  targetMode === "items"
+                    ? "bg-ink text-white"
+                    : "bg-muted text-muted-foreground hover:bg-muted/80"
+                }`}
+              >
+                Selected items
+              </button>
+            </div>
+            {restrictToItems && (
+              <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border border-border">
+                {selectableTargets.map((target) => (
+                  <label
+                    key={target.key}
+                    className="flex cursor-pointer items-center gap-3 border-b border-border px-3 py-2 last:border-b-0 hover:bg-muted/50"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedKeysValid.includes(target.key)}
+                      onChange={() => toggleTarget(target.key)}
+                      className="h-4 w-4 accent-ink"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                      {target.quantity}x {target.name}
+                    </span>
+                    <span className="numeric text-xs text-muted-foreground">
+                      {formatCurrency(target.amount, currencySymbol)}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+            {restrictToItems && selectedKeysValid.length === 0 && (
+              <p className="mt-1 text-xs text-muted-foreground">Select at least one item.</p>
+            )}
+          </div>
+        )}
 
         {/* Warning for exceeding limit */}
         {exceedsLimit && (

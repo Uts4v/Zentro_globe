@@ -419,3 +419,21 @@ class CollectPaymentTests(PosFixtureMixin, TestCase):
         self.assertEqual(again.status_code, 400)
         self.assertEqual(again.data["payment_status"], "paid")
         self.assertEqual(Order.objects.get(uuid=order["uuid"]).pos_payments.count(), 1)
+
+
+class ReceiptItemDiscountTests(PosFixtureMixin, TestCase):
+    def test_receipt_surfaces_catalog_discount_separately_from_subtotal(self):
+        self.coke.discount_type = "fixed"
+        self.coke.discount_value = Decimal("20.00")
+        self.coke.save(update_fields=["discount_type", "discount_value"])
+
+        order = self.create_pos_order([(self.coke, 1), (self.tea, 1)]).data
+        resp = self.client.get(f"/api/pos/receipt/{order['uuid']}/")
+        self.assertEqual(resp.status_code, 200, resp.data)
+        self.assertEqual(resp.data["subtotal"], "130.00")
+        self.assertEqual(resp.data["list_subtotal"], "150.00")
+        self.assertEqual(resp.data["item_discount_total"], "20.00")
+
+        coke = next(item for item in resp.data["items"] if item["name"] == "Coke")
+        self.assertEqual(coke["price"], "80.00")
+        self.assertEqual(coke["list_unit_price"], "100.00")

@@ -376,6 +376,37 @@ def health_check(request):
     })
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated, IsMerchantUser, IsPosEnabled])
+def pos_ws_token(request):
+    from datetime import timedelta
+
+    from rest_framework_simplejwt.tokens import AccessToken
+
+    merchant = _get_merchant(request)
+    if not _require_pos(merchant):
+        return Response(
+            {"error": "POS is not enabled."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    from . import rbac
+
+    worker = getattr(request, "worker", None) or rbac.request_worker(request, merchant)
+    denied = _perm_denied(worker, "orders.view", request)
+    if denied:
+        return denied
+
+    token = AccessToken.for_user(request.user)
+    token["ws_auth"] = True
+    token["pos_merchant_id"] = merchant.id
+    if worker is not None:
+        token["pos_worker_id"] = str(worker.id)
+    token.set_exp(lifetime=timedelta(seconds=60))
+
+    return Response({"token": str(token), "expires_in": 60})
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # POS LOGIN & BOOTSTRAP (Phase 4)
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2764,6 +2795,25 @@ def apply_discount(request):
     discount_value = ser.validated_data["discount_value"]
     reason = ser.validated_data.get("reason", "")
 
+    # Optional item targeting: the cashier picked specific lines. The engine
+    # already restricts a discount to eligible line keys, so no new pricing
+    # model is needed - only a guard that every id is on this order and paid.
+    target_item_ids = ser.validated_data.get("order_item_ids") or []
+    target_items = []
+    eligible_line_keys = None
+    if target_item_ids:
+        target_items = list(
+            order.items.filter(pk__in=target_item_ids, is_complimentary=False)
+        )
+        found_ids = {item.pk for item in target_items}
+        missing_ids = [pk for pk in target_item_ids if pk not in found_ids]
+        if missing_ids:
+            return Response(
+                {"error": "Some selected items are no longer on this order."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        eligible_line_keys = frozenset(str(item.pk) for item in target_items)
+
     if discount_type == PosDiscount.TYPE_PERCENTAGE:
         if discount_value > 100:
             return Response({"error": "Percentage cannot exceed 100%."},
@@ -2775,11 +2825,17 @@ def apply_discount(request):
                     {"error": f"Discount exceeds max ({merchant.max_worker_discount_percent}%). Manager approval required."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-    elif discount_value > order.subtotal:
-        return Response(
-            {"error": f"Fixed discount ({discount_value}) cannot exceed order subtotal ({order.subtotal})."},
-            status=status.HTTP_400_BAD_REQUEST,
+    else:
+        discountable_subtotal = (
+            sum((item.subtotal for item in target_items), Decimal("0"))
+            if eligible_line_keys is not None
+            else order.subtotal
         )
+        if discount_value > discountable_subtotal:
+            return Response(
+                {"error": f"Fixed discount ({discount_value}) cannot exceed the selected items' subtotal ({discountable_subtotal})."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
     authorized_by = None
     authorized_by_id = ser.validated_data.get("authorized_by_worker_id")
@@ -2801,6 +2857,7 @@ def apply_discount(request):
                 calc_type=discount_type,
                 value=discount_value,
                 label=(reason or "Discount")[:120],
+                eligible_line_keys=eligible_line_keys,
             ),
             # A cashier changing 10% to 15% replaces their own discount; a
             # loyalty reward or offer already on the order blocks it.
@@ -2837,6 +2894,7 @@ def apply_discount(request):
                "type": discount_type,
                "value": str(discount_value),
                "amount": str(adjustment.amount),
+               **({"item_ids": [item.pk for item in target_items]} if target_items else {}),
            })
 
     payload = dict(PosDiscountSerializer(discount).data)
@@ -3468,6 +3526,8 @@ def _pos_menu_categories(merchant):
     `prefetch_related` makes this 2 extra queries for the whole menu rather than
     two per item, which matters because bootstrap runs on every till sign-in.
     """
+    from config.menu_pricing import apply_discount, resolve_discount
+
     items = (
         MenuItem.objects.filter(merchant=merchant)
         .prefetch_related("option_groups__options")
@@ -3476,11 +3536,23 @@ def _pos_menu_categories(merchant):
     categories = {}
     for item in items:
         cat = item.category or "Uncategorized"
+        discount_type, discount_value = resolve_discount(item)
+        discount_price = None
+        discount_amount = "0.00"
+        if discount_type != "none":
+            discounted, cut = apply_discount(item.price, discount_type, discount_value)
+            discount_price = str(discounted)
+            discount_amount = str(cut)
         entry = {
             "id": item.id,
             "name": item.name,
             "description": item.description,
             "price": str(item.price),
+            "discount_type": discount_type,
+            "discount_value": str(discount_value) if discount_value is not None else None,
+            "discount_source": item.discount_source,
+            "discount_price": discount_price,
+            "discount_amount": discount_amount,
             "tax_class": item.tax_class,
             "image_url": item.image_url,
             "category": item.category,
@@ -3602,6 +3674,23 @@ def receipt_data(request, order_id):
         for item in order_items
     ]
 
+    # Menu-item discounts are already baked into each line's effective price.
+    # Surface the saving separately so a bill can show the original subtotal and
+    # the item discount that brought it down (free/complimentary lines are not a
+    # discount and are excluded).
+    item_discount_total = sum(
+        (
+            (Decimal(item["list_unit_price"]) - Decimal(item["price"])) * item["quantity"]
+            for item in items
+            if not item["is_free"]
+            and item["list_unit_price"]
+            and Decimal(item["list_unit_price"]) > Decimal(item["price"])
+        ),
+        Decimal("0"),
+    ).quantize(MONEY)
+    subtotal_value = Decimal(order.subtotal or order.total_amount or 0)
+    list_subtotal = (subtotal_value + item_discount_total).quantize(MONEY)
+
     # Discounts: the adjustments currently on the bill, as the pricing engine
     # computed them. (Replaced manual discounts stay in pos_discounts for audit.)
     pos_discounts = {f"pos_discount:{d.id}": d for d in order.pos_discounts.all()}
@@ -3704,7 +3793,9 @@ def receipt_data(request, order_id):
         "notes": order.notes,
 
         "items": items,
-        "subtotal": str(order.subtotal or order.total_amount),
+        "subtotal": str(subtotal_value),
+        "list_subtotal": str(list_subtotal),
+        "item_discount_total": str(item_discount_total),
         "discounts": discounts,
         "discount_amount": str(order.discount_amount),
         "taxable_amount": str(order.taxable_amount),

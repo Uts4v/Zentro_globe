@@ -24,6 +24,7 @@ test("every other POS screen is blocked", () => {
     "/pos/preparation",
     "/pos/preparation/3",
     "/pos/conflicts",
+    "/pos/tables",
     "/pos/accounts",
     "/pos/cash-movements",
     "/pos/reports",

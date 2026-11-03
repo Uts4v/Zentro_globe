@@ -107,10 +107,11 @@ class PricingFlowBase(TestCase):
         self.assertEqual(resp.status_code, 201, resp.data)
         return Order.objects.get(pk=resp.data["id"])
 
-    def apply_pos_discount(self, order, discount_type, value):
+    def apply_pos_discount(self, order, discount_type, value, **extra):
         return self.as_merchant().post("/api/pos/discount/apply/", {
             "order_id": str(order.uuid), "worker_id": str(self.worker.id),
             "discount_type": discount_type, "discount_value": str(value),
+            **extra,
         }, format="json")
 
 
@@ -229,6 +230,33 @@ class DiscountTests(PricingFlowBase):
         order = self.pos_order()
         resp = self.apply_pos_discount(order, "fixed", 5000)
         self.assertEqual(resp.status_code, 400)
+        self.assertFalse(PosDiscount.objects.exists())
+
+    def test_discount_can_be_restricted_to_selected_lines(self):
+        order = self.pos_order()
+        pizza = order.items.get(menu_item=self.pizza)
+        coffee = order.items.get(menu_item=self.coffee)
+        resp = self.apply_pos_discount(
+            order, "percentage", 20, order_item_ids=[pizza.id],
+        )
+        self.assertEqual(resp.status_code, 201, resp.data)
+        order.refresh_from_db()
+        pizza.refresh_from_db()
+        coffee.refresh_from_db()
+        # 20% of the pizza's effective 800 line, not of the 2400 order.
+        self.assertEqual(order.discount_amount, D("160.00"))
+        self.assertEqual(pizza.discount_amount, D("160.00"))
+        self.assertEqual(coffee.discount_amount, D("0.00"))
+        self.assertEqual(order.total_amount, D("2492.20"))
+
+    def test_fixed_discount_above_selected_lines_is_rejected(self):
+        order = self.pos_order()
+        pizza = order.items.get(menu_item=self.pizza)
+        resp = self.apply_pos_discount(
+            order, "fixed", 900, order_item_ids=[pizza.id],
+        )
+        self.assertEqual(resp.status_code, 400, resp.data)
+        self.assertIn("selected items' subtotal", resp.data["error"])
         self.assertFalse(PosDiscount.objects.exists())
 
 

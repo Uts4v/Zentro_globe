@@ -191,8 +191,21 @@ async function processItem(queued: SyncQueueItem): Promise<Outcome> {
       response.uuid ? String(response.uuid) : undefined,
     );
   }
-  if (item.type === "payment" && response?.id) {
-    await offlinePayments.markSynced(item.client_mutation_id, String(response.id));
+  if (item.type === "payment") {
+    if (Array.isArray(response?.payments)) {
+      // A split returns one payment per leg; each leg was saved under its own
+      // client mutation id so it can be marked synced without guessing.
+      for (const payment of response.payments) {
+        if (payment?.client_mutation_id && payment?.id) {
+          await offlinePayments.markSynced(
+            String(payment.client_mutation_id),
+            String(payment.id),
+          );
+        }
+      }
+    } else if (response?.id) {
+      await offlinePayments.markSynced(item.client_mutation_id, String(response.id));
+    }
   }
 
   return "synced";

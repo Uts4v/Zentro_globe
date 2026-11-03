@@ -14,6 +14,7 @@ import SyncStatusBar from "./SyncStatusBar";
 import PendingOfflineKOTs from "./PendingOfflineKOTs";
 import NotificationBell from "./NotificationBell";
 import PosVoiceAnnouncer from "./PosVoiceAnnouncer";
+import PosRealtimeBridge from "./PosRealtimeBridge";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { useBackgroundSync, useOnlineStatus } from "../offline/hooks";
 import { isPosPathOfflineSafe, POS_NAV_SECTIONS } from "../offline/permissions";
@@ -47,6 +48,7 @@ export function hasRoutePermission(path: string): boolean {
   if (path.startsWith("/pos/staff") || path.startsWith("/pos/schedule"))
     return hasStaffPermission("staff.manage");
   if (path.startsWith("/pos/settings")) return hasStaffPermission("settings.manage");
+  if (path.startsWith("/pos/tables")) return hasStaffPermission("orders.view");
   if (path.startsWith("/pos/orders")) return hasStaffPermission("orders.view");
   if (path.startsWith("/pos/accounts")) return hasStaffPermission("payments.take");
   if (path.startsWith("/pos/cash-movements")) return hasStaffPermission("shifts.close");
@@ -552,6 +554,7 @@ export default function PosLayout() {
     <div className="flex h-dvh overflow-hidden bg-background">
       {/* One coordinator per terminal: owns the shared order feed and speech. */}
       <PosVoiceAnnouncer />
+      <PosRealtimeBridge />
       {/* ── Sidebar ── */}
       <aside className="hidden w-64 shrink-0 flex-col h-screen border-r border-border bg-background lg:flex overflow-hidden">
         {/* Logo + notification */}

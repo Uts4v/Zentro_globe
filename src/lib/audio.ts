@@ -1,3 +1,6 @@
+import { maximize008Sound } from "@/lib/maximize-008";
+import { playSound } from "@/lib/sound-engine";
+
 let sharedContext: AudioContext | null = null;
 
 function getContext(): AudioContext | null {
@@ -25,6 +28,7 @@ function unlockAudio(): void {
 // browser autoplay policy lets later programmatic play() calls through.
 export const WAITER_SOUND = "/sounds/waiter.mp3";
 export const ORDER_NOTIFICATION_SOUND = "/sounds/order-notification.mp3";
+export { maximize008Sound };
 
 const mediaElements = new Map<string, HTMLAudioElement>();
 let mediaPrimed = false;
@@ -94,6 +98,18 @@ export function playWaiterCallSound(volume = 0.7): void {
 
 export function playOrderNotificationSound(volume = 0.6): void {
   playSample(ORDER_NOTIFICATION_SOUND, volume);
+}
+
+export async function playMaximize008Sound(volume = 0.7): Promise<void> {
+  try {
+    const ctx = getContext();
+    if (ctx && ctx.state === "suspended") {
+      void ctx.resume();
+    }
+    await playSound(maximize008Sound.dataUri, { volume: clampVolume(volume) });
+  } catch {
+    // Audio not available — ignore
+  }
 }
 
 if (typeof window !== "undefined") {
