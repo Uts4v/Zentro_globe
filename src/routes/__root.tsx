@@ -27,6 +27,7 @@ import { getWsToken } from "@/lib/ws";
 import { registerPushSubscription } from "@/lib/push";
 import { DJANGO_BASE } from "@/lib/django-api-base";
 import { playMaximize008Sound } from "@/lib/audio";
+import { setMerchantNotificationSoundEnabled } from "@/lib/notification-sound";
 
 // Routes that never require auth
 const PUBLIC_ROUTES = [
@@ -264,9 +265,9 @@ function GlobalNotificationToasts() {
       ws.onmessage = (event) => {
         try {
           const notif = JSON.parse(event.data);
-          try {
-            playMaximize008Sound(0.7);
-          } catch {}
+          const silent = notif.silent === true;
+          if (silent) setMerchantNotificationSoundEnabled(false);
+          if (!silent) void playMaximize008Sound(0.7);
           toast.success(notif.title, {
             description: notif.message,
             duration: 6000,

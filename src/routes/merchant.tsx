@@ -7,8 +7,9 @@ import {
   redirect,
   useRouterState,
 } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { refreshMerchantNotificationSound } from "@/lib/notification-sound";
 import { requireMerchant } from "@/lib/merchant-auth-guard";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import {
@@ -225,11 +226,32 @@ function matchNav(pathname: string) {
 }
 
 function MerchantLayout() {
-  const { merchantProfile, signOut } = useAuth();
+  const { merchantProfile, signOut, user } = useAuth();
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { access, can, isStaff, isLoading } = useAccess();
+
+  // Keep the store-wide notification-sound switch fresh on every merchant
+  // device so turning it off elsewhere silences this device too. This updates
+  // only the cached audio preference, never the merchant profile state, so it
+  // cannot overwrite an in-progress settings form.
+  useEffect(() => {
+    if (user?.role !== "merchant") return;
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      void refreshMerchantNotificationSound();
+    };
+    refresh();
+    const interval = setInterval(refresh, 45_000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, [user?.role]);
 
   // Employees see only what their role allows; the owner sees everything.
   const visibleNav = access ? navItems.filter((n) => can(n.perm)) : isLoading ? [] : navItems;

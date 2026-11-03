@@ -19,10 +19,12 @@ import {
   Upload,
   KeyRound,
   FileText,
+  Bell,
 } from "lucide-react";
 import { ChangePasswordDialog } from "@/components/auth/ChangePasswordDialog";
 import { FreeItemsSettings } from "../components/FreeItemsSettings";
 import { ClearCacheRow } from "@/components/ClearCacheControl";
+import { setMerchantNotificationSoundEnabled } from "@/lib/notification-sound";
 
 const TAX_PRESETS: Record<string, Array<{ name: string; rate: number }>> = {
   nepal: [{ name: "VAT", rate: 13 }],
@@ -281,6 +283,7 @@ export function MerchantSettingsPage() {
         service_charge_dine_in_only: profile.service_charge_dine_in_only ?? true,
         currency_code: profile.currency_code,
         currency_symbol: profile.currency_symbol,
+        notification_sound_enabled: profile.notification_sound_enabled ?? true,
         gst_number: profile.gst_number?.trim() ?? "",
         receipt_footer_text: profile.receipt_footer_text?.trim() ?? "",
         accepted_payment_methods: profile.accepted_payment_methods,
@@ -304,7 +307,17 @@ export function MerchantSettingsPage() {
         return;
       }
       const updated = await merchantApi.update(payload);
-      setProfile((p) => (p ? { ...p, ...paymentConfigOf(updated) } : p));
+      setProfile((p) =>
+        p
+          ? {
+              ...p,
+              ...paymentConfigOf(updated),
+              notification_sound_enabled:
+                updated.notification_sound_enabled ?? p.notification_sound_enabled,
+            }
+          : p,
+      );
+      setMerchantNotificationSoundEnabled(updated.notification_sound_enabled);
       if (refreshProfile) await refreshProfile();
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -598,6 +611,53 @@ export function MerchantSettingsPage() {
         onChange={(next) => setProfile((p) => (p ? { ...p, ...next } : p))}
       />
 
+      {/* ── Notification sounds ───────────────────────────────────────────── */}
+      <section className="glass-strong rounded-3xl p-6">
+        <div className="mb-1 flex items-center gap-2">
+          <Bell className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">
+            Notification Sounds
+          </h2>
+        </div>
+        <p className="mb-4 text-xs text-muted-foreground">
+          The master switch for alert sounds across your whole store. When off, no notification
+          sounds play on any POS terminal, preparation screen, or merchant device.
+        </p>
+        <div className="flex items-center justify-between gap-4 rounded-2xl bg-mist px-4 py-3">
+          <div>
+            <p className="text-sm font-medium text-foreground">Notification sounds</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              When this is on, staff can still mute notification sounds from each POS terminal.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={profile.notification_sound_enabled ?? true}
+            aria-label="Notification sounds"
+            onClick={() =>
+              setProfile((p) =>
+                p
+                  ? {
+                      ...p,
+                      notification_sound_enabled: !(p.notification_sound_enabled ?? true),
+                    }
+                  : p,
+              )
+            }
+            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+              (profile.notification_sound_enabled ?? true) ? "bg-ink" : "bg-border"
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-[left] ${
+                (profile.notification_sound_enabled ?? true) ? "left-[22px]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
+      </section>
+
       {/* ── Payment methods ────────────────────────────────────────────────── */}
       <section className="glass-strong rounded-3xl p-6">
         <div className="mb-1 flex items-center gap-2">
@@ -830,6 +890,18 @@ export function MerchantSettingsPage() {
               </span>
             </div>
           ) : null}
+          <div className="flex items-center justify-between rounded-2xl bg-mist px-4 py-3">
+            <span className="text-sm text-foreground">Notification Sounds</span>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                (profile.notification_sound_enabled ?? true)
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {(profile.notification_sound_enabled ?? true) ? "Enabled" : "Disabled"}
+            </span>
+          </div>
           <div className="flex items-center justify-between rounded-2xl bg-mist px-4 py-3">
             <span className="text-sm text-foreground">Tax Status</span>
             <span

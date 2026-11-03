@@ -368,6 +368,8 @@ export interface Notification {
   reward_id: number | null;
   is_read: boolean;
   created_at: string;
+  /** Server-side mute flag for merchant notification sounds. */
+  silent?: boolean;
 }
 
 export interface MerchantProfile {
@@ -417,6 +419,8 @@ export interface MerchantProfile {
   discounts_enabled?: boolean;
   shift_management_enabled?: boolean;
   receipt_printing_enabled?: boolean;
+  /** Master switch for notification sounds across all POS terminals and devices. */
+  notification_sound_enabled?: boolean;
   /** Custom message printed at the bottom center of bills and receipts. */
   receipt_footer_text?: string | null;
   max_worker_discount_percent?: number;

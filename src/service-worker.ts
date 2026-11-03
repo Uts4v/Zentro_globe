@@ -160,6 +160,7 @@ self.addEventListener("push", (event) => {
     badge?: string;
     url?: string;
     data?: any;
+    silent?: boolean;
   };
 
   try {
@@ -168,12 +169,18 @@ self.addEventListener("push", (event) => {
     payload = { title: "Zentro", body: event.data.text() };
   }
 
-  const options: NotificationOptions & { vibrate?: number[]; renotify?: boolean } = {
+  const silent = payload.silent === true;
+  const options: NotificationOptions & {
+    vibrate?: number[];
+    renotify?: boolean;
+    silent?: boolean;
+  } = {
     body: payload.body,
     icon: payload.icon || "/icons/pwa-192x192.png",
     badge: payload.badge || "/icons/pwa-192x192.png",
     data: payload.data || { url: payload.url || "/" },
-    vibrate: [100, 50, 100],
+    vibrate: silent ? [] : [100, 50, 100],
+    silent,
     tag: "zentro-notification",
     renotify: true,
   };

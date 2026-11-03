@@ -119,6 +119,13 @@ class MerchantProfile(models.Model):
         default=False,
         help_text="Enable receipt printing from POS",
     )
+    notification_sound_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Master switch for notification sounds across all POS terminals "
+            "and merchant devices"
+        ),
+    )
     receipt_footer_text = models.TextField(
         blank=True, default="",
         help_text="Custom message printed at the bottom center of bills and receipts (empty = hidden)",

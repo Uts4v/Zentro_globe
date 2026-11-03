@@ -1,5 +1,6 @@
 import { maximize008Sound } from "@/lib/maximize-008";
 import { playSound } from "@/lib/sound-engine";
+import { isNotificationSoundEnabled } from "@/lib/notification-sound";
 
 let sharedContext: AudioContext | null = null;
 
@@ -93,14 +94,17 @@ function playSample(src: string, volume: number): void {
 // A waiter call warrants a clearly distinct ringtone from ordinary order
 // notifications, so the two use different samples.
 export function playWaiterCallSound(volume = 0.7): void {
+  if (!isNotificationSoundEnabled()) return;
   playSample(WAITER_SOUND, volume);
 }
 
 export function playOrderNotificationSound(volume = 0.6): void {
+  if (!isNotificationSoundEnabled()) return;
   playSample(ORDER_NOTIFICATION_SOUND, volume);
 }
 
 export async function playMaximize008Sound(volume = 0.7): Promise<void> {
+  if (!isNotificationSoundEnabled()) return;
   try {
     const ctx = getContext();
     if (ctx && ctx.state === "suspended") {
@@ -123,6 +127,7 @@ if (typeof window !== "undefined") {
 }
 
 export function playOrderChime(volume = 0.3) {
+  if (!isNotificationSoundEnabled()) return;
   try {
     const ctx = getContext();
     if (!ctx) return;
@@ -144,6 +149,7 @@ export function playOrderChime(volume = 0.3) {
 }
 
 export function playWaiterCallChime() {
+  if (!isNotificationSoundEnabled()) return;
   try {
     const ctx = getContext();
     if (!ctx) return;

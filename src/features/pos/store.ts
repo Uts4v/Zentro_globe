@@ -14,6 +14,7 @@ import {
 } from "./api";
 import { clearAllSavedBootstrap, saveSavedBootstrap } from "./offline/cache";
 import type { PosOrderItem } from "./cart-payload";
+import { setMerchantNotificationSoundEnabled } from "@/lib/notification-sound";
 
 export { cartToOfferLines, cartToOrderItems } from "./cart-payload";
 export type { PosOrderItem } from "./cart-payload";
@@ -382,6 +383,13 @@ export const usePosStore = create<PosState>((set, get) => ({
     let cacheUnavailable = false;
     if (!opts?.savedAt) {
       cacheUnavailable = !saveSavedBootstrap(resp.merchant?.id, resp);
+    }
+
+    if (
+      !opts?.savedAt &&
+      typeof resp.pos_settings?.notification_sound_enabled === "boolean"
+    ) {
+      setMerchantNotificationSoundEnabled(resp.pos_settings.notification_sound_enabled);
     }
 
     set({

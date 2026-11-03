@@ -472,6 +472,9 @@ class PosSettingsSerializer(serializers.Serializer):
     discounts_enabled = serializers.BooleanField()
     shift_management_enabled = serializers.BooleanField()
     receipt_printing_enabled = serializers.BooleanField()
+    # Merchant-controlled master switch. Read-only here: staff may mute their
+    # own terminal locally, but cannot change the store-wide setting.
+    notification_sound_enabled = serializers.BooleanField(read_only=True)
     max_worker_discount_percent = serializers.DecimalField(max_digits=5, decimal_places=2)
     manager_approval_threshold = serializers.DecimalField(max_digits=10, decimal_places=2)
     offline_discounts_allowed = serializers.BooleanField()

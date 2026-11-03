@@ -912,6 +912,8 @@ export interface PosSettings {
   discounts_enabled: boolean;
   shift_management_enabled: boolean;
   receipt_printing_enabled: boolean;
+  /** Merchant master switch; read-only from the POS. */
+  notification_sound_enabled?: boolean;
   max_worker_discount_percent: string;
   manager_approval_threshold: string;
   offline_discounts_allowed: boolean;

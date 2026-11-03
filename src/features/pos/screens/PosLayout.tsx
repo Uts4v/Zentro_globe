@@ -15,6 +15,7 @@ import PendingOfflineKOTs from "./PendingOfflineKOTs";
 import NotificationBell from "./NotificationBell";
 import PosVoiceAnnouncer from "./PosVoiceAnnouncer";
 import PosRealtimeBridge from "./PosRealtimeBridge";
+import NotificationSoundSync from "./NotificationSoundSync";
 import { ZentroLogo } from "@/components/brand/ZentroLogo";
 import { useBackgroundSync, useOnlineStatus } from "../offline/hooks";
 import { isPosPathOfflineSafe, POS_NAV_SECTIONS } from "../offline/permissions";
@@ -555,6 +556,7 @@ export default function PosLayout() {
       {/* One coordinator per terminal: owns the shared order feed and speech. */}
       <PosVoiceAnnouncer />
       <PosRealtimeBridge />
+      <NotificationSoundSync />
       {/* ── Sidebar ── */}
       <aside className="hidden w-64 shrink-0 flex-col h-screen border-r border-border bg-background lg:flex overflow-hidden">
         {/* Logo + notification */}

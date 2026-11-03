@@ -21,6 +21,10 @@ import { apiUrl, tokenStore, djangoFetch } from "@/lib/django-api-base";
 import { decodeJwt, refreshAccessToken, secondsUntilExpiry } from "@/lib/auth-tokens";
 import { useStore } from "@/lib/store";
 import { usePosStore } from "@/features/pos/store";
+import {
+  clearMerchantNotificationSound,
+  setMerchantNotificationSoundEnabled,
+} from "@/lib/notification-sound";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,6 +76,8 @@ export type MerchantProfile = {
   free_item_pin_set?: boolean;
   shift_management_enabled?: boolean;
   receipt_printing_enabled?: boolean;
+  /** Master switch for notification sounds across all POS terminals and devices. */
+  notification_sound_enabled?: boolean;
   /** Custom message printed at the bottom center of bills and receipts. */
   receipt_footer_text?: string | null;
   max_worker_discount_percent?: number;
@@ -230,6 +236,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!token) {
       setUser(null);
       setMerchantProfile(null);
+      clearMerchantNotificationSound();
       return;
     }
 
@@ -243,10 +250,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         djangoFetch<MerchantProfile>(apiUrl("/merchants/me/"), {
           headers: { Authorization: `Bearer ${token}` },
         })
-          .then(setMerchantProfile)
+          .then((profile) => {
+            setMerchantProfile(profile);
+            setMerchantNotificationSoundEnabled(profile.notification_sound_enabled);
+          })
           .catch(() => setMerchantProfile(null));
       } else {
         setMerchantProfile(null);
+        clearMerchantNotificationSound();
       }
     } catch (err: any) {
       if (err?.status === 401) {
@@ -254,6 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tokenStore.clear();
         setUser(null);
         setMerchantProfile(null);
+        clearMerchantNotificationSound();
       } else {
         // For rate limit (429) or temporary server errors, retain user session from valid token
         const fallbackUser = secondsUntilExpiry(token) > 0 ? userFromToken(token) : null;
@@ -531,6 +543,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Switching accounts must not carry the previous merchant's workers,
     // menu or tables into the next account's POS either.
     dropPreviousAccountPos();
+    clearMerchantNotificationSound();
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     setUser(null);
     setMerchantProfile(null);
@@ -550,6 +563,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: { Authorization: `Bearer ${token}` },
       });
       setMerchantProfile(mp);
+      setMerchantNotificationSoundEnabled(mp.notification_sound_enabled);
     } catch {
       setMerchantProfile(null);
     }

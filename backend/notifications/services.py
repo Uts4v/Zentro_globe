@@ -49,6 +49,12 @@ def send_notification(
         "created_at": notification.created_at.isoformat(),
     }
 
+    # The merchant master switch also mutes OS-level push notifications on
+    # installed PWAs. Customers keep their normal system notification sounds.
+    profile = getattr(user, "merchant_profile", None)
+    if profile is not None and not profile.notification_sound_enabled:
+        payload["silent"] = True
+
     channel_layer = get_channel_layer()
     if channel_layer is not None:
         async_to_sync(channel_layer.group_send)(

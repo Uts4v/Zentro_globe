@@ -2,11 +2,16 @@ import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { usePosStore } from "../store";
 import { posGetSettings, posUpdateSettings, PosSettings } from "../api";
-import { Info, Settings, Save, Loader2, Trash2, Wifi, WifiOff } from "lucide-react";
+import { Info, Settings, Save, Loader2, Trash2, Wifi, WifiOff, Bell } from "lucide-react";
 import { ClearCacheDialog } from "@/components/ClearCacheControl";
 import { useOnlineStatus } from "../offline/hooks";
 import { PrinterSettingsSection } from "../printing/PrinterSettingsSection";
 import { VoiceAnnouncementSettings } from "../voice/VoiceAnnouncementSettings";
+import {
+  getLocalNotificationSoundEnabled,
+  setLocalNotificationSoundEnabled,
+  setMerchantNotificationSoundEnabled,
+} from "@/lib/notification-sound";
 
 export default function PosSettingsScreen() {
   const posSettings = usePosStore((s) => s.posSettings);
@@ -15,6 +20,9 @@ export default function PosSettingsScreen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [clearCacheOpen, setClearCacheOpen] = useState(false);
+  const [notificationSoundsOn, setNotificationSoundsOn] = useState<boolean>(() =>
+    getLocalNotificationSoundEnabled(),
+  );
   const isOnline = useOnlineStatus();
 
   useEffect(() => {
@@ -24,6 +32,7 @@ export default function PosSettingsScreen() {
         if (cancelled) return;
         setSettings(fresh);
         setPosSettings(fresh);
+        setMerchantNotificationSoundEnabled(fresh.notification_sound_enabled);
       })
       .catch(() => {
         // keep the cached value
@@ -41,6 +50,7 @@ export default function PosSettingsScreen() {
       const updated = await posUpdateSettings(settings);
       setSettings(updated);
       setPosSettings(updated);
+      setMerchantNotificationSoundEnabled(updated.notification_sound_enabled);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
@@ -112,6 +122,50 @@ export default function PosSettingsScreen() {
                 </button>
               </label>
             ))}
+          </div>
+        </section>
+
+        {/* Notification sounds — terminal preference, saved immediately. */}
+        <section className="rounded-2xl border border-border bg-card p-5">
+          <div className="mb-4 flex items-center gap-2">
+            <Bell className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-bold text-foreground">Notification Sounds</h2>
+          </div>
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-sm text-foreground">Sounds on this terminal</p>
+              <p className="text-xs leading-relaxed text-muted-foreground">
+                {settings.notification_sound_enabled === false
+                  ? "Disabled by the merchant. Notification sounds are off across all store devices."
+                  : "Mute order alerts, waiter calls and chimes on this device. This does not change the store-wide setting."}
+              </p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={
+                settings.notification_sound_enabled === false ? false : notificationSoundsOn
+              }
+              aria-label="Notification sounds on this terminal"
+              disabled={settings.notification_sound_enabled === false}
+              onClick={() => {
+                const next = !notificationSoundsOn;
+                setNotificationSoundsOn(next);
+                setLocalNotificationSoundEnabled(next);
+              }}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                settings.notification_sound_enabled !== false && notificationSoundsOn
+                  ? "bg-ink"
+                  : "bg-muted"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-card shadow transition-[left] ${
+                  settings.notification_sound_enabled !== false && notificationSoundsOn
+                    ? "left-[22px]"
+                    : "left-0.5"
+                }`}
+              />
+            </button>
           </div>
         </section>
 
