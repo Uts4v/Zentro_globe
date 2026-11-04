@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { usePosStore } from "../store";
 import { posListOrders, PosOrder } from "../api";
+import { subscribePosRealtime } from "../realtime";
 import { formatCurrency } from "@/lib/currency";
 import {
   Clock,
@@ -84,30 +85,52 @@ export default function PosOrdersScreen() {
   const [search, setSearch] = useState("");
   const [billOrder, setBillOrder] = useState<OfflineOrder | null>(null);
 
-  async function loadOrders() {
-    // Offline the server list is unreachable. The offline orders below carry
-    // the screen, so this is an expected state rather than an error.
-    if (!isOnline) {
-      setOrders([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const data = await posListOrders(activeShift?.id);
-      setOrders(data);
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loadOrders = useCallback(
+    async (silent = false) => {
+      // Offline the server list is unreachable. The offline orders below carry
+      // the screen, so this is an expected state rather than an error.
+      if (!isOnline) {
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+      if (!silent) setLoading(true);
+      try {
+        const data = await posListOrders(activeShift?.id);
+        setOrders(data);
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    },
+    [activeShift?.id, isOnline],
+  );
 
   useEffect(() => {
-    loadOrders();
-    const interval = setInterval(loadOrders, 30000); // refresh every 30s
+    void loadOrders();
+    const interval = setInterval(() => {
+      if (navigator.onLine) void loadOrders(true);
+    }, 10000);
     return () => clearInterval(interval);
-  }, [activeShift?.id, isOnline]);
+  }, [loadOrders]);
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribePosRealtime((event) => {
+      if (event.event !== "order.changed") return;
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void loadOrders(true);
+      }, 400);
+    });
+
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [loadOrders]);
 
   const filtered = orders.filter((o) => {
     if (!search) return true;
@@ -225,68 +248,68 @@ export default function PosOrdersScreen() {
               {filtered.map((order) => {
                 const tableDisplay = getPosOrderTableDisplay(order);
                 return (
-                <div
-                  key={order.uuid ?? order.id}
-                  className="rounded-2xl border border-border bg-card p-4 transition-shadow hover:shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-bold text-foreground">#{order.id}</span>
-                        {tableDisplay && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
-                            <Utensils className="h-3.5 w-3.5" />
-                            {tableDisplay}
+                  <div
+                    key={order.uuid ?? order.id}
+                    className="rounded-2xl border border-border bg-card p-4 transition-shadow hover:shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-bold text-foreground">#{order.id}</span>
+                          {tableDisplay && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/15 px-2.5 py-0.5 text-xs font-bold text-amber-700 dark:text-amber-400">
+                              <Utensils className="h-3.5 w-3.5" />
+                              {tableDisplay}
+                            </span>
+                          )}
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                              STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {order.status.toUpperCase()}
                           </span>
-                        )}
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-bold ${
-                            STATUS_COLORS[order.status] ?? "bg-muted text-muted-foreground"
-                          }`}
-                        >
-                          {order.status.toUpperCase()}
-                        </span>
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
-                          {order.source}
-                        </span>
-                      </div>
-
-                      {tableDisplay && (
-                        <div className="mt-2 inline-flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-foreground">
-                          <Utensils className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                          <span>{tableDisplay}</span>
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium capitalize text-muted-foreground">
+                            {order.source}
+                          </span>
                         </div>
-                      )}
 
-                      <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                        {order.customer_name && <p>Customer: {order.customer_name}</p>}
-                        <p>
-                          {order.items.length} item(s) —{" "}
-                          <span className="numeric">
-                            {formatCurrency(Number(order.total_amount), currencySymbol)}
-                          </span>
-                        </p>
-                        <p>
-                          Payment:{" "}
-                          <span className="font-medium capitalize">{order.payment_status}</span>
-                        </p>
+                        {tableDisplay && (
+                          <div className="mt-2 inline-flex items-center gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-foreground">
+                            <Utensils className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                            <span>{tableDisplay}</span>
+                          </div>
+                        )}
+
+                        <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                          {order.customer_name && <p>Customer: {order.customer_name}</p>}
+                          <p>
+                            {order.items.length} item(s) —{" "}
+                            <span className="numeric">
+                              {formatCurrency(Number(order.total_amount), currencySymbol)}
+                            </span>
+                          </p>
+                          <p>
+                            Payment:{" "}
+                            <span className="font-medium capitalize">{order.payment_status}</span>
+                          </p>
+                        </div>
                       </div>
-                    </div>
 
-                    {/* Status icon */}
-                    <div className="shrink-0">
-                      {order.status === "completed" ? (
-                        <CheckCircle2 className="h-5 w-5 text-success" />
-                      ) : order.status === "cancelled" ? (
-                        <XCircle className="h-5 w-5 text-destructive" />
-                      ) : (
-                        <Clock className="h-5 w-5 text-warning" />
-                      )}
+                      {/* Status icon */}
+                      <div className="shrink-0">
+                        {order.status === "completed" ? (
+                          <CheckCircle2 className="h-5 w-5 text-success" />
+                        ) : order.status === "cancelled" ? (
+                          <XCircle className="h-5 w-5 text-destructive" />
+                        ) : (
+                          <Clock className="h-5 w-5 text-warning" />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
             </>
           )}
         </div>

@@ -86,6 +86,11 @@ def _bill_summary(order):
         "total_amount": str(order.total_amount),
         "item_count": getattr(order, "item_count", 0),
         "opened_at": order.created_at.isoformat(),
+        "customer_name": (
+            order.customer.full_name
+            if order.customer_id and order.customer
+            else order.guest_name_snapshot or None
+        ),
     }
 
 
@@ -118,6 +123,7 @@ def table_statuses(request):
             table_id__in=table_ids,
             status__in=OPEN_ORDER_STATUSES,
         )
+        .select_related("customer")
         .annotate(item_count=Count("items"))
         .order_by("-created_at", "-id")
     )

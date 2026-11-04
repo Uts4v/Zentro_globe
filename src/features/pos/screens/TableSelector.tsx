@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePosStore } from "../store";
 import { formatCurrency } from "@/lib/currency";
+import { buildTableOccupancy } from "../tables/table-occupancy";
+import { useLiveTableStatuses } from "../tables/useLiveTableStatuses";
 import { Armchair, Check, Circle, Search } from "lucide-react";
 
-const ACTIVE_STATUSES = ["pending", "confirmed", "preparing"];
 const ALL = "all";
 const NO_AREA = "none";
 
@@ -18,6 +19,7 @@ export default function TableSelector() {
   const setSelectedTable = usePosStore((s) => s.setSelectedTable);
   const recentOrders = usePosStore((s) => s.recentOrders);
   const incomingOrders = usePosStore((s) => s.incomingOrders);
+  const { statuses } = useLiveTableStatuses();
   const posSettings = usePosStore((s) => s.posSettings);
   const currentWorker = usePosStore((s) => s.currentWorker);
   const currencySymbol = posSettings?.currency_symbol || "Rs";
@@ -58,17 +60,16 @@ export default function TableSelector() {
     });
   }, [areas, selectedTable]);
 
-  // Derive occupied tables from active orders
-  const occupiedByTable = new Map<number, { amount: string; customer: string | null }>();
-  for (const order of [...recentOrders, ...incomingOrders]) {
-    if (!order.table_id || !ACTIVE_STATUSES.includes(order.status)) continue;
-    if (!occupiedByTable.has(order.table_id)) {
-      occupiedByTable.set(order.table_id, {
-        amount: order.total_amount,
-        customer: order.customer_name,
-      });
-    }
-  }
+  // Live table status is authoritative; cached orders only fill the first
+  // paint and customer names. A moved bill therefore updates immediately.
+  const fallbackOrders = useMemo(
+    () => [...recentOrders, ...incomingOrders],
+    [recentOrders, incomingOrders],
+  );
+  const occupiedByTable = useMemo(
+    () => buildTableOccupancy(statuses, fallbackOrders),
+    [statuses, fallbackOrders],
+  );
 
   const q = search.trim().toLowerCase();
   const shown = visibleTables.filter((t) => {
@@ -197,7 +198,7 @@ export default function TableSelector() {
                   {occupied ? info?.customer || "Occupied" : "Available"}
                 </span>
                 <span className="whitespace-nowrap text-[11px] text-muted-foreground">
-                  {occupied && info ? (
+                  {occupied && info?.amount != null ? (
                     <span className="font-bold text-amber-700">
                       {formatCurrency(info.amount, currencySymbol)}
                     </span>

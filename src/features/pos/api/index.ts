@@ -341,6 +341,7 @@ export interface PosTableStatusBill {
   total_amount: string;
   item_count: number;
   opened_at: string;
+  customer_name?: string | null;
 }
 
 export interface PosTableStatus {
@@ -402,10 +403,7 @@ export interface PosOrderItemPayload {
   price?: number;
 }
 
-export const posAddItemsToOrder = (
-  orderId: number,
-  items: PosOrderItemPayload[],
-) =>
+export const posAddItemsToOrder = (orderId: number, items: PosOrderItemPayload[]) =>
   djangoFetch<PosOrder>(apiUrl(`/orders/${orderId}/add-items/`), {
     method: "POST",
     headers: headers(),
