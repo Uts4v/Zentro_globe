@@ -228,7 +228,7 @@ def move_order_table(request):
 
     try:
         destination = (
-            MerchantTable.objects.select_for_update()
+            MerchantTable.objects.select_for_update(of=("self",))
             .select_related("area")
             .get(id=table_id, merchant=merchant, is_active=True)
         )
